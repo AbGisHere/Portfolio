@@ -9,14 +9,14 @@ export const projectCustomizations: Record<string, Partial<ProjectData>> = {
     "tags": []
   },
   "Bisleri": {
-    "customTitle": "Rangaayan",
+    "title": "Rangaayan",
     "tags": []
   },
   "MediQuest": {
     "tags": []
   },
   "CollabLens_BeTheBuilder26": {
-    "customTitle": "CollabLens",
+    "title": "CollabLens",
     "tags": []
   },
   "Therma-Triage": {
