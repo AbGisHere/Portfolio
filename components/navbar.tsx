@@ -36,7 +36,7 @@ export default function Navbar() {
 
                     <Link href="/" className="font-bold text-xl tracking-tighter flex items-center gap-2 group">
                         <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-500 group-hover:to-blue-500 group-hover:from-purple-500 transition-all duration-500">
-                            DevPortfolio
+                            AbG
                         </span>
                     </Link>
 

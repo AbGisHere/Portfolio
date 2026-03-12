@@ -1,35 +1,47 @@
 import React from 'react';
 import { Rocket, Shield, Brain, Terminal, Github, ExternalLink } from 'lucide-react';
+import { fetchGitHubRepos, transformRepoToProject, ProjectData } from './github-api';
+import { projectCustomizations, featuredProjects, excludedProjects } from './project-config';
 
-export const projects = [
-    {
-        title: "Project Alpha",
-        description: "An AI-powered fullstack platform redefining user experiences. Built with Next.js, OpenAI, and Tailwind CSS.",
-        image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
-        tags: ["Next.js", "TypeScript", "AI", "Tailwind"],
-        github: "https://github.com",
-        live: "https://example.com",
-        featured: true,
-    },
-    {
-        title: "SecureVault",
-        description: "A secure, end-to-end encrypted file sharing application ensuring absolute data privacy and integrity.",
-        image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800",
-        tags: ["React", "Node.js", "Cryptography", "PostgreSQL"],
-        github: "https://github.com",
-        live: "https://example.com",
-        featured: true,
-    },
-    {
-        title: "NeuroFlow",
-        description: "An elegant productivity dashboard with predictive analytics to optimize developer workflows seamlessly.",
-        image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
-        tags: ["Vue", "Python", "D3.js"],
-        github: "https://github.com",
-        live: "https://example.com",
-        featured: false,
-    }
-];
+// Fallback mock data for development or when GitHub API fails
+// Fallback projects - empty since we'll use real GitHub projects
+export const mockProjects: ProjectData[] = [];
+
+// Function to get projects (combines GitHub API with manual customizations)
+export async function getProjects(): Promise<ProjectData[]> {
+  try {
+    // Fetch repositories from GitHub
+    const repos = await fetchGitHubRepos();
+    
+    // Transform repos to projects with customizations
+    const projects = repos
+      .filter(repo => !excludedProjects.includes(repo.name))
+      .map(repo => {
+        const customization = projectCustomizations[repo.name];
+        const project = transformRepoToProject(repo, customization);
+        
+        // Set featured status
+        project.featured = featuredProjects.includes(repo.name) || customization?.featured || false;
+        
+        return project;
+      })
+      .sort((a, b) => {
+        // Sort featured projects first, then by last updated
+        if (a.featured && !b.featured) return -1;
+        if (!a.featured && b.featured) return 1;
+        return new Date(b.pushed_at).getTime() - new Date(a.pushed_at).getTime();
+      });
+    
+    return projects.length > 0 ? projects : mockProjects;
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    // Don't return mock projects, propagate the error so UI can show proper error message
+    throw error;
+  }
+}
+
+// Static projects for initial load - will be replaced with GitHub data
+export const projects = [];
 
 export const achievements = [
     {
@@ -52,61 +64,4 @@ export const achievements = [
     }
 ];
 
-export const timelineData = [
-    {
-        title: "2024",
-        content: (
-            <div>
-            <p className= "text-neutral-800 dark:text-neutral-200 text-sm md:text-md font-normal mb-8" >
-            Launched several successful open- source projects and led a team of 5 engineers to deliver a massive B2B SaaS platform used by Fortune 500s.
-        </p>
-    < div className = "grid grid-cols-2 gap-4" >
-    <img
-            src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=500"
-            alt = "startup template"
-            className = "rounded-lg object-cover h-20 md:h-44 lg:h-60 w-full shadow-md"
-    />
-    <img
-            src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&q=80&w=500"
-            alt = "startup template"
-            className = "rounded-lg object-cover h-20 md:h-44 lg:h-60 w-full shadow-md"
-    />
-    </div>
-    </div>
-    ),
-  },
-{
-    title: "2023",
-        content: (
-            <div>
-            <p className= "text-neutral-800 dark:text-neutral-200 text-sm md:text-md font-normal mb-8" >
-            Graduated with honors and immediately jumped into the startup world.Built MVP products that secured seed funding.
-        </p>
-                < div className = "grid grid-cols-2 gap-4" >
-                    <img
-            src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=500"
-    alt = "startup template"
-    className = "rounded-lg object-cover h-20 md:h-44 lg:h-60 w-full shadow-md"
-        />
-        </div>
-        </div>
-    ),
-},
-{
-    title: "2022",
-        content: (
-            <div>
-            <p className= "text-neutral-800 dark:text-neutral-200 text-sm md:text-md font-normal mb-8" >
-            Discovered my passion for frontend design and won my first hackathon.The addiction to building beautiful UI began here.
-        </p>
-                < div className = "grid grid-cols-2 gap-4" >
-                    <img
-            src="https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=500"
-    alt = "startup template"
-    className = "rounded-lg object-cover h-20 md:h-44 lg:h-60 w-full shadow-md"
-        />
-        </div>
-        </div>
-    ),
-},
-];
+export const timelineData = []; // Will be replaced with dynamic GitHub project timeline

@@ -28,7 +28,7 @@ coverage/
 .grunt
 
 # Bower dependency directory
-bower_components
+bower_components/
 
 # node-waf configuration
 .lock-wscript
@@ -152,3 +152,15 @@ test-results.xml
 # Misc
 *.tgz
 *.tar.gz
+
+# Security - Never commit sensitive data
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# Favicon
+favicon.ico
+favicon.png
+favicon.svg

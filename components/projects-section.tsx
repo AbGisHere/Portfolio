@@ -4,8 +4,14 @@ import { motion } from 'framer-motion';
 import { projects } from '@/lib/data';
 import { ExternalLink, Github, Star } from 'lucide-react';
 import Image from 'next/image';
+import { ProjectData } from '@/lib/github-api';
 
-export default function ProjectsSection() {
+interface ProjectsSectionProps {
+  projects?: ProjectData[];
+  loading?: boolean;
+}
+
+export default function ProjectsSection({ projects: propProjects = projects, loading = false }: ProjectsSectionProps) {
     return (
         <section id="projects" className="py-24 px-4 max-w-7xl mx-auto relative">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
@@ -40,9 +46,9 @@ export default function ProjectsSection() {
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {projects.map((project, index) => (
+                {propProjects.map((project, index) => (
                     <motion.div
-                        key={project.title}
+                        key={project.name || project.title}
                         initial={{ opacity: 0, y: 30 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: index * 0.1 }}
@@ -59,8 +65,8 @@ export default function ProjectsSection() {
                         <div className="relative h-56 w-full overflow-hidden">
                             <div className="absolute inset-0 bg-neutral-900/20 group-hover:bg-transparent transition-colors z-10" />
                             <Image
-                                src={project.image}
-                                alt={project.title}
+                                src={project.customImage || project.image || "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800"}
+                                alt={project.title || project.name}
                                 fill
                                 className="object-cover transition-transform duration-700 group-hover:scale-110"
                             />
@@ -68,10 +74,10 @@ export default function ProjectsSection() {
 
                         <div className="p-6 md:p-8 flex flex-col flex-grow">
                             <h3 className="text-2xl font-bold text-neutral-900 dark:text-white mb-3">
-                                {project.title}
+                                {project.title || project.name}
                             </h3>
                             <p className="text-neutral-600 dark:text-neutral-400 mb-6 flex-grow text-sm leading-relaxed">
-                                {project.description}
+                                {project.customDescription || project.description}
                             </p>
 
                             <div className="flex flex-wrap gap-2 mb-8">
@@ -84,7 +90,7 @@ export default function ProjectsSection() {
 
                             <div className="flex items-center gap-4 mt-auto">
                                 <a
-                                    href={project.live}
+                                    href={project.customLiveUrl || project.live || project.homepage || '#'}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="flex-1 text-center py-2.5 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-black font-semibold text-sm hover:scale-105 transition-transform"
@@ -92,7 +98,7 @@ export default function ProjectsSection() {
                                     Visit Site
                                 </a>
                                 <a
-                                    href={project.github}
+                                    href={project.github || project.html_url}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="p-2.5 rounded-xl bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-white/20 transition-colors"

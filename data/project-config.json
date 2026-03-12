@@ -1,0 +1,35 @@
+{
+  "excludedProjects": [
+    "Brew-and-Bites-Images",
+    "traffic-analytics-AbG",
+    "Quizierra"
+  ],
+  "projectCustomizations": {
+    "Portfolio": {
+      "tags": []
+    },
+    "BusShare": {
+      "tags": []
+    },
+    "Bisleri": {
+      "customTitle": "Rangaayan",
+      "tags": []
+    },
+    "MediQuest": {
+      "tags": []
+    },
+    "CollabLens_BeTheBuilder26": {
+      "customTitle": "CollabLens",
+      "tags": []
+    },
+    "Therma-Triage": {
+      "tags": []
+    },
+    "Brew-and-Bites": {
+      "tags": []
+    },
+    "FocusFlow": {
+      "tags": []
+    }
+  }
+}

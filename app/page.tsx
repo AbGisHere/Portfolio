@@ -3,7 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
-import ProjectsSection from '@/components/projects-section';
+import ProjectsWrapper from '@/components/projects-wrapper';
 import JourneySection from '@/components/journey-section';
 import AchievementsSection from '@/components/achievements-section';
 import { ArrowDown, Terminal, Code2, Cpu } from 'lucide-react';
@@ -86,7 +86,7 @@ export default function Home() {
             </section>
 
             <div className="relative z-10 bg-neutral-50 dark:bg-transparent">
-                <ProjectsSection />
+                <ProjectsWrapper />
                 <JourneySection />
                 <AchievementsSection />
             </div>
