@@ -306,6 +306,13 @@ will drop them**, so reapply:
    centred on a frame too narrow for that. `SunToggle.module.css` mirrors the
    clamp in CSS with `cqh` units — keep it, the engine and `mistGeometry.js`
    in step.
+9. **Sun colour springs.** The studio derives the sun colour (`tr`) from the
+   stops each frame: it takes the brightest stop and branches on a 0.5
+   luminance threshold. Fed in-between stops, that pops mid-switch. So `or`
+   springs `tr(target stops)` as three extra channels in the `Wl` vector
+   (`Sr, Sg, Sb`), and `I` is built from them. The GL renderer does the same
+   (`STOPS_AT` in `MistCanvas.jsx`). At rest it's identical, and in motion it
+   fades.
 
 Also: the top of the file needs `'use client'`, and the recipe it ships with
 is renamed to `defaultRecipe` so the `recipe` prop can shadow it.

@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-[2026-09-23: the Vite/React SPA has been replaced — this is now the shipped stack, not a plan.] Next.js 16 (App Router) + React 19, plain JS/JSX (no TypeScript), plain CSS in `app/globals.css`. Fonts via `next/font/google`: Unbounded (display) + JetBrains Mono (body/labels). Animation/scroll: GSAP + ScrollTrigger and Lenis are installed as primitives for later scroll choreography, but nothing composes them yet. The reactive background is a generated gradient/shader engine (`components/gradient/engine.js`) driven by per-theme recipe files under `components/gradient/recipes/`. The earlier ambient experiments — a Three.js "LiquidMesh" and a 2D particle field — were deleted; `three` is still listed in `package.json` but is no longer imported by anything. Deploy target not yet discussed.
+[2026-09-23: the Vite/React SPA has been replaced — this is now the shipped stack, not a plan.] Next.js 16 (App Router) + React 19, plain JS/JSX (no TypeScript), plain CSS, split into per-component CSS Modules (`app/globals.css` holds tokens, reset and base type only). Fonts via `next/font/google`: Unbounded (display) + JetBrains Mono (body/labels). Animation/scroll: GSAP + ScrollTrigger and Lenis are installed as primitives for later scroll choreography, but nothing composes them yet. The background is a WebGL2 renderer of the studio's MIST scene (`components/gradient/gl/`), driven by per-theme recipe files under `components/gradient/recipes/`. The generated SVG engine it was ported from (`components/gradient/engine.js`) remains as the fallback for browsers without WebGL. [2026-09-24: WebGL became the default in 0.1.4.] The earlier ambient experiments (a Three.js "LiquidMesh" and a 2D particle field) were deleted, and `three` has been removed. Deployed on Vercel at abgishere.vercel.app.
 
 ## Users
 
@@ -29,7 +29,7 @@ Visitor arrives via a shared link with no prior context and the entire experienc
 ## Capabilities and Constraints
 
 - Next.js 16 App Router + React 19, no backend. Whether a multi-route structure fits a "continuous scroll" experience, versus staying one page, is undecided — resolve in new-work.
-- The rebuild ships layer by layer, and the version line tracks which layer: the `0.1.x` line covers the background/atmosphere layer only; page content arrives in later lines. Current version: 0.1.4.
+- The rebuild ships layer by layer, and the version line tracks which layer: the `0.1.x` line covers the background/atmosphere layer only; page content arrives in later lines. Current version: 0.1.5.
 - What exists today is the atmosphere layer: one full-bleed scene of mountain ridges under drifting haze with a sun in the sky. Clicking the sun runs day → night as one continuous ~1.25s motion (sun slides across and recolours into a moon, ridges reshape, haze thins, sky shifts through its colour stops on the same clock). Scenes are data: `dusk-ember.js` (day) and `moonlit.js` (night) recipes feed the shared engine.
 - The responsive/viewport approach for the scroll narrative is undecided — resolve in new-work.
 - Real content (resume, dev log, projects, contact) still needs a home in the new structure. Planned direction for projects, post-`0.1.x`: the camera pans down from the atmosphere to a desk, a laptop (landscape) or phone (portrait) unlocks, and the scroll zooms into its screen, where a painted background carries the projects as cards/widgets (not an OS) and each opens its live deployment in an iframe. Full plan in `ROADMAP.md`. [2026-09-23: user decision, not scheduled.]

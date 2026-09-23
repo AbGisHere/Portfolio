@@ -27,7 +27,15 @@ const GRAIN_SIZE = 256;
 const MAX_DPR = 2;
 
 // Everything the transition springs, in the SVG engine's order (its `Wl`
-// call): geometry dials, then each colour stop as three 0–255 channels.
+// call): geometry dials, then the sun colour, then each colour stop, colours
+// as three 0–255 channels.
+//
+// The sun colour is springed rather than derived per frame: `sunColour` picks
+// the brightest stop and branches on a luminance threshold, so computing it
+// from in-between stops made the sun jump colour mid-switch. Springing the
+// target scene's sun colour blends it on the same clock and is identical at
+// rest.
+const STOPS_AT = 10;
 function targetVector(recipe) {
   const m = mistOf(recipe.mist);
   return [
@@ -38,18 +46,21 @@ function targetVector(recipe) {
     m.sharp,
     m.sun,
     m.seed,
+    ...hexToRgb(sunColour(recipe.stops)),
     ...recipe.stops.flatMap(hexToRgb),
   ];
 }
 
 const toHexStops = v => {
   const out = [];
-  for (let i = 7; i < v.length; i += 3) {
-    const c = [v[i], v[i + 1], v[i + 2]].map(x => Math.max(0, Math.min(255, Math.round(x))));
-    out.push(`#${c.map(x => x.toString(16).padStart(2, '0')).join('')}`);
-  }
+  for (let i = STOPS_AT; i < v.length; i += 3) out.push(rgbToHex(v, i));
   return out;
 };
+
+function rgbToHex(v, i) {
+  const c = [v[i], v[i + 1], v[i + 2]].map(x => Math.max(0, Math.min(255, Math.round(x))));
+  return `#${c.map(x => x.toString(16).padStart(2, '0')).join('')}`;
+}
 
 const rgb01 = hex => hexToRgb(hex).map(c => c / 255);
 
@@ -235,7 +246,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(uniform('uRes'), canvas.width, canvas.height);
       gl.uniform1f(uniform('uDpr'), canvas.width / w);
       gl.uniform3f(uniform('uSun'), sun.x, sun.y, sun.r);
-      gl.uniform3fv(uniform('uSunCol'), rgb01(sunColour(stops)));
+      gl.uniform3fv(uniform('uSunCol'), rgb01(rgbToHex(value, 7)));
       gl.uniform1i(uniform('uCount'), n);
       gl.uniform1fv(uniform('uTop'), f(1, rd => rd.top));
       gl.uniform1fv(uniform('uBase'), f(1, rd => rd.base));
