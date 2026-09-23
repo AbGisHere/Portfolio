@@ -5,7 +5,7 @@
  *
  *   node scripts/perf.mjs [--base URL] [--renderers svg,gl]
  *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window 700]
- *        [--idle 3000] [--headed]
+ *        [--idle 3000] [--headed] [--query k=v&k=v]
  *
  * Prints a table and writes scripts/out/perf/perf-<timestamp>.json.
  * Absolute numbers depend on the machine and on headless GPU support; compare
@@ -30,6 +30,8 @@ const RENDERERS = String(args.renderers ?? 'svg,gl').split(',');
 const SWITCHES = Number(args.switches ?? 4);
 const WINDOW = Number(args.window ?? 700); // ms recorded after each click
 const IDLE = Number(args.idle ?? 3000);
+// Extra query params for every page, e.g. `--query crest=cpu`.
+const QUERY = Object.fromEntries(new URLSearchParams(typeof args.query === 'string' ? args.query : ''));
 const VIEWPORTS = viewportsFrom(args.viewports, [
   '1440x900@2',
   '1728x1117@2',
@@ -109,7 +111,7 @@ async function measure(browser, vp, renderer) {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Performance.enable');
 
-  await page.goto(sceneUrl(BASE, renderer), { waitUntil: 'load' });
+  await page.goto(sceneUrl(BASE, renderer, QUERY), { waitUntil: 'load' });
   await page
     .waitForSelector('[data-renderer], svg.jg-mist-layers', { timeout: 15000 })
     .catch(() => {});

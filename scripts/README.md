@@ -31,6 +31,7 @@ a diff between them.
 | `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun |
 | `--settle` | `2500` | ms to wait after load before capturing |
 | `--grain` | off | Include grain in the comparison. It's off by default because grain is random noise that no two renderers can match pixel for pixel. Judge grain by eye in the report instead. |
+| `--query`, `--query-a`, `--query-b` | none | Extra URL params (`k=v&k=v`) for both sides or one side. For example, `--a gl --b gl --query driftAt=0.25 --query-b crest=cpu` compares the GL crest paths mid-drift. `perf.mjs` takes `--query` too. |
 
 How it works:
 1. Each case loads `?renderer=<a>&freeze=1&grain=0` and the same for `<b>`,
@@ -80,3 +81,6 @@ absolute fps, or pass `--headed` for the real GPU.
 | `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check when there's no SVG `circle` to measure. Without it, the check reports "none" and doesn't fail. |
 | `button[aria-pressed]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |
 | `localStorage['abg-theme']` | theme | `day` or `night`, read before first paint. |
+| `?crest=cpu` | GL renderer | Compute ridge crests on the CPU instead of the GPU crest pass (the fallback path when float render targets are missing). |
+| `data-crest="gpu" \| "cpu"` | scene wrapper | Which crest path the GL renderer used. |
+| `?driftAt=<offset>` | GL renderer | Pin the idle seed-drift offset, even with `?freeze=1`. Use it to compare the two crest paths mid-drift. |

@@ -6,9 +6,11 @@
  * each function came from are noted beside it: if the studio's MIST ever
  * changes, diff against those.
  *
- * Everything here is plain JS and runs on the CPU once per frame while the
- * scene is moving (a few thousand cheap evaluations); the GPU does the
- * per-pixel work in mistShader.js.
+ * Everything here is plain JS and runs on the CPU while the scene is moving.
+ * The ridge crests (`layout`'s control points + `sampleCrest`) are the
+ * exception where float render targets exist: crestShader.js computes those on
+ * the GPU, and this CPU version is the fallback and the reference it matches.
+ * The GPU does the per-pixel work in mistShader.js.
  */
 
 import { skyRamp } from '../skyRamp';
@@ -152,8 +154,10 @@ const POINTS = 110; // jo
  * Xs — ridges, veils and sun for a w × h (CSS px) frame. `aspect` is the
  * recipe's studio canvas aspect (engine patch 7: ridges are height-locked and
  * sampled around the frame centre; patch 8: sun clamped off the edges).
+ * `crests: false` skips the control points (`ys`) when the GPU crest pass
+ * (crestShader.js) computes them instead; everything else is unchanged.
  */
-export function layout(w, h, { size, horizon = 0.42, mist, aspect }) {
+export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true }) {
   const U = aspect ? h * aspect : w;
   const Q = Math.max(POINTS, Math.ceil((POINTS * w) / U));
   const r = rangeCount(size);
@@ -172,12 +176,15 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect }) {
     const L = (0.12 + 0.26 * t) * d * lift * 1.35;
     const x0 = -0.03 * h;
     const dx = (w + 0.06 * h) / Q;
-    const ys = new Float64Array(Q + 1);
-    for (let I = 0; I <= Q; I++) {
-      const X = x0 + I * dx;
-      ys[I] = base - L * ridgeProfile((X - w / 2) / U + 0.5, b, seed, mist.sharp);
+    let ys = null;
+    if (crests) {
+      ys = new Float64Array(Q + 1);
+      for (let I = 0; I <= Q; I++) {
+        const X = x0 + I * dx;
+        ys[I] = base - L * ridgeProfile((X - w / 2) / U + 0.5, b, seed, mist.sharp);
+      }
     }
-    ridges.push({ x0, dx, ys, top: base - L, base, t, fade });
+    ridges.push({ x0, dx, Q, U, L, ys, top: base - L, base, t, fade });
   }
 
   const veils = ridges.map((ridge, b) => {

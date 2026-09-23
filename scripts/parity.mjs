@@ -6,6 +6,7 @@
  *   node scripts/parity.mjs [--base URL] [--threshold 2] [--p99 24]
  *        [--viewports 393x852@2,1440x900@2] [--themes day,night]
  *        [--settle 2500] [--sun-tolerance 1] [--a svg --b gl] [--grain]
+ *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v]
  *
  * Writes scripts/out/parity/index.html (a | b | diff per case) and exits
  * non-zero if any case breaks a threshold. Contract: scripts/README.md.
@@ -33,6 +34,10 @@ const SUN_TOL = Number(args['sun-tolerance'] ?? 1); // CSS px
 const A = args.a ?? 'svg';
 const B = args.b ?? 'gl';
 const GRAIN = Boolean(args.grain); // off by default: random noise can't match pixel-for-pixel
+// Extra query params: `--query` for both sides, `--query-a` / `--query-b` for
+// one (e.g. `--a gl --b gl --query-b crest=cpu` compares the GL crest paths).
+const params = q => Object.fromEntries(new URLSearchParams(typeof q === 'string' ? q : ''));
+const QUERY = { a: { ...params(args.query), ...params(args['query-a']) }, b: { ...params(args.query), ...params(args['query-b']) } };
 const THEMES = String(args.themes ?? 'day,night').split(',');
 const VIEWPORTS = viewportsFrom(args.viewports, [
   '393x852@2',
@@ -69,7 +74,7 @@ function seedRandom() {
 }
 
 /** Load one renderer, settle, freeze, screenshot, and measure the sun. */
-async function capture(browser, vp, theme, renderer) {
+async function capture(browser, vp, theme, renderer, side) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
     deviceScaleFactor: vp.dpr,
@@ -81,7 +86,7 @@ async function capture(browser, vp, theme, renderer) {
   page.on('console', m => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', e => errors.push(String(e)));
 
-  const query = GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' };
+  const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), ...QUERY[side] };
   await page.goto(sceneUrl(BASE, renderer, query), { waitUntil: 'load' });
   await page
     .waitForSelector('[data-renderer], svg.jg-mist-layers', { timeout: 15000 })
@@ -231,8 +236,8 @@ async function main() {
   for (const vp of VIEWPORTS) {
     for (const theme of THEMES) {
       const id = `${vp.name.replace('@', '-')}-${theme}`;
-      const a = await capture(browser, vp, theme, A);
-      const b = await capture(browser, vp, theme, B);
+      const a = await capture(browser, vp, theme, A, 'a');
+      const b = await capture(browser, vp, theme, B, 'b');
       const d = await diff(differ, a.png, b.png);
 
       writeFileSync(join(OUT, `${id}-${A}.png`), a.png);

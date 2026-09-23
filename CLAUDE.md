@@ -155,6 +155,8 @@ components/
       MistCanvas.jsx (+ .module.css) — WebGL renderer (default): canvas, spring, textures
       mistGeometry.js  — one-for-one port of the engine's MIST maths
       mistShader.js    — the fullscreen fragment shader
+      crestShader.js   — GPU crest pass (ridge outlines → R32F texture)
+      hashTable.js     — precomputed noise lattice hashes for the crest pass
     engine.js          — generated SVG engine, the fallback renderer (see below)
     skyRamp.js         — the smooth sky ramp every sky path uses
     sky.js             — a recipe's sky as a CSS gradient (backdrop, static sky)
@@ -203,11 +205,34 @@ Two renderers draw the same recipe, and the page picks one after mount
   patches 7–8, colour mixing in oklab, veil timings), `mistShader.js` is one
   fullscreen fragment shader compositing sky → sun glow → sun → per ridge
   (fill, blurred edge, crest rim, veil) → air → grain in the SVG's paint
-  order, and `MistCanvas.jsx` runs the spring. A frame is one draw call: the
-  CPU recomputes geometry only while the transition moves, and at rest only
-  the veils' drift uniforms change, redrawn once they've moved ~0.2 device px.
+  order, and `MistCanvas.jsx` runs the spring. At rest the veils' drift
+  uniforms change and the frame is redrawn once they've moved ~0.2 device px.
   Canvas DPR is capped at 2. Reduced motion freezes the veils and makes the
   switch a cut.
+  - **Crests on the GPU.** The ridge outlines (the control points'
+    noise heights and the Catmull-Rom→Bézier curve through them, one sample
+    per device column) come from a render-to-texture pass,
+    `crestShader.js`, into the R32F crest texture that `mistShader.js`
+    samples. A frame is then two draw calls, and the CPU only sets uniforms.
+    The engine's sin-based lattice hash isn't portable in float32, so the
+    shader never hashes: `hashTable.js` precomputes every hash a frame can
+    need in JS doubles, into a static texture with one row per
+    (ridge, octave/`d` layer). It's rebuilt only when the frame size changes or
+    the noise offset leaves its range (a theme switch), never per frame.
+  - **CPU fallback for crests.** Without `EXT_color_buffer_float`, if the
+    float target or hash table can't be built, or with `?crest=cpu`, the crests
+    are computed by `layout` + `sampleCrest` on the CPU and uploaded as before.
+    Both paths render pixel-identical frames (parity diff 0.00, also
+    mid-drift). `data-crest="gpu|cpu"` on the scene wrapper says which ran.
+  - **Idle drift.** A recipe's `idle: { seedDrift, period }` breathes the seed
+    ±`seedDrift` on a `period`-second sine at rest, so the ridges slowly
+    shift. Crest updates are capped at `IDLE_HZ` (60) in `MistCanvas.jsx`:
+    at this speed ridges move under a pixel per update, so 120 looks the same
+    and doubles the GPU work. It's off under reduced motion and `?freeze=1`,
+    and only runs while the scene is on screen. The SVG fallback doesn't
+    drift. Measured on an M4 (prod, idle main-thread ms/s at
+    1440×900@2 / 393×852@2 / 3440×1440@1): drift off 36/35/42, GPU crests
+    at 60/s 56/39/59, CPU crests at 60/s 92/72/91.
 - **SVG (fallback)** — the generated `engine.js`, loaded only when WebGL2 is
   missing, the shader fails to build, or the context is lost. It re-renders
   the whole SVG through React every frame, which is what made switches janky
@@ -226,6 +251,9 @@ maths changes. Hooks both renderers honour:
 | `?freeze=1` | Veils at rest phase (no drift, full opacity) |
 | `?grain=0` | No grain layer (grain is random per load) |
 | `data-sun-cx` / `data-sun-cy` (GL) | Painted sun centre, CSS px |
+| `?crest=cpu` (GL) | Force the CPU crest path |
+| `data-crest` on the scene wrapper (GL) | Which crest path ran: `gpu` or `cpu` |
+| `?driftAt=0.25` (GL) | Pin the idle seed-drift offset, even with `?freeze=1`, to compare crest paths mid-drift |
 
 When porting anything new from the studio, change `mistGeometry.js` /
 `mistShader.js` and the engine together, then re-run parity. One trap

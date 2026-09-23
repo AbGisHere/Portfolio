@@ -50,6 +50,11 @@ const duskEmber = {
   // ATMOSPHERE + MOUNTAINS detail
   mist: { haze: 50, height: 63, sharp: 64, seed: 12, sun: 28, drift: 55 },
 
+  // Ours, not the studio's: at rest the seed breathes ±seedDrift around its
+  // value on a `period`-second sine, so the ridges slowly shift. GL only; the
+  // SVG fallback stays still. 0 turns it off.
+  idle: { seedDrift: 0.5, period: 60 },
+
   // How this scene animates when it becomes the active theme.
   transition: {
     springRate: 4,

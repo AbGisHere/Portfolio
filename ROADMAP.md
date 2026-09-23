@@ -11,7 +11,7 @@ tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
 from regressing afterwards is the per-push checklist in `CLAUDE.md`
 ("Pre-push checks").
 
-State at `0.1.5`: `lang`, title template, description, canonical, OG and
+State at `0.1.6`: `lang`, title template, description, canonical, OG and
 Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
 llms.txt are in place. Browser source maps are off, and there is no
 boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
