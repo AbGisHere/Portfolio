@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-[2026-09-23: confirmed with user, superseding the prior Vite+plain-CSS stack.] Next.js (framework switch from Vite/React SPA). Animation/scroll: GSAP + ScrollTrigger for scroll-driven reveal choreography, Lenis for smooth scroll. Reactive background: a mix of 2D canvas (particles) and WebGL/Three.js (a liquid/3D moment) rather than committing to only one. Deploy target not yet discussed.
+[2026-09-23: the Vite/React SPA has been replaced — this is now the shipped stack, not a plan.] Next.js 16 (App Router) + React 19, plain JS/JSX (no TypeScript), plain CSS in `app/globals.css`. Fonts via `next/font/google`: Unbounded (display) + JetBrains Mono (body/labels). Animation/scroll: GSAP + ScrollTrigger and Lenis are installed as primitives for later scroll choreography, but nothing composes them yet. The reactive background is a generated gradient/shader engine (`components/gradient/engine.js`) driven by per-theme recipe files under `components/gradient/recipes/`. The earlier ambient experiments — a Three.js "LiquidMesh" and a 2D particle field — were deleted; `three` is still listed in `package.json` but is no longer imported by anything. Deploy target not yet discussed.
 
 ## Users
 
@@ -20,23 +20,25 @@ Mixed general audience — no single dominant persona. Recruiters/hiring manager
 
 ## Positioning
 
-Replacing the prior "fake desktop OS" mechanism entirely (confirmed decision, not an incumbent to preserve). The new differentiator: a single continuous scroll experience where every scroll delta is staged as a reveal — content, motion, and transitions choreographed as one narrative arc, not sections stacked on a page. The old OS build (boot/login/desktop/windows/dock/terminal) is retained only as anti-reference evidence of prior craft, not as a base to extend.
+Replacing the prior "fake desktop OS" mechanism entirely (confirmed decision, not an incumbent to preserve). The new differentiator: a single continuous scroll experience where every scroll delta is staged as a reveal — content, motion, and transitions choreographed as one narrative arc, not sections stacked on a page. The old OS build (boot/login/desktop/windows/dock/terminal) is retained only as anti-reference evidence of prior craft, not as a base to extend. The rebuild is underway: the atmosphere/background layer ships first (`0.1.x`) and sets the mood the later content beats are staged against.
 
 ## Operating Context
 
-Visitor arrives via a shared link with no prior context and the entire experience unfolds through scrolling — no login gate, no window management. Terminal-style or "hacker" moments may still appear as narrative beats/easter eggs within the scroll (not as a persistent OS shell). Admin-only surfaces (if kept) would need a new, undecided mechanism since the old password-gated desktop is going away.
+Visitor arrives via a shared link with no prior context and the entire experience unfolds through scrolling — no login gate, no window management. Today the visitor lands on the atmosphere layer alone: a single full-bleed animated scene with one interaction (click the sun to move day → night). Terminal-style or "hacker" moments may still appear as narrative beats/easter eggs within the scroll (not as a persistent OS shell). Whether an admin surface is still wanted at all is undecided; if kept, it would need a new mechanism since the old password-gated desktop is gone.
 
 ## Capabilities and Constraints
 
-- Single-page React 19 + Vite app, no backend. Whether a router/multi-route structure fits a "continuous scroll" experience, versus staying single-page, is undecided — resolve in new-work.
+- Next.js 16 App Router + React 19, no backend. Whether a multi-route structure fits a "continuous scroll" experience, versus staying one page, is undecided — resolve in new-work.
+- The rebuild ships layer by layer, and the version line tracks which layer: the `0.1.x` line covers the background/atmosphere layer only; page content arrives in later lines. Current version: 0.1.1.
+- What exists today is the atmosphere layer: one full-bleed scene of mountain ridges under drifting haze with a sun in the sky. Clicking the sun runs day → night as one continuous ~555ms motion (sun slides across and recolours into a moon, ridges reshape, haze thins, sky crossfades). Scenes are data: `dusk-ember.js` (day) and `moonlit.js` (night) recipes feed the shared engine.
 - The prior fixed 1728×1117 desktop-canvas convention no longer applies; a scroll-driven narrative needs its own responsive/viewport approach — undecided, resolve in new-work.
-- Prior surfaces (Boot, Login, Desktop shell, Terminal, dock) are being replaced, not extended. Real content (resume, DevLog, projects) still needs a home in the new structure.
+- Prior surfaces (Boot, Login, Desktop shell, Terminal, dock) and the first pass at page sections (Hero, Work, Proof, Contact) have all been deleted, not extended. Real content (resume, DevLog, projects, contact) still needs a home in the new structure.
 - Whether "AbG OS" survives as a name/wordmark within the new narrative, or the identity changes too, is undecided — the user has only confirmed the *interaction mechanism* (OS windows → scroll narrative) changes, not the name.
 
 ## Brand Commitments
 
 - Personal identity: Abhinav Gupta ("AbG"). Whether the "AbG OS" name/branding carries into the new direction is undecided.
-- Prior visual system (green terminal palette, Porter Sans Blockblock/Oswald/Playwrite/Poly/PT Mono/Rock Salt fonts, glass/blur chrome) is now anti-reference, not a constraint — the new visual world is chosen fresh in new-work, informed by but not copying `why.zero.university`'s specific imagery (liquid-metal renders, corporate-logo tokens, Michelangelo homage are that site's content, not a reusable asset).
+- Prior visual system (green terminal palette, Porter Sans Blockblock/Oswald/Playwrite/Poly/PT Mono/Rock Salt fonts, glass/blur chrome) is now anti-reference, not a constraint. The new visual world starts from the atmosphere layer: Unbounded (display) + JetBrains Mono (body/labels), and the day/night scene palettes carried by the `dusk-ember` and `moonlit` recipes. Content-layer visuals are still chosen fresh in new-work, informed by but not copying `why.zero.university`'s specific imagery (liquid-metal renders, corporate-logo tokens, Michelangelo homage are that site's content, not a reusable asset).
 
 ## Evidence on Hand
 

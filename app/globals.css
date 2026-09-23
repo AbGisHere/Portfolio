@@ -1,15 +1,11 @@
 /* ============================================================
-   Design tokens — scroll-spine reveal narrative
+   Design tokens
    See .impeccable/surfaces/home.md for the direction contract
    ============================================================ */
 
 :root {
   --bg: #0c0c0d;
-  --bg-raised: #131315;
   --accent: #ff5a1f;
-  --accent-dim: #b23f14;
-  --teal: #1f3a3a;
-  --teal-bright: #3d6b6b;
   --ink: #f4f1ea;
   --ink-dim: #8b8b8f;
   --line: rgba(244, 241, 234, 0.12);
@@ -18,7 +14,6 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --section-pad: clamp(2.5rem, 8vw, 8rem);
 }
 
 * {
@@ -33,10 +28,6 @@ body {
   color: var(--ink);
   font-family: var(--font-mono);
   overscroll-behavior: none;
-}
-
-body {
-  min-height: 100vh;
 }
 
 h1,
@@ -69,282 +60,75 @@ button {
   color: var(--bg);
 }
 
-.section {
-  position: relative;
-  padding: var(--section-pad) clamp(1.25rem, 5vw, 4rem);
-  overflow: hidden;
-}
-
-.kicker {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5em;
-}
-
-.kicker::before {
-  content: '';
-  width: 0.5em;
-  height: 0.5em;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-}
-
-/* split-text targets — GSAP writes inline transforms, this just sets the
-   baseline so unhydrated/no-js content is still legible */
-.split-line,
-.split-word,
-.split-char {
-  display: inline-block;
-  will-change: transform;
-}
-
 /* ============================================================
-   Hero
+   Stage — the shell everything else gets built onto
    ============================================================ */
-.hero {
+.stage {
+  position: relative;
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: var(--section-pad);
-  padding-bottom: var(--section-pad);
-}
-
-.particle-field {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
-
-.liquid-mesh {
-  position: absolute;
-  top: 50%;
-  right: -8vw;
-  transform: translateY(-50%);
-  width: min(60vw, 640px);
-  height: min(60vw, 640px);
-  z-index: 0;
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.liquid-mesh canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 1;
-  max-width: 44rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.hero-title {
-  font-size: clamp(2.5rem, 7vw, 5.5rem);
-  color: var(--ink);
-}
-
-.hero-sub {
-  font-size: 1rem;
-  max-width: 32rem;
-}
-
-.scroll-cue {
-  position: absolute;
-  bottom: clamp(1.5rem, 4vw, 3rem);
-  left: clamp(1.25rem, 5vw, 4rem);
-  z-index: 1;
-  width: 1px;
-  height: 4rem;
-  background: var(--line);
-}
-
-.scroll-cue span {
-  display: block;
-  width: 1px;
-  height: 40%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  animation: scroll-cue 1.8s var(--ease-out) infinite;
-}
-
-@keyframes scroll-cue {
-  0% {
-    transform: translateY(0);
-    opacity: 0;
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(140%);
-    opacity: 0;
-  }
-}
-
-/* ============================================================
-   Section title (shared)
-   ============================================================ */
-.section-title {
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  color: var(--ink);
-  margin-top: 0.75rem;
-  margin-bottom: 3rem;
-}
-
-/* ============================================================
-   Work
-   ============================================================ */
-.work-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.5rem;
-}
-
-.magnetic-card {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg-raised);
-  padding: 1px;
-  transform-style: preserve-3d;
   overflow: hidden;
 }
 
-.magnetic-card-glow {
+/* ============================================================
+   Atmosphere field — gradient engine background (day/night)
+   Recipes: components/gradient/recipes/*
+   ============================================================ */
+.atmosphere-field {
   position: absolute;
   inset: 0;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  background: radial-gradient(240px circle at var(--gx, 50%) var(--gy, 50%), rgba(255, 90, 31, 0.16), transparent 70%);
+  z-index: 0;
+  overflow: hidden;
+}
+
+.atmosphere-scene {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
 }
 
-.magnetic-card-body {
-  position: relative;
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.work-card-index {
-  font-size: 0.75rem;
-  color: var(--accent);
-}
-
-.work-card-title {
-  font-size: 1.5rem;
-  color: var(--ink);
-}
-
-.work-card-blurb {
-  font-size: 0.875rem;
-}
-
-.work-card-stack {
-  font-size: 0.75rem;
-  color: var(--ink-dim);
-  margin-top: auto;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
+/* The engine renders a fixed-aspect box; force it to fill the stage. */
+.atmosphere-scene .feral-gradient-export {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 /* ============================================================
-   Proof
+   Sun toggle — the sun painted into the scene is the control
+   Geometry comes from the recipe; see components/SunToggle.jsx
    ============================================================ */
-.proof-copy {
-  max-width: 34rem;
-  margin-bottom: 2rem;
-  font-size: 0.9375rem;
+.sun-toggle {
+  position: absolute;
+  z-index: 2;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  /* Rides along as the sun crossfades to its night position. */
+  /* Matches the engine's spring as the sun crosses the sky. */
+  transition:
+    left var(--atmo-ms, 600ms) var(--atmo-ease, ease),
+    top var(--atmo-ms, 600ms) var(--atmo-ease, ease);
 }
 
-.proof-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+.sun-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 6px;
 }
 
-.proof-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.25rem 1.75rem;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  text-decoration: none;
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  transition: border-color 0.25s ease, transform 0.25s ease;
+.sun-toggle:active {
+  transform: translate(-50%, -50%) scale(0.94);
 }
 
-.proof-link:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-}
-
-.proof-link-note {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: var(--ink-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-/* ============================================================
-   Contact
-   ============================================================ */
-.contact {
-  min-height: 70svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.contact-copy {
-  max-width: 30rem;
-  margin-bottom: 1.5rem;
-}
-
-.contact-cta {
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
-  color: var(--accent);
-  text-decoration: none;
-  width: fit-content;
-  border-bottom: 2px solid transparent;
-  transition: border-color 0.25s ease;
-}
-
-.contact-cta:hover {
-  border-color: var(--accent);
-}
-
-.contact-footer {
-  margin-top: 4rem;
-  font-size: 0.75rem;
-  color: var(--ink-dim);
-}
-
-@media (max-width: 720px) {
-  .liquid-mesh {
-    width: 80vw;
-    height: 80vw;
-    right: -20vw;
-    opacity: 0.5;
+@media (prefers-reduced-motion: reduce) {
+  .sun-toggle {
+    transition-duration: 1ms;
   }
 }
