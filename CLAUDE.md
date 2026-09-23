@@ -108,8 +108,9 @@ npm run test      # Playwright e2e tests
 ## Tech Stack
 
 - **Next.js 16** (App Router), React 19, plain JS/JSX (no TypeScript).
-- A generated gradient/shader engine (`components/gradient/engine.js`) drawing
-  an animated mountain scene.
+- The atmosphere: a WebGL2 renderer (`components/gradient/gl/`) drawing the
+  animated mountain scene from recipe files, with the generated SVG engine it
+  was ported from (`components/gradient/engine.js`) as the fallback.
 - **GSAP + ScrollTrigger** and **Lenis** for scroll choreography. The
   primitives exist but nothing composes them yet.
 - Plain CSS, structured rather than monolithic: **CSS Modules** beside each
@@ -145,12 +146,17 @@ public/
   llms.txt        — plain-markdown summary for LLM agents
 components/
   Stage.jsx (+ .module.css)           — full-viewport shell for every scene
-  AtmosphereField.jsx (+ .module.css) — backdrop sky + engine + sun toggle
+  AtmosphereField.jsx (+ .module.css) — backdrop sky + renderer pick (GL/SVG) + sun toggle
   SunToggle.jsx (+ .module.css)       — hit target sitting on the painted sun
   ErrorScreen.jsx (+ .module.css)     — shared 404/error layout, palette-tinted scrim
   ThemeProvider.jsx                   — day/night state, localStorage, `data-theme`
   gradient/
-    engine.js          — generated rendering engine (see below)
+    gl/
+      MistCanvas.jsx (+ .module.css) — WebGL renderer (default): canvas, spring, textures
+      mistGeometry.js  — one-for-one port of the engine's MIST maths
+      mistShader.js    — the fullscreen fragment shader
+    engine.js          — generated SVG engine, the fallback renderer (see below)
+    skyRamp.js         — the smooth sky ramp every sky path uses
     sky.js             — a recipe's sky as a CSS gradient (backdrop, static sky)
     themes.js          — theme ids -> recipes, and the toggle cycle
     recipes/
@@ -167,7 +173,7 @@ sun in the sky. Clicking the sun transitions to night as a single motion — the
 sun slides across and recolours into a moon, ridges change height and
 silhouette, haze thins, sky shifts to its night colours.
 
-**Nothing about the look lives in the engine.** Each scene is a recipe, and
+**Nothing about the look lives in a renderer.** Each scene is a recipe, and
 every value the source gradient studio exposes is a field on it:
 
 | Studio panel            | Recipe field                              |
@@ -184,17 +190,65 @@ every value the source gradient studio exposes is a field on it:
 Plus one field that is ours, not the studio's:
 
 ```js
-transition: { springRate: 9, ms: 555, ease: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+transition: { springRate: 4, ms: 1250, ease: 'cubic-bezier(0.16, 1, 0.3, 1)' }
 ```
+
+### Renderers
+
+Two renderers draw the same recipe, and the page picks one after mount
+(`AtmosphereField`), with the CSS backdrop covering the gap:
+
+- **WebGL (default)** — `components/gradient/gl/`. `mistGeometry.js` is a
+  one-for-one port of the engine's MIST maths (ridge noise, layout with
+  patches 7–8, colour mixing in oklab, veil timings), `mistShader.js` is one
+  fullscreen fragment shader compositing sky → sun glow → sun → per ridge
+  (fill, blurred edge, crest rim, veil) → air → grain in the SVG's paint
+  order, and `MistCanvas.jsx` runs the spring. A frame is one draw call: the
+  CPU recomputes geometry only while the transition moves, and at rest only
+  the veils' drift uniforms change, redrawn once they've moved ~0.2 device px.
+  Canvas DPR is capped at 2. Reduced motion freezes the veils and makes the
+  switch a cut.
+- **SVG (fallback)** — the generated `engine.js`, loaded only when WebGL2 is
+  missing, the shader fails to build, or the context is lost. It re-renders
+  the whole SVG through React every frame, which is what made switches janky
+  on large or high-DPR screens.
+
+Both are dynamically imported, so neither is in first-load JS. They must stay
+visually identical: `npm run parity` (see `scripts/README.md`) compares them
+at rest across viewports and themes and fails above a mean of 2/255 or a p99
+of 24. Run it, and `npm run perf`, whenever either renderer or the recipe
+maths changes. Hooks both renderers honour:
+
+| Hook | Meaning |
+|---|---|
+| `?renderer=gl` / `?renderer=svg` | Force a renderer |
+| `data-renderer` on the scene wrapper | Which one actually painted |
+| `?freeze=1` | Veils at rest phase (no drift, full opacity) |
+| `?grain=0` | No grain layer (grain is random per load) |
+| `data-sun-cx` / `data-sun-cy` (GL) | Painted sun centre, CSS px |
+
+When porting anything new from the studio, change `mistGeometry.js` /
+`mistShader.js` and the engine together, then re-run parity. One trap
+already hit: pass bounded arguments to `tanh`/`exp` in the shader — some GPUs
+(and SwiftShader) return NaN once `exp` overflows, which blanked every ridge
+fill.
 
 ### How the transition works
 
 - The engine's `Wl` helper is **exponential smoothing**, not a real spring:
-  `value += (target - value) * (1 - e^(-rate * dt))`. No overshoot. Settle time
-  is roughly `5 / rate` seconds, so `rate: 9` ≈ 555ms — hence `ms: 555`.
-  **Keep `ms ≈ 5000 / springRate`** or the scene and the sky drift apart.
+  `value += (target - value) * (1 - e^(-rate * dt))`, with dt in seconds
+  clamped to [.001, .05] and a settle threshold of 8e-4 × max(1, |target|).
+  No overshoot. Settle time is roughly `5 / rate` seconds, so `rate: 4` ≈
+  1.25s — hence `ms: 1250`. **Keep `ms ≈ 5000 / springRate`** or the scene
+  and the sun hit target drift apart. The GL renderer runs the identical
+  spring over the identical vector (geometry dials, including `mist.seed`,
+  then every stop's RGB), and settles in the same time as the SVG engine.
+- Because `mist.seed` springs, the ridges sweep through every silhouette
+  between the two seeds — roughly one shape change per unit of seed × .73. Keep
+  the day and night seeds close to keep a switch calm.
 - That one loop carries *everything*: geometry, the colour stops, and the sky
-  gradient built from those stops. Adding a second animation loop for colours
+  gradient built from those stops (in GL, a 1024-texel texture rebaked from the
+  sprung stops each moving frame). Adding a second animation loop for colours
   is what made this stutter before — don't reintroduce one.
 - `ease` must be an **exponential ease-out** (`cubic-bezier(0.16, 1, 0.3, 1)`)
   because that is the shape of the smoothing curve. Anything tracking the sun
@@ -218,8 +272,8 @@ transition: { springRate: 9, ms: 555, ease: 'cubic-bezier(0.16, 1, 0.3, 1)' }
 
 ### Engine patches
 
-`components/gradient/engine.js` is generated, minified, and marked "do not
-edit", but carries several deliberate patches. **Re-exporting from the studio
+`components/gradient/engine.js` (the SVG fallback) is generated, minified,
+and marked "do not edit", but carries several deliberate patches. **Re-exporting from the studio
 will drop them**, so reapply:
 
 1. `Wl(e)` → `Wl(e, k = 2)`, with `-9*l` → `-k*l`, so rate is a parameter.
@@ -231,10 +285,16 @@ will drop them**, so reapply:
 6. `or` paints the sky itself: a `<linearGradient>` built from the sprung stops
    plus a full-bleed `<rect>` behind the sun and ridges. This is what makes the
    sky animate on the same clock, and symmetrically in both directions. The
-   stops come from `Gk(stops, divs)`, which reproduces the studio's own sky —
-   `linear-gradient(180deg in oklab, …)` at the `divs` positions — by sampling
-   8 oklab steps per segment (SVG gradients can only blend in sRGB, which bands
-   visibly across the dark night blues). `uc` passes `divs` down for this.
+   stops come from `Gk(stops, divs)`, which now just calls
+   `components/gradient/skyRamp.js` (imported at the top of the file). `uc`
+   passes `divs` down for this. **Deliberate departure from the studio:** the
+   studio draws straight oklab segments between stops, whose corners read as
+   Mach bands (worst on moonlit's `#101828 → #3A4A6B → #33415F` jump and
+   reversal). `skyRamp` passes a monotone cubic (Fritsch–Carlson) in oklab
+   through the same stops at the same `divs` positions — every recipe colour
+   still lands exactly, with no overshoot and no corners — for both themes.
+   The GL sky texture and the CSS backdrop (`sky.js`) use the same ramp, so
+   all three sky paths match.
 7. **Aspect lock.** `Xs(..., K)` takes the recipe's `aspect` (the studio canvas,
    2048×1494) via `or`'s `aspect` prop. Ridge noise is sampled per unit of
    `height × aspect` around the frame centre, so any viewport crops or extends
@@ -243,8 +303,9 @@ will drop them**, so reapply:
    past each edge so their blur never fades out inside the frame. Veil width
    uses `max(width, height × aspect)`.
 8. The sun's x is clamped 1.5 radii (0.078 × height) clear of either edge, or
-   centred on a frame too narrow for that. `.sun-toggle` mirrors the clamp in
-   CSS with `cqh` units — keep the two in step.
+   centred on a frame too narrow for that. `SunToggle.module.css` mirrors the
+   clamp in CSS with `cqh` units — keep it, the engine and `mistGeometry.js`
+   in step.
 
 Also: the top of the file needs `'use client'`, and the recipe it ships with
 is renamed to `defaultRecipe` so the `recipe` prop can shadow it.

@@ -47,12 +47,12 @@ const moonlit = {
   glintHorizon: 0.4,
 
   // ATMOSPHERE + MOUNTAINS detail
-  mist: { haze: 50, height: 58, sharp: 68, seed: 51, sun: 76, drift: 40 },
+  mist: { haze: 50, height: 58, sharp: 68, seed: 18, sun: 76, drift: 40 },
 
   // How this scene animates when it becomes the active theme.
   transition: {
-    springRate: 9,
-    ms: 555,
+    springRate: 4,
+    ms: 1250,
     // Mirrors the spring's own shape: 1 - e^(-rate*t) is an exponential
     // ease-out, so anything tracking the sun needs the same curve or it
     // visibly lags mid-flight.

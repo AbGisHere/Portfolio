@@ -9,3 +9,4 @@ out/
 .impeccable/
 test-results/
 playwright-report/
+scripts/out/

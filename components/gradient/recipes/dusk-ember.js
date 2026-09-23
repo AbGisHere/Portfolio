@@ -52,8 +52,8 @@ const duskEmber = {
 
   // How this scene animates when it becomes the active theme.
   transition: {
-    springRate: 9,
-    ms: 555,
+    springRate: 4,
+    ms: 1250,
     // Mirrors the spring's own shape: 1 - e^(-rate*t) is an exponential
     // ease-out, so anything tracking the sun needs the same curve or it
     // visibly lags mid-flight.

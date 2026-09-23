@@ -1,17 +1,32 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './ThemeProvider';
 import SunToggle from './SunToggle';
 import themes from './gradient/themes';
 import { skyGradient } from './gradient/sky';
 import styles from './AtmosphereField.module.css';
 
-// Canvas/WebGL engine — browser only, and heavy enough to keep out of the
-// initial bundle.
-const GradientEngine = dynamic(() => import('./gradient/engine'), {
-  ssr: false,
-});
+// Two renderers for the same recipe, both browser-only and kept out of the
+// initial bundle: the WebGL one (default) and the generated SVG engine it was
+// ported from, loaded only as the fallback.
+const MistCanvas = dynamic(() => import('./gradient/gl/MistCanvas'), { ssr: false });
+const GradientEngine = dynamic(() => import('./gradient/engine'), { ssr: false });
+
+// `?renderer=gl|svg` forces one (parity checks, debugging); otherwise WebGL2
+// when the browser has it.
+function pickRenderer() {
+  const forced = new URLSearchParams(window.location.search).get('renderer');
+  if (forced === 'gl' || forced === 'svg') return forced;
+  try {
+    const probe = document.createElement('canvas').getContext('webgl2');
+    probe?.getExtension('WEBGL_lose_context')?.loseContext();
+    return probe ? 'gl' : 'svg';
+  } catch {
+    return 'svg';
+  }
+}
 
 // Painted behind the engine: what shows before its chunk arrives, and in any
 // frame it drops, instead of the page's near-black. Both skies are handed to
@@ -37,14 +52,19 @@ export default function AtmosphereField({ className = '' }) {
   const { theme } = useTheme();
   const { recipe } = themes[theme];
   const { ms, ease } = recipe.transition;
+  // Decided after mount (it needs the browser); the CSS backdrop covers the gap.
+  const [renderer, setRenderer] = useState(null);
+  useEffect(() => setRenderer(pickRenderer()), []);
+  const fallBack = useCallback(() => setRenderer('svg'), []);
 
   return (
     <div
       className={`${styles.field} ${className}`}
       style={{ ...BACKDROP, '--atmo-ms': `${ms}ms`, '--atmo-ease': ease }}
     >
-      <div className={styles.scene} aria-hidden="true">
-        <GradientEngine recipe={recipe} speed={recipe.speed} />
+      <div className={styles.scene} aria-hidden="true" data-renderer={renderer ?? undefined}>
+        {renderer === 'gl' && <MistCanvas recipe={recipe} onFail={fallBack} />}
+        {renderer === 'svg' && <GradientEngine recipe={recipe} speed={recipe.speed} />}
       </div>
 
       <SunToggle recipe={recipe} />

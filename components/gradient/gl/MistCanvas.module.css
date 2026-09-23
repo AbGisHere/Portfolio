@@ -1,0 +1,8 @@
+/* Fills the scene layer; the canvas's pixel size is set from JS (× DPR). */
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
