@@ -1,11 +1,18 @@
-'use client';
-
 import AtmosphereField from '@/components/AtmosphereField';
+import Stage from '@/components/Stage';
+import { SITE } from './site';
 
+// Server component: the heading and intro ship as real HTML, so the page has
+// content before any script runs. They're visually hidden until the hero
+// layer gives them a place in the scene.
 export default function Home() {
   return (
-    <main className="stage">
+    <Stage>
+      <div className="visually-hidden">
+        <h1>{SITE.name}</h1>
+        <p>{SITE.description}</p>
+      </div>
       <AtmosphereField />
-    </main>
+    </Stage>
   );
 }

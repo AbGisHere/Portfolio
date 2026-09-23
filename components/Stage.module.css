@@ -1,0 +1,7 @@
+/* The full-viewport shell every scene is built onto. */
+.stage {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+}

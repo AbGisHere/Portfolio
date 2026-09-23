@@ -33,7 +33,7 @@ const moonlit = {
   // FINISH
   blur: 0,
   fieldBlur: 0,
-  grain: 14,
+  grain: 9,
 
   // COLOURS — night sky down to deep shadow
   stops: ['#101828', '#3A4A6B', '#33415F', '#26324C', '#1B2439', '#111826'],

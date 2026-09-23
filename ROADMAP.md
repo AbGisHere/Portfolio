@@ -1,7 +1,66 @@
 # Roadmap
 
-Plans agreed in discussion but deliberately **not** scheduled. Nothing here is
-in scope for the `0.1.x` atmosphere line.
+Plans agreed in discussion. The desk scene is deliberately not scheduled and
+is out of scope for the `0.1.x` atmosphere line. The ship-hygiene list is a
+hard gate for `1.0.0`, and any item on it can land earlier.
+
+## Before 1.0.0 — ship hygiene
+
+**Status:** required before `1.0.0`. Recorded 2026-09-23. These are the
+tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
+from regressing afterwards is the per-push checklist in `CLAUDE.md`
+("Pre-push checks").
+
+State at `0.1.3`: `lang`, title template, description, canonical, OG and
+Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
+llms.txt are in place. Browser source maps are off, and there is no
+boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
+visually hidden. The open items below are the ones that need real content,
+or a decision not yet made.
+
+None of these is "done once and forgotten". The 404, OG image, icons,
+metadata, JSON-LD, sitemap and llms.txt all reflect the site. Re-check them at
+every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
+
+- [ ] **Real server-rendered content.** View source currently shows an almost
+      empty page: the scene is client-only (`ssr: false`) and there is no
+      text. Name, role, and the real content must render on the server
+      (static HTML), with the atmosphere layered on top. Lands naturally with
+      the first content layer. Don't leave it to the end.
+- [ ] **Exactly one `<h1>` per page, and visible.** The home `<h1>` exists
+      (server HTML) but is visually hidden until the hero layer places it. The hero name is
+      the obvious one. Section titles are `<h2>`s.
+- [x] **Custom 404 and error pages.** `app/not-found.jsx`, `app/error.jsx` and
+      `app/global-error.jsx` all render `components/ErrorScreen`, in the site's
+      own world (the atmosphere, a way home), not Next's defaults. They're
+      refreshed with every version line, like all derived surfaces. See
+      "Derived surfaces follow the site" in `CLAUDE.md`.
+- [ ] **Unique title and description per route.** One `metadata` per route
+      (or `generateMetadata`), using a `title.template` in the root layout, so
+      no two pages share a title once routes like `/projects/<slug>` exist.
+- [x] **Canonical URL.** `metadataBase` + `alternates.canonical` on every
+      route. Needs the production domain, which is not decided yet.
+- [x] **Open Graph / Twitter cards.** `og:title`, `og:description`,
+      `og:image` (1200×630, generated via `app/opengraph-image.jsx` from the
+      atmosphere palette), `twitter:card=summary_large_image`. Per-project images
+      once projects have routes.
+- [x] **Structured data.** JSON-LD `Person` (name, url, jobTitle, `sameAs`
+      links) on the home page, plus `CreativeWork`/`SoftwareSourceCode` per project.
+      Only real facts. See PRODUCT.md's evidence rules.
+- [x] **Favicon and app icons.** `app/icon.svg` (+ `apple-icon.png`),
+      so there is no browser-default or framework-default icon.
+- [x] **robots.txt** via `app/robots.js`. Allows all crawlers, including AI
+      crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended…). They are
+      not blocked. Points at the sitemap.
+- [x] **sitemap.xml** via `app/sitemap.js`, generated from the real routes
+      (home, projects, resume, dev log).
+- [x] **llms.txt** at the root: a plain-markdown summary of who Abhinav is,
+      the projects with links, resume and contact, for LLM agents.
+- [ ] **Bundle diet.** Set a budget and measure with `next build` output /
+      `@next/bundle-analyzer`. Known weight: the generated engine (~360 KB
+      minified, lazy-loaded) carries every studio scene type though only MIST
+      is used. Trim it or split it. (`three` is already gone.)
+      GSAP/Lenis load only when the scroll layer uses them.
 
 ## The desk scene — projects inside a device
 

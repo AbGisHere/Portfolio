@@ -1,6 +1,7 @@
 /* ============================================================
-   Design tokens
-   See .impeccable/surfaces/home.md for the direction contract
+   Global layer: tokens, reset, base type. Nothing component-
+   specific lives here; components own a *.module.css beside
+   them. See .impeccable/surfaces/home.md for the direction.
    ============================================================ */
 
 :root {
@@ -10,8 +11,8 @@
   --ink-dim: #8b8b8f;
   --line: rgba(244, 241, 234, 0.12);
 
-  --font-display: 'Unbounded', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* --font-display / --font-mono come from next/font (app/fonts.js) on <html>;
+     redefining them here would override its size-adjusted fallbacks. */
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -26,14 +27,14 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   overscroll-behavior: none;
 }
 
 h1,
 h2,
 h3 {
-  font-family: var(--font-display);
+  font-family: var(--font-display), sans-serif;
   font-weight: 800;
   line-height: 0.98;
   margin: 0;
@@ -51,92 +52,11 @@ a {
 }
 
 button {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
   cursor: pointer;
 }
 
 ::selection {
   background: var(--accent);
   color: var(--bg);
-}
-
-/* ============================================================
-   Stage — the shell everything else gets built onto
-   ============================================================ */
-.stage {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: hidden;
-}
-
-/* ============================================================
-   Atmosphere field — gradient engine background (day/night)
-   Recipes: components/gradient/recipes/*
-   ============================================================ */
-.atmosphere-field {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  /* cqh = the scene's height, which the engine sizes the sun by. */
-  container-type: size;
-}
-
-.atmosphere-scene {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-/* The engine renders a fixed-aspect box; force it to fill the stage. */
-.atmosphere-scene .feral-gradient-export {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  aspect-ratio: auto;
-}
-
-/* ============================================================
-   Sun toggle — the sun painted into the scene is the control
-   Geometry comes from the recipe; see components/SunToggle.jsx
-   ============================================================ */
-.sun-toggle {
-  position: absolute;
-  z-index: 2;
-  /* Same edge clamp as the engine: 1.5 sun radii (0.078 of height) clear of
-     either side, or dead centre on a frame too narrow for both. */
-  left: clamp(7.8cqh, var(--sun-x, 50%), max(100% - 7.8cqh, 50%));
-  /* The painted sun is 10.4% of the height across; on short frames that
-     drops under a usable touch target, so the hit area floors at 44px. */
-  height: max(10.4cqh, 44px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  pointer-events: auto;
-  -webkit-tap-highlight-color: transparent;
-  cursor: pointer;
-  /* Matches the engine's spring as the sun crosses the sky. */
-  transition:
-    left var(--atmo-ms, 600ms) var(--atmo-ease, ease),
-    top var(--atmo-ms, 600ms) var(--atmo-ease, ease);
-}
-
-.sun-toggle:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.7);
-  outline-offset: 6px;
-}
-
-.sun-toggle:active {
-  transform: translate(-50%, -50%) scale(0.94);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sun-toggle {
-    transition-duration: 1ms;
-  }
 }

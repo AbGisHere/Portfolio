@@ -1,0 +1,104 @@
+/* 404 and error pages: the scene with a way out, set on the near ridges. */
+
+/* Stand-in for the live scene when the engine can't be trusted (global-error). */
+.staticSky {
+  position: absolute;
+  inset: 0;
+  background: var(--sky-day);
+}
+
+:global(:root[data-theme='night']) .staticSky {
+  background: var(--sky-night);
+}
+
+.copy {
+  position: absolute;
+  z-index: 3;
+  left: max(24px, env(safe-area-inset-left), 6vw);
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom), 8svh);
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  color: var(--ink);
+  --deep: var(--deep-day);
+}
+
+:global(:root[data-theme='night']) .copy {
+  --deep: var(--deep-night);
+}
+
+/* Scrim sized to the copy, not the viewport, so contrast holds on the pale day
+   haze and on short frames alike. It's tinted from the scene's own deepest
+   stop rather than black, so on the warm day palette it reads as shadow in
+   the ridges instead of a muddy band, and fades in over a long run so it has
+   no visible top edge. */
+.copy::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -9rem;
+  bottom: -12rem;
+  left: calc(-1 * max(24px, env(safe-area-inset-left), 6vw));
+  right: calc(-1 * max(24px, env(safe-area-inset-right)));
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--deep) 0%, transparent),
+    color-mix(in oklab, var(--deep) 45%, transparent) 4.5rem,
+    color-mix(in oklab, var(--deep) 80%, transparent) 9rem,
+    color-mix(in oklab, var(--deep) 88%, transparent)
+  );
+}
+
+.title {
+  /* Height-bound too, so a letterbox-short frame doesn't push it into the sun. */
+  font-size: clamp(1.75rem, min(1.2rem + 5vw, 13svh), 5.5rem);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.message {
+  color: rgba(244, 241, 234, 0.84);
+  font-size: clamp(0.9rem, 0.85rem + 0.25vw, 1.05rem);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin-top: 8px;
+}
+
+/* Links and buttons share one look: underlined text, no chrome. */
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+  text-decoration-color: rgba(244, 241, 234, 0.5);
+  transition:
+    text-decoration-color 200ms var(--ease-out),
+    color 200ms var(--ease-out);
+}
+
+.action:hover {
+  color: #fff;
+  text-decoration-color: var(--accent);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 2px;
+}

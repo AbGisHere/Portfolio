@@ -1,0 +1,32 @@
+/* Gradient engine background (day/night). Recipes: components/gradient/recipes/* */
+.field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  /* cqh = the scene's height, which the engine sizes the sun by. */
+  container-type: size;
+  /* Backdrop: each recipe's sky as CSS, behind the engine. It shows before the
+     engine's chunk loads and in any frame it drops, instead of near-black. */
+  background: var(--sky-day);
+}
+
+:global(:root[data-theme='night']) .field {
+  background: var(--sky-night);
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The engine renders a fixed-aspect box under its own global class; force it
+   to fill the stage. */
+.scene :global(.feral-gradient-export) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}

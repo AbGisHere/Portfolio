@@ -1,6 +1,7 @@
 'use client';
 
 import { useTheme } from './ThemeProvider';
+import styles from './SunToggle.module.css';
 
 /**
  * Hit target over the sun the MIST recipe paints into the scene.
@@ -9,9 +10,9 @@ import { useTheme } from './ThemeProvider';
  *   x = mist.sun%  of width, kept 1.5r clear of either edge
  *   y = max(0.10, clamp(glintHorizon, 0.14, 0.62) - 0.11)  of height
  *   r = 0.052  of height
- * so the same numbers position this button (the edge clamp lives in CSS, in
- * container units). Clicking swaps day/night, which also moves the sun —
- * Dusk ember puts it at 28%, Moonlit at 76%.
+ * so the same numbers position this button (the edge clamp lives in
+ * SunToggle.module.css, in container units). Clicking swaps day/night, which
+ * also moves the sun — Dusk ember puts it at 28%, Moonlit at 76%.
  */
 export default function SunToggle({ recipe }) {
   const { theme, toggle } = useTheme();
@@ -27,7 +28,7 @@ export default function SunToggle({ recipe }) {
   return (
     <button
       type="button"
-      className="sun-toggle"
+      className={styles.toggle}
       style={style}
       onClick={toggle}
       aria-pressed={night}

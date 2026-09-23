@@ -13,8 +13,8 @@ See `PRODUCT.md` for the product record and `.impeccable/surfaces/home.md`
 for the visual direction contract. An earlier fake-desktop-OS build (boot →
 login → windows/dock/terminal) was retired and its branding dropped; do not
 resurrect that metaphor or its name unasked. `ROADMAP.md` holds agreed future
-plans (not in scope for `0.1.x`), including a device scene where projects
-open inside a laptop/phone. The device screen is a painted background with
+plans: the ship-hygiene gate for `1.0.0`, and a device scene (not in scope
+for `0.1.x`) where projects open inside a laptop/phone. The device screen is a painted background with
 project cards, not an OS.
 
 ## Versioning
@@ -33,21 +33,68 @@ attribution trailers to commits or PRs.
 
 ### Commit messages
 
-Subject line is a Conventional Commits type, then the version, then a summary:
+Conventional Commits, with the version in the scope slot:
 
 ```
-<type>: vX.Y.Z <summary>
+<type>(vX.Y.Z): <summary>
 ```
 
 ```
-feat: v0.2.0 Stage the hero name reveal on first scroll
-fix: v0.1.2 Keep the sun hit target in step on resize
-docs: v0.1.2 Drop AbG OS branding and align the direction contract
+feat(v0.2.0): Stage the hero name reveal on first scroll
+fix(v0.1.2): Keep the sun hit target in step on resize
+docs(v0.1.2): Drop AbG OS branding and align the direction contract
 ```
+
+(Commits up to `v0.1.2` used the older `<type>: vX.Y.Z <summary>` form.)
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 `chore`. The version is the one the user confirmed for this commit and must
 match `package.json` and the tag.
+
+### Derived surfaces follow the site
+
+Several files reflect the site's look or content but aren't the site itself.
+They drift quietly as UI decisions pile up. **Whenever the version line moves
+(`0.1.x` → `0.2.0`, and so on), re-check each one against the current site and
+update it in the same release.** Do the same sooner if a change clearly
+affects one of them, such as a new palette, font, route or real content.
+
+| Surface | Must match |
+|---|---|
+| `components/ErrorScreen` (404, `error.jsx`, `global-error.jsx`) | The current scene, type and palette. The live pages use the real atmosphere; `global-error` uses the recipes' skies as CSS. A new layer style belongs here too. |
+| `app/opengraph-image.jpg` / `twitter-image.jpg` | A fresh render of the current scene |
+| `app/icon.svg` / `apple-icon.png` | The current palette and mark |
+| `app/site.js` / metadata | Real role and description. No claims beyond PRODUCT.md's evidence. |
+| JSON-LD (`app/layout.jsx`) | The same facts, plus links that actually exist |
+| `app/sitemap.js` | Every live route, nothing dead |
+| `public/llms.txt` | Current content, projects and links |
+
+### Pre-push checks
+
+Before every push, verify against a production build (`npm run build &&
+npm run start`), not the dev server. Report what fails. Don't push around it
+silently. Items marked *(once built)* start applying when the matching
+`ROADMAP.md` "Before 1.0.0" item lands. Until then, note them as known gaps.
+
+- [ ] `<html lang="en">` present.
+- [ ] Every route has its own `<title>` and meta description. No duplicates, and
+      no framework or boilerplate defaults ("Create Next App", "Vite + React").
+- [ ] At most one `<h1>` per page *(exactly one, once built)*.
+- [ ] Every `<img>` / `next/image` has meaningful `alt`. Decorative ones use
+      `alt=""`. Decorative SVG/canvas is `aria-hidden`.
+- [ ] Zero console errors or warnings on load and on the day/night toggle
+      (Chromium and WebKit).
+- [ ] No browser source maps shipped (`productionBrowserSourceMaps` stays
+      off). No `.map` files served from `/_next/static`.
+- [ ] Bundle: check `next build`'s route sizes against the previous push. Flag
+      any jump, and anything new shipped in the first-load JS.
+- [ ] *(once built)* View source shows real text content, not an empty shell.
+- [ ] *(once built)* Favicon, custom 404, canonical, OG image and JSON-LD all
+      resolve. `robots.txt` doesn't block AI crawlers. `sitemap.xml` lists
+      every route and nothing dead. `llms.txt` matches the current content.
+- [ ] The atmosphere still adapts: phone portrait/landscape, iPad, laptop,
+      ultrawide, and one odd aspect. No squashed ridges, no horizontal
+      overflow, and the sun hit target sits on the painted sun.
 
 ## Commands
 
@@ -65,25 +112,46 @@ npm run test      # Playwright e2e tests
   an animated mountain scene.
 - **GSAP + ScrollTrigger** and **Lenis** for scroll choreography. The
   primitives exist but nothing composes them yet.
-- Plain CSS in `app/globals.css` (no Tailwind, no CSS modules).
-- Fonts via `next/font/google`: **Unbounded** (display) + **JetBrains Mono**
-  (body/labels), exposed as `--font-display` / `--font-mono`.
-- `three` is still in `package.json` but no longer imported — its only consumer
-  was deleted. Remove it when convenient.
+- Plain CSS, structured rather than monolithic: **CSS Modules** beside each
+  component (`Component.module.css`), with `app/globals.css` limited to
+  tokens, reset and base type, and `styles/utilities.css` for global helpers
+  like `.visually-hidden`. No Tailwind. New component styles go in the
+  component's own module, never in `globals.css`. Global classes the
+  generated engine emits (`.feral-gradient-export`) are reached with
+  `:global()` inside the owning module.
+- Fonts via `next/font/google` in `app/fonts.js`: **Unbounded** (display) +
+  **JetBrains Mono** (body/labels), exposed as `--font-display` /
+  `--font-mono` on `<html>`. Don't redefine those variables in CSS, because
+  that bypasses next/font's size-adjusted fallbacks.
 
 ## Project Structure
 
 ```
 app/
-  layout.jsx    — fonts, metadata, ThemeProvider
-  page.jsx      — the stage; currently just the atmosphere
-  globals.css   — tokens, reset, stage, atmosphere, sun toggle
+  layout.jsx      — metadata (title template, canonical, OG), JSON-LD, theme script, ThemeProvider
+  page.jsx        — home: server-rendered h1/intro (visually hidden) + atmosphere
+  not-found.jsx   — 404        ┐
+  error.jsx       — route error ├ all render components/ErrorScreen
+  global-error.jsx — root-layout failure (own <html>, static sky, no engine) ┘
+  fonts.js        — next/font instances, shared by layout and global-error
+  site.js         — shared site facts (url, name, role, links)
+  robots.js, sitemap.js     — generated /robots.txt and /sitemap.xml
+  icon.svg, apple-icon.png  — favicon / iOS touch icon
+  opengraph-image.jpg, twitter-image.jpg (+ .alt.txt) — share cards
+  globals.css     — tokens, reset, base type only
+styles/
+  utilities.css   — global helpers (.visually-hidden)
+public/
+  llms.txt        — plain-markdown summary for LLM agents
 components/
-  AtmosphereField.jsx  — composes sky layers + engine + sun toggle
-  SunToggle.jsx        — hit target sitting on the painted sun
-  ThemeProvider.jsx    — day/night state, localStorage, `data-theme`
+  Stage.jsx (+ .module.css)           — full-viewport shell for every scene
+  AtmosphereField.jsx (+ .module.css) — backdrop sky + engine + sun toggle
+  SunToggle.jsx (+ .module.css)       — hit target sitting on the painted sun
+  ErrorScreen.jsx (+ .module.css)     — shared 404/error layout, palette-tinted scrim
+  ThemeProvider.jsx                   — day/night state, localStorage, `data-theme`
   gradient/
     engine.js          — generated rendering engine (see below)
+    sky.js             — a recipe's sky as a CSS gradient (backdrop, static sky)
     themes.js          — theme ids -> recipes, and the toggle cycle
     recipes/
       dusk-ember.js    — day scene
@@ -140,6 +208,13 @@ transition: { springRate: 9, ms: 555, ease: 'cubic-bezier(0.16, 1, 0.3, 1)' }
   stops is 93% / 92%. Don't reintroduce a layered crossfade.
 - `ms`/`ease` reach CSS as `--atmo-ms` / `--atmo-ease`, set by
   `AtmosphereField`, and position the sun hit target.
+- **Backdrop.** `.atmosphere-field` paints each recipe's sky as a CSS
+  gradient (`--sky-day` / `--sky-night`, generated from the recipes by
+  `AtmosphereField`) behind the engine. It shows before the engine's chunk
+  loads and in any frame the engine drops, so neither ever flashes the page's
+  near-black. An inline script in `app/layout.jsx` sets `data-theme` from
+  localStorage before first paint, so a night visitor's backdrop is night
+  from the start.
 
 ### Engine patches
 
@@ -186,5 +261,15 @@ is renamed to `defaultRecipe` so the `recipe` prop can shadow it.
 |---|
 | Content layers: real projects, resume, dev log, contact (projects: see the desk scene in `ROADMAP.md`) |
 | Compose the scroll primitives (SplitText/Reveal/MagneticCard/SmoothScroll) |
-| Drop the unused `three` dependency |
+| Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
