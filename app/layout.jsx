@@ -21,6 +21,16 @@ export const metadata = {
   description: 'Software engineer building interactive, technically ambitious web experiences.',
 };
 
+// viewport-fit=cover lets the scene run under notches and rounded corners in
+// landscape instead of sitting inside letterbox bars. theme-color starts on
+// the day sky's top stop; ThemeProvider keeps it in step with the scene.
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#FBE7CD',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${unbounded.variable} ${jetbrainsMono.variable}`}>

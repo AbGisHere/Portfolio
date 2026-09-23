@@ -65,7 +65,8 @@ button {
    ============================================================ */
 .stage {
   position: relative;
-  min-height: 100svh;
+  min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -78,6 +79,8 @@ button {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  /* cqh = the scene's height, which the engine sizes the sun by. */
+  container-type: size;
 }
 
 .atmosphere-scene {
@@ -102,6 +105,12 @@ button {
 .sun-toggle {
   position: absolute;
   z-index: 2;
+  /* Same edge clamp as the engine: 1.5 sun radii (0.078 of height) clear of
+     either side, or dead centre on a frame too narrow for both. */
+  left: clamp(7.8cqh, var(--sun-x, 50%), max(100% - 7.8cqh, 50%));
+  /* The painted sun is 10.4% of the height across; on short frames that
+     drops under a usable touch target, so the hit area floors at 44px. */
+  height: max(10.4cqh, 44px);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   padding: 0;
@@ -111,7 +120,6 @@ button {
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
-  /* Rides along as the sun crossfades to its night position. */
   /* Matches the engine's spring as the sun crosses the sky. */
   transition:
     left var(--atmo-ms, 600ms) var(--atmo-ease, ease),

@@ -9,10 +9,13 @@ Abhinav Gupta's ("AbG") personal portfolio — a single continuous, scroll-drive
 experience where every scroll delta stages a reveal, rather than a page of
 static stacked sections. Next.js (App Router).
 
-This replaced an earlier "AbG OS" build (a fake desktop-OS metaphor: boot →
-login → windows/dock/terminal). That direction was explicitly retired — see
-`PRODUCT.md` for the product record and `.impeccable/surfaces/home.md` for the
-visual direction contract. Do not resurrect the OS metaphor unasked.
+See `PRODUCT.md` for the product record and `.impeccable/surfaces/home.md`
+for the visual direction contract. An earlier fake-desktop-OS build (boot →
+login → windows/dock/terminal) was retired and its branding dropped; do not
+resurrect that metaphor or its name unasked. `ROADMAP.md` holds agreed future
+plans (not in scope for `0.1.x`), including a device scene where projects
+open inside a laptop/phone. The device screen is a painted background with
+project cards, not an OS.
 
 ## Versioning
 
@@ -27,6 +30,24 @@ The rebuild goes layer by layer, and the version line tracks which layer:
 unilaterally — then update `package.json` and any other file carrying a
 version so nothing drifts from the git tag. Do not add Claude co-author or
 attribution trailers to commits or PRs.
+
+### Commit messages
+
+Subject line is a Conventional Commits type, then the version, then a summary:
+
+```
+<type>: vX.Y.Z <summary>
+```
+
+```
+feat: v0.2.0 Stage the hero name reveal on first scroll
+fix: v0.1.2 Keep the sun hit target in step on resize
+docs: v0.1.2 Drop AbG OS branding and align the direction contract
+```
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
+`chore`. The version is the one the user confirmed for this commit and must
+match `package.json` and the tag.
 
 ## Commands
 
@@ -76,7 +97,7 @@ components/
 The page is one full-bleed scene: mountain ridges under drifting haze, with a
 sun in the sky. Clicking the sun transitions to night as a single motion — the
 sun slides across and recolours into a moon, ridges change height and
-silhouette, haze thins, sky crossfades.
+silhouette, haze thins, sky shifts to its night colours.
 
 **Nothing about the look lives in the engine.** Each scene is a recipe, and
 every value the source gradient studio exposes is a field on it:
@@ -90,7 +111,7 @@ every value the source gradient studio exposes is a field on it:
 | ATMOSPHERE · Sun        | `mist.sun` (% across the frame)           |
 | Shuffle                 | `mist.seed` (ridge silhouette)            |
 | COLOURS                 | `stops` + `divs`                          |
-| FINISH · Soften/Noise   | `blur` / `grain`                          |
+| FINISH · Soften/Noise   | `fieldBlur` / `grain` (`blur` is unused)   |
 
 Plus one field that is ours, not the studio's:
 
@@ -134,7 +155,21 @@ will drop them**, so reapply:
    sky, because CSS can't interpolate a gradient.
 6. `or` paints the sky itself: a `<linearGradient>` built from the sprung stops
    plus a full-bleed `<rect>` behind the sun and ridges. This is what makes the
-   sky animate on the same clock, and symmetrically in both directions.
+   sky animate on the same clock, and symmetrically in both directions. The
+   stops come from `Gk(stops, divs)`, which reproduces the studio's own sky —
+   `linear-gradient(180deg in oklab, …)` at the `divs` positions — by sampling
+   8 oklab steps per segment (SVG gradients can only blend in sRGB, which bands
+   visibly across the dark night blues). `uc` passes `divs` down for this.
+7. **Aspect lock.** `Xs(..., K)` takes the recipe's `aspect` (the studio canvas,
+   2048×1494) via `or`'s `aspect` prop. Ridge noise is sampled per unit of
+   `height × aspect` around the frame centre, so any viewport crops or extends
+   the range instead of squashing it — portrait phones show fewer, correctly
+   proportioned peaks; ultrawides show more. Ridge paths run 3% of the height
+   past each edge so their blur never fades out inside the frame. Veil width
+   uses `max(width, height × aspect)`.
+8. The sun's x is clamped 1.5 radii (0.078 × height) clear of either edge, or
+   centred on a frame too narrow for that. `.sun-toggle` mirrors the clamp in
+   CSS with `cqh` units — keep the two in step.
 
 Also: the top of the file needs `'use client'`, and the recipe it ships with
 is renamed to `defaultRecipe` so the `recipe` prop can shadow it.
@@ -149,7 +184,7 @@ is renamed to `defaultRecipe` so the `recipe` prop can shadow it.
 
 | Task |
 |---|
-| Content layers: real projects, resume, dev log, contact |
+| Content layers: real projects, resume, dev log, contact (projects: see the desk scene in `ROADMAP.md`) |
 | Compose the scroll primitives (SplitText/Reveal/MagneticCard/SmoothScroll) |
 | Drop the unused `three` dependency |
 | Decide whether an admin surface is still wanted |

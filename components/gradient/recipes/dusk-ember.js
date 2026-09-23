@@ -13,11 +13,11 @@
  *              Drift   -> mist.drift    (veil speed)
  *              Shuffle -> mist.seed     (ridge silhouette)
  *   COLOURS            -> stops + divs  (sky ramp, top to bottom)
- *   FINISH     Soften  -> blur
+ *   FINISH     Soften  -> fieldBlur    (px; `blur` is unused by MIST)
  *              Noise   -> grain
  *
  * `transition` is ours, not the studio's: it drives both the engine's spring
- * and the sky crossfade, so they can't drift apart.
+ * and the sun hit target's CSS transition, so they can't drift apart.
  */
 const duskEmber = {
   version: 1,

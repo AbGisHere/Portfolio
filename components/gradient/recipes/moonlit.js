@@ -13,11 +13,11 @@
  *              Drift   -> mist.drift    (veil speed)
  *              Shuffle -> mist.seed     (ridge silhouette)
  *   COLOURS            -> stops + divs  (sky ramp, top to bottom)
- *   FINISH     Soften  -> blur
+ *   FINISH     Soften  -> fieldBlur    (px; `blur` is unused by MIST)
  *              Noise   -> grain
  *
  * `transition` is ours, not the studio's: it drives both the engine's spring
- * and the sky crossfade, so they can't drift apart.
+ * and the sun hit target's CSS transition, so they can't drift apart.
  */
 const moonlit = {
   version: 1,
@@ -47,7 +47,7 @@ const moonlit = {
   glintHorizon: 0.4,
 
   // ATMOSPHERE + MOUNTAINS detail
-  mist: { haze: 50, height: 63, sharp: 64, seed: 51, sun: 76, drift: 40 },
+  mist: { haze: 50, height: 58, sharp: 68, seed: 51, sun: 76, drift: 40 },
 
   // How this scene animates when it becomes the active theme.
   transition: {
