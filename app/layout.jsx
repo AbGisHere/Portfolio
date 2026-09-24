@@ -1,3 +1,4 @@
+import AtmosphereField from '@/components/AtmosphereField';
 import ThemeProvider from '@/components/ThemeProvider';
 import { fontVariables } from './fonts';
 import { SITE } from './site';
@@ -67,7 +68,13 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
         />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          {/* The scene lives here, not in the pages, so it keeps running
+              across navigation (404 → home carries on from the same sky and
+              seed). It sits behind page content that has a z-index. */}
+          <AtmosphereField />
+        </ThemeProvider>
       </body>
     </html>
   );

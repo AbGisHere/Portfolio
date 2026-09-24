@@ -49,6 +49,10 @@ over about a minute. The moon has a face (seas, craters, Tycho's rays), and
 the sun a warm edge and a soft two-layer glow; low in the sky it deepens
 toward orange and flattens a little, rising or setting.
 
+The scene is mounted once for the whole site, so it keeps running as you move
+between pages (the 404's "Back to the mountains" carries on from the same
+sky).
+
 Without WebGL, a layered fallback draws the same scene from stacked CSS
 layers, with each ridge's outline computed as a mask using the shader's own
 maths. It keeps the ridges' shape through a switch (only their light

@@ -69,7 +69,7 @@ affects one of them, such as a new palette, font, route or real content.
 
 | Surface | Must match |
 |---|---|
-| `components/ErrorScreen` (404, `error.jsx`, `global-error.jsx`) | The current scene, type and palette. The live pages use the real atmosphere; `global-error` uses the recipes' skies as CSS. A new layer style belongs here too. |
+| `components/ErrorScreen` (404, `error.jsx`, `global-error.jsx`) | The current scene, type and palette. The live pages sit on the real atmosphere (from the root layout); `global-error` uses the recipes' skies as CSS. A new layer style belongs here too. |
 | `app/opengraph-image.jpg` / `twitter-image.jpg` | A fresh render of the current scene |
 | `app/icon.svg` / `apple-icon.png` | The current palette and mark |
 | `app/site.js` / metadata | Real role and description. No claims beyond PRODUCT.md's evidence. |
@@ -135,8 +135,9 @@ npm run test      # Playwright e2e tests
 
 ```
 app/
-  layout.jsx      — metadata (title template, canonical, OG), JSON-LD, theme script, ThemeProvider
-  page.jsx        — home: server-rendered h1/intro (visually hidden) + atmosphere
+  layout.jsx      — metadata (title template, canonical, OG), JSON-LD, theme script, ThemeProvider,
+                    and the atmosphere (mounted once, so it persists across routes)
+  page.jsx        — home: server-rendered h1/intro (visually hidden)
   not-found.jsx   — 404        ┐
   error.jsx       — route error ├ all render components/ErrorScreen
   global-error.jsx — root-layout failure (own <html>, static sky, no renderer) ┘
@@ -152,7 +153,8 @@ public/
   llms.txt        — plain-markdown summary for LLM agents
 components/
   Stage.jsx (+ .module.css)           — full-viewport shell for every scene
-  AtmosphereField.jsx (+ .module.css) — backdrop sky + renderer pick (GL/layers) + sun toggle
+  AtmosphereField.jsx (+ .module.css) — the scene, fixed behind every page: backdrop sky,
+                                        renderer pick (GL/layers), sun toggle
   SunToggle.jsx (+ .module.css)       — hit target on the painted sun; sits out each switch
   ErrorScreen.jsx (+ .module.css)     — shared 404/error layout, palette-tinted scrim
   ThemeProvider.jsx                   — day/night state, localStorage, `data-theme`
@@ -414,6 +416,13 @@ Two clocks, each with one job:
   departure from the studio**, which draws straight oklab segments whose
   corners read as Mach bands (worst on moonlit's `#101828 → #3A4A6B` jump).
   Every recipe colour still lands exactly, with no overshoot.
+- **One scene for the whole site.** `AtmosphereField` is mounted in the root
+  layout, not in the pages, so navigating (the 404's "Back to the
+  mountains", later sections) keeps the same running scene: sky, theme,
+  seed and veils carry straight on. It's `position: fixed` behind the
+  pages and comes after them in the DOM, click-through except for the sun
+  button, so **page content that sits over it needs a z-index** (the error
+  copy uses 3). `global-error` has no layout and paints the static sky.
 - **Backdrop.** `.atmosphere-field` paints each recipe's sky as a CSS
   gradient (`--sky-day` / `--sky-night`, generated from the recipes by
   `AtmosphereField`) behind the renderer. It shows before the renderer's

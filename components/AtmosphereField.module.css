@@ -1,8 +1,12 @@
 /* The atmosphere's frame (day/night). Recipes: components/gradient/recipes/* */
+/* Fixed behind the pages (it's in the root layout). It comes after them in
+   the DOM, so it's click-through except for the sun: page content above it
+   needs a z-index. */
 .field {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
+  pointer-events: none;
   overflow: hidden;
   /* cqh = the scene's height, which the renderers size the sun by. */
   container-type: size;

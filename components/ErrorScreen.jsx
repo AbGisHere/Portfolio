@@ -1,4 +1,3 @@
-import AtmosphereField from './AtmosphereField';
 import Stage from './Stage';
 import themes from './gradient/themes';
 import { skyGradient } from './gradient/sky';
@@ -18,8 +17,10 @@ const STATIC_SKY = {
 
 /**
  * Shared by the 404, the route error boundary and the last-resort global
- * error, so the three can't drift apart. `live` runs the real atmosphere;
- * global-error passes `live={false}` and gets the recipes' skies as plain CSS,
+ * error, so the three can't drift apart. `live` pages sit on the real
+ * atmosphere, which the root layout keeps running across routes (so "Back
+ * to the mountains" carries on from the same sky); global-error has no
+ * layout, passes `live={false}` and gets the recipes' skies as plain CSS,
  * since whatever broke may be the renderer itself.
  *
  * These are derived surfaces: see "Derived surfaces follow the site" in
@@ -28,11 +29,7 @@ const STATIC_SKY = {
 export default function ErrorScreen({ title, message, children, live = true }) {
   return (
     <Stage>
-      {live ? (
-        <AtmosphereField />
-      ) : (
-        <div className={styles.staticSky} style={STATIC_SKY} aria-hidden="true" />
-      )}
+      {!live && <div className={styles.staticSky} style={STATIC_SKY} aria-hidden="true" />}
       <div className={styles.copy} style={TINTS}>
         <h1 className={styles.title}>{title}</h1>
         <p className={styles.message}>{message}</p>

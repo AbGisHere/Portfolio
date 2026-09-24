@@ -10,7 +10,7 @@ as the site takes shape.
 
 | Line | Scope |
 |---|---|
-| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.8`. |
+| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.9`. |
 | `0.2.x` | The next section down the scroll, most likely about me. Not yet designed. |
 | `0.3.x` | Projects: the desk scene below, a laptop or phone holding the projects. |
 | `0.4.x` | Contact / reach out. |
@@ -25,7 +25,7 @@ tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
 from regressing afterwards is the per-push checklist in `CLAUDE.md`
 ("Pre-push checks").
 
-State at `0.1.8`: `lang`, title template, description, canonical, OG and
+State at `0.1.9`: `lang`, title template, description, canonical, OG and
 Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
 llms.txt are in place. Browser source maps are off, and there is no
 boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
