@@ -22,6 +22,7 @@ import {
   sunColour,
   veilTiming,
 } from './mistGeometry';
+import { GEO, beginOrbit, ease, orbitBodies, orbitScene, restX } from '../orbit';
 import styles from './MistCanvas.module.css';
 
 const SKY_TEXELS = 1024;
@@ -201,11 +202,51 @@ export default function MistCanvas({ recipe, onFail }) {
     const seedOffset = () => {
       if (driftAt != null) return driftAt;
       const idle = recipeRef.current.idle;
-      if (!idle?.seedDrift || motion.matches || frozen) return 0;
+      // Mid-switch the drift is folded into the switch's own start seed.
+      if (orbit || !idle?.seedDrift || motion.matches || frozen) return 0;
       return idle.seedDrift * Math.sin((2 * Math.PI * idleT) / (idle.period ?? 60));
     };
 
+    // A switch: the sky turns between the scenes (../orbit.js, shared with
+    // the SVG engine) — bodies, palette keyframes and geometry dials all on
+    // one ease-in-out. Here it runs on this loop's clock, so like the veils
+    // it pauses while the scene is hidden.
+    let sunRecipe = recipeRef.current;
+    let orbit = null; // beginOrbit(…) + { t, e, scene }
+    let shownStops = null; // the palette last drawn mid-switch
+    // Called before the spring steps, so the switch starts from exactly what
+    // was last painted — the idle drift's seed included — not from a frame
+    // the spring has already moved.
+    function startOrbit() {
+      const r = recipeRef.current;
+      if (r === sunRecipe) return;
+      const geo = value.slice(0, GEO);
+      geo[6] += builtOffset;
+      orbit = motion.matches
+        ? null
+        : { ...beginOrbit(sunRecipe, r, geo, shownStops ?? toHexStops(value)), t: 0, e: 0, scene: null };
+      sunRecipe = r;
+      dirty = true;
+    }
+
+    function stepOrbit(dt) {
+      if (!orbit) return;
+      orbit.t = Math.min(orbit.dur, orbit.t + dt);
+      orbit.e = ease(orbit.t / orbit.dur);
+      orbit.scene = orbitScene(orbit, orbit.e);
+      // The geometry dials leave the spring for the switch's clock.
+      for (let i = 0; i < GEO; i++) value[i] = orbit.scene.geo[i];
+      if (orbit.t >= orbit.dur) {
+        orbit = null;
+        shownStops = null;
+        // Landed on the target seed exactly: breathe from here (sin 0 = 0).
+        idleT = 0;
+      }
+      dirty = true;
+    }
+
     const settled = () => {
+      if (orbit || recipeRef.current !== sunRecipe) return false;
       const target = targetVector(recipeRef.current);
       return target.every((t, i) => t === value[i]);
     };
@@ -364,6 +405,8 @@ export default function MistCanvas({ recipe, onFail }) {
     function driftCrests() {
       const r = recipeRef.current;
       builtOffset = seedOffset();
+      const host = canvas.parentElement;
+      if (host) host.dataset.seed = (value[6] + builtOffset).toFixed(4);
       // GPU path: only the seed changed, so the last layout's ridges serve as is.
       const count = Math.min(scene.ridges.length, MAX_RIDGES);
       if (gpuCrests(scene.ridges, count, value[6] + builtOffset, value[4])) return;
@@ -375,17 +418,27 @@ export default function MistCanvas({ recipe, onFail }) {
     // Recompute layout, colours and textures from the current spring value.
     function rebuild() {
       const r = recipeRef.current;
-      const stops = toHexStops(value);
+      // Mid-switch the palette runs through the target's keyframes (dawn,
+      // day…) on the switch's clock, and the ridges are relit from it; at
+      // rest it's the spring's, as ever.
+      const stops = orbit?.scene ? orbit.scene.stops : toHexStops(value);
+      if (orbit?.scene) shownStops = stops;
       const target = mistOf(r.mist);
       builtOffset = seedOffset();
       const mist = { ...target, haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] + builtOffset };
       scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: !crestGpu });
+      // At rest, one body where `layout` put it; mid-switch, both on the arc
+      // (whose far end is the target's resting spot — same height, its x).
       const { sun } = scene;
+      const lit = orbit?.scene
+        ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: scene.ridges })
+        : [{ ...sun, col: rgbToHex(value, 7), glow: 1, alpha: 1, wash: 0 }];
       // The painted sun's centre, for the harness's hit-target check.
       const host = canvas.parentElement;
       if (host) {
         host.dataset.sunCx = sun.x.toFixed(2);
         host.dataset.sunCy = sun.y.toFixed(2);
+        host.dataset.seed = mist.seed.toFixed(4);
       }
       let { ridges } = scene;
       const n = Math.min(ridges.length, MAX_RIDGES);
@@ -415,8 +468,12 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(uniform('uSize'), w, h);
       gl.uniform2f(uniform('uRes'), canvas.width, canvas.height);
       gl.uniform1f(uniform('uDpr'), canvas.width / w);
-      gl.uniform3f(uniform('uSun'), sun.x, sun.y, sun.r);
-      gl.uniform3fv(uniform('uSunCol'), rgb01(rgbToHex(value, 7)));
+      gl.uniform1i(uniform('uBodies'), lit.length);
+      gl.uniform3fv(uniform('uBody'), lit.flatMap(b => [b.x, b.y, b.r]).concat([0, 0, 0]).slice(0, 6));
+      gl.uniform3fv(uniform('uBodyCol'), lit.flatMap(b => rgb01(b.col)).concat([0, 0, 0]).slice(0, 6));
+      gl.uniform1fv(uniform('uBodyGlow'), lit.map(b => b.glow * b.alpha).concat([0]).slice(0, 2));
+      gl.uniform1fv(uniform('uBodyA'), lit.map(b => b.alpha).concat([0]).slice(0, 2));
+      gl.uniform1fv(uniform('uBodyWash'), lit.map(b => b.wash).concat([0]).slice(0, 2));
       gl.uniform1i(uniform('uCount'), n);
       gl.uniform1fv(uniform('uTop'), f(1, rd => rd.top));
       gl.uniform1fv(uniform('uBase'), f(1, rd => rd.base));
@@ -483,6 +540,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
       last = now;
 
+      startOrbit();
       // The engine's spring (Wl): exponential smoothing at springRate.
       const target = targetVector(recipeRef.current);
       if (!settled()) {
@@ -502,9 +560,10 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         dirty = true;
       }
+      stepOrbit(dt);
 
       let crestMoved = false;
-      if (!motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
+      if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (dirty) rebuild();
       else if (now - lastCrestAt >= 1000 / IDLE_HZ && Math.abs(seedOffset() - builtOffset) > 1e-5) {
         driftCrests();

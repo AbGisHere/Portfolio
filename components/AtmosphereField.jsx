@@ -38,9 +38,10 @@ const BACKDROP = {
 };
 
 /**
- * One scene, one sun, one clock. Switching theme hands the engine a new recipe
- * and its spring walks every value across at once: sun position and colour,
- * ridge height, sharpness and silhouette, haze, and the sky's colour stops.
+ * One scene, one clock. Switching theme hands the renderer a new recipe and
+ * the sky turns to it (components/gradient/orbit.js): the sun and moon cross
+ * on one arc while the palette passes through the in-between skies and the
+ * ridges reshape, all on the same ease; at rest the spring holds the scene.
  *
  * The sky used to be two stacked CSS gradients crossfading on opacity, which
  * looked symmetric but wasn't — compositing a dark layer over a light one
@@ -51,7 +52,6 @@ const BACKDROP = {
 export default function AtmosphereField({ className = '' }) {
   const { theme } = useTheme();
   const { recipe } = themes[theme];
-  const { ms, ease } = recipe.transition;
   // Decided after mount (it needs the browser); the CSS backdrop covers the gap.
   const [renderer, setRenderer] = useState(null);
   useEffect(() => setRenderer(pickRenderer()), []);
@@ -60,7 +60,7 @@ export default function AtmosphereField({ className = '' }) {
   return (
     <div
       className={`${styles.field} ${className}`}
-      style={{ ...BACKDROP, '--atmo-ms': `${ms}ms`, '--atmo-ease': ease }}
+      style={BACKDROP}
     >
       <div className={styles.scene} aria-hidden="true" data-renderer={renderer ?? undefined}>
         {renderer === 'gl' && <MistCanvas recipe={recipe} onFail={fallBack} />}

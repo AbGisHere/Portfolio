@@ -37,19 +37,21 @@ See [`scripts/README.md`](./scripts/README.md) for the harness flags.
 ## The atmosphere
 
 The whole page is currently a single full-bleed scene: mountain ridges under a
-drifting haze, with a sun in the sky. **Clicking the sun** transitions the
-scene to night — the sun slides across and recolours into a moon, the ridges
-change height and silhouette, the haze thins, and the sky shifts to its night
-colours. One click, one continuous motion, about 1.25s long. At rest the
-ridges slowly breathe: their silhouette drifts a little and back over about a
-minute.
+drifting haze, with a sun in the sky. **Clicking the sun** turns the sky.
+Dusk → night (1.5s): the sun sets down-left behind the ridges as the moon rises
+on the right, through a blue hour. Night → dusk (4s): the moon goes over and
+fades with the morning while the sun comes up on the right and crosses the
+whole sky, through dawn, day and late afternoon. The ridges reshape and are
+relit from the passing sky all the way. At rest they slowly breathe: their
+silhouette drifts a little and back over about a minute.
 
 Nothing about the look lives in the renderer. Each scene is a recipe file under
 `components/gradient/recipes/`, holding every value the source gradient studio
 exposes (ranges, horizon, peaks, sharpness, haze, sun position, drift, seed,
-colour stops, soften, noise). Two blocks are ours, not the studio's: `idle`
-(the rest-state drift) and `transition`, which drives both the renderer's
-spring and the sun's CSS hit target so they stay in step. Both renderers read
-the same recipes, and one shared smooth ramp paints the sky.
+colour stops, soften, noise). A few fields are ours, not the studio's: `body`
+(sun or moon), `idle` (the rest-state drift) and `transition` (how long a
+switch into the scene takes, the arc the sun and moon ride, and the skies
+passed on the way). Both renderers read the same recipes and share the switch
+maths (`components/gradient/orbit.js`), and one smooth ramp paints the sky.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full structure and how to add a scene.

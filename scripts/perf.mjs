@@ -4,7 +4,7 @@
  * day/night switches and a stretch of idle, plus main-thread cost from CDP.
  *
  *   node scripts/perf.mjs [--base URL] [--renderers svg,gl]
- *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window 700]
+ *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window ms]
  *        [--idle 3000] [--headed] [--query k=v&k=v]
  *
  * Prints a table and writes scripts/out/perf/perf-<timestamp>.json.
@@ -28,7 +28,9 @@ const args = parseArgs();
 const BASE = args.base ?? 'http://localhost:3001';
 const RENDERERS = String(args.renderers ?? 'svg,gl').split(',');
 const SWITCHES = Number(args.switches ?? 4);
-const WINDOW = Number(args.window ?? 700); // ms recorded after each click
+// ms recorded after each click; by default each switch is recorded for as
+// long as it runs (until the sun button stops ignoring clicks).
+const WINDOW = Number(args.window ?? 0);
 const IDLE = Number(args.idle ?? 3000);
 // Extra query params for every page, e.g. `--query crest=cpu`.
 const QUERY = Object.fromEntries(new URLSearchParams(typeof args.query === 'string' ? args.query : ''));
@@ -68,14 +70,16 @@ function recordFrames(page, ms, click) {
       await new Promise(resolve => {
         const tick = t => {
           ts.push(t);
-          if (t - t0 < ms) requestAnimationFrame(tick);
+          const busy = document.querySelector('button[aria-pressed][data-busy]');
+          const more = ms ? t - t0 < ms : t - t0 < 150 || (busy && t - t0 < 10000);
+          if (more) requestAnimationFrame(tick);
           else resolve();
         };
         requestAnimationFrame(tick);
       });
       await new Promise(r => setTimeout(r, 0)); // let the observer flush
       po?.disconnect();
-      return { intervals: ts.slice(1).map((t, i) => t - ts[i]), long };
+      return { intervals: ts.slice(1).map((t, i) => t - ts[i]), long, ms: ts[ts.length - 1] - t0 };
     },
     { ms, click },
   );
@@ -118,20 +122,22 @@ async function measure(browser, vp, renderer) {
   await sleep(2500);
   const painted = await readRenderer(page);
 
-  // Switches: day→night→day…, each recorded for WINDOW ms, with a pause so
-  // the next one starts from rest.
+  // Switches: day→night→day…, each recorded for its whole run (or WINDOW ms),
+  // with a pause so the next one starts from rest.
   const m0 = await metrics(cdp);
   const all = [];
   const long = [];
+  let recorded = 0;
   for (let i = 0; i < SWITCHES; i++) {
     const r = await recordFrames(page, WINDOW, true);
     all.push(...r.intervals);
     long.push(...r.long);
+    recorded += r.ms;
     await sleep(400);
   }
   const m1 = await metrics(cdp);
   const switching = {
-    ...summarise(all, long, WINDOW * SWITCHES),
+    ...summarise(all, long, recorded),
     mainThreadMs: delta(m0, m1),
   };
 

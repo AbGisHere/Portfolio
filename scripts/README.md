@@ -55,8 +55,10 @@ local defect, and the `worst 32px block` coordinates say where to look.
 
 This measures, per renderer and viewport:
 - **Switch:** the theme is toggled `--switches` times (default 4). Every
-  `requestAnimationFrame` interval is recorded for `--window` ms (default 700)
-  after each click. The summary is fps, p50/p95/max frame time, the count of
+  `requestAnimationFrame` interval is recorded from the click until the
+  switch has run its course (the sun button's `data-busy` clears: ~1.5s into
+  night, ~4s into dusk), or for a fixed `--window` ms if given. The summary
+  is fps, p50/p95/max frame time, the count of
   frames over 20 ms (dropped at 60 Hz), and long tasks.
 - **Idle:** `--idle` ms (default 3000) with nothing clicked. The number to
   watch is `task ms/s`: main-thread time per second at rest. The SVG engine's
@@ -84,3 +86,5 @@ absolute fps, or pass `--headed` for the real GPU.
 | `?crest=cpu` | GL renderer | Compute ridge crests on the CPU instead of the GPU crest pass (the fallback path when float render targets are missing). |
 | `data-crest="gpu" \| "cpu"` | scene wrapper | Which crest path the GL renderer used. |
 | `?driftAt=<offset>` | GL renderer | Pin the idle seed-drift offset, even with `?freeze=1`. Use it to compare the two crest paths mid-drift. |
+| `data-seed` | scene wrapper | The seed the GL renderer last painted, idle drift included. Sample it per frame to check a switch starts from the drifted seed with no jump. |
+| `data-busy` | sun button | Present while a switch runs; clicks are ignored until it clears. `perf.mjs` records each switch until then. |

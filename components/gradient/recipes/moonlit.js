@@ -16,13 +16,18 @@
  *   FINISH     Soften  -> fieldBlur    (px; `blur` is unused by MIST)
  *              Noise   -> grain
  *
- * `transition` is ours, not the studio's: it drives both the engine's spring
- * and the sun hit target's CSS transition, so they can't drift apart.
+ * `body`, `idle` and `transition` are ours, not the studio's. `transition`
+ * sets how a switch into this scene runs: its length (the spring that holds
+ * the resting scene settles in the same time), the arc the sun and moon ride,
+ * and the skies passed on the way (components/gradient/orbit.js).
  */
 const moonlit = {
   version: 1,
   name: 'Moonlit',
   type: 'MIST',
+  // Which body this scene's sky holds (see components/gradient/orbit.js):
+  // the moon fades with daylight, the sun warms near the horizon.
+  body: 'moon',
   animated: true,
   width: 2048,
   height: 1494,
@@ -36,7 +41,7 @@ const moonlit = {
   grain: 9,
 
   // COLOURS — night sky down to deep shadow
-  stops: ['#101828', '#3A4A6B', '#33415F', '#26324C', '#1B2439', '#111826'],
+  stops: ['#101828', '#3A4A6B', '#3B4060', '#28314C', '#1C2239', '#111826'],
   divs: [
     0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666,
     0.8333333333333334,
@@ -56,12 +61,21 @@ const moonlit = {
 
   // How this scene animates when it becomes the active theme.
   transition: {
-    springRate: 4,
-    ms: 1250,
-    // Mirrors the spring's own shape: 1 - e^(-rate*t) is an exponential
-    // ease-out, so anything tracking the sun needs the same curve or it
-    // visibly lags mid-flight.
-    ease: 'cubic-bezier(0.16, 1, 0.3, 1)',
+    // Switching into night is the short hop (sun down, moon up), so it's
+    // quicker than night → dusk, which crosses the whole sky.
+    // Keep ms ≈ 5000 / springRate.
+    springRate: 3.33,
+    ms: 1500,
+    // Top of the arc the sun and moon travel in a switch, as a share of the
+    // frame height from the top (see components/gradient/orbit.js).
+    apex: 0.12,
+    // Skies passed through on the way here from dusk (see
+    // components/gradient/orbit.js): `at` is how far through the switch (0 → 1, on the sun's
+    // clock) each palette is reached. Same six-band layout as `stops`.
+    via: [
+      // Blue hour: deep blue overhead, a last warm band at the horizon.
+      { at: 0.5, stops: ['#1F2A4A', '#4A5680', '#9A7E9A', '#6A5478', '#40375C', '#211F38'] },
+    ],
   },
 
   // Unused by MIST, kept so the recipe stays a drop-in for the engine.

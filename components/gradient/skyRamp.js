@@ -27,7 +27,7 @@ export function stopPositions(count, divs) {
 const toLinear = c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const toSrgb = c => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.max(0, c) ** (1 / 2.4) - 0.055);
 
-function hexToLms(hex) {
+export function hexToLms(hex) {
   const [r, g, b] = [1, 3, 5].map(i => toLinear(parseInt(hex.slice(i, i + 2), 16) / 255));
   return [
     Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b),
@@ -36,7 +36,7 @@ function hexToLms(hex) {
   ];
 }
 
-function lmsToHex([l, m, s]) {
+export function lmsToHex([l, m, s]) {
   l **= 3;
   m **= 3;
   s **= 3;
@@ -55,7 +55,7 @@ function lmsToHex([l, m, s]) {
 
 // Fritsch–Carlson tangents for one channel: zero at extrema and at the ends,
 // limited elsewhere so the curve stays monotone between neighbouring stops.
-function tangents(x, y) {
+export function tangents(x, y) {
   const n = y.length;
   const d = x.slice(1).map((xi, i) => (y[i + 1] - y[i]) / (xi - x[i]));
   const m = y.map((_, i) => (i === 0 || i === n - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));

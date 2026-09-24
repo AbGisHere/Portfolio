@@ -21,10 +21,18 @@ project cards, not an OS.
 
 The rebuild goes layer by layer, and the version line tracks which layer:
 
-| Line    | Scope                                            |
-|---------|--------------------------------------------------|
-| `0.1.x` | Background / atmosphere layer (current)          |
-| later   | Page content, sections, real copy                |
+| Line    | Scope                                                        |
+|---------|--------------------------------------------------------------|
+| `0.1.x` | Background / atmosphere layer (current, near complete)       |
+| `0.2.x` | The next scroll section, most likely about me                |
+| `0.3.x` | Projects: the laptop/phone device scene (`ROADMAP.md`)       |
+| `0.4.x` | Contact / reach out                                          |
+| `0.5.x` | Header navigation across the sections                        |
+| `0.6.x` | Real content throughout                                      |
+| `1.0.0` | Ship, once the `ROADMAP.md` hygiene gate is clear            |
+
+The plan past `0.1.x` is the user's current thinking and will change; see
+`ROADMAP.md`.
 
 **Before every commit, ask which version to bump to** — never pick one
 unilaterally — then update `package.json` and any other file carrying a
@@ -147,17 +155,19 @@ public/
 components/
   Stage.jsx (+ .module.css)           — full-viewport shell for every scene
   AtmosphereField.jsx (+ .module.css) — backdrop sky + renderer pick (GL/SVG) + sun toggle
-  SunToggle.jsx (+ .module.css)       — hit target sitting on the painted sun
+  SunToggle.jsx (+ .module.css)       — hit target on the painted sun; sits out each switch
   ErrorScreen.jsx (+ .module.css)     — shared 404/error layout, palette-tinted scrim
   ThemeProvider.jsx                   — day/night state, localStorage, `data-theme`
   gradient/
     gl/
-      MistCanvas.jsx (+ .module.css) — WebGL renderer (default): canvas, spring, textures
+      MistCanvas.jsx (+ .module.css) — WebGL renderer (default): canvas, clocks, textures
       mistGeometry.js  — one-for-one port of the engine's MIST maths
       mistShader.js    — the fullscreen fragment shader
       crestShader.js   — GPU crest pass (ridge outlines → R32F texture)
       hashTable.js     — precomputed noise lattice hashes for the crest pass
     engine.js          — generated SVG engine, the fallback renderer (see below)
+    orbit.js           — a switch: the sky turning, bodies, palette keys (both renderers)
+    skyKeys.js         — a palette partway through a switch's keyframes
     skyRamp.js         — the smooth sky ramp every sky path uses
     sky.js             — a recipe's sky as a CSS gradient (backdrop, static sky)
     themes.js          — theme ids -> recipes, and the toggle cycle
@@ -171,9 +181,12 @@ components/
 ## The atmosphere
 
 The page is one full-bleed scene: mountain ridges under drifting haze, with a
-sun in the sky. Clicking the sun transitions to night as a single motion — the
-sun slides across and recolours into a moon, ridges change height and
-silhouette, haze thins, sky shifts to its night colours.
+sun in the sky. Clicking the sun turns the sky: dusk → night, the sun sets
+down-left behind the ridges as the moon rises on the right, through a blue
+hour; night → dusk, the moon goes over and fades with the morning while the
+sun comes up on the right and crosses the sky, through dawn, day and late
+afternoon. The ridges reshape and are relit from the passing sky the whole
+way.
 
 **Nothing about the look lives in a renderer.** Each scene is a recipe, and
 every value the source gradient studio exposes is a field on it:
@@ -189,11 +202,21 @@ every value the source gradient studio exposes is a field on it:
 | COLOURS                 | `stops` + `divs`                          |
 | FINISH · Soften/Noise   | `fieldBlur` / `grain` (`blur` is unused)   |
 
-Plus one field that is ours, not the studio's:
+Plus fields that are ours, not the studio's:
 
 ```js
-transition: { springRate: 4, ms: 1250, ease: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+body: 'sun',                        // or 'moon': which body this sky holds
+idle: { seedDrift: 0.5, period: 60 }, // resting ridge "breathing" (GL)
+transition: {                       // how a switch INTO this scene runs
+  springRate: 1.25, ms: 4000,       // length; keep ms ≈ 5000 / springRate
+  apex: 0.12,                       // top of the sun/moon arc, share of height
+  via: [{ at: 0.22, stops: [...] }, ...], // skies passed on the way
+},
 ```
+
+Into dusk is 4s (the sun crosses the whole sky, through dawn at .22, day at
+.58 and late afternoon at .8); into night is 1.5s (a short hop, through blue
+hour at .5). `via` palettes use the same six bands as `stops`.
 
 ### Renderers
 
@@ -203,9 +226,10 @@ Two renderers draw the same recipe, and the page picks one after mount
 - **WebGL (default)** — `components/gradient/gl/`. `mistGeometry.js` is a
   one-for-one port of the engine's MIST maths (ridge noise, layout with
   patches 7–8, colour mixing in oklab, veil timings), `mistShader.js` is one
-  fullscreen fragment shader compositing sky → sun glow → sun → per ridge
-  (fill, blurred edge, crest rim, veil) → air → grain in the SVG's paint
-  order, and `MistCanvas.jsx` runs the spring. At rest the veils' drift
+  fullscreen fragment shader compositing sky → sun/moon glow and disc (two
+  mid-switch) → per ridge (fill, blurred edge, crest rim, veil) → air → grain
+  in the SVG's paint order, and `MistCanvas.jsx` runs the spring and the
+  switch clock (`orbit.js`). At rest the veils' drift
   uniforms change and the frame is redrawn once they've moved ~0.2 device px.
   Canvas DPR is capped at 2. Reduced motion freezes the veils and makes the
   switch a cut.
@@ -229,14 +253,19 @@ Two renderers draw the same recipe, and the page picks one after mount
     shift. Crest updates are capped at `IDLE_HZ` (60) in `MistCanvas.jsx`:
     at this speed ridges move under a pixel per update, so 120 looks the same
     and doubles the GPU work. It's off under reduced motion and `?freeze=1`,
-    and only runs while the scene is on screen. The SVG fallback doesn't
-    drift. Measured on an M4 (prod, idle main-thread ms/s at
-    1440×900@2 / 393×852@2 / 3440×1440@1): drift off 36/35/42, GPU crests
-    at 60/s 56/39/59, CPU crests at 60/s 92/72/91.
+    and only runs while the scene is on screen. It pauses for a switch: the
+    switch starts from the drifted seed and, on landing, the drift restarts
+    from zero at the target, so the ridges never jump back to the base seed
+    first. The SVG fallback doesn't drift. Measured on an M4 (prod, idle
+    main-thread ms/s at 1440×900@2 / 393×852@2 / 3440×1440@1): drift off
+    36/35/42, GPU crests at 60/s 56/39/59, CPU crests at 60/s 92/72/91.
+    Switches (`0.1.7`, sky turn with keyframed palettes): GL holds 120 fps,
+    p95 ~9.5 ms, max 10.4 ms, no frame over 20 ms at every viewport.
 - **SVG (fallback)** — the generated `engine.js`, loaded only when WebGL2 is
   missing, the shader fails to build, or the context is lost. It re-renders
   the whole SVG through React every frame, which is what made switches janky
-  on large or high-DPR screens.
+  on large or high-DPR screens. Switches run the same `orbit.js` maths
+  through its `useSkyOrbit` hook (patch 10).
 
 Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical: `npm run parity` (see `scripts/README.md`) compares them
@@ -254,6 +283,8 @@ maths changes. Hooks both renderers honour:
 | `?crest=cpu` (GL) | Force the CPU crest path |
 | `data-crest` on the scene wrapper (GL) | Which crest path ran: `gpu` or `cpu` |
 | `?driftAt=0.25` (GL) | Pin the idle seed-drift offset, even with `?freeze=1`, to compare crest paths mid-drift |
+| `data-seed` on the scene wrapper (GL) | The seed last painted, drift included |
+| `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
 
 When porting anything new from the studio, change `mistGeometry.js` /
 `mistShader.js` and the engine together, then re-run parity. One trap
@@ -263,33 +294,52 @@ fill.
 
 ### How the transition works
 
-- The engine's `Wl` helper is **exponential smoothing**, not a real spring:
-  `value += (target - value) * (1 - e^(-rate * dt))`, with dt in seconds
-  clamped to [.001, .05] and a settle threshold of 8e-4 × max(1, |target|).
-  No overshoot. Settle time is roughly `5 / rate` seconds, so `rate: 4` ≈
-  1.25s — hence `ms: 1250`. **Keep `ms ≈ 5000 / springRate`** or the scene
-  and the sun hit target drift apart. The GL renderer runs the identical
-  spring over the identical vector (geometry dials, including `mist.seed`,
-  then every stop's RGB), and settles in the same time as the SVG engine.
-- Because `mist.seed` springs, the ridges sweep through every silhouette
-  between the two seeds — roughly one shape change per unit of seed × .73. Keep
-  the day and night seeds close to keep a switch calm.
-- That one loop carries *everything*: geometry, the colour stops, and the sky
-  gradient built from those stops (in GL, a 1024-texel texture rebaked from the
-  sprung stops each moving frame). Adding a second animation loop for colours
-  is what made this stutter before — don't reintroduce one.
-- `ease` must be an **exponential ease-out** (`cubic-bezier(0.16, 1, 0.3, 1)`)
-  because that is the shape of the smoothing curve. Anything tracking the sun
-  (the hit target) lags visibly on an ease-in-out. Verified: worst-case
-  divergence ~5% of frame width, versus ~24% on the wrong curve.
+Two clocks, each with one job:
+
+- **At rest, the spring.** The engine's `Wl` helper is **exponential
+  smoothing**, not a real spring: `value += (target - value) * (1 - e^(-rate
+  * dt))`, with dt in seconds clamped to [.001, .05] and a settle threshold
+  of 8e-4 × max(1, |target|). No overshoot, settling in about `5 / rate`
+  seconds. It holds the resting scene (geometry dials, the sun colour, every
+  stop's RGB); the GL renderer runs the identical spring over the identical
+  vector. **Keep `ms ≈ 5000 / springRate`** so the spring has settled by the
+  time a switch lands and hands the scene back to it.
+- **In a switch, the sky's turn** (`components/gradient/orbit.js`, shared by
+  both renderers). One sine ease-in-out over the target's `transition.ms`
+  carries everything, so nothing runs ahead of anything else:
+  - **Bodies.** One arc (an ellipse through both resting spots, peaking
+    `apex` from the top) turns right to left — the viewer faces north. The
+    outgoing body carries on and sets behind the far ridge on the left while
+    the incoming one rises from behind it on the right, in parallel; both
+    turn through the same angle. The arc meets the ridges at `SET_ANGLE`
+    (0.3 rad), not straight down, and sideways travel past the resting spots
+    is stretched by `SET_SPREAD` (1.3), so the sun slants left as it sets. A
+    body's glow fades as its disc goes under. Each keeps its own colour but
+    leans toward the sky behind it (`wash`): the moon is pale in a bright sky,
+    the sun warms low down. The moon fades out over the first ~30% of a
+    morning (a 6 a.m. moon) rather than setting, and fades in as it clears
+    the ridges at dusk.
+  - **Palette.** The sky passes through the target's `via` keyframes on a
+    monotone cubic in oklab (`skyKeys.js`), so it hits every keyframe with no
+    jolt. The ridges' colours are derived from the palette (and fade toward
+    its mist band, `stops[1]`, at their feet), so they're relit every frame.
+    Keep a keyframe's near ridges (`stops[4]`, `stops[5]`) dark: in a pale
+    palette, lighter ones fade into each other and the front ridge vanishes.
+  - **Geometry.** The dials — ranges, horizon, haze, peaks, sharp, sun, seed —
+    ease from what was last painted (the idle-drifted seed included) to the
+    target's, so the ridges reshape as the sun travels. Roughly one
+    silhouette change per unit of seed × .73: keep day and night seeds close.
+  - It starts from what was last painted (captured before the spring steps),
+    so a switch never jumps on its first frame. Under reduced motion it's a
+    cut.
+- **The hit target doesn't follow the sun.** `SunToggle` jumps straight to
+  where the sun will land and ignores clicks (`data-busy`) for the switch's
+  `ms`. At rest it sits exactly on the painted sun.
 - The sky **interpolates its stops**; it is not a crossfade. Two stacked
   opaque layers fading on opacity looked symmetric but wasn't: compositing a
-  dark layer over a light one kills brightness far faster than the reverse, so
-  night arrived early and day arrived in a late rush. Measured at the halfway
-  point, the old crossfade was 76% done one way and 20% the other; lerping the
-  stops is 93% / 92%. Don't reintroduce a layered crossfade.
-- `ms`/`ease` reach CSS as `--atmo-ms` / `--atmo-ease`, set by
-  `AtmosphereField`, and position the sun hit target.
+  dark layer over a light one kills brightness far faster than the reverse.
+  Don't reintroduce a layered crossfade, or a second animation loop beside
+  the switch clock.
 - **Backdrop.** `.atmosphere-field` paints each recipe's sky as a CSS
   gradient (`--sky-day` / `--sky-night`, generated from the recipes by
   `AtmosphereField`) behind the engine. It shows before the engine's chunk
@@ -339,15 +389,27 @@ will drop them**, so reapply:
    luminance threshold. Fed in-between stops, that pops mid-switch. So `or`
    springs `tr(target stops)` as three extra channels in the `Wl` vector
    (`Sr, Sg, Sb`), and `I` is built from them. The GL renderer does the same
-   (`STOPS_AT` in `MistCanvas.jsx`). At rest it's identical, and in motion it
-   fades.
+   (`STOPS_AT` in `MistCanvas.jsx`). At rest it's identical. (Mid-switch the
+   bodies' colours come from patch 10 instead.)
+10. **The sky's turn.** `or` takes the target recipe (`rcp`, passed by `uc`
+    as `rcp: ee`) and calls `useSkyOrbit(Rc, [p,m,f,b,h,g,v], t)` from
+    `orbit.js` right after the sprung stops `Tx`. Mid-switch it returns the
+    eased geometry dials and keyframed palette, which overwrite the sprung
+    ones before `Xs` lays out the ridges, and `orbitBodies` gives the two
+    bodies (`Bd`), each washed toward the sky behind it with `skyAt`. The
+    single sun ellipse + circle became one glow gradient (`mh0`, `mh1`),
+    ellipse and circle per body; at rest `Bd` is the one sprung sun, drawn
+    exactly as before. The hook tells a scene change by recipe name + stops,
+    since `uc` may pass a fresh object each render.
 
 Also: the top of the file needs `'use client'`, and the recipe it ships with
 is renamed to `defaultRecipe` so the `recipe` prop can shadow it.
 
 ### Adding a scene
 
-1. Add a recipe under `components/gradient/recipes/`.
+1. Add a recipe under `components/gradient/recipes/`, with its `body`
+   (`'sun'` or `'moon'`) and a `transition` (`springRate`/`ms`, `apex`, and
+   any `via` skies on the way into it).
 2. Register it in `components/gradient/themes.js` with an `id`, `label` and
    `next` (the cycle is defined by the themes, not the provider).
 

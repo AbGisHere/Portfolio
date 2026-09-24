@@ -19,10 +19,12 @@
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
-  /* Matches the engine's spring as the sun crosses the sky. */
-  transition:
-    left var(--atmo-ms, 600ms) var(--atmo-ease, ease),
-    top var(--atmo-ms, 600ms) var(--atmo-ease, ease);
+  /* No transition: the target jumps to where the sun will land and sits out
+     the switch (see SunToggle.jsx). */
+}
+
+.toggle[data-busy] {
+  pointer-events: none;
 }
 
 .toggle:focus-visible {
@@ -32,10 +34,4 @@
 
 .toggle:active {
   transform: translate(-50%, -50%) scale(0.94);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toggle {
-    transition-duration: 1ms;
-  }
 }

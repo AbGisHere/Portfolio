@@ -1,8 +1,22 @@
 # Roadmap
 
-Plans agreed in discussion. The desk scene is deliberately not scheduled and
-is out of scope for the `0.1.x` atmosphere line. The ship-hygiene list is a
-hard gate for `1.0.0`, and any item on it can land earlier.
+Plans agreed in discussion. The ship-hygiene list is a hard gate for `1.0.0`,
+and any item on it can land earlier.
+
+## Version lines
+
+**Status:** the user's current thinking, recorded 2026-09-24. It will change
+as the site takes shape.
+
+| Line | Scope |
+|---|---|
+| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.7`. |
+| `0.2.x` | The next section down the scroll, most likely about me. Not yet designed. |
+| `0.3.x` | Projects: the desk scene below, a laptop or phone holding the projects. |
+| `0.4.x` | Contact / reach out. |
+| `0.5.x` | A header on top of the site to navigate between the sections. |
+| `0.6.x` | Populating the site with the real content. |
+| `1.0.0` | Ship, once "Before 1.0.0" below is clear. |
 
 ## Before 1.0.0 — ship hygiene
 
@@ -11,7 +25,7 @@ tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
 from regressing afterwards is the per-push checklist in `CLAUDE.md`
 ("Pre-push checks").
 
-State at `0.1.6`: `lang`, title template, description, canonical, OG and
+State at `0.1.7`: `lang`, title template, description, canonical, OG and
 Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
 llms.txt are in place. Browser source maps are off, and there is no
 boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
@@ -66,8 +80,8 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
 
 ## The desk scene — projects inside a device
 
-**Status:** future plan, post-`0.1.x`. Recorded 2026-09-23. Version to be
-decided when work starts (likely a `0.2.x`+ line).
+**Status:** future plan, post-`0.1.x`. Recorded 2026-09-23. Planned for the
+`0.3.x` line (see "Version lines").
 
 ### The sequence
 

@@ -26,8 +26,12 @@ uniform vec2 uSize;          // frame, CSS px
 uniform vec2 uRes;           // canvas, device px
 uniform float uDpr;          // device px per CSS px (for antialiasing widths)
 uniform sampler2D uSky;      // sky gradient, top → bottom
-uniform vec3 uSun;           // x, y, r
-uniform vec3 uSunCol;
+uniform int uBodies;         // 1 at rest, 2 while the sun and moon trade places
+uniform vec3 uBody[2];       // x, y, r
+uniform vec3 uBodyCol[2];
+uniform float uBodyGlow[2];  // glow strength: 1 in the sky, 0 once under the ridges
+uniform float uBodyA[2];     // disc opacity (the moon fades with daylight)
+uniform float uBodyWash[2];  // how far the colour leans to the sky behind it
 uniform sampler2D uCrest;    // R32F: crest y per device column, one row per ridge
 uniform int uCount;
 uniform float uTop[MAX_RIDGES];
@@ -67,11 +71,15 @@ void main() {
   // Sky: the gradient spans the full frame height.
   vec3 col = texture(uSky, vec2(p.y / uSize.y, 0.5)).rgb;
 
-  // Sun glow: radial, colour at .4 fading linearly to 0 at 3.4r.
-  float dSun = length(p - uSun.xy);
-  col = over(col, uSunCol, 0.4 * max(0.0, 1.0 - dSun / (uSun.z * 3.4)));
-  // Sun disc at .85, antialiased over a device pixel.
-  col = over(col, uSunCol, 0.85 * clamp((uSun.z - dSun) * uDpr + 0.5, 0.0, 1.0));
+  // Sun (and, mid-switch, moon): glow radial at .4 fading linearly to 0 at
+  // 3.4r, then the disc at .85, antialiased over a device pixel.
+  for (int i = 0; i < 2; i++) {
+    if (i >= uBodies) break;
+    float d = length(p - uBody[i].xy);
+    vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp(uBody[i].y / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
+    col = over(col, bc, 0.4 * uBodyGlow[i] * max(0.0, 1.0 - d / (uBody[i].z * 3.4)));
+    col = over(col, bc, 0.85 * uBodyA[i] * clamp((uBody[i].z - d) * uDpr + 0.5, 0.0, 1.0));
+  }
 
   // Antialiasing width, as a Gaussian of ~half a device pixel.
   float aa = 0.5 / uDpr;
