@@ -6,8 +6,8 @@ import { fontVariables } from './fonts';
 import './globals.css';
 
 // Last resort: the root layout itself failed, so this replaces it and brings
-// its own <html>, fonts and styles. The engine stays off — it may be what
-// broke — and the scene falls back to the recipes' skies as plain CSS.
+// its own <html>, fonts and styles. The renderers stay off — they may be
+// what broke — and the scene falls back to the recipes' skies as plain CSS.
 export default function GlobalError({ error }) {
   useEffect(() => {
     console.error(error);

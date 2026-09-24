@@ -1,8 +1,9 @@
 # Renderer harness
 
-Two scripts compare atmosphere renderers: the generated SVG engine (`svg`) and
-the WebGL renderer (`gl`). Use them whenever the renderer changes. Parity
-proves the look didn't move, and perf proves the frames got cheaper.
+Two scripts compare the atmosphere's renderers: WebGL (`gl`) and the layered
+DOM fallback (`layers`). By default they run `layers` against `gl`. Use them
+whenever a renderer changes. Parity proves the look didn't move, and perf
+proves the frames got cheaper.
 
 Run them against a production server, not `next dev`. The dev build is
 slower, and its overlay and HMR add noise:
@@ -23,7 +24,7 @@ a diff between them.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--a`, `--b` | `svg`, `gl` | Renderers to compare |
+| `--a`, `--b` | `layers`, `gl` | Renderers to compare |
 | `--viewports` | `393x852@2,320x568@1,852x393@1,820x1180@1,1440x900@2,3440x1440@1,1600x300@1` | `WxH@dpr`, comma-separated |
 | `--themes` | `day,night` | |
 | `--threshold` | `2` | Max **mean** absolute channel difference, on the 0–255 scale |
@@ -36,7 +37,7 @@ a diff between them.
 How it works:
 1. Each case loads `?renderer=<a>&freeze=1&grain=0` and the same for `<b>`,
    with the theme already in localStorage and `Math.random` seeded, so each
-   renderer is repeatable. The SVG engine's grain overlay is hidden by CSS.
+   renderer is repeatable.
 2. It disables CSS animations and transitions, waits for the scene to
    settle, then screenshots.
 3. The two screenshots are diffed in a blank page's canvas, so no image
@@ -47,9 +48,11 @@ Output in `scripts/out/parity/`: `index.html` shows a | b | diff for every case
 per-case PNGs and `results.json`. The script exits with 1 if any case breaks a
 threshold or logs a console error, and 2 if the script itself crashes.
 
-What the numbers mean: SVG against itself comes out at exactly 0. For a new
-renderer, a mean under 2 with a p99 under 24 means it looks the same. A higher p99 with a low mean points at one
-local defect, and the `worst 32px block` coordinates say where to look.
+What the numbers mean: a renderer against itself comes out at exactly 0. A
+mean under 2 with a p99 under 24 means two renderers look the same (`layers`
+against `gl` sits at a mean of ~0.4, p99 2). A higher p99 with a low mean
+points at one local defect, and the `worst 32px block` coordinates say where
+to look.
 
 ## `npm run perf`
 
@@ -61,8 +64,8 @@ This measures, per renderer and viewport:
   is fps, p50/p95/max frame time, the count of
   frames over 20 ms (dropped at 60 Hz), and long tasks.
 - **Idle:** `--idle` ms (default 3000) with nothing clicked. The number to
-  watch is `task ms/s`: main-thread time per second at rest. The SVG engine's
-  veil drift can force a repaint every frame. A good renderer idles near 0.
+  watch is `task ms/s`: main-thread time per second at rest. Anything that
+  repaints every frame at rest shows up here.
 - **Main-thread time:** CDP `Performance.getMetrics` deltas (`TaskDuration`,
   `ScriptDuration`, `LayoutDuration`, `RecalcStyleDuration`) for each phase.
 
@@ -76,15 +79,16 @@ absolute fps, or pass `--headed` for the real GPU.
 
 | Hook | Who | Meaning |
 |---|---|---|
-| `?renderer=svg` / `?renderer=gl` | page | Forces a renderer. With no param the page chooses (GL where supported). |
-| `data-renderer="gl" \| "svg"` | scene wrapper | Which renderer actually painted. The harness reports it, so a silent fallback to SVG is visible. |
-| `?freeze=1` | renderer | Draws time-dependent motion at its resting phase: veil drift offset **0** and veil opacity at its full value (`--jg-veil-a`, the SVG veil with its CSS animation removed). Any other clock-driven motion, such as grain animation, sits at t = 0. The SVG engine gets the same state from the harness's CSS, so both sides are frozen the same way. |
+| `?renderer=gl` / `?renderer=layers` | page | Forces a renderer. With no param the page chooses (GL where supported, else layers). |
+| `data-renderer="gl" \| "layers"` | scene wrapper | Which renderer actually painted. The harness reports it, so a silent fallback is visible. |
+| `?freeze=1` | renderer | Draws time-dependent motion at its resting phase: veil drift offset **0** and veil opacity at its full value, and (GL) no idle drift. Both renderers freeze the same way. |
 | `?grain=0` | renderer | Omit the grain layer. Parity compares grain-free frames by default. |
-| `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check when there's no SVG `circle` to measure. Without it, the check reports "none" and doesn't fail. |
+| `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check. Without it, the check reports "none" and doesn't fail. |
 | `button[aria-pressed]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |
 | `localStorage['abg-theme']` | theme | `day` or `night`, read before first paint. |
 | `?crest=cpu` | GL renderer | Compute ridge crests on the CPU instead of the GPU crest pass (the fallback path when float render targets are missing). |
 | `data-crest="gpu" \| "cpu"` | scene wrapper | Which crest path the GL renderer used. |
 | `?driftAt=<offset>` | GL renderer | Pin the idle seed-drift offset, even with `?freeze=1`. Use it to compare the two crest paths mid-drift. |
-| `data-seed` | scene wrapper | The seed the GL renderer last painted, idle drift included. Sample it per frame to check a switch starts from the drifted seed with no jump. |
+| `data-seed` | scene wrapper | The seed last painted (GL: idle drift included, and it only increases across switches). Sample it per frame to check a switch starts from the drifted seed with no jump and never runs backward. |
+| `data-ready` | layered scene | Set once the layered renderer's ridge masks are painted. |
 | `data-busy` | sun button | Present while a switch runs; clicks are ignored until it clears. `perf.mjs` records each switch until then. |

@@ -1,10 +1,10 @@
 /**
- * The MIST scene's maths, ported one-for-one from the generated SVG engine
- * (components/gradient/engine.js, including our patches 7–8) so the WebGL
- * renderer draws the same picture from the same recipe; the sky comes from the
- * shared skyRamp.js, as it does for the engine (patch 6). The minified names
- * each function came from are noted beside it: if the studio's MIST ever
- * changes, diff against those.
+ * The MIST scene's maths, ported one-for-one from the gradient studio's
+ * generated SVG engine (deleted in 0.1.8, still in git history before it,
+ * with our aspect lock and sun clamp patches) so every renderer draws the
+ * same picture from the same recipe; the sky comes from the shared
+ * skyRamp.js. The minified names each function came from are noted beside
+ * it: if the studio's MIST ever changes, diff a fresh export against those.
  *
  * Everything here is plain JS and runs on the CPU while the scene is moving.
  * The ridge crests (`layout`'s control points + `sampleCrest`) are the
@@ -113,6 +113,37 @@ export const ridgeBlur = (t, h) => (1 - t) * (1 - t) * 0.006 * h;
 // ar — opacity the air gradient reaches at the frame's foot
 export const airOpacity = (haze = MIST_DEFAULTS.haze) => dial(haze, 0.08, 0.26, 0.44);
 
+/**
+ * What each ridge is painted with, from this frame's palette: the fill's three
+ * gradient stops (top, 45%, base), the crest rim's colour and opacity, the
+ * blur (Gaussian sigma, CSS px; 0 = crisp) and the fade (a fractional last
+ * range). Shared by every renderer that composites the ridges itself (the GL
+ * shader, the layered fallback).
+ */
+export function ridgePaint(stops, ridges, haze, h) {
+  const M = mistColour(stops);
+  return ridges.map(rd => {
+    const A = ridgeColour(stops, rd.t, haze);
+    const blur = ridgeBlur(rd.t, h);
+    return {
+      fill: [A, mix(A, M, 0.16), mix(A, M, ridgeFootMix(rd.t, haze))],
+      rim: rimColour(stops, rd.t, haze),
+      rimA: rimOpacity(rd.t),
+      blur: blur > 0.4 ? blur : 0,
+      fade: rd.fade,
+    };
+  });
+}
+
+/** The crest rim's stroke width, CSS px. */
+export const rimWidth = h => Math.max(1, h * 0.0035);
+
+/** The grain layer's opacity (FINISH · Noise). */
+export const grainOpacity = recipe => (Math.max(0, Math.min(100, recipe.grain ?? 0)) / 100) * 0.5;
+
+/** Scale on the veils' animation durations from the recipe's `speed`. */
+export const veilSpeedScale = speed => (speed == null || speed <= 0 ? 1 : 50 / Math.max(1, speed));
+
 // ---------------------------------------------------------------- ridge noise
 
 // Hl
@@ -152,8 +183,8 @@ const POINTS = 110; // jo
 
 /**
  * Xs — ridges, veils and sun for a w × h (CSS px) frame. `aspect` is the
- * recipe's studio canvas aspect (engine patch 7: ridges are height-locked and
- * sampled around the frame centre; patch 8: sun clamped off the edges).
+ * recipe's studio canvas aspect (the aspect lock: ridges are height-locked and
+ * sampled around the frame centre; the sun is clamped off the edges).
  * `crests: false` skips the control points (`ys`) when the GPU crest pass
  * (crestShader.js) computes them instead; everything else is unchanged.
  */
@@ -233,8 +264,8 @@ export function sampleCrest(ridge, columns, dpr, out, offset = 0) {
 }
 
 /**
- * The sky gradient as the SVG paints it — the shared smooth ramp (skyRamp.js,
- * engine patch 6), blended linearly in sRGB between its dense stops and padded
+ * The sky gradient as CSS paints it — the shared smooth ramp (skyRamp.js),
+ * blended linearly in sRGB between its dense stops and padded
  * past the ends — baked into `size` RGBA texels.
  */
 export function bakeSky(stops, divs, size, out) {

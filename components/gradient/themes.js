@@ -3,7 +3,7 @@ import moonlit from './recipes/moonlit';
 
 /**
  * A theme is a recipe plus its label. Everything visual is decided in the
- * recipe files — the engine holds no look of its own — so adding a scene is
+ * recipe files — the renderers hold no look of their own — so adding a scene is
  * just another entry here.
  */
 const themes = {

@@ -7,7 +7,7 @@ import styles from './SunToggle.module.css';
 /**
  * Hit target over the sun the MIST recipe paints into the scene.
  *
- * The engine places it at:
+ * The renderers place it at:
  *   x = mist.sun%  of width, kept 1.5r clear of either edge
  *   y = max(0.10, clamp(glintHorizon, 0.14, 0.62) - 0.11)  of height
  *   r = 0.052  of height

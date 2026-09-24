@@ -57,13 +57,9 @@ export async function seedTheme(context, theme) {
   }, theme);
 }
 
-/** Which renderer actually painted: the wrapper's data-renderer, else inferred. */
+/** Which renderer actually painted: the wrapper's data-renderer. */
 export async function readRenderer(page) {
-  return page.evaluate(() => {
-    const el = document.querySelector('[data-renderer]');
-    if (el) return el.dataset.renderer;
-    return document.querySelector('svg.jg-mist-layers') ? 'svg (no data-renderer)' : 'unknown';
-  });
+  return page.evaluate(() => document.querySelector('[data-renderer]')?.dataset.renderer ?? 'unknown');
 }
 
 export const sleep = ms => new Promise(r => setTimeout(r, ms));

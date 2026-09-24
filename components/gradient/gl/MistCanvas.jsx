@@ -8,20 +8,19 @@ import {
   airOpacity,
   alternate,
   bakeSky,
+  grainOpacity,
   hexToRgb,
   layout,
   mistColour,
   mistOf,
-  mix,
-  rimColour,
-  rimOpacity,
-  ridgeBlur,
-  ridgeColour,
-  ridgeFootMix,
+  ridgePaint,
+  rimWidth,
   sampleCrest,
   sunColour,
+  veilSpeedScale,
   veilTiming,
 } from './mistGeometry';
+import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitBodies, orbitScene, restX } from '../orbit';
 import styles from './MistCanvas.module.css';
 
@@ -107,11 +106,11 @@ function grainTexels() {
 }
 
 /**
- * The MIST atmosphere drawn on the GPU. Same recipe, same maths as the SVG
- * engine (mistGeometry.js), but a frame is one draw call: the CPU recomputes
- * geometry only while the transition is moving, and at rest only the veils'
- * drift uniforms change. `onFail` hands over to the SVG engine if WebGL2 is
- * missing, the shader won't build, or the context is lost.
+ * The MIST atmosphere drawn on the GPU (maths in mistGeometry.js): a frame is
+ * one draw call, the CPU recomputes geometry only while the transition is
+ * moving, and at rest only the veils' drift uniforms change. `onFail` hands
+ * over to the layered fallback if WebGL2 is missing or the shader won't
+ * build, or (with `err.lost`) if the context is lost.
  */
 export default function MistCanvas({ recipe, onFail }) {
   const canvasRef = useRef(null);
@@ -158,6 +157,10 @@ export default function MistCanvas({ recipe, onFail }) {
     gl.activeTexture(gl.TEXTURE2);
     const grainTex = texture(gl, gl.NEAREST);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, GRAIN_SIZE, GRAIN_SIZE, 0, gl.RED, gl.UNSIGNED_BYTE, grainTexels());
+    gl.activeTexture(gl.TEXTURE4);
+    const moonTex = texture(gl, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, MOON_SIZE, MOON_SIZE, 0, gl.RED, gl.UNSIGNED_BYTE, moonFace());
+    gl.uniform1i(uniform('uMoon'), 4);
     gl.uniform1i(uniform('uSky'), 0);
     gl.uniform1i(uniform('uCrest'), 1);
     gl.uniform1i(uniform('uGrain'), 2);
@@ -168,6 +171,14 @@ export default function MistCanvas({ recipe, onFail }) {
 
     // ---- state
     let value = targetVector(recipeRef.current); // mounts at rest, like Wl
+    // Switches only move the seed forward (orbit.js SEED_CYCLE); this is how
+    // far the resting seed has got past the recipe's. 0 on every load.
+    let seedShift = 0;
+    const targetNow = () => {
+      const t = targetVector(recipeRef.current);
+      t[6] += seedShift;
+      return t;
+    };
     let w = 0;
     let h = 0;
     let dirty = true; // geometry / colours need recomputing
@@ -181,8 +192,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     // Harness hooks (scripts/README.md): `?grain=0` drops the grain, whose
     // noise is random per load; `?freeze=1` holds the veils at their resting
-    // phase (no drift, full opacity), as the SVG engine sits with its CSS
-    // animation removed.
+    // phase (no drift, full opacity), as the layered renderer does.
     const params = new URLSearchParams(window.location.search);
     const noGrain = params.get('grain') === '0';
     const frozen = params.get('freeze') === '1';
@@ -208,7 +218,7 @@ export default function MistCanvas({ recipe, onFail }) {
     };
 
     // A switch: the sky turns between the scenes (../orbit.js, shared with
-    // the SVG engine) — bodies, palette keyframes and geometry dials all on
+    // the layered renderer) — bodies, palette keyframes and geometry dials all on
     // one ease-in-out. Here it runs on this loop's clock, so like the veils
     // it pauses while the scene is hidden.
     let sunRecipe = recipeRef.current;
@@ -224,7 +234,7 @@ export default function MistCanvas({ recipe, onFail }) {
       geo[6] += builtOffset;
       orbit = motion.matches
         ? null
-        : { ...beginOrbit(sunRecipe, r, geo, shownStops ?? toHexStops(value)), t: 0, e: 0, scene: null };
+        : { ...beginOrbit(sunRecipe, r, geo, shownStops ?? toHexStops(value), { forward: true }), t: 0, e: 0, scene: null };
       sunRecipe = r;
       dirty = true;
     }
@@ -237,6 +247,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // The geometry dials leave the spring for the switch's clock.
       for (let i = 0; i < GEO; i++) value[i] = orbit.scene.geo[i];
       if (orbit.t >= orbit.dur) {
+        // The scene now rests on the switch's seed, not the recipe's.
+        seedShift = orbit.seedTo - mistOf(orbit.next.mist).seed;
         orbit = null;
         shownStops = null;
         // Landed on the target seed exactly: breathe from here (sin 0 = 0).
@@ -247,7 +259,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const settled = () => {
       if (orbit || recipeRef.current !== sunRecipe) return false;
-      const target = targetVector(recipeRef.current);
+      const target = targetNow();
       return target.every((t, i) => t === value[i]);
     };
 
@@ -317,7 +329,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (g.table && g.tableKey === key && N >= g.table.nLo && N <= g.table.nHi) return true;
       const r = recipeRef.current;
       const slack = ((r.idle?.seedDrift ?? 0) + 1) * 0.73;
-      const seeds = [value[6] * 0.73, mistOf(r.mist).seed * 0.73, N];
+      const seeds = [value[6] * 0.73, (mistOf(r.mist).seed + seedShift) * 0.73, N];
       const nLo = Math.min(...seeds) - slack;
       const nHi = Math.max(...seeds) + slack;
       const eAt = x => (x - w / 2) / ridge.U + 0.5;
@@ -432,7 +444,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { sun } = scene;
       const lit = orbit?.scene
         ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: scene.ridges })
-        : [{ ...sun, col: rgbToHex(value, 7), glow: 1, alpha: 1, wash: 0 }];
+        : [{ ...sun, col: rgbToHex(value, 7), face: r.body === 'moon' ? 1 : 0, glow: 1, alpha: 1, wash: 0, squash: 0 }];
       // The painted sun's centre, for the harness's hit-target check.
       const host = canvas.parentElement;
       if (host) {
@@ -456,15 +468,12 @@ export default function MistCanvas({ recipe, onFail }) {
 
       const M = mistColour(stops);
       const haze = value[2];
+      const paint = ridgePaint(stops, ridges.slice(0, n), haze, h);
       const f = (k, fn) => {
         const a = new Float32Array(MAX_RIDGES * k);
         for (let i = 0; i < n; i++) a.set([].concat(fn(ridges[i], i)), i * k);
         return a;
       };
-      const fills = ridges.slice(0, n).map(rd => {
-        const A = ridgeColour(stops, rd.t, haze);
-        return [A, mix(A, M, 0.16), mix(A, M, ridgeFootMix(rd.t, haze))];
-      });
       gl.uniform2f(uniform('uSize'), w, h);
       gl.uniform2f(uniform('uRes'), canvas.width, canvas.height);
       gl.uniform1f(uniform('uDpr'), canvas.width / w);
@@ -474,20 +483,22 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uBodyGlow'), lit.map(b => b.glow * b.alpha).concat([0]).slice(0, 2));
       gl.uniform1fv(uniform('uBodyA'), lit.map(b => b.alpha).concat([0]).slice(0, 2));
       gl.uniform1fv(uniform('uBodyWash'), lit.map(b => b.wash).concat([0]).slice(0, 2));
+      gl.uniform1fv(uniform('uBodyFace'), lit.map(b => b.face).concat([0]).slice(0, 2));
+      gl.uniform1fv(uniform('uBodySquash'), lit.map(b => b.squash).concat([0]).slice(0, 2));
       gl.uniform1i(uniform('uCount'), n);
       gl.uniform1fv(uniform('uTop'), f(1, rd => rd.top));
       gl.uniform1fv(uniform('uBase'), f(1, rd => rd.base));
-      gl.uniform3fv(uniform('uFillA'), f(3, (_, i) => rgb01(fills[i][0])));
-      gl.uniform3fv(uniform('uFillB'), f(3, (_, i) => rgb01(fills[i][1])));
-      gl.uniform3fv(uniform('uFillC'), f(3, (_, i) => rgb01(fills[i][2])));
-      gl.uniform3fv(uniform('uRimCol'), f(3, rd => rgb01(rimColour(stops, rd.t, haze))));
-      gl.uniform1fv(uniform('uRimA'), f(1, rd => rimOpacity(rd.t)));
-      gl.uniform1fv(uniform('uBlur'), f(1, rd => (ridgeBlur(rd.t, h) > 0.4 ? ridgeBlur(rd.t, h) : 0)));
-      gl.uniform1fv(uniform('uFade'), f(1, rd => rd.fade));
-      gl.uniform1f(uniform('uRimW'), Math.max(1, h * 0.0035));
+      gl.uniform3fv(uniform('uFillA'), f(3, (_, i) => rgb01(paint[i].fill[0])));
+      gl.uniform3fv(uniform('uFillB'), f(3, (_, i) => rgb01(paint[i].fill[1])));
+      gl.uniform3fv(uniform('uFillC'), f(3, (_, i) => rgb01(paint[i].fill[2])));
+      gl.uniform3fv(uniform('uRimCol'), f(3, (_, i) => rgb01(paint[i].rim)));
+      gl.uniform1fv(uniform('uRimA'), f(1, (_, i) => paint[i].rimA));
+      gl.uniform1fv(uniform('uBlur'), f(1, (_, i) => paint[i].blur));
+      gl.uniform1fv(uniform('uFade'), f(1, (_, i) => paint[i].fade));
+      gl.uniform1f(uniform('uRimW'), rimWidth(h));
       gl.uniform3fv(uniform('uMist'), rgb01(M));
       gl.uniform1f(uniform('uAirA'), airOpacity(haze));
-      gl.uniform1f(uniform('uGrainA'), noGrain ? 0 : (Math.max(0, Math.min(100, r.grain ?? 0)) / 100) * 0.5);
+      gl.uniform1f(uniform('uGrainA'), noGrain ? 0 : grainOpacity(r));
       dirty = false;
       lastDrawn = null;
     }
@@ -497,8 +508,7 @@ export default function MistCanvas({ recipe, onFail }) {
     function veils(dt) {
       const r = recipeRef.current;
       const still = motion.matches || frozen;
-      const speed = r.speed;
-      const speedScale = speed == null || speed <= 0 ? 1 : 50 / Math.max(1, speed);
+      const speedScale = veilSpeedScale(r.speed);
       const drift = mistOf(r.mist).drift;
       return scene.veils.slice(0, MAX_RIDGES).map((v, i) => {
         const { duration, amp } = veilTiming(i, drift, w);
@@ -542,7 +552,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
       startOrbit();
       // The engine's spring (Wl): exponential smoothing at springRate.
-      const target = targetVector(recipeRef.current);
+      const target = targetNow();
       if (!settled()) {
         if (motion.matches) {
           // Reduced motion: the switch is a cut.
@@ -611,7 +621,7 @@ export default function MistCanvas({ recipe, onFail }) {
       e.preventDefault();
       cancelAnimationFrame(raf);
       raf = 0;
-      onFail?.(new Error('webgl context lost'));
+      onFail?.(Object.assign(new Error('webgl context lost'), { lost: true }));
     };
     canvas.addEventListener('webglcontextlost', onLost);
 
@@ -630,6 +640,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(crestTex);
       dropGpuCrests();
       gl.deleteTexture(grainTex);
+      gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
     };

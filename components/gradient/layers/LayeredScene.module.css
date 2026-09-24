@@ -1,0 +1,60 @@
+/* The layered fallback (LayeredScene.jsx). Every layer is positioned from
+   JS in CSS px from the top-left; transforms and opacity only, so moving
+   them is compositing, not repainting. */
+.scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* The grain's overlay blend stays inside the scene. */
+  isolation: isolate;
+}
+
+/* Nothing until the first silhouettes exist: the backdrop sky covers. */
+.scene:not([data-ready]) {
+  visibility: hidden;
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+}
+
+.glow,
+.disc,
+.ridge,
+.veil,
+.air {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.disc {
+  border-radius: 50%;
+  /* The moon's face multiplies into its colour, as in the GL shader. */
+  background-size: 100% 100%;
+  background-blend-mode: multiply;
+}
+
+.ridge {
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.drift {
+  width: 100%;
+  height: 100%;
+  will-change: transform, opacity;
+}
+
+.air {
+  width: 100%;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  background-size: 256px 256px;
+  image-rendering: pixelated;
+}

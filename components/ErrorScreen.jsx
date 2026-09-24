@@ -20,7 +20,7 @@ const STATIC_SKY = {
  * Shared by the 404, the route error boundary and the last-resort global
  * error, so the three can't drift apart. `live` runs the real atmosphere;
  * global-error passes `live={false}` and gets the recipes' skies as plain CSS,
- * since whatever broke may be the engine itself.
+ * since whatever broke may be the renderer itself.
  *
  * These are derived surfaces: see "Derived surfaces follow the site" in
  * CLAUDE.md.

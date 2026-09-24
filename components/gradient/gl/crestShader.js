@@ -6,8 +6,8 @@
  *
  * Each fragment is one (column, ridge). It evaluates what mistGeometry.js's
  * `layout` + `sampleCrest` compute on the CPU: the ridge profile `Vl` at the
- * four control points around the column, height-locked to the frame (engine
- * patch 7), then the Catmull-Rom → Bézier segment through them (`Zs`). Lattice
+ * four control points around the column, height-locked to the frame (the
+ * aspect lock), then the Catmull-Rom → Bézier segment through them (`Zs`). Lattice
  * hashes come from a precomputed table (hashTable.js), because the engine's
  * sin-based hash isn't portable in float32.
  */

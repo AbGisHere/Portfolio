@@ -10,7 +10,7 @@ as the site takes shape.
 
 | Line | Scope |
 |---|---|
-| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.7`. |
+| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.8`. |
 | `0.2.x` | The next section down the scroll, most likely about me. Not yet designed. |
 | `0.3.x` | Projects: the desk scene below, a laptop or phone holding the projects. |
 | `0.4.x` | Contact / reach out. |
@@ -25,7 +25,7 @@ tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
 from regressing afterwards is the per-push checklist in `CLAUDE.md`
 ("Pre-push checks").
 
-State at `0.1.7`: `lang`, title template, description, canonical, OG and
+State at `0.1.8`: `lang`, title template, description, canonical, OG and
 Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
 llms.txt are in place. Browser source maps are off, and there is no
 boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
@@ -72,11 +72,10 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       the projects with links, resume and contact, for LLM agents.
 - [ ] **Bundle diet.** Set a budget and measure with `next build` output /
       `@next/bundle-analyzer`. Since `0.1.4` the page draws with the small
-      WebGL renderer. The generated SVG engine (~360 KB minified, every studio
-      scene type) is only fetched on the fallback path, for browsers without
-      WebGL or after a lost GPU context. The open decision: keep it as the
-      fallback, or delete it and fall back to the static CSS sky. `three` is
-      already gone. GSAP/Lenis load only when the scroll layer uses them.
+      WebGL renderer. Since `0.1.8` the fallback is the layered DOM renderer
+      (`components/gradient/layers/`), and the generated SVG engine (~360 KB
+      minified, 128 KB gzipped) is deleted. Neither renderer is in first-load
+      JS. `three` is already gone. GSAP/Lenis load only when the scroll layer uses them.
 
 ## The desk scene — projects inside a device
 
@@ -93,7 +92,8 @@ input), in four beats:
    faster, near ridges fastest — so it reads as a camera, not a sliding
    picture. The WebGL renderer draws each ridge as its own layer in one
    shader, so per-ridge parallax is a per-ridge offset uniform, driven by
-   scroll. The SVG fallback can do a simple whole-scene pan.
+   scroll. The layered fallback can do the same: each ridge is already its
+   own DOM layer, so parallax is a per-layer transform.
 2. **Table enters.** A tabletop rises from below as the ridges leave the top
    and becomes the new horizon line.
 3. **Device reveals and unlocks.**

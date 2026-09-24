@@ -2,7 +2,7 @@
  * Day scene — warm dusk haze.
  *
  * Every value the gradient studio exposes lives here; nothing about the look
- * is decided inside the engine. Panel label -> field:
+ * is decided inside a renderer. Panel label -> field:
  *
  *   MOUNTAINS  Ranges  -> size          (3 + size/100 * 6, so 33.3 = 5 ranges)
  *              Horizon -> glintHorizon  (share of frame that is sky)
@@ -87,7 +87,7 @@ const duskEmber = {
     ],
   },
 
-  // Unused by MIST, kept so the recipe stays a drop-in for the engine.
+  // Unused by MIST, kept so the recipe stays a drop-in studio export.
   mesh: null,
   params: null,
   hexStyle: 'hive',

@@ -1,6 +1,6 @@
 /**
- * One fullscreen fragment shader that composites the MIST scene in the SVG
- * engine's paint order: sky → sun glow → sun → for each ridge (fill, crest
+ * One fullscreen fragment shader that composites the MIST scene in the
+ * studio's paint order: sky → sun glow → sun → for each ridge (fill, crest
  * rim, veil) → air → grain. Geometry and colours arrive from mistGeometry.js
  * as uniforms and two small textures, so a frame is one draw call.
  *
@@ -9,7 +9,13 @@
  * centre in those units, y down.
  */
 
+import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SUN_GLOW } from '../sunLook';
+import { hexToRgb } from './mistGeometry';
+
 export const MAX_RIDGES = 9; // "Ranges" tops out at 9
+
+const f = v => v.toFixed(6);
+const GLOW_N = SUN_GLOW.length;
 
 export const VERTEX = `#version 300 es
 in vec2 aPos;
@@ -32,6 +38,9 @@ uniform vec3 uBodyCol[2];
 uniform float uBodyGlow[2];  // glow strength: 1 in the sky, 0 once under the ridges
 uniform float uBodyA[2];     // disc opacity (the moon fades with daylight)
 uniform float uBodyWash[2];  // how far the colour leans to the sky behind it
+uniform float uBodyFace[2];  // 1: the moon (face shaded in), 0: the sun
+uniform float uBodySquash[2]; // a low sun's flattening, share of its height
+uniform sampler2D uMoon;     // moonFace.js shade map, across the disc
 uniform sampler2D uCrest;    // R32F: crest y per device column, one row per ridge
 uniform int uCount;
 uniform float uTop[MAX_RIDGES];
@@ -63,6 +72,20 @@ float Phi(float x) {
 
 vec3 over(vec3 dst, vec3 src, float a) { return mix(dst, src, clamp(a, 0.0, 1.0)); }
 
+// The sun's two-layer glow (sunLook.js): opacity at x radii, piecewise-linear
+// through the same stops the layered fallback's CSS gradient uses.
+const float GLOW_X[${GLOW_N}] = float[](${SUN_GLOW.map(([x]) => f(x)).join(', ')});
+const float GLOW_A[${GLOW_N}] = float[](${SUN_GLOW.map(([, a]) => f(a)).join(', ')});
+float sunGlow(float x) {
+  if (x >= GLOW_X[${GLOW_N - 1}]) return 0.0;
+  for (int k = 1; k < ${GLOW_N}; k++) {
+    if (x <= GLOW_X[k]) return mix(GLOW_A[k - 1], GLOW_A[k], (x - GLOW_X[k - 1]) / (GLOW_X[k] - GLOW_X[k - 1]));
+  }
+  return 0.0;
+}
+const vec3 LIMB_EDGE = vec3(${LIMB_EDGE.map(f).join(', ')});
+const vec3 DISC_WHITE = vec3(${hexToRgb(DISC_WHITE).map(c => f(c / 255)).join(', ')});
+
 void main() {
   // Pixel centre in CSS px, y down like the SVG.
   float xPx = gl_FragCoord.x;
@@ -71,14 +94,27 @@ void main() {
   // Sky: the gradient spans the full frame height.
   vec3 col = texture(uSky, vec2(p.y / uSize.y, 0.5)).rgb;
 
-  // Sun (and, mid-switch, moon): glow radial at .4 fading linearly to 0 at
-  // 3.4r, then the disc at .85, antialiased over a device pixel.
+  // Sun and moon (both mid-switch), then the disc at .85, antialiased over a
+  // device pixel. The moon: glow radial at .4 fading linearly to 0 at 3.4r,
+  // disc multiplied by its face (seas and craters). The sun (sunLook.js):
+  // two-layer glow, disc darker and warmer toward the limb, flattened low.
   for (int i = 0; i < 2; i++) {
     if (i >= uBodies) break;
-    float d = length(p - uBody[i].xy);
+    float r = uBody[i].z;
+    vec2 q = p - uBody[i].xy;
+    float d = length(q);
+    bool moon = uBodyFace[i] > 0.5;
     vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp(uBody[i].y / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
-    col = over(col, bc, 0.4 * uBodyGlow[i] * max(0.0, 1.0 - d / (uBody[i].z * 3.4)));
-    col = over(col, bc, 0.85 * uBodyA[i] * clamp((uBody[i].z - d) * uDpr + 0.5, 0.0, 1.0));
+    float glow = moon ? 0.4 * max(0.0, 1.0 - d / (r * 3.4)) : sunGlow(d / r);
+    col = over(col, bc, uBodyGlow[i] * glow);
+    // The disc: an ellipse, r wide and r·(1 - squash) tall.
+    vec2 e = q / vec2(r, r * (1.0 - uBodySquash[i]));
+    float rho = length(e);
+    vec3 dc = moon
+      ? bc * texture(uMoon, e * 0.5 + 0.5).r
+      : mix(bc, DISC_WHITE, ${f(DISC_LIFT)}) * mix(vec3(1.0), LIMB_EDGE, pow(min(rho, 1.0), ${f(LIMB_POWER)}));
+    float da = moon ? 0.85 : ${f(DISC_ALPHA)};
+    col = over(col, dc, da * uBodyA[i] * clamp((1.0 - rho) * r * uDpr + 0.5, 0.0, 1.0));
   }
 
   // Antialiasing width, as a Gaussian of ~half a device pixel.

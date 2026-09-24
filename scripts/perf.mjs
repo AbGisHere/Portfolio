@@ -3,7 +3,7 @@
  * Renderer performance: per renderer × viewport, times every frame of four
  * day/night switches and a stretch of idle, plus main-thread cost from CDP.
  *
- *   node scripts/perf.mjs [--base URL] [--renderers svg,gl]
+ *   node scripts/perf.mjs [--base URL] [--renderers layers,gl]
  *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window ms]
  *        [--idle 3000] [--headed] [--query k=v&k=v]
  *
@@ -26,7 +26,7 @@ import {
 
 const args = parseArgs();
 const BASE = args.base ?? 'http://localhost:3001';
-const RENDERERS = String(args.renderers ?? 'svg,gl').split(',');
+const RENDERERS = String(args.renderers ?? 'layers,gl').split(',');
 const SWITCHES = Number(args.switches ?? 4);
 // ms recorded after each click; by default each switch is recorded for as
 // long as it runs (until the sun button stops ignoring clicks).
@@ -117,7 +117,7 @@ async function measure(browser, vp, renderer) {
 
   await page.goto(sceneUrl(BASE, renderer, QUERY), { waitUntil: 'load' });
   await page
-    .waitForSelector('[data-renderer], svg.jg-mist-layers', { timeout: 15000 })
+    .waitForSelector('[data-renderer]', { timeout: 15000 })
     .catch(() => {});
   await sleep(2500);
   const painted = await readRenderer(page);

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Renderer parity: screenshots the atmosphere drawn by the SVG engine and by
- * the WebGL renderer at rest, per viewport × theme, and diffs them.
+ * Renderer parity: screenshots the atmosphere drawn by two renderers (by
+ * default the layered fallback and the WebGL renderer) at rest, per
+ * viewport × theme, and diffs them.
  *
  *   node scripts/parity.mjs [--base URL] [--threshold 2] [--p99 24]
  *        [--viewports 393x852@2,1440x900@2] [--themes day,night]
- *        [--settle 2500] [--sun-tolerance 1] [--a svg --b gl] [--grain]
+ *        [--settle 2500] [--sun-tolerance 1] [--a layers --b gl] [--grain]
  *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v]
  *
  * Writes scripts/out/parity/index.html (a | b | diff per case) and exits
@@ -31,7 +32,7 @@ const THRESHOLD = Number(args.threshold ?? 2); // mean abs diff, 0–255 scale
 const P99 = Number(args.p99 ?? 24); // 99th-percentile per-pixel max-channel diff
 const SETTLE = Number(args.settle ?? 2500);
 const SUN_TOL = Number(args['sun-tolerance'] ?? 1); // CSS px
-const A = args.a ?? 'svg';
+const A = args.a ?? 'layers';
 const B = args.b ?? 'gl';
 const GRAIN = Boolean(args.grain); // off by default: random noise can't match pixel-for-pixel
 // Extra query params: `--query` for both sides, `--query-a` / `--query-b` for
@@ -51,17 +52,15 @@ const VIEWPORTS = viewportsFrom(args.viewports, [
 
 const OUT = ensureDir(join(OUT_DIR, 'parity'));
 
-// Time-dependent motion, frozen the same way on both sides. The SVG engine's
-// veils drift and breathe on CSS animations: with animations off they sit at
-// drift offset 0 and full veil opacity. `?freeze=1` asks a renderer (the GL
-// one) to draw that same resting frame. Transitions go too, so the sun hit
-// target is measured at its final spot.
+// Time-dependent motion, frozen the same way on both sides: `?freeze=1` asks
+// each renderer to draw its veils at drift offset 0 and full opacity. CSS
+// animations and transitions go too, so the sun hit target is measured at its
+// final spot.
 const FREEZE_CSS = `*,*::before,*::after{animation:none!important;transition:none!important}`;
 
-// The SVG engine's grain is a DOM overlay of Math.random() noise. With grain
-// off (the default) it's hidden here and `?grain=0` asks other renderers to
-// skip theirs; either way Math.random is seeded so a renderer is repeatable.
-const NO_GRAIN_CSS = `.feral-gradient-export > [style*="mix-blend-mode: overlay"]{display:none!important}`;
+// Grain is random noise per load. With grain off (the default) `?grain=0`
+// asks each renderer to skip it; either way Math.random is seeded so a
+// renderer is repeatable.
 
 function seedRandom() {
   let t = 0x9e3779b9;
@@ -89,9 +88,9 @@ async function capture(browser, vp, theme, renderer, side) {
   const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), ...QUERY[side] };
   await page.goto(sceneUrl(BASE, renderer, query), { waitUntil: 'load' });
   await page
-    .waitForSelector('[data-renderer], svg.jg-mist-layers', { timeout: 15000 })
+    .waitForSelector('[data-renderer]', { timeout: 15000 })
     .catch(() => {});
-  await page.addStyleTag({ content: GRAIN ? FREEZE_CSS : FREEZE_CSS + NO_GRAIN_CSS });
+  await page.addStyleTag({ content: FREEZE_CSS });
   await sleep(SETTLE);
 
   const painted = await readRenderer(page);
@@ -101,13 +100,8 @@ async function capture(browser, vp, theme, renderer, side) {
     const b = btn.getBoundingClientRect();
     const target = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
 
-    // Painted sun: the SVG engine's circle, else the renderer's data-sun-cx/cy
-    // (CSS px, relative to the [data-renderer] element's box).
-    const circle = document.querySelector('svg.jg-mist-layers circle');
-    if (circle) {
-      const c = circle.getBoundingClientRect();
-      return { target, painted: { x: c.left + c.width / 2, y: c.top + c.height / 2 }, via: 'svg circle' };
-    }
+    // Painted sun: the renderer's data-sun-cx/cy (CSS px, relative to the
+    // [data-renderer] element's box).
     const host = document.querySelector('[data-sun-cx][data-sun-cy]');
     if (host) {
       const h = host.getBoundingClientRect();

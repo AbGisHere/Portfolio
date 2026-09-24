@@ -10,8 +10,8 @@
  * and has no corners. Flat tangents at the ends ease into the solid bands
  * above the first stop and below the last.
  *
- * Every sky path uses this — the GL renderer's sky texture, the SVG engine's
- * sky gradient (engine patch 6) and the CSS backdrop — so they can't diverge.
+ * Every sky path uses this — the GL renderer's sky texture, the layered
+ * renderer's sky gradient and the CSS backdrop — so they can't diverge.
  */
 
 // Stop positions: mid-band between the `divs` boundaries, as the studio does.

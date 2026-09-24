@@ -1,6 +1,6 @@
 /* 404 and error pages: the scene with a way out, set on the near ridges. */
 
-/* Stand-in for the live scene when the engine can't be trusted (global-error). */
+/* Stand-in for the live scene when the renderer can't be trusted (global-error). */
 .staticSky {
   position: absolute;
   inset: 0;

@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
 import { mistOf, mix, sunColour } from './gl/mistGeometry';
 import { paletteAt } from './skyKeys';
 import { skyRamp } from './skyRamp';
+import { SQUASH, SUNSET_COLOUR, SUNSET_MIX } from './sunLook';
 
 /**
  * The sky turning between two scenes: the motion of a day/night switch, shared
- * by both renderers (the GL renderer calls these each frame; the SVG engine
- * through `useSkyOrbit`, engine patch 10).
+ * by both renderers (each calls these every frame of a switch on its own
+ * clock: MistCanvas.jsx, LayeredScene.jsx).
  *
  * At rest a scene is its recipe, held by the spring. In a switch the sky turns
  * right to left — the viewer faces north, east on the right, west on the
@@ -40,6 +40,16 @@ export const SET_ANGLE = 0.3;
  * travel is stretched by this much: a setting sun slants further left. */
 export const SET_SPREAD = 1.3;
 
+/**
+ * With `forward`, a switch's seed only ever increases, at this many seeds a
+ * second, so the ridges drift the way the sky turns (right to left) in both
+ * directions and at the same pace: +6 over the 4s into dusk, +2.25 over the
+ * 1.5s into night. It carries on from whatever seed is painted, so after the
+ * first switch the scenes no longer rest on their recipes' seeds; a reload
+ * starts from the recipe's seed again.
+ */
+export const SEED_RATE = 1.5;
+
 export const ease = u => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, u)));
 const smooth = (lo, hi, x) => ease((x - lo) / (hi - lo));
 
@@ -50,11 +60,14 @@ export const restX = (pct, w, h) => Math.min(Math.max((pct / 100) * w, 0.078 * h
  * A switch from `prev` to `next`, starting from what was last painted.
  * @param {number[]} geo  the geometry dials as painted (seed including drift)
  * @param {string[]} stops the palette as painted
+ * @param {{forward?: boolean}} [opts] seed only increases (see SEED_RATE)
  */
-export function beginOrbit(prev, next, geo, stops) {
+export function beginOrbit(prev, next, geo, stops, { forward = false } = {}) {
+  const seed = mistOf(next.mist).seed;
   return {
     prev,
     next,
+    seedTo: forward ? geo[6] + SEED_RATE * ((next.transition?.ms ?? 1250) / 1000) : seed,
     dur: (next.transition?.ms ?? 1250) / 1000,
     geo: geo.slice(0, GEO),
     keys: [{ at: 0, stops }, ...(next.transition?.via ?? []), { at: 1, stops: next.stops }],
@@ -70,6 +83,7 @@ export function targetGeo(recipe) {
 /** Geometry dials and palette at eased progress `e`. */
 export function orbitScene(orbit, e) {
   const to = targetGeo(orbit.next);
+  to[6] = orbit.seedTo;
   return {
     geo: orbit.geo.map((v, i) => v + (to[i] - v) * e),
     stops: paletteAt(orbit.keys, e),
@@ -77,8 +91,10 @@ export function orbitScene(orbit, e) {
 }
 
 /**
- * The two bodies at eased progress `e`, each { x, y, r, col, glow, alpha,
- * wash }: `glow` fades as the disc goes under (no halo left over the ridges),
+ * The two bodies at eased progress `e`, each { x, y, r, col, face, glow,
+ * alpha, wash, squash }: `face` is 1 for the moon (its disc gets
+ * moonFace.js), `squash` flattens a low sun (sunLook.js),
+ * `glow` fades as the disc goes under (no halo left over the ridges),
  * `alpha` is the disc's opacity (the moon's), `wash` how far its colour leans
  * toward the sky right behind it (the renderer mixes that in).
  *
@@ -120,14 +136,21 @@ export function orbitBodies(orbit, e, { w, h, sun, ridges }) {
       x: cx + (Math.abs(c) > edge ? Math.sign(c) * (edge + (Math.abs(c) - edge) * SET_SPREAD) : c),
       y,
       r: sun.r,
-      col: sunColour(recipe.stops),
+      // A low sun deepens toward orange and flattens a little (sunLook.js),
+      // setting and rising alike.
+      col: moon ? sunColour(recipe.stops) : mix(sunColour(recipe.stops), SUNSET_COLOUR, SUNSET_MIX * low),
+      squash: moon ? 0 : SQUASH * low,
+      // The moon's face (moonFace.js) is shaded into its disc.
+      face: moon ? 1 : 0,
       glow: (1 - low) ** 2,
       // The moon lingers faintly as the sun comes up (a 6 a.m. moon) and is
       // gone before dawn turns to day; in the evening it's full once it's
       // clear of the ridges.
       alpha: moon ? (going ? 1 - smooth(0, 0.3, e) : smooth(0, 0.5, e)) : 1,
       // Pale in a bright sky (moon); warming toward the horizon (sun).
-      wash: moon ? 0.6 * daylight : 0.5 * low,
+      // (The sun only a little: it already deepens toward orange, and more
+      // sky in it lost it against a sunset sky.)
+      wash: moon ? 0.6 * daylight : 0.2 * low,
     };
   };
   return [
@@ -137,64 +160,9 @@ export function orbitBodies(orbit, e, { w, h, sun, ridges }) {
 }
 
 /**
- * The SVG engine's clock for a switch (engine patch 10). Call every render
- * with the target recipe and what's being painted now; returns null at rest,
- * or { orbit, e } mid-switch, re-rendering each frame until it lands. The GL
- * renderer keeps its own clock (it only runs while the scene is visible).
- */
-export function useSkyOrbit(recipe, geo, stops) {
-  // The engine may hand over a fresh recipe object each render, so a scene
-  // change is told by content, not identity.
-  const key = recipe ? `${recipe.name}|${recipe.stops.join()}` : '';
-  const state = useRef({ key, recipe, orbit: null, t0: 0, geo, stops });
-  const [, tick] = useState(0);
-  const s = state.current;
-  if (key !== s.key) {
-    // Starts from what was last painted (the previous render's values).
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    s.orbit = reduce ? null : beginOrbit(s.recipe, recipe, s.geo, s.stops);
-    s.t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-    s.recipe = recipe;
-    s.key = key;
-  }
-  const running = !!s.orbit;
-  useEffect(() => {
-    if (!running) return undefined;
-    let raf = requestAnimationFrame(function f() {
-      tick(n => n + 1);
-      if (state.current.orbit) raf = requestAnimationFrame(f);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [running, key]);
-  if (!s.orbit) {
-    s.geo = geo;
-    s.stops = stops;
-    return null;
-  }
-  const u = (performance.now() - s.t0) / 1000 / s.orbit.dur;
-  if (u >= 1) {
-    // Landed. Hold the target until the spring (which carries the resting
-    // scene) has settled on it too, so handing back doesn't nudge anything.
-    const tg = targetGeo(recipe);
-    const settled = geo.every((v, i) => v === tg[i]) && stops.every((c, i) => c.toLowerCase() === recipe.stops[i].toLowerCase());
-    if (settled) {
-      s.orbit = null;
-      s.geo = geo;
-      s.stops = stops;
-      return null;
-    }
-  }
-  const e = ease(u);
-  const scene = orbitScene(s.orbit, e);
-  s.geo = scene.geo;
-  s.stops = scene.stops;
-  return { orbit: s.orbit, e, ...scene };
-}
-
-/**
  * The sky's colour at `f` (0 top … 1 bottom) of the frame, from the same ramp
- * every renderer paints. The SVG engine uses it for a body's `wash`; the GL
- * renderer samples its sky texture instead.
+ * every renderer paints. The layered renderer uses it for a body's `wash`;
+ * the GL renderer samples its sky texture instead.
  */
 export function skyAt(stops, divs, f) {
   const ramp = skyRamp(stops, divs);
