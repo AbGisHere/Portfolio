@@ -8,6 +8,7 @@ import {
   airOpacity,
   alternate,
   bakeSky,
+  crestExtension,
   grainOpacity,
   hexToRgb,
   layout,
@@ -22,6 +23,19 @@ import {
 } from './mistGeometry';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitBodies, orbitScene, restX } from '../orbit';
+import {
+  WIND,
+  bodyAt,
+  cameraAt,
+  frameAt,
+  groundPaint,
+  meadowOf,
+  scrollPalette,
+  scrollPaletteSwitch,
+  veilAt,
+  widestScales,
+} from '../camera';
+import { getDescent, subscribeDescent } from '../../scroll/descent';
 import styles from './MistCanvas.module.css';
 
 const SKY_TEXELS = 1024;
@@ -185,6 +199,13 @@ export default function MistCanvas({ recipe, onFail }) {
     let scene = null; // last layout
     let veilPhase = []; // [drift, breathe] per veil, in cycles
     let lastDrawn = null;
+    // The descent camera (../camera.js) for the last rebuild: per-ridge
+    // scale and foot, the sky's shift, the meadow's top. Read straight from
+    // the descent store each rebuild, never sprung.
+    let view = null;
+    let groundShown = false;
+    let windPhase = 0;
+    let lastWindAt = -Infinity;
     let raf = 0;
     let last = 0;
     let visible = !document.hidden;
@@ -323,9 +344,11 @@ export default function MistCanvas({ recipe, onFail }) {
     // The hash table covers this frame's x range for noise offsets from the
     // current spring value to the target seed, ± the idle drift. It's rebuilt
     // only when the frame changes or the offset leaves that range.
-    function ensureHashTable(ridge, N) {
+    // It also covers the widest noise range the descent can need (every
+    // ridge at its smallest, about = 1), so scrolling never rebuilds it.
+    function ensureHashTable(ridge, N, ext) {
       const g = crestGpu;
-      const key = `${w}|${ridge.U}|${ridge.Q}|${ridge.x0}|${ridge.dx}`;
+      const key = `${w}|${ridge.U}|${ridge.Q}|${ridge.x0}|${ridge.dx}|${ext}`;
       if (g.table && g.tableKey === key && N >= g.table.nLo && N <= g.table.nHi) return true;
       const r = recipeRef.current;
       const slack = ((r.idle?.seedDrift ?? 0) + 1) * 0.73;
@@ -333,7 +356,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const nLo = Math.min(...seeds) - slack;
       const nHi = Math.max(...seeds) + slack;
       const eAt = x => (x - w / 2) / ridge.U + 0.5;
-      const table = buildHashTable(eAt(ridge.x0), eAt(ridge.x0 + ridge.Q * ridge.dx), nLo, nHi);
+      const table = buildHashTable(eAt(ridge.x0 - ext * ridge.dx), eAt(ridge.x0 + (ridge.Q + ext) * ridge.dx), nLo, nHi);
       if (table.width > gl.getParameter(gl.MAX_TEXTURE_SIZE)) return false;
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, g.hashTex);
@@ -347,6 +370,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // texture. Returns false (after switching to the CPU path) if the float
     // target or the hash table can't be set up.
     function gpuCrests(ridges, n, seed, sharp) {
+      const rc = view.ridges;
       const g = crestGpu;
       if (!g || !n) return false;
       const cols = canvas.width;
@@ -367,15 +391,23 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       const N = seed * 0.73;
       const ridge = ridges[0];
-      if (!ensureHashTable(ridge, N)) {
+      if (!ensureHashTable(ridge, N, view.ext)) {
         dropGpuCrests();
         return false;
       }
       const base = new Float32Array(MAX_RIDGES);
       const lift = new Float32Array(MAX_RIDGES);
+      const scale = new Float32Array(MAX_RIDGES).fill(1);
+      const foot = new Float32Array(MAX_RIDGES);
+      const ext = new Int32Array(MAX_RIDGES);
+      // One row per ridge, by its noise index (crestShader.js).
       for (let i = 0; i < n; i++) {
-        base[i] = ridges[i].base;
-        lift[i] = ridges[i].L;
+        const k = ridges[i].noise ?? i;
+        base[k] = ridges[i].base;
+        lift[k] = ridges[i].L;
+        scale[k] = rc[i].s;
+        foot[k] = rc[i].foot;
+        ext[k] = crestExtension(rc[i].s, w, h, ridge.dx);
       }
       gl.useProgram(g.prog);
       gl.uniform1i(g.u('uOrigin'), g.table.origin);
@@ -389,6 +421,9 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uSharp'), sharp / 100);
       gl.uniform1fv(g.u('uBase'), base);
       gl.uniform1fv(g.u('uL'), lift);
+      gl.uniform1fv(g.u('uS'), scale);
+      gl.uniform1fv(g.u('uFoot'), foot);
+      gl.uniform1iv(g.u('uExt'), ext);
       gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo);
       gl.viewport(0, 0, cols, n);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -402,7 +437,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const cols = canvas.width;
       if (crest.length !== cols * n) crest = new Float32Array(cols * n);
       const scale = cols / w;
-      for (let i = 0; i < n; i++) sampleCrest(ridges[i], cols, scale, crest, i * cols);
+      // Rows by noise index, as the GPU pass writes them.
+      for (let i = 0; i < n; i++) sampleCrest(ridges[i], cols, scale, crest, (ridges[i].noise ?? i) * cols, view.ridges[i]);
       gl.activeTexture(gl.TEXTURE1);
       if (crestDims !== `${cols}x${n}`) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, cols, n, 0, gl.RED, gl.FLOAT, crest);
@@ -423,41 +459,64 @@ export default function MistCanvas({ recipe, onFail }) {
       const count = Math.min(scene.ridges.length, MAX_RIDGES);
       if (gpuCrests(scene.ridges, count, value[6] + builtOffset, value[4])) return;
       const mist = { ...mistOf(r.mist), haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] + builtOffset };
-      const { ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect });
+      const scales = view.rest ? null : view.ridges.map(rc => rc.s);
+      const { ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, extra: view.more });
       uploadCrest(ridges, Math.min(ridges.length, MAX_RIDGES));
     }
 
-    // Recompute layout, colours and textures from the current spring value.
+    // Recompute layout, colours and textures from the current spring value
+    // and the descent's progress.
     function rebuild() {
       const r = recipeRef.current;
+      const { about } = getDescent();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
-      // rest it's the spring's, as ever.
-      const stops = orbit?.scene ? orbit.scene.stops : toHexStops(value);
-      if (orbit?.scene) shownStops = stops;
+      // rest it's the spring's, as ever. The descent's time of day goes on
+      // top (camera.js): both scenes' overlays, blended on the switch.
+      const base = orbit?.scene ? orbit.scene.stops : toHexStops(value);
+      if (orbit?.scene) shownStops = base;
+      const stops = orbit?.scene ? scrollPaletteSwitch(base, orbit.prev, orbit.next, about, orbit.e) : scrollPalette(base, r, about);
       const target = mistOf(r.mist);
       builtOffset = seedOffset();
       const mist = { ...target, haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] + builtOffset };
-      scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: !crestGpu });
+      // The camera: a pure function of `about`, mid-switch blended between
+      // the scenes' amounts; ranges join behind the far one as it opens. The
+      // hash table is sized for its widest reach.
+      const cam = cameraAt(about, r, { reduced: motion.matches, from: orbit?.prev, e: orbit ? orbit.e : 1 });
+      scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: false, extra: cam.more });
+      view = frameAt(scene, h, cam);
+      view.more = cam.more;
+      const widest = widestScales(scene, h, orbit ? [r, orbit.prev] : [r]);
+      view.ext = Math.max(0, ...widest.map(s => crestExtension(s, w, h, scene.ridges[0]?.dx ?? 1)));
       // At rest, one body where `layout` put it; mid-switch, both on the arc
       // (whose far end is the target's resting spot — same height, its x).
+      // Then the descent moves them: up with the sky, and each its own way.
       const { sun } = scene;
+      // (The recipe's own ranges, not the descent's extra far ones.)
+      const own = scene.ridges.filter(rd => !rd.extra);
+      const hidden = own[0] ? own[0].base + 1.25 * sun.r : sun.y + 3 * sun.r;
+      const place = { w, h, hidden, restY: sun.y };
       const lit = orbit?.scene
-        ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: scene.ridges })
-        : [{ ...sun, col: rgbToHex(value, 7), face: r.body === 'moon' ? 1 : 0, glow: 1, alpha: 1, wash: 0, squash: 0 }];
-      // The painted sun's centre, for the harness's hit-target check.
+        ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: own }).map((b, i) =>
+            bodyAt(b, i === 0 ? orbit.prev : orbit.next, view, { ...place, look: false }),
+          )
+        : [bodyAt({ ...sun, col: rgbToHex(value, 7), face: r.body === 'moon' ? 1 : 0, glow: 1, alpha: 1, wash: 0, squash: 0 }, r, view, place)];
+      // The painted sun's centre, for the harness's hit-target check (and a
+      // hit target that follows it under scroll): at rest the body as
+      // painted; mid-switch where it will land, moved by the descent too.
       const host = canvas.parentElement;
       if (host) {
-        host.dataset.sunCx = sun.x.toFixed(2);
-        host.dataset.sunCy = sun.y.toFixed(2);
+        const painted = orbit?.scene ? bodyAt({ ...sun, x: restX(target.sun, w, h), face: 1 }, r, view, place) : lit[0];
+        host.dataset.sunCx = painted.x.toFixed(2);
+        host.dataset.sunCy = painted.y.toFixed(2);
         host.dataset.seed = mist.seed.toFixed(4);
       }
       let { ridges } = scene;
       const n = Math.min(ridges.length, MAX_RIDGES);
       if (!gpuCrests(ridges, n, mist.seed, mist.sharp)) {
-        if (!ridges[0]?.ys) {
-          scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect });
-          ({ ridges } = scene);
+        if (!ridges[0]?.ys || !view.rest) {
+          const scales = view.rest ? null : view.ridges.map(rc => rc.s);
+          ({ ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, extra: cam.more }));
         }
         uploadCrest(ridges, n);
       }
@@ -474,6 +533,7 @@ export default function MistCanvas({ recipe, onFail }) {
         for (let i = 0; i < n; i++) a.set([].concat(fn(ridges[i], i)), i * k);
         return a;
       };
+      const rc = view.ridges;
       gl.uniform2f(uniform('uSize'), w, h);
       gl.uniform2f(uniform('uRes'), canvas.width, canvas.height);
       gl.uniform1f(uniform('uDpr'), canvas.width / w);
@@ -486,8 +546,12 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uBodyFace'), lit.map(b => b.face).concat([0]).slice(0, 2));
       gl.uniform1fv(uniform('uBodySquash'), lit.map(b => b.squash).concat([0]).slice(0, 2));
       gl.uniform1i(uniform('uCount'), n);
-      gl.uniform1fv(uniform('uTop'), f(1, rd => rd.top));
-      gl.uniform1fv(uniform('uBase'), f(1, rd => rd.base));
+      gl.uniform1iv(uniform('uCrestRow'), Int32Array.from({ length: MAX_RIDGES }, (_, i) => (i < n ? (ridges[i].noise ?? i) : 0)));
+      // A ridge's fill gradient runs from its top to its base: both moved
+      // with it (identities at rest).
+      gl.uniform1fv(uniform('uTop'), f(1, (rd, i) => (view.rest ? rd.top : rc[i].foot - rd.L * rc[i].s)));
+      gl.uniform1fv(uniform('uBase'), f(1, (rd, i) => (view.rest ? rd.base : rc[i].foot)));
+      gl.uniform1fv(uniform('uScale'), f(1, (_, i) => rc[i].s));
       gl.uniform3fv(uniform('uFillA'), f(3, (_, i) => rgb01(paint[i].fill[0])));
       gl.uniform3fv(uniform('uFillB'), f(3, (_, i) => rgb01(paint[i].fill[1])));
       gl.uniform3fv(uniform('uFillC'), f(3, (_, i) => rgb01(paint[i].fill[2])));
@@ -499,8 +563,26 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(uniform('uMist'), rgb01(M));
       gl.uniform1f(uniform('uAirA'), airOpacity(haze));
       gl.uniform1f(uniform('uGrainA'), noGrain ? 0 : grainOpacity(r));
+      // The sky and the meadow.
+      gl.uniform1f(uniform('uSkyShift'), view.shift);
+      gl.uniform1f(uniform('uHorizon'), view.horizon);
+      const ground = n ? groundPaint(stops, meadowOf(orbit ? orbit.prev : r, r, orbit ? orbit.e : 1), paint[n - 1].fill[2], view, h, haze) : null;
+      groundShown = !!ground;
+      gl.uniform1f(uniform('uFront'), ground ? ground.top : h);
+      if (ground) {
+        gl.uniform4f(uniform('uGroundY'), ...ground.stops.map(([y]) => y));
+        gl.uniform3fv(uniform('uGroundCol'), ground.stops.flatMap(([, c]) => rgb01(c)));
+      }
+      setWind();
       dirty = false;
       lastDrawn = null;
+    }
+
+    // The wind over the meadow: its phase runs on this loop's clock while
+    // the meadow shows (still under reduced motion; none under `?freeze=1`,
+    // so the harness compares a still meadow).
+    function setWind() {
+      gl.uniform3f(uniform('uWind'), groundShown && !frozen ? WIND.amp : 0, WIND.bands, windPhase % 1);
     }
 
     // The veils' CSS drift/breathe animations, reproduced on a clock that
@@ -510,9 +592,15 @@ export default function MistCanvas({ recipe, onFail }) {
       const still = motion.matches || frozen;
       const speedScale = veilSpeedScale(r.speed);
       const drift = mistOf(r.mist).drift;
-      return scene.veils.slice(0, MAX_RIDGES).map((v, i) => {
-        const { duration, amp } = veilTiming(i, drift, w);
-        const ph = (veilPhase[i] ??= [0, 0]);
+      return scene.veils.slice(0, MAX_RIDGES).map((v0, i) => {
+        // Each veil moves and scales with its ridge (camera.js), drift and all.
+        const rc = view.ridges[i];
+        const v = rc ? veilAt(v0, scene.ridges[i], rc, w) : v0;
+        // Timed by the ridge's own index, so its drift carries on as ranges join.
+        const k = scene.ridges[i].noise ?? i;
+        const { duration, amp: amp0 } = veilTiming(k, drift, w);
+        const amp = rc && rc.s !== 1 ? amp0 * rc.s : amp0;
+        const ph = (veilPhase[k] ??= [0, 0]);
         if (!still && dt > 0) {
           ph[0] += dt / (duration * speedScale);
           ph[1] += dt / (duration * 0.55 * speedScale);
@@ -574,14 +662,22 @@ export default function MistCanvas({ recipe, onFail }) {
 
       let crestMoved = false;
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
+      if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
       if (dirty) rebuild();
       else if (now - lastCrestAt >= 1000 / IDLE_HZ && Math.abs(seedOffset() - builtOffset) > 1e-5) {
         driftCrests();
         lastCrestAt = now;
         crestMoved = true;
       }
+      // The wind over the meadow redraws at most IDLE_HZ times a second.
+      let windMoved = false;
+      if (!dirty && groundShown && !frozen && !motion.matches && now - lastWindAt >= 1000 / IDLE_HZ) {
+        setWind();
+        lastWindAt = now;
+        windMoved = true;
+      }
       const vs = veils(dt);
-      if (crestMoved || changed(vs)) draw(vs);
+      if (crestMoved || windMoved || changed(vs)) draw(vs);
 
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
@@ -589,7 +685,7 @@ export default function MistCanvas({ recipe, onFail }) {
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is
-    // the time to the first frame.
+    // the time to the first view.
     const kick = () => {
       if (!raf && visible && onScreen) {
         last = performance.now();
@@ -616,7 +712,18 @@ export default function MistCanvas({ recipe, onFail }) {
       kick();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    motion.addEventListener('change', kick);
+    // Motion preference changes the camera's reach (camera.js REDUCED_CAMERA).
+    const onMotion = () => {
+      dirty = true;
+      kick();
+    };
+    motion.addEventListener('change', onMotion);
+    // The descent: a scroll frame only marks the scene for a rebuild (new
+    // uniforms and one crest pass) and asks for a view.
+    const unsubscribe = subscribeDescent(() => {
+      dirty = true;
+      kick();
+    });
     const onLost = e => {
       e.preventDefault();
       cancelAnimationFrame(raf);
@@ -634,7 +741,8 @@ export default function MistCanvas({ recipe, onFail }) {
       ro.disconnect();
       io?.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
-      motion.removeEventListener('change', kick);
+      motion.removeEventListener('change', onMotion);
+      unsubscribe();
       canvas.removeEventListener('webglcontextlost', onLost);
       gl.deleteTexture(skyTex);
       gl.deleteTexture(crestTex);

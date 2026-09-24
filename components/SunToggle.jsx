@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeProvider';
+import { getDescent, subscribeDescent } from './scroll/descent';
 import styles from './SunToggle.module.css';
 
 /**
@@ -18,12 +19,43 @@ import styles from './SunToggle.module.css';
  * The button doesn't follow the sun's arc: it jumps straight to where the sun
  * will land and ignores clicks until the switch has finished
  * (`transition.ms`).
+ *
+ * Once the descent starts, the painted sun moves with the camera and this
+ * target doesn't follow it: it fades over `about` 0.05 → 0.1 (which mostly
+ * matters for the focus ring) and past 0.1 is inert, so it can't be clicked
+ * or focused. Written straight to the element from the descent store, not
+ * through React state, so scrolling never re-renders it.
  */
+const FADE_FROM = 0.05;
+const FADE_TO = 0.1;
 export default function SunToggle({ recipe }) {
   const { theme, toggle } = useTheme();
   const night = theme === 'night';
   const [busy, setBusy] = useState(false);
   const first = useRef(true);
+  const button = useRef(null);
+
+  useEffect(() => {
+    const el = button.current;
+    let off = null;
+    const apply = ({ about = 0 }) => {
+      const fade = Math.min(1, Math.max(0, (about - FADE_FROM) / (FADE_TO - FADE_FROM)));
+      el.style.setProperty('--descent-fade', String(1 - fade));
+      const gone = about > FADE_TO;
+      if (gone === off) return;
+      off = gone;
+      el.inert = gone;
+      if (gone) {
+        el.tabIndex = -1;
+        el.setAttribute('aria-hidden', 'true');
+      } else {
+        el.removeAttribute('tabindex');
+        el.removeAttribute('aria-hidden');
+      }
+    };
+    apply(getDescent());
+    return subscribeDescent(apply);
+  }, []);
 
   useEffect(() => {
     if (first.current) {
@@ -45,6 +77,7 @@ export default function SunToggle({ recipe }) {
 
   return (
     <button
+      ref={button}
       type="button"
       className={styles.toggle}
       style={style}

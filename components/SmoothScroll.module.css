@@ -1,0 +1,13 @@
+/* Measures the large viewport height (100lvh: the viewport with any mobile
+   URL bar collapsed) so the descent's span doesn't change as the bar moves.
+   Fixed and zero-width, so it never adds scroll or catches a pointer. */
+.probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100vh;
+  height: 100lvh;
+  visibility: hidden;
+  pointer-events: none;
+}

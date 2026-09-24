@@ -1,5 +1,6 @@
 import { layout, mistOf, ridgeBlur, rimWidth, sampleCrest } from '../gl/mistGeometry';
 import { targetGeo } from '../orbit';
+import { cameraAt, cameraOf, widestScales } from '../camera';
 
 /**
  * A scene's ridge silhouettes as alpha masks, for the layered fallback.
@@ -15,6 +16,15 @@ import { targetGeo } from '../orbit';
  *
  * Only the rows the edge passes through are stored: above them the fill is
  * empty and below it's solid, which the layer adds with a plain CSS mask.
+ *
+ * The descent camera (../camera.js) draws a ridge smaller about the frame's
+ * centre line and moves its foot: the layer takes that as a CSS transform,
+ * so each mask is baked once at scale 1, over the widest span of its noise
+ * the camera can show (its smallest scale, at `about` = 1), with the extra
+ * columns whole device pixels past each edge so the resting frame lands on
+ * exactly the pixels it did. Its blur and rim scale with the transform, as
+ * they do in the shader. The descent's extra ranges (`layout`'s `extra`) get
+ * masks too, all of them, so ranges joining only fade a layer in.
  */
 
 // Past ±6σ the edge is fully on or off in 8 bits (the shader clamps there).
@@ -54,34 +64,48 @@ async function toUrl(alpha, cols, rows) {
 }
 
 /**
- * Masks for `recipe` resting in a w × h (CSS px) frame at `dpr`. Resolves to
- * { ridges: [{ top, base, t, fade, fill, rim }], revoke }, where `fill` and
- * `rim` are { url, top, height } bands in CSS px (the image spans the full
- * width). Yields to the main thread between ridges.
+ * Masks for `recipe` resting in a w × h (CSS px) frame at `dpr`, for every
+ * ridge the descent can show under any of `recipes` (the scenes whose camera
+ * may run: their `scroll.camera`). Resolves to { ridges: [{ noise, top, base,
+ * t, bottom, fill, rim }], revoke }, in paint order with the extra ranges in
+ * their gaps; `fill` and `rim` are { url, left, width, top, height } bands in
+ * CSS px, and `bottom` is how far down the fill must reach (in the ridge's
+ * own, unscaled terms) to cover the frame at its smallest. Yields to the main
+ * thread between ridges.
  */
-export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false) {
+export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false, recipes = [recipe]) {
   const [size, horizon, haze, height, sharp, sun, seed] = targetGeo(recipe);
   const mist = { ...mistOf(recipe.mist), haze, height, sharp, sun, seed };
-  const { ridges } = layout(w, h, { size, horizon, mist, aspect: recipe.aspect });
+  const extra = Math.max(0, ...recipes.map(r => cameraOf(r).more));
+  const tilt = Math.max(0, ...recipes.map(r => cameraAt(1, r).tilt));
+  const opts = { size, horizon, mist, aspect: recipe.aspect, extra };
+  const pre = layout(w, h, { ...opts, crests: false });
+  const least = widestScales(pre, h, recipes);
+  const { ridges, horizon: c } = layout(w, h, { ...opts, scales: least });
 
   // The GL canvas's backing size, so the masks land on the same device pixels.
-  const cols = Math.max(1, Math.round(w * dpr));
+  const cols0 = Math.max(1, Math.round(w * dpr));
   const rowsAll = Math.max(1, Math.round(h * dpr));
-  const sx = w / cols;
+  const sx = w / cols0;
   const sy = h / rowsAll;
-  const aa = 0.5 / (cols / w);
+  const aa = 0.5 / (cols0 / w);
   const hw = rimWidth(h) / 2;
-  const crest = new Float64Array(cols);
-  const reach = new Float64Array(cols); // how far the edge spreads, CSS px
   const urls = [];
   const keep = []; // the decoded images, held so they stay in memory
   const out = [];
 
-  for (const ridge of ridges) {
+  for (const [b, ridge] of ridges.entries()) {
     if (isCancelled()) break;
     const blur = ridgeBlur(ridge.t, h);
     const sigma = Math.sqrt((blur > 0.4 ? blur * blur : 0) + aa * aa);
-    sampleCrest(ridge, cols, cols / w, crest);
+    // Whole device columns past each edge, enough for the frame at the
+    // ridge's smallest scale; column j sits at x = (j − ext + ½)·sx.
+    const s = least[b];
+    const ext = s < 1 ? Math.ceil(((w / 2) * (1 / s - 1)) / sx) : 0;
+    const cols = cols0 + 2 * ext;
+    const crest = new Float64Array(cols);
+    const reach = new Float64Array(cols); // how far the edge spreads, CSS px
+    sampleCrest({ ...ridge, x0: ridge.x0 + ext * sx }, cols, cols0 / w, crest);
 
     // Slope-corrected distance, as the shader: d = (y - crest) · k.
     const k = new Float64Array(cols);
@@ -125,13 +149,18 @@ export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false) {
     const rimUrl = rimImg.url;
     urls.push(fillUrl, rimUrl);
     keep.push(fillImg.img, rimImg.img);
+    const left = -ext * sx;
+    const width = cols * sx;
     out.push({
+      noise: ridge.noise,
       top: ridge.top,
       base: ridge.base,
       t: ridge.t,
-      fade: ridge.fade,
-      fill: { url: fillUrl, top, height: bandH },
-      rim: { url: rimUrl, top, height: bandH },
+      // The foot never rises above the horizon tilted up, and the ridge is
+      // never drawn smaller than `s`.
+      bottom: ridge.base + (h - (c - tilt * h)) / s + 2,
+      fill: { url: fillUrl, left, width, top, height: bandH },
+      rim: { url: rimUrl, left, width, top, height: bandH },
     });
     await yieldToMain();
   }

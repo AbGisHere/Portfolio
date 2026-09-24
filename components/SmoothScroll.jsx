@@ -1,31 +1,128 @@
 'use client';
 
-import { useEffect } from 'react';
-import Lenis from 'lenis';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { isPinned, setDescent } from './scroll/descent';
+import styles from './SmoothScroll.module.css';
 
-gsap.registerPlugin(ScrollTrigger);
+/**
+ * The site's scroll layer. Mounted once in the root layout, it renders
+ * nothing visible and does two jobs:
+ *
+ * - Publishes the descent's progress. `about` is how far the page has
+ *   scrolled through the `[data-descent="about"]` track (DescentTrack), 0 → 1
+ *   across its scrollable span, written to the descent store. It's a pure
+ *   function of scroll position: no easing beyond Lenis's own smoothing, so
+ *   scrolling back retraces exactly. A page without a track publishes 0.
+ *   `?scroll=` pins the store and nothing is published.
+ * - Smooths wheel scrolling with Lenis, loaded after first paint (idle) so it
+ *   stays out of first-load JS. Until then, and under reduced motion (no
+ *   Lenis at all), a passive native scroll listener publishes instead.
+ *   Keyboard scrolling stays native: Lenis doesn't touch keys, and nothing
+ *   snaps.
+ *
+ * The span is the track's height less the *large* viewport height (the probe
+ * below, 100lvh), not innerHeight, so a mobile URL bar collapsing or
+ * expanding doesn't change the denominator and progress doesn't jump.
+ */
+export default function SmoothScroll() {
+  const pathname = usePathname();
+  const probe = useRef(null);
+  const remeasure = useRef(null);
 
-export default function SmoothScroll({ children }) {
   useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.1,
-      smoothWheel: true,
-    });
+    const pinned = isPinned();
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let track = null;
+    let start = 0;
+    let span = 1;
+    let lenis = null;
+    let loading = false;
+    let dead = false;
+    let idleId = null;
 
-    lenis.on('scroll', ScrollTrigger.update);
+    const publish = (y = window.scrollY) => {
+      if (pinned) return;
+      setDescent({ about: track ? (y - start) / span : 0 });
+    };
 
-    gsap.ticker.add((time) => {
-      lenis.raf(time * 1000);
-    });
-    gsap.ticker.lagSmoothing(0);
+    const measure = () => {
+      track = document.querySelector('[data-descent="about"]');
+      if (track) {
+        const y = lenis ? lenis.animatedScroll : window.scrollY;
+        start = track.getBoundingClientRect().top + window.scrollY;
+        span = Math.max(1, track.offsetHeight - (probe.current?.offsetHeight || window.innerHeight));
+        publish(y);
+      } else {
+        publish();
+      }
+    };
+    remeasure.current = measure;
+
+    const onNative = () => publish();
+    const onLenis = (l) => publish(l.animatedScroll);
+
+    const startLenis = () => {
+      if (dead || lenis || loading || reduce.matches) return;
+      loading = true;
+      import('lenis').then(({ default: Lenis }) => {
+        loading = false;
+        if (dead || lenis || reduce.matches) return;
+        lenis = new Lenis({ autoRaf: true, smoothWheel: true, anchors: false });
+        lenis.on('scroll', onLenis);
+        window.removeEventListener('scroll', onNative);
+        measure();
+      }, () => {
+        // Chunk failed: stay on native scroll.
+        loading = false;
+      });
+    };
+
+    const stopLenis = () => {
+      if (!lenis) return;
+      lenis.destroy();
+      lenis = null;
+      window.addEventListener('scroll', onNative, { passive: true });
+      measure();
+    };
+
+    const onMotionPref = () => (reduce.matches ? stopLenis() : startLenis());
+
+    window.addEventListener('scroll', onNative, { passive: true });
+    window.addEventListener('resize', measure);
+    reduce.addEventListener('change', onMotionPref);
+    // Catches the track mounting or unmounting, and content changing height.
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    measure();
+
+    if (!reduce.matches) {
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(startLenis, { timeout: 1500 });
+      } else {
+        idleId = window.setTimeout(startLenis, 200);
+      }
+    }
 
     return () => {
-      lenis.destroy();
-      gsap.ticker.remove(lenis.raf);
+      dead = true;
+      remeasure.current = null;
+      if (idleId != null) {
+        if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
+        else window.clearTimeout(idleId);
+      }
+      window.removeEventListener('scroll', onNative);
+      window.removeEventListener('resize', measure);
+      reduce.removeEventListener('change', onMotionPref);
+      ro.disconnect();
+      lenis?.destroy();
     };
   }, []);
 
-  return children;
+  // A route change swaps the page (and its track, or lack of one).
+  useEffect(() => {
+    remeasure.current?.();
+  }, [pathname]);
+
+  return <div ref={probe} className={styles.probe} aria-hidden="true" />;
 }

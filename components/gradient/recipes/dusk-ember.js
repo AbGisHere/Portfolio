@@ -87,6 +87,31 @@ const duskEmber = {
     ],
   },
 
+  // The descent's time of day (components/gradient/camera.js), over the
+  // 0.2 stretch (`about` 0 → 1) while the camera draws back. Ours, not the
+  // studio's.
+  scroll: {
+    // Palettes the sky passes on the way down, like `transition.via`: the
+    // evening turns into a real sunset and stops short of it. Warm amber
+    // mist and orange low down where the sun is, a narrow dusky rose above,
+    // cooling to soft violet-blue overhead (off the top of the frame by the
+    // end). The far ridges take the orange glow; the near ones (stops[4],
+    // stops[5]) stay dark plum so the front ridge holds. Same six bands as
+    // `stops`.
+    keys: [
+      { at: 0.5, stops: ['#D8C3C6', '#F7C88F', '#E5966B', '#B2716F', '#72496D', '#412C53'] },
+      { at: 1, stops: ['#8C88B2', '#F5B878', '#DE8A5A', '#A8665E', '#6A4468', '#382850'] },
+    ],
+    // Where the sun is on screen by the end, from its resting spot, in
+    // shares of the height (−dy is up). The camera tilting down lifts the
+    // sky faster than this, so it sinks toward the ridges, leaning left the
+    // way it sets, and ends on the far crests without setting.
+    body: { dx: -0.05, dy: -0.19 },
+    // The meadow's tint at the viewer's feet, leaned into the front ridge's
+    // colour: a dusty sage that sits with the mauve ranges.
+    meadow: '#8E8664',
+  },
+
   // Unused by MIST, kept so the recipe stays a drop-in studio export.
   mesh: null,
   params: null,

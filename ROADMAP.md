@@ -10,9 +10,9 @@ as the site takes shape.
 
 | Line | Scope |
 |---|---|
-| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.11`. |
-| `0.2.x` | About me: the first stretch of the descent. Scroll tilts the camera down, the ridges rise and the sky turns toward evening (see "The descent"). |
-| `0.3.x` | Projects: the descent carries on onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line, from `0.2.0`. |
+| `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -76,19 +76,24 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       WebGL renderer. Since `0.1.8` the fallback is the layered DOM renderer
       (`components/gradient/layers/`), and the generated SVG engine (~360 KB
       minified, 128 KB gzipped) is deleted. Neither renderer is in first-load
-      JS. `three` is already gone. GSAP/Lenis load only when the scroll layer uses them.
+      JS. `three` is already gone. Since `0.2.0`, Lenis loads in its own chunk
+      when the browser is idle (the scroll layer added ~1.4 KB gzip to
+      first-load JS); GSAP ships nowhere, as only the unused primitives import it.
 
 ## The descent — one camera from the sky to the desk
 
 **Status:** agreed in discussion 2026-09-24, for the `0.2.x` and `0.3.x`
 lines. Replaces the 2026-09-23 sequence (tilt down, a table rising from
-below, a CSS 3D device, zoom until the screen fills the viewport).
+below, a CSS 3D device, zoom until the screen fills the viewport). **Changed
+while building `0.2`:** `0.2` is not the start of arc 1. It pulls the camera
+back (see "0.2"), and both arcs, the whole S, happen in `0.3`, starting from
+where `0.2` leaves the camera.
 
 `0.1` → `0.2` → `0.3` is **one continuous camera move**, not three effects
 stitched together. Scroll position drives a camera along one path: from
-today's view of the mountains, down onto a desk in a meadow, and round to face
-an open laptop with the mountains behind it. Each version line ships the next
-stretch of the same path.
+today's view of the mountains, back away from them, down onto a desk in a
+meadow, and round to face an open laptop with the mountains behind it. Each
+version line ships the next stretch of the same path.
 
 ### The camera path
 
@@ -96,8 +101,8 @@ Side view: Z runs left to right, with the mountains off to the left (−Z), and
 Y points up.
 
 ```
- mountains  <-------- [cam 1]    facing the mountains (today's view)
-                          \
+ mountains <[cam 0]->[cam 1]    0.2: both face the mountains; the camera
+                          \      pulls back along +Z (slight tilt, small rise)
                            \     arc 1: faces away from its centre
                          [cam 2]  facing straight down
                             |  \
@@ -106,8 +111,11 @@ Y points up.
  ~~~~~~~~~~~~~~~~~~~~~~ grass ~~~~~~~~~~~~~~~~~~~~~~~
 ```
 
-- **Arc 1** (`0.2`, then into `0.3`). The camera starts at (y 0, z −R) on a
-  circle in the YZ plane, facing outward (−Z), which is today's view. It
+- **The pull-back** (`0.2`, from `0.2.0`). From today's view (cam 0) the
+  camera walks back along +Z, still facing the mountains, pitching down
+  slightly and rising a little. It ends at cam 1, where arc 1 starts.
+- **Arc 1** (`0.3`). The camera starts at (y 0, z −R) on a
+  circle in the YZ plane, facing outward (−Z): where `0.2` left it. It
   travels a quarter-turn to (y −R, z 0), still facing outward, which is now
   straight down. It pitches down 90° as it drops and draws back.
 - **Arc 2** (`0.3`). A second circle, centred on the laptop, starts where arc
@@ -139,36 +147,64 @@ How it should feel:
   the field of view a little only at the very end, to flatten the screen so
   the project tiles read well.
 - **The camera is a pure function of scroll progress.** Lenis smooths the
-  input and a ScrollTrigger `scrub` supplies the progress. There's no physics
-  and no catching up, so scrolling back up retraces the path exactly, and a
-  resize mid-descent lands in the right place.
+  input and the scroll layer (`components/SmoothScroll.jsx`) computes the
+  progress straight from the scroll position (no ScrollTrigger in `0.2`).
+  There's no physics and no catching up, so scrolling back up retraces the
+  path exactly, and a resize mid-descent lands in the right place.
 - **Scroll drives the camera directly, not recipe fields.** Recipe fields
   (`glintHorizon`, `mist.height`) pass through the GL renderer's rest spring
   and would trail the scroll by about half a second.
 
-### 0.2 — about me: the first stretch
+### 0.2 — about me: the pull-back
 
-- **The ridges rise and the sky shrinks.** This is the camera pitching down
-  arc 1. Each ridge gets a depth, so the camera maths gives correct parallax
-  for free: near ridges move more than far ones. In the GL renderer that's a
-  per-ridge offset and scale from uniforms. In the layered fallback it's a
-  transform on each ridge's layer, handled by the compositor.
-- **Time of day moves on top of the camera.** This part isn't camera motion.
-  - **Day:** the sun sinks toward the ridges, and the palette warms toward
-    pink, like the first part of a switch into night. It stops there: the
-    moon doesn't rise.
-  - **Night:** the moon climbs, and the palette's lilac/pink cast fades into
-    a deeper night.
-  - This is recipe data, not renderer code: a new recipe field (working name
-    `scroll`: palette keyframes, where the body goes, how far the ridges
-    rise), interpolated with `skyKeys.js` like `via`.
-- **The sun toggle works only near the top.** It fades out after about 10% of
-  scroll, since the sun is sinking out of reach anyway. That avoids a switch
-  having to turn the sky between two scrolled states. The lamp takes over
-  further down (see below).
-- **Proposal:** the about text sits on the front ridge's fill as it rises,
-  so the mountains become the page. Not decided.
-- **Reduced motion:** a smaller rise, with the colour change kept.
+**Shipped in `0.2.0`** (the details are in `CLAUDE.md`, "The camera (0.2)"):
+
+- **The camera pulls back** along +Z, walking away from the mountains, with
+  a slight downward tilt and a small rise. The end frame is mostly
+  mountains, a faint strip of sky and a thin band of meadow. Each ridge has
+  a depth from `layout`'s ground plane, so parallax comes from the maths:
+  near ridges shrink more than far ones. GL sets uniforms; the layered
+  fallback transforms each ridge's layers on the compositor. Extra ranges
+  fade in between the recipe's as the view opens.
+- **Time of day moves on top of the camera,** as recipe data (`scroll`:
+  palette keys by progress, the body's offset, the meadow tint), through
+  `skyKeys.js` like `via`. Day: the sun sinks and the palette warms toward a
+  sunset, stopping short of one. Night: the moon climbs and the lilac cast
+  fades into a deeper night.
+- **The sun toggle works only near the top.** It fades out over 5–10% of
+  the stretch and is inert past it (until `0.2.2`, below).
+- **Reduced motion:** 30% of the camera move, with the colour change kept.
+
+**`0.2.1`: ridges that behave like terrain.** Today the view morphs rather
+than pulls back: `rise` spreads the feet by (1 + rise)·s while the heights
+shrink by s, extra ranges fade in place, idle seed drift carries on during
+scroll, and the ridges are relit.
+- **A ridge conveyor.** The front ridge (n = 1) recedes smoothly into the
+  n = 2 slot while a new ridge emerges in front as the new n = 1. Every
+  property interpolates continuously, and each ridge keeps its own
+  silhouette.
+- **New distant ranges rise into view** from behind the horizon and the far
+  ridge, like a drone pulling back, instead of fading in place.
+- **Each silhouette stays fixed in world space.**
+
+**`0.2.2`: the sun and moon under scroll.**
+- **Clickable at any scroll position.** The switch arc keeps its full
+  unscrolled shape, shifted by the camera tilt, and a body may leave the
+  frame mid-arc. The hit target follows the painted body. The orbit's
+  `hidden` line comes from the transformed far ridge.
+- **The sun visibly sets.** On scroll it drifts up and left, keeping a fixed
+  gap to the ridges, so it doesn't read as setting. It must sink toward and
+  into the ridges. The moon gets the same fix.
+- **A believable sunset.** The day scroll palette is too orange. Balance it
+  so the sky and the light on the ridges and meadow work together.
+
+**Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
+feature is ported to it, with parity passing, before any `0.3.x` work
+starts.
+
+- **Proposal:** the about text sits on the front ridge's fill, so the
+  mountains become the page. Not decided; the text itself comes with the
+  real content (`0.6.x`).
 
 ### 0.3 — the desk
 
@@ -268,8 +304,9 @@ front needs real geometry.
   device class. Budget: under about 1–1.5 MB for the whole desk scene.
 - **The layered fallback** follows the mountains' part as layer transforms,
   and shows the desk as stills with a crossfade.
-- **Parity:** add a scroll-position hook (for example `?scroll=0.5`) so
-  `npm run parity` compares the renderers mid-descent, not only at rest.
+- **Parity:** `?scroll=` pins the progress, and `npm run parity` compares
+  the renderers at the top, middle and end of the `0.2` stretch
+  (`--scrolls`). Extend both to the `0.3` stretch.
 
 ### Loading
 
@@ -277,7 +314,7 @@ Nothing should load all at once, and nobody should have to scroll and wait.
 
 1. **Open.** HTML, the server-rendered text and the CSS backdrop sky paint
    first, then the `0.1` renderer, as today. Nothing else competes with it.
-2. **Once `0.1` has painted and the browser is idle:** load the `0.2`/`0.3`
+2. **Once `0.1` has painted and the browser is idle:** load the `0.3`
    code (the camera path, the ridges' depth, the ground). It's small, since
    it mostly extends the running shader. Pre-compile the new shaders in the
    background (`KHR_parallel_shader_compile`), so the first frame that needs

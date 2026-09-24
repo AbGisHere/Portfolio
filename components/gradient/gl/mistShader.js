@@ -7,6 +7,12 @@
  * All compositing is plain source-over in gamma-encoded sRGB, like SVG and
  * CSS, and lengths are in CSS px (the SVG's user units); `p` is the pixel
  * centre in those units, y down.
+ *
+ * The descent camera (../camera.js) arrives as uniforms too: the sky's shift
+ * (uSkyShift), each ridge's scale (uScale: its blur and rim scale with it;
+ * its crest, top, base and veil come already moved), the meadow below the
+ * front ridge (uGround*) and the air following the front foot (uFront). At
+ * `about` = 0 they're all identities, and the picture is 0.1's exactly.
  */
 
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SUN_GLOW } from '../sunLook';
@@ -43,6 +49,7 @@ uniform float uBodySquash[2]; // a low sun's flattening, share of its height
 uniform sampler2D uMoon;     // moonFace.js shade map, across the disc
 uniform sampler2D uCrest;    // R32F: crest y per device column, one row per ridge
 uniform int uCount;
+uniform int uCrestRow[MAX_RIDGES]; // each ridge's row in uCrest (its noise index)
 uniform float uTop[MAX_RIDGES];
 uniform float uBase[MAX_RIDGES];
 uniform vec3 uFillA[MAX_RIDGES];   // gradient stop at 0%
@@ -59,6 +66,13 @@ uniform vec3 uMist;
 uniform float uAirA;
 uniform sampler2D uGrain;    // 256² noise, tiled at 256 CSS px, nearest
 uniform float uGrainA;
+uniform float uSkyShift;     // the camera's tilt: the sky moves up this far, CSS px
+uniform float uScale[MAX_RIDGES]; // each ridge's camera scale (1 at rest)
+uniform float uFront;        // the front ridge's foot: the meadow's top (≥ height: none)
+uniform float uHorizon;      // the ground's vanishing line
+uniform vec4 uGroundY;       // the meadow gradient's stops, y in CSS px (camera.js GROUND_AT)
+uniform vec3 uGroundCol[4];
+uniform vec3 uWind;          // amplitude, bands per unit depth ratio, phase (cycles)
 
 out vec4 outColor;
 
@@ -71,6 +85,26 @@ float Phi(float x) {
 }
 
 vec3 over(vec3 dst, vec3 src, float a) { return mix(dst, src, clamp(a, 0.0, 1.0)); }
+
+// The meadow at p (below uFront): camera.js groundPaint's stops, linear in
+// sRGB between them as CSS draws them, then the wind: soft bright bands at
+// constant ground depth, fading out toward the front foot where they'd crowd.
+vec3 meadow(vec2 p) {
+  vec3 g = p.y < uGroundY.y ? mix(uGroundCol[0], uGroundCol[1], (p.y - uGroundY.x) / max(1e-3, uGroundY.y - uGroundY.x))
+    : p.y < uGroundY.z ? mix(uGroundCol[1], uGroundCol[2], (p.y - uGroundY.y) / max(1e-3, uGroundY.z - uGroundY.y))
+    : mix(uGroundCol[2], uGroundCol[3], clamp((p.y - uGroundY.z) / max(1e-3, uGroundY.w - uGroundY.z), 0.0, 1.0));
+  if (uWind.x > 0.0) {
+    float dy = max(1.0, p.y - uHorizon);
+    float q = (uFront - uHorizon) / dy;              // depth over the front foot's
+    float gx = (p.x - uSize.x * 0.5) / dy * (uFront - uHorizon) / uSize.y; // across, same units
+    // Bands of constant depth rolling toward the viewer, bent a little, lit
+    // in gusts: patches that wander across as the bands pass.
+    float wave = sin(6.2831853 * (q * uWind.y + uWind.z + 0.3 * sin(gx * 2.1)));
+    float gust = smoothstep(0.25, 0.95, 0.5 + 0.5 * sin(gx * 4.3 + q * 9.0 - 6.2831853 * uWind.z * 0.37));
+    g *= 1.0 + uWind.x * wave * gust * clamp((1.0 - q) * 12.0, 0.0, 1.0);
+  }
+  return g;
+}
 
 // The sun's two-layer glow (sunLook.js): opacity at x radii, piecewise-linear
 // through the same stops the layered fallback's CSS gradient uses.
@@ -92,7 +126,7 @@ void main() {
   vec2 p = vec2(xPx, uRes.y - gl_FragCoord.y) * uSize / uRes;
 
   // Sky: the gradient spans the full frame height.
-  vec3 col = texture(uSky, vec2(p.y / uSize.y, 0.5)).rgb;
+  vec3 col = texture(uSky, vec2((p.y + uSkyShift) / uSize.y, 0.5)).rgb;
 
   // Sun and moon (both mid-switch), then the disc at .85, antialiased over a
   // device pixel. The moon: glow radial at .4 fading linearly to 0 at 3.4r,
@@ -104,7 +138,7 @@ void main() {
     vec2 q = p - uBody[i].xy;
     float d = length(q);
     bool moon = uBodyFace[i] > 0.5;
-    vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp(uBody[i].y / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
+    vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp((uBody[i].y + uSkyShift) / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
     float glow = moon ? 0.4 * max(0.0, 1.0 - d / (r * 3.4)) : sunGlow(d / r);
     col = over(col, bc, uBodyGlow[i] * glow);
     // The disc: an ellipse, r wide and r·(1 - squash) tall.
@@ -131,12 +165,14 @@ void main() {
 
     // Signed distance to the crest (positive below it), corrected for slope
     // so the blurred and antialiased edges keep an even width on steep flanks.
-    float crest = texelFetch(uCrest, ivec2(cx, i), 0).r;
+    int row = uCrestRow[i];
+    float crest = texelFetch(uCrest, ivec2(cx, row), 0).r;
     float slope = span > 0.0
-      ? (texelFetch(uCrest, ivec2(cr, i), 0).r - texelFetch(uCrest, ivec2(cl, i), 0).r) / span
+      ? (texelFetch(uCrest, ivec2(cr, row), 0).r - texelFetch(uCrest, ivec2(cl, row), 0).r) / span
       : 0.0;
     float d = (p.y - crest) / sqrt(1.0 + slope * slope);
-    float sigma = sqrt(uBlur[i] * uBlur[i] + aa * aa);
+    float bl = uBlur[i] * uScale[i];
+    float sigma = sqrt(bl * bl + aa * aa);
 
     // Fill: vertical gradient in user space from top to base, clamped past both.
     float t = clamp((p.y - uTop[i]) / max(1e-3, uBase[i] - uTop[i]), 0.0, 1.0);
@@ -146,9 +182,12 @@ void main() {
     col = over(col, fill, Phi(d / sigma) * fade);
 
     // Crest rim: a stroke centred on the curve, blurred with the ridge.
-    float hw = uRimW * 0.5;
+    float hw = uRimW * 0.5 * uScale[i];
     float rim = Phi((d + hw) / sigma) - Phi((d - hw) / sigma);
     col = over(col, uRimCol[i], rim * uRimA[i] * fade);
+
+    // The meadow, in front of every ridge and under the front one's veil.
+    if (i == uCount - 1 && p.y > uFront) col = meadow(p);
 
     // Veil: radial gradient in the ellipse's box — .9 at the centre, .42 at
     // 55%, 0 at the rim — times the veil's (breathing) opacity.
@@ -158,9 +197,14 @@ void main() {
     col = over(col, uMist, va * uVeilA[i] * fade);
   }
 
-  // Air: the mist colour rising from 0 to uAirA over the bottom 14%.
-  float airTop = uSize.y * 0.86;
-  col = over(col, uMist, p.y > airTop ? (p.y - airTop) / (uSize.y * 0.14) * uAirA : 0.0);
+  // Air: the mist colour rising from 0 to uAirA over the 14% of the height
+  // above the front foot (the frame's foot at rest), then thinning out over
+  // the meadow (camera.js airAt).
+  float airTop = uSize.y * 0.86 + (uFront < uSize.y ? uFront - uSize.y : 0.0);
+  float air = p.y > uFront
+    ? uAirA * (1.0 - (p.y - uFront) / max(1.0, uSize.y - uFront))
+    : p.y > airTop ? (p.y - airTop) / (uSize.y * 0.14) * uAirA : 0.0;
+  col = over(col, uMist, air);
 
   // Grain: CSS mix-blend-mode overlay at uGrainA, texels one CSS px square.
   if (uGrainA > 0.0) {

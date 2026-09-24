@@ -2,10 +2,11 @@
 /**
  * Renderer parity: screenshots the atmosphere drawn by two renderers (by
  * default the layered fallback and the WebGL renderer) at rest, per
- * viewport × theme, and diffs them.
+ * viewport × theme × descent position (`?scroll=`), and diffs them.
  *
  *   node scripts/parity.mjs [--base URL] [--threshold 2] [--p99 24]
  *        [--viewports 393x852@2,1440x900@2] [--themes day,night]
+ *        [--scrolls 0,0.5,1]
  *        [--settle 2500] [--sun-tolerance 1] [--a layers --b gl] [--grain]
  *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v]
  *
@@ -38,8 +39,15 @@ const GRAIN = Boolean(args.grain); // off by default: random noise can't match p
 // Extra query params: `--query` for both sides, `--query-a` / `--query-b` for
 // one (e.g. `--a gl --b gl --query-b crest=cpu` compares the GL crest paths).
 const params = q => Object.fromEntries(new URLSearchParams(typeof q === 'string' ? q : ''));
-const QUERY = { a: { ...params(args.query), ...params(args['query-a']) }, b: { ...params(args.query), ...params(args['query-b']) } };
+const QUERY = {
+  a: { ...params(args.query), ...params(args['query-a']) },
+  b: { ...params(args.query), ...params(args['query-b']) },
+};
 const THEMES = String(args.themes ?? 'day,night').split(',');
+// Descent positions, pinned with `?scroll=` (components/scroll/descent.js).
+const SCROLLS = String(args.scrolls ?? '0,0.5,1')
+  .split(',')
+  .map(Number);
 const VIEWPORTS = viewportsFrom(args.viewports, [
   '393x852@2',
   '320x568@1',
@@ -73,7 +81,7 @@ function seedRandom() {
 }
 
 /** Load one renderer, settle, freeze, screenshot, and measure the sun. */
-async function capture(browser, vp, theme, renderer, side) {
+async function capture(browser, vp, theme, renderer, side, scroll) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
     deviceScaleFactor: vp.dpr,
@@ -85,11 +93,9 @@ async function capture(browser, vp, theme, renderer, side) {
   page.on('console', m => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', e => errors.push(String(e)));
 
-  const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), ...QUERY[side] };
+  const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), scroll: String(scroll), ...QUERY[side] };
   await page.goto(sceneUrl(BASE, renderer, query), { waitUntil: 'load' });
-  await page
-    .waitForSelector('[data-renderer]', { timeout: 15000 })
-    .catch(() => {});
+  await page.waitForSelector('[data-renderer]', { timeout: 15000 }).catch(() => {});
   await page.addStyleTag({ content: FREEZE_CSS });
   await sleep(SETTLE);
 
@@ -113,7 +119,9 @@ async function capture(browser, vp, theme, renderer, side) {
     }
     return { target, painted: null, via: 'none (renderer exposes no sun position)' };
   });
-  if (sun.painted) {
+  // Mid-descent the hit target stays put (and goes inert) while the painted
+  // sun moves: only the resting frame checks the target against it.
+  if (sun.painted && scroll === 0) {
     sun.offset = Math.hypot(sun.target.x - sun.painted.x, sun.target.y - sun.painted.y);
   }
 
@@ -229,53 +237,61 @@ async function main() {
 
   for (const vp of VIEWPORTS) {
     for (const theme of THEMES) {
-      const id = `${vp.name.replace('@', '-')}-${theme}`;
-      const a = await capture(browser, vp, theme, A, 'a');
-      const b = await capture(browser, vp, theme, B, 'b');
-      const d = await diff(differ, a.png, b.png);
+      for (const scroll of SCROLLS) {
+        const id = `${vp.name.replace('@', '-')}-${theme}-s${scroll}`;
+        const a = await capture(browser, vp, theme, A, 'a', scroll);
+        const b = await capture(browser, vp, theme, B, 'b', scroll);
+        const d = await diff(differ, a.png, b.png);
 
-      writeFileSync(join(OUT, `${id}-${A}.png`), a.png);
-      writeFileSync(join(OUT, `${id}-${B}.png`), b.png);
-      if (d.heatmap) {
-        writeFileSync(join(OUT, `${id}-diff.png`), Buffer.from(d.heatmap.split(',')[1], 'base64'));
-      }
-
-      const problems = [];
-      if (d.error) problems.push(d.error);
-      else {
-        if (d.mean > THRESHOLD) problems.push(`mean ${fmt(d.mean)} > ${THRESHOLD}`);
-        if (d.p99 > P99) problems.push(`p99 ${d.p99} > ${P99}`);
-      }
-      for (const [label, cap] of [
-        [A, a],
-        [B, b],
-      ]) {
-        if (cap.sun.offset != null && cap.sun.offset > SUN_TOL) {
-          problems.push(`${label} sun target off by ${fmt(cap.sun.offset)}px`);
+        writeFileSync(join(OUT, `${id}-${A}.png`), a.png);
+        writeFileSync(join(OUT, `${id}-${B}.png`), b.png);
+        if (d.heatmap) {
+          writeFileSync(join(OUT, `${id}-diff.png`), Buffer.from(d.heatmap.split(',')[1], 'base64'));
         }
-        if (cap.errors.length) problems.push(`${label} console: ${cap.errors[0]}`);
-      }
-      if (problems.length) failed++;
 
-      const row = {
-        id,
-        viewport: vp.name,
-        theme,
-        painted: { [A]: a.painted, [B]: b.painted },
-        mean: d.mean,
-        p99: d.p99,
-        worst: d.worst,
-        sun: { [A]: a.sun, [B]: b.sun },
-        problems,
-      };
-      cases.push(row);
-      console.log(
-        `${problems.length ? 'FAIL' : 'ok  '} ${id.padEnd(22)} ` +
-          `painted ${A}=${a.painted} ${B}=${b.painted}  ` +
-          `mean ${fmt(d.mean)}  p99 ${d.p99 ?? '—'}  worst32 ${fmt(d.worst?.mean)}  ` +
-          `sun ${fmt(a.sun.offset)}/${fmt(b.sun.offset)}px` +
-          (problems.length ? `  → ${problems.join('; ')}` : ''),
-      );
+        const problems = [];
+        if (d.error) problems.push(d.error);
+        else {
+          if (d.mean > THRESHOLD) problems.push(`mean ${fmt(d.mean)} > ${THRESHOLD}`);
+          if (d.p99 > P99) problems.push(`p99 ${d.p99} > ${P99}`);
+        }
+        for (const [label, cap] of [
+          [A, a],
+          [B, b],
+        ]) {
+          if (cap.sun.offset != null && cap.sun.offset > SUN_TOL) {
+            problems.push(`${label} sun target off by ${fmt(cap.sun.offset)}px`);
+          }
+          if (cap.errors.length) problems.push(`${label} console: ${cap.errors[0]}`);
+        }
+        // Both renderers must report the same painted sun (they move it alike).
+        const pa = a.sun.painted;
+        const pb = b.sun.painted;
+        const drift = pa && pb ? Math.hypot(pa.x - pb.x, pa.y - pb.y) : null;
+        if (drift != null && drift > SUN_TOL) problems.push(`painted sun ${A}/${B} apart by ${fmt(drift)}px`);
+        if (problems.length) failed++;
+
+        const row = {
+          id,
+          viewport: vp.name,
+          theme,
+          scroll,
+          painted: { [A]: a.painted, [B]: b.painted },
+          mean: d.mean,
+          p99: d.p99,
+          worst: d.worst,
+          sun: { [A]: a.sun, [B]: b.sun },
+          problems,
+        };
+        cases.push(row);
+        console.log(
+          `${problems.length ? 'FAIL' : 'ok  '} ${id.padEnd(28)} ` +
+            `painted ${A}=${a.painted} ${B}=${b.painted}  ` +
+            `mean ${fmt(d.mean)}  p99 ${d.p99 ?? '—'}  worst32 ${fmt(d.worst?.mean)}  ` +
+            `sun ${fmt(a.sun.offset)}/${fmt(b.sun.offset)}px` +
+            (problems.length ? `  → ${problems.join('; ')}` : ''),
+        );
+      }
     }
   }
   await browser.close();

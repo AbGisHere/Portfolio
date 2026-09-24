@@ -1,4 +1,5 @@
 import AtmosphereField from '@/components/AtmosphereField';
+import SmoothScroll from '@/components/SmoothScroll';
 import ThemeProvider from '@/components/ThemeProvider';
 import { fontVariables } from './fonts';
 import { SITE } from './site';
@@ -74,6 +75,8 @@ export default function RootLayout({ children }) {
               across navigation (404 → home carries on from the same sky and
               seed). It sits behind page content that has a z-index. */}
           <AtmosphereField />
+          {/* Smooth scroll, and the descent's progress from it. */}
+          <SmoothScroll />
         </ThemeProvider>
       </body>
     </html>

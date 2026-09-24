@@ -19,11 +19,30 @@
   inset: 0;
 }
 
+/* The sky: taller than the frame, so the descent can slide it up. */
+.sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-repeat: no-repeat;
+  will-change: transform;
+}
+
+/* A ridge's shape (fill and rim) or its veil, moved by the descent camera
+   as one transform (identity at rest), on the compositor. */
+.cam {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
 .glow,
 .disc,
 .ridge,
 .veil,
-.air {
+.air,
+.meadow {
   position: absolute;
   top: 0;
   left: 0;
@@ -47,7 +66,8 @@
   will-change: transform, opacity;
 }
 
-.air {
+.air,
+.meadow {
   width: 100%;
 }
 

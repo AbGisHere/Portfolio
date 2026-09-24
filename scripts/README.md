@@ -19,23 +19,25 @@ npm run perf   -- --base http://localhost:3002
 
 ## `npm run parity`
 
-This compares the two renderers at rest for each viewport and theme, and draws
-a diff between them.
+This compares the two renderers at rest for each viewport, theme and descent
+position (`?scroll=`: the top, halfway and the end of the camera move), and
+draws a diff between them.
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--a`, `--b` | `layers`, `gl` | Renderers to compare |
 | `--viewports` | `393x852@2,320x568@1,852x393@1,820x1180@1,1440x900@2,3440x1440@1,1600x300@1` | `WxH@dpr`, comma-separated |
 | `--themes` | `day,night` | |
+| `--scrolls` | `0,0.5,1` | Descent positions (`about`), each pinned with `?scroll=`. Case ids end in `-s<about>` |
 | `--threshold` | `2` | Max **mean** absolute channel difference, on the 0–255 scale |
 | `--p99` | `24` | Max **99th-percentile** per-pixel difference (the largest channel), 0–255. Catches a localised defect, like a misplaced sun or ridge, that the mean would dilute |
-| `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun |
+| `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun (at `scroll` 0 only: mid-descent the target stays put and goes inert while the sun moves), and between the two renderers' painted suns (every case) |
 | `--settle` | `2500` | ms to wait after load before capturing |
 | `--grain` | off | Include grain in the comparison. It's off by default because grain is random noise that no two renderers can match pixel for pixel. Judge grain by eye in the report instead. |
 | `--query`, `--query-a`, `--query-b` | none | Extra URL params (`k=v&k=v`) for both sides or one side. For example, `--a gl --b gl --query driftAt=0.25 --query-b crest=cpu` compares the GL crest paths mid-drift. `perf.mjs` takes `--query` too. |
 
 How it works:
-1. Each case loads `?renderer=<a>&freeze=1&grain=0` and the same for `<b>`,
+1. Each case loads `?renderer=<a>&freeze=1&grain=0&scroll=<about>` and the same for `<b>`,
    with the theme already in localStorage and `Math.random` seeded, so each
    renderer is repeatable.
 2. It disables CSS animations and transitions, waits for the scene to
@@ -50,7 +52,7 @@ threshold or logs a console error, and 2 if the script itself crashes.
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same (`layers`
-against `gl` sits at a mean of ~0.4, p99 2). A higher p99 with a low mean
+against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A higher p99 with a low mean
 points at one local defect, and the `worst 32px block` coordinates say where
 to look.
 
@@ -66,6 +68,12 @@ This measures, per renderer and viewport:
 - **Idle:** `--idle` ms (default 3000) with nothing clicked. The number to
   watch is `task ms/s`: main-thread time per second at rest. Anything that
   repaints every frame at rest shows up here.
+- **Scroll:** the mouse wheel runs down the page's descent track and back up
+  (`--scroll` sweeps, default 1; `0` skips it), with every frame recorded:
+  fps, p95/max and frames over 20 ms. `sun y` is the painted sun's centre at
+  the top, the bottom and back at the top, which confirms `about` moved the
+  camera (and came back to rest). Known gap: the headless sweep doesn't
+  quite reach the bottom of the track, so `about` stops a little short of 1.
 - **Main-thread time:** CDP `Performance.getMetrics` deltas (`TaskDuration`,
   `ScriptDuration`, `LayoutDuration`, `RecalcStyleDuration`) for each phase.
 
@@ -81,7 +89,8 @@ absolute fps, or pass `--headed` for the real GPU.
 |---|---|---|
 | `?renderer=gl` / `?renderer=layers` | page | Forces a renderer. With no param the page chooses (GL where supported, else layers). |
 | `data-renderer="gl" \| "layers"` | scene wrapper | Which renderer actually painted. The harness reports it, so a silent fallback is visible. |
-| `?freeze=1` | renderer | Draws time-dependent motion at its resting phase: veil drift offset **0** and veil opacity at its full value, and (GL) no idle drift. Both renderers freeze the same way. |
+| `?freeze=1` | renderer | Draws time-dependent motion at its resting phase: veil drift offset **0** and veil opacity at its full value, and (GL) no idle drift and no wind over the meadow. Both renderers freeze the same way. |
+| `?scroll=<0..1>` | descent store | Pins the descent's `about` (components/scroll/descent.js), so a frame mid-descent can be compared or timed without scrolling. |
 | `?grain=0` | renderer | Omit the grain layer. Parity compares grain-free frames by default. |
 | `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check. Without it, the check reports "none" and doesn't fail. |
 | `button[aria-pressed]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |

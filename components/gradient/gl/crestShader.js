@@ -10,6 +10,16 @@
  * aspect lock), then the Catmull-Rom → Bézier segment through them (`Zs`). Lattice
  * hashes come from a precomputed table (hashTable.js), because the engine's
  * sin-based hash isn't portable in float32.
+ *
+ * Under the descent camera (../camera.js) a ridge is drawn at scale uS about
+ * the frame's centre line with its foot at uFoot: a column samples the curve
+ * at its source x, over control points running uExt past each end, and the
+ * height is scaled onto the new foot, as `sampleCrest` does with `cam`.
+ *
+ * Rows are by a ridge's `noise` index (mistGeometry.js `layout`), not its
+ * paint order, so the descent's extra ranges can slot in between without a
+ * recipe ridge's maths changing at all; the scene shader looks each ridge's
+ * row up (uCrestRow).
  */
 
 import { MAX_RIDGES } from './mistShader';
@@ -37,6 +47,9 @@ uniform float uN;              // noise offset, (seed + drift) × 0.73
 uniform float uSharp;          // sharp / 100
 uniform float uBase[MAX_RIDGES];
 uniform float uL[MAX_RIDGES];   // crest lift above the base
+uniform float uS[MAX_RIDGES];   // camera scale (1 at rest)
+uniform float uFoot[MAX_RIDGES]; // camera foot (= uBase at rest)
+uniform int uExt[MAX_RIDGES];   // control points past each end
 
 out vec4 outCrest;
 
@@ -79,17 +92,23 @@ float pointY(int i, int b) {
 void main() {
   int col = int(gl_FragCoord.x);
   int b = int(gl_FragCoord.y);
+  bool moved = uS[b] != 1.0 || uFoot[b] != uBase[b];
   float x = (float(col) + 0.5) / uDpr;
+  if (moved) x = uW * 0.5 + (x - uW * 0.5) / uS[b];
+  int lo = -uExt[b];
+  int hi = uLast + uExt[b];
   int n = int(floor((x - uX0) / uDx));
-  n = clamp(n, 0, uLast - 1);
+  n = clamp(n, lo, hi - 1);
   float u = clamp((x - (uX0 + float(n) * uDx)) / uDx, 0.0, 1.0);
-  float a = pointY(max(n - 1, 0), b);
+  float a = pointY(max(n - 1, lo), b);
   float o = pointY(n, b);
   float s = pointY(n + 1, b);
-  float r = pointY(min(n + 2, uLast), b);
+  float r = pointY(min(n + 2, hi), b);
   float c1 = o + (s - a) / 6.0;
   float c2 = s - (r - o) / 6.0;
   float v = 1.0 - u;
-  outCrest = vec4(v * v * v * o + 3.0 * v * v * u * c1 + 3.0 * v * u * u * c2 + u * u * u * s, 0.0, 0.0, 1.0);
+  float y = v * v * v * o + 3.0 * v * v * u * c1 + 3.0 * v * u * u * c2 + u * u * u * s;
+  if (moved) y = uFoot[b] + (y - uBase[b]) * uS[b];
+  outCrest = vec4(y, 0.0, 0.0, 1.0);
 }
 `;

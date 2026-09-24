@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
  * Renderer performance: per renderer × viewport, times every frame of four
- * day/night switches and a stretch of idle, plus main-thread cost from CDP.
+ * day/night switches, a stretch of idle and a scroll through the descent
+ * (wheel down the page's track and back up, `about` 0 → 1 → 0), plus
+ * main-thread cost from CDP.
  *
  *   node scripts/perf.mjs [--base URL] [--renderers layers,gl]
  *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window ms]
- *        [--idle 3000] [--headed] [--query k=v&k=v]
+ *        [--idle 3000] [--scroll 1] [--headed] [--query k=v&k=v]
  *
  * Prints a table and writes scripts/out/perf/perf-<timestamp>.json.
  * Absolute numbers depend on the machine and on headless GPU support; compare
@@ -32,6 +34,8 @@ const SWITCHES = Number(args.switches ?? 4);
 // long as it runs (until the sun button stops ignoring clicks).
 const WINDOW = Number(args.window ?? 0);
 const IDLE = Number(args.idle ?? 3000);
+// Scroll sweeps (down the descent track and back up); 0 skips them.
+const SCROLLS = Number(args.scroll ?? 1);
 // Extra query params for every page, e.g. `--query crest=cpu`.
 const QUERY = Object.fromEntries(new URLSearchParams(typeof args.query === 'string' ? args.query : ''));
 const VIEWPORTS = viewportsFrom(args.viewports, [
@@ -154,8 +158,55 @@ async function measure(browser, vp, renderer) {
     taskMsPerSec: (idleDelta.TaskDuration / IDLE) * 1000,
   };
 
+  // Scroll: wheel down the whole descent track and back up, recording every
+  // frame. The painted sun's centre (data-sun-cy) confirms the camera moved.
+  let scroll = null;
+  if (SCROLLS > 0) {
+    await page.mouse.move(vp.width / 2, vp.height / 2);
+    const cy = () => page.evaluate(() => Number(document.querySelector('[data-renderer]')?.dataset.sunCy ?? NaN));
+    const track = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    const cy0 = await cy();
+    const m4 = await metrics(cdp);
+    await page.evaluate(() => {
+      const rec = (window.__scrollRec = { ts: [], long: [], on: true });
+      try {
+        rec.po = new PerformanceObserver(l => l.getEntries().forEach(e => rec.long.push(e.duration)));
+        rec.po.observe({ type: 'longtask' });
+      } catch {}
+      const tick = t => {
+        rec.ts.push(t);
+        if (rec.on) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    let cyMid = cy0;
+    const steps = Math.max(20, Math.ceil(track / 60));
+    for (let k = 0; k < SCROLLS; k++) {
+      for (const dir of [1, -1]) {
+        for (let i = 0; i < steps; i++) {
+          await page.mouse.wheel(0, dir * 60);
+          await sleep(16);
+        }
+        await sleep(900); // let the smoothing land
+        if (dir === 1) cyMid = await cy();
+      }
+    }
+    const rec = await page.evaluate(() => {
+      const r = window.__scrollRec;
+      r.on = false;
+      r.po?.disconnect();
+      return { intervals: r.ts.slice(1).map((t, i) => t - r.ts[i]), long: r.long, ms: r.ts.at(-1) - r.ts[0] };
+    });
+    const m5 = await metrics(cdp);
+    scroll = {
+      ...summarise(rec.intervals, rec.long, rec.ms),
+      mainThreadMs: delta(m4, m5),
+      sunCy: [cy0, cyMid, await cy()],
+    };
+  }
+
   await context.close();
-  return { renderer, painted, viewport: vp.name, switching, idle };
+  return { renderer, painted, viewport: vp.name, switching, idle, scroll };
 }
 
 const n1 = x => x.toFixed(1);
@@ -185,7 +236,7 @@ async function main() {
   await browser.close();
 
   const head =
-    'viewport       req  painted  │ switch: fps   p50   p95    max  >20ms  long(ms)  task(ms) │ idle: fps  >20ms  task ms/s';
+    'viewport       req  painted  │ switch: fps   p50   p95    max  >20ms  long(ms)  task(ms) │ idle: fps  >20ms  task ms/s │ scroll: fps   p95    max  >20ms  sun y top→bottom→top';
   console.log(`GPU: ${gpu}\n${head}\n${'─'.repeat(head.length)}`);
   for (const r of results) {
     const s = r.switching;
@@ -194,7 +245,11 @@ async function main() {
       `${r.viewport.padEnd(14)} ${r.renderer.padEnd(4)} ${String(r.painted).slice(0, 7).padEnd(8)} │ ` +
         `${n1(s.fps).padStart(10)} ${n1(s.p50).padStart(5)} ${n1(s.p95).padStart(5)} ${n1(s.max).padStart(6)} ` +
         `${String(s.over20).padStart(6)} ${n1(s.longTaskMs).padStart(9)} ${n1(s.mainThreadMs.TaskDuration).padStart(9)} │ ` +
-        `${n1(i.fps).padStart(9)} ${String(i.over20).padStart(6)} ${n1(i.taskMsPerSec).padStart(10)}`,
+        `${n1(i.fps).padStart(9)} ${String(i.over20).padStart(6)} ${n1(i.taskMsPerSec).padStart(10)}` +
+        (r.scroll
+          ? ` │ ${n1(r.scroll.fps).padStart(11)} ${n1(r.scroll.p95).padStart(5)} ${n1(r.scroll.max).padStart(6)} ` +
+            `${String(r.scroll.over20).padStart(6)}  ${r.scroll.sunCy.map(n1).join('→')}`
+          : ''),
     );
   }
 

@@ -1,0 +1,10 @@
+/* Scroll length for one stretch of the descent, from the track's length
+   (--track-lvh, set by DescentTrack.jsx). Large-viewport units, so the span
+   the scroll layer measures (height - 100lvh) holds still as a mobile URL
+   bar collapses. vh first for browsers without lvh. */
+.track {
+  position: relative;
+  width: 100%;
+  height: calc(var(--track-lvh, 100) * 1vh);
+  height: calc(var(--track-lvh, 100) * 1lvh);
+}

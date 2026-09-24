@@ -97,7 +97,9 @@ export function sunColour(stops) {
 // sa — a ridge's base colour at depth t (0 far … 1 near)
 export function ridgeColour(stops, t, haze = MIST_DEFAULTS.haze) {
   const ramp = stops.length > 2 ? stops.slice(2) : stops;
-  const o = t * (ramp.length - 1);
+  // t < 0: the descent's extra far ranges (`layout`'s `extra`), the far
+  // ridge's colour further into the haze.
+  const o = Math.max(0, t) * (ramp.length - 1);
   const i = Math.floor(o);
   const c = mix(ramp[i], ramp[Math.min(ramp.length - 1, i + 1)], o - i);
   return mix(c, mistColour(stops), Math.min(0.82, (1 - t) * dial(haze, 0.15, 0.42, 0.7)));
@@ -187,8 +189,27 @@ const POINTS = 110; // jo
  * sampled around the frame centre; the sun is clamped off the edges).
  * `crests: false` skips the control points (`ys`) when the GPU crest pass
  * (crestShader.js) computes them instead; everything else is unchanged.
+ *
+ * `scales` (the descent camera, ../camera.js): each ridge's scale about the
+ * vanishing point. A ridge drawn smaller spans more of its noise across the
+ * frame, so its control points run `E` extra spacings past each end (`ys[0]`
+ * is point −E). With no scales, or all 1, it's the studio's layout exactly.
+ *
+ * `extra` (the descent camera, as it opens the view): up to that many more
+ * ranges (fractional, the last fading in; at most MAX_RANGES in all), each
+ * in a gap between two of the recipe's, farthest gap first: the ranges a
+ * nearer one hid until the camera climbed. Each sits at the geometric mean
+ * of its neighbours' depths, a little lower than them, coloured between
+ * them. Every ridge carries `noise`, the index its noise is hashed with (its
+ * own, so a ridge keeps its silhouette as ranges join), and `extra` on the
+ * new ones. Ridges stay in paint order, far first.
  */
-export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true }) {
+export const MAX_RANGES = 9;
+export const EXTRA_LOW = 0.8; // an extra range's height, share of its neighbours'
+export const crestExtension = (s, w, h, dx) =>
+  s >= 1 ? 0 : Math.max(0, Math.ceil(((1 / s - 1) * (w / 2 + 0.03 * h)) / dx - 1e-9));
+
+export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0 }) {
   const U = aspect ? h * aspect : w;
   const Q = Math.max(POINTS, Math.ceil((POINTS * w) / U));
   const r = rangeCount(size);
@@ -199,23 +220,19 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
   const hazeK = dial(mist.haze, 0.25, 1, 1.6);
   const seed = mist.seed * 0.73;
 
+  // The descent's extra ranges: how many (the last fractional).
+  const more = count > 1 ? Math.max(0, Math.min(extra, MAX_RANGES - count, count - 1)) : 0;
+  const m = more > 0 ? Math.ceil(more - 0.001) : 0;
+  const x0 = -0.03 * h;
+  const dx = (w + 0.06 * h) / Q;
+
   const ridges = [];
   for (let b = 0; b < count; b++) {
     const t = Math.min(1, b / Math.max(1e-4, r - 1));
     const fade = Math.max(0, Math.min(1, r - b));
     const base = c + Math.pow((b + 1) / r, 1.3) * d;
     const L = (0.12 + 0.26 * t) * d * lift * 1.35;
-    const x0 = -0.03 * h;
-    const dx = (w + 0.06 * h) / Q;
-    let ys = null;
-    if (crests) {
-      ys = new Float64Array(Q + 1);
-      for (let I = 0; I <= Q; I++) {
-        const X = x0 + I * dx;
-        ys[I] = base - L * ridgeProfile((X - w / 2) / U + 0.5, b, seed, mist.sharp);
-      }
-    }
-    ridges.push({ x0, dx, Q, U, L, ys, top: base - L, base, t, fade });
+    ridges.push({ x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t, fade, noise: b });
   }
 
   const veils = ridges.map((ridge, b) => {
@@ -230,12 +247,51 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
     };
   });
 
+  // Extra ranges into the gaps, far gap first; then all in paint order.
+  if (m) {
+    const own = ridges.slice();
+    const depth = rd => d / Math.max(1e-3, rd.base - c);
+    for (let j = 0; j < m; j++) {
+      const a = own[j];
+      const n = own[j + 1];
+      const noise = count + j;
+      const base = c + d / Math.sqrt(depth(a) * depth(n));
+      const L = EXTRA_LOW * Math.sqrt(a.L * n.L);
+      const t = (a.t + n.t) / 2;
+      const fade = Math.max(0, Math.min(1, more - j));
+      const at = ridges.indexOf(n);
+      ridges.splice(at, 0, { x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t, fade, noise, extra: true });
+      veils.splice(at, 0, {
+        cx: (noise % 2 === 0 ? 0.32 : 0.68) * w + Math.sin(noise * 2.1) * 0.06 * w,
+        cy: base,
+        rx: 0.62 * Math.max(w, U),
+        ry: Math.max(0.05 * h, (base - a.base) * 0.6),
+        a: Math.min(0.92, (0.62 - 0.34 * t) * hazeK) * fade,
+      });
+    }
+  }
+
+  // Crests: each ridge's control points, over its scaled span (`scales` is
+  // in this final order).
+  if (crests) {
+    ridges.forEach((rd, i) => {
+      const E = scales ? crestExtension(scales[i] ?? 1, w, h, dx) : 0;
+      const ys = new Float64Array(Q + 1 + 2 * E);
+      for (let I = -E; I <= Q + E; I++) {
+        const X = x0 + I * dx;
+        ys[I + E] = rd.base - rd.L * ridgeProfile((X - w / 2) / U + 0.5, rd.noise, seed, mist.sharp);
+      }
+      rd.ys = ys;
+      rd.E = E;
+    });
+  }
+
   const sunX = aspect
     ? Math.min(Math.max((mist.sun / 100) * w, 0.078 * h), Math.max(w - 0.078 * h, w / 2))
     : (mist.sun / 100) * w;
   const sun = { x: sunX, y: Math.max(0.1 * h, c - 0.11 * h), r: 0.052 * h };
 
-  return { ridges, veils, sun };
+  return { ridges, veils, sun, horizon: c };
 }
 
 /**
@@ -243,15 +299,22 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
  * points, written as cubic Béziers. Points are evenly spaced in x, so on every
  * interior segment x(τ) is linear and τ follows from x directly. Writes the
  * crest's y (CSS px) at each device-pixel column centre into `out`.
+ *
+ * `cam` ({ s, foot }, from ../camera.js) draws the ridge scaled by `s` about
+ * the frame's centre line with its foot at `foot`: a column samples the
+ * curve at its source x, and the height is scaled onto the new foot.
+ * crestShader.js does exactly this on the GPU.
  */
-export function sampleCrest(ridge, columns, dpr, out, offset = 0) {
-  const { x0, dx, ys } = ridge;
+export function sampleCrest(ridge, columns, dpr, out, offset = 0, cam = null) {
+  const { x0, dx, ys, E = 0, cx, base } = ridge;
   const last = ys.length - 1;
+  const moved = cam && (cam.s !== 1 || cam.foot !== base);
   for (let col = 0; col < columns; col++) {
-    const x = (col + 0.5) / dpr;
-    let n = Math.floor((x - x0) / dx);
+    const x = moved ? cx + ((col + 0.5) / dpr - cx) / cam.s : (col + 0.5) / dpr;
+    // Point indices run −E … Q + E; `ys[k]` holds point k − E.
+    let n = Math.floor((x - x0) / dx) + E;
     n = n < 0 ? 0 : n > last - 1 ? last - 1 : n;
-    const u = Math.min(1, Math.max(0, (x - (x0 + n * dx)) / dx));
+    const u = Math.min(1, Math.max(0, (x - (x0 + (n - E) * dx)) / dx));
     const a = ys[n > 0 ? n - 1 : 0];
     const o = ys[n];
     const s = ys[n + 1];
@@ -259,7 +322,8 @@ export function sampleCrest(ridge, columns, dpr, out, offset = 0) {
     const c1 = o + (s - a) / 6;
     const c2 = s - (r - o) / 6;
     const v = 1 - u;
-    out[offset + col] = v * v * v * o + 3 * v * v * u * c1 + 3 * v * u * u * c2 + u * u * u * s;
+    const y = v * v * v * o + 3 * v * v * u * c1 + 3 * v * u * u * c2 + u * u * u * s;
+    out[offset + col] = moved ? cam.foot + (y - base) * cam.s : y;
   }
 }
 

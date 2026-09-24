@@ -1,7 +1,10 @@
-/* The full-viewport shell every scene is built onto. */
+/* The full-viewport shell every scene is built onto. It grows with a page's
+   scroll track; clip (not hidden) so it isn't a scroll container and sticky
+   content inside can still stick. */
 .stage {
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
   overflow: hidden;
+  overflow: clip;
 }

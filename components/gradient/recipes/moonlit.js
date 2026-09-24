@@ -78,6 +78,21 @@ const moonlit = {
     ],
   },
 
+  // The descent's time of day (components/gradient/camera.js), over the
+  // 0.2 stretch (`about` 0 → 1) while the camera draws back. Ours, not the
+  // studio's.
+  scroll: {
+    // The lilac cast in the haze fades into a deeper, cooler night. Same six
+    // bands as `stops`.
+    keys: [{ at: 1, stops: ['#0B1120', '#2A3756', '#2C3350', '#1E263E', '#151B2F', '#0C111D'] }],
+    // Where the moon is on screen by the end, from its resting spot, in
+    // shares of the height (−dy is up): it climbs to the top of the sky
+    // strip, well clear of the ridges, drifting left as the sky turns.
+    body: { dx: -0.03, dy: -0.23 },
+    // The meadow's tint at the viewer's feet: moonlit blue-green.
+    meadow: '#22323A',
+  },
+
   // Unused by MIST, kept so the recipe stays a drop-in studio export.
   mesh: null,
   params: null,

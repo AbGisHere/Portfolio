@@ -19,11 +19,14 @@
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
+  /* Fades out as the descent starts (SunToggle.jsx writes the variable). */
+  opacity: var(--descent-fade, 1);
   /* No transition: the target jumps to where the sun will land and sits out
      the switch (see SunToggle.jsx). */
 }
 
-.toggle[data-busy] {
+.toggle[data-busy],
+.toggle[inert] {
   pointer-events: none;
 }
 
