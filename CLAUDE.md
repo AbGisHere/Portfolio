@@ -77,7 +77,7 @@ affects one of them, such as a new palette, font, route or real content.
 | `app/site.js` / metadata | Real role and description. No claims beyond PRODUCT.md's evidence. |
 | JSON-LD (`app/layout.jsx`) | The same facts, plus links that actually exist |
 | `app/sitemap.js` | Every live route, nothing dead |
-| `public/llms.txt` | Current content, projects and links |
+| `app/llms.txt/route.js` | Current content, projects and links |
 
 ### Pre-push checks
 
@@ -159,15 +159,15 @@ app/
   error.jsx       — route error ├ all render components/ErrorScreen
   global-error.jsx — root-layout failure (own <html>, static sky, no renderer) ┘
   fonts.js        — next/font instances, shared by layout and global-error
-  site.js         — shared site facts (url, name, role, links)
+  site.js         — shared site facts (url, name, role, links). The url comes from config:
+                    SITE_URL, else Vercel's primary production domain, else localhost
   robots.js, sitemap.js     — generated /robots.txt and /sitemap.xml
+  llms.txt/route.js         — generated /llms.txt, a plain-markdown summary for LLM agents
   icon.svg, apple-icon.png  — favicon / iOS touch icon
   opengraph-image.jpg, twitter-image.jpg (+ .alt.txt) — share cards
   globals.css     — tokens, reset, base type only
 styles/
   utilities.css   — global helpers (.visually-hidden)
-public/
-  llms.txt        — plain-markdown summary for LLM agents
 components/
   Stage.jsx (+ .module.css)           — full-viewport shell for every scene
   AtmosphereField.jsx (+ .module.css) — the scene, fixed behind every page: backdrop sky,

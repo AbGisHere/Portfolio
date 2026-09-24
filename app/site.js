@@ -4,12 +4,18 @@
  * evidence rules before adding anything here.
  */
 
-// Vercel sets this on every build of the project; the fallback is the current
-// production alias, for local builds.
+// The canonical origin. The domain lives in config, not here: `SITE_URL`
+// overrides (e.g. to pick one of several production domains), then Vercel's
+// `VERCEL_PROJECT_PRODUCTION_URL` (set on every build, the project's primary
+// production domain), then localhost for local builds.
 const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+const url = (
+  process.env.SITE_URL ||
+  (productionHost ? `https://${productionHost}` : 'http://localhost:3000')
+).replace(/\/$/, '');
 
 export const SITE = {
-  url: productionHost ? `https://${productionHost}` : 'https://abgishere.vercel.app',
+  url,
   name: 'Abhinav Gupta',
   role: 'Software engineer',
   description:
