@@ -83,6 +83,84 @@ export function cameraAt(about, recipe, { reduced = false, from = null, e = 1 } 
 
 export const cameraAtRest = cam => !cam || (cam.back === 0 && cam.tilt === 0 && cam.rise === 0 && !cam.more);
 
+/**
+ * The 0.2.1 descent (GL; the layered fallback still runs the 0.2.0 camera
+ * above until it's ported). The same world model, taken literally: every
+ * ridge is fixed terrain at depth z with a fixed silhouette, and the camera
+ * only pulls back, climbs and tilts, so a ridge only moves and scales
+ * (uniformly: its proportions hold). Nothing fades in. Instead:
+ *
+ * - **The conveyor.** Pulling back slides every ridge up the frame and
+ *   smaller: the front ridge ends about where the second was, and so on down
+ *   the line.
+ * - **A new front ridge** (`ranges`, z < 1: terrain the camera pulls back
+ *   over) starts `drop` × h under its place, wholly below the frame, and
+ *   slides up into view from the bottom edge, fully opaque, as the drop eases
+ *   out by `until` of the stretch, to become the new front one with the
+ *   meadow at its foot.
+ * - **Distant ranges** (z beyond the far ridge) rise from behind the ridge in
+ *   front of them the same way: at the top of the page they're dropped under
+ *   the far ridge's fill, and the climb opens the view over it.
+ * - A range's `stretch` widens its silhouette (a fixed shape, so it keeps
+ *   its proportions as it moves: the camera scales it uniformly).
+ * - **Light follows the slot.** A ridge's `t` (colour, haze, blur, rim, veil
+ *   opacity) comes from where its foot is on the frame, through the studio's
+ *   own slot curve, so a ridge sliding back takes on the look of the slot it
+ *   reaches, and the far ones merge into the haze by colour, not alpha.
+ *
+ * With `about` = 0 it's the studio's frame exactly (no extra ranges at all).
+ */
+export const DESCENT = {
+  back: 0.4,
+  tilt: 0.28,
+  rise: 0.59,
+  // z: depth (the frame's foot = 1); height: world height, share of the
+  // frame's height at depth 1; drop/until: see above.
+  ranges: [
+    { z: 0.78, height: 0.4, stretch: 1.6, drop: 0.5, until: 0.85 },
+    { z: 13, height: 1.4, drop: 0.3, until: 0.6 },
+    { z: 20, height: 1.7, drop: 0.3, until: 0.6 },
+    { z: 32, height: 2, drop: 0.3, until: 0.6 },
+  ],
+};
+
+/** The recipe's 0.2.1 descent amounts (`scroll.descent` overrides). */
+export const descentOf = recipe => ({ ...DESCENT, ...recipe?.scroll?.descent });
+
+/** The camera at `about` for the 0.2.1 descent: { back, tilt, rise, k,
+ * ranges }, blended mid-switch like `cameraAt`. */
+export function descentAt(about, recipe, { reduced = false, from = null, e = 1 } = {}) {
+  const k = ease(about) * (reduced ? REDUCED_CAMERA : 1);
+  const a = descentOf(recipe);
+  const b = from ? descentOf(from) : a;
+  const at = key => b[key] + (a[key] - b[key]) * e;
+  return {
+    back: at('back') * k,
+    tilt: at('tilt') * k,
+    rise: at('rise') * k,
+    more: 0,
+    k,
+    ranges: k > 0 ? a.ranges : null,
+  };
+}
+
+/** The smallest scale any ridge reaches in the 0.2.1 descent (about = 1): what
+ * the crest noise's range (the hash table) must cover. */
+export function descentWidest(scene, h, recipes) {
+  const back = Math.max(...recipes.map(r => descentOf(r).back));
+  const zs = scene.ridges.map(rd => rd.z ?? depthOf(rd.base, scene.horizon, h));
+  for (const r of recipes) for (const g of descentOf(r).ranges) zs.push(g.z);
+  return Math.min(1, ...zs.map(z => z / (z + back)));
+}
+
+/** A ridge's depth t (0 far … 1 near; below 0 hazier still) from where its
+ * foot sits between the horizon and the frame's foot, through the studio's
+ * slot curve (base = c + ((b + 1) / r)^1.3 × d). */
+export function slotT(foot, horizon, h, ranges) {
+  const v = Math.max(0, (foot - horizon) / Math.max(1, h - horizon));
+  return Math.min(1, Math.max(-1, (ranges * v ** (1 / 1.3) - 1) / Math.max(1e-3, ranges - 1)));
+}
+
 /** Ridge b's depth, z_b = (h − c) / (base_b − c). */
 const depthOf = (base, c, h) => (h - c) / Math.max(1e-3, base - c);
 
@@ -104,9 +182,16 @@ export function frameAt(scene, h, cam) {
   }
   const shift = cam.tilt * h;
   const horizon = c - shift;
-  const out = ridges.map((rd, i) => {
+  // (0.2.1) A world range sits `drop` lower until its `until` of the
+  // stretch (under the frame, or behind the far ridge), and each ridge's
+  // light follows its slot (`slotT`). A `stretch`ed range is drawn that
+  // much larger (its height is set that much lower in `layout`).
+  const out = ridges.map(rd => {
     const s = ridgeScales([rd], c, h, cam)[0];
-    return { s, foot: horizon + (1 + cam.rise) * s * (rd.base - c) };
+    const foot = horizon + (1 + cam.rise) * s * (rd.base - c);
+    const u = rd.drop ? Math.min(1, (cam.k ?? 1) / (rd.until ?? 1)) : 1;
+    const dropped = rd.drop ? rd.drop * h * (1 - u * u * (3 - 2 * u)) : 0;
+    return { s: s * (rd.stretch ?? 1), foot: foot + dropped, t: slotT(foot, horizon, h, scene.ranges ?? 5) };
   });
   return { rest: false, k: cam.k ?? 1, shift, horizon, ridges: out, front: out.length ? out[out.length - 1].foot : h };
 }

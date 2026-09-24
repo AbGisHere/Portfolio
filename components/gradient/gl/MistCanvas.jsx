@@ -18,6 +18,7 @@ import {
   rimWidth,
   sampleCrest,
   sunColour,
+  veilAlpha,
   veilSpeedScale,
   veilTiming,
 } from './mistGeometry';
@@ -26,14 +27,14 @@ import { GEO, beginOrbit, ease, orbitBodies, orbitScene, restX } from '../orbit'
 import {
   WIND,
   bodyAt,
-  cameraAt,
+  descentAt,
+  descentWidest,
   frameAt,
   groundPaint,
   meadowOf,
   scrollPalette,
   scrollPaletteSwitch,
   veilAt,
-  widestScales,
 } from '../camera';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
 import styles from './MistCanvas.module.css';
@@ -422,6 +423,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(g.u('uBase'), base);
       gl.uniform1fv(g.u('uL'), lift);
       gl.uniform1fv(g.u('uS'), scale);
+
       gl.uniform1fv(g.u('uFoot'), foot);
       gl.uniform1iv(g.u('uExt'), ext);
       gl.bindFramebuffer(gl.FRAMEBUFFER, g.fbo);
@@ -460,7 +462,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (gpuCrests(scene.ridges, count, value[6] + builtOffset, value[4])) return;
       const mist = { ...mistOf(r.mist), haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] + builtOffset };
       const scales = view.rest ? null : view.ridges.map(rc => rc.s);
-      const { ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, extra: view.more });
+      const { ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, ranges: view.ranges });
       uploadCrest(ridges, Math.min(ridges.length, MAX_RIDGES));
     }
 
@@ -479,15 +481,19 @@ export default function MistCanvas({ recipe, onFail }) {
       const target = mistOf(r.mist);
       builtOffset = seedOffset();
       const mist = { ...target, haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] + builtOffset };
-      // The camera: a pure function of `about`, mid-switch blended between
-      // the scenes' amounts; ranges join behind the far one as it opens. The
-      // hash table is sized for its widest reach.
-      const cam = cameraAt(about, r, { reduced: motion.matches, from: orbit?.prev, e: orbit ? orbit.e : 1 });
-      scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: false, extra: cam.more });
+      // The camera (camera.js, the 0.2.1 descent): a pure function of
+      // `about`, mid-switch blended between the scenes' amounts. Past the top
+      // the world ranges join the layout (under the frame, or sunk behind
+      // the far ridge), and the camera brings them in by geometry alone. The
+      // hash table is sized for the widest reach, so scrolling never
+      // rebuilds it.
+      const cam = descentAt(about, r, { reduced: motion.matches, from: orbit?.prev, e: orbit ? orbit.e : 1 });
+      scene = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: false, ranges: cam.ranges });
       view = frameAt(scene, h, cam);
-      view.more = cam.more;
-      const widest = widestScales(scene, h, orbit ? [r, orbit.prev] : [r]);
-      view.ext = Math.max(0, ...widest.map(s => crestExtension(s, w, h, scene.ridges[0]?.dx ?? 1)));
+      view.ranges = cam.ranges;
+      view.haze = value[2];
+      const widest = descentWidest(scene, h, orbit ? [r, orbit.prev] : [r]);
+      view.ext = crestExtension(widest, w, h, scene.ridges[0]?.dx ?? 1);
       // At rest, one body where `layout` put it; mid-switch, both on the arc
       // (whose far end is the target's resting spot — same height, its x).
       // Then the descent moves them: up with the sky, and each its own way.
@@ -516,7 +522,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!gpuCrests(ridges, n, mist.seed, mist.sharp)) {
         if (!ridges[0]?.ys || !view.rest) {
           const scales = view.rest ? null : view.ridges.map(rc => rc.s);
-          ({ ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, extra: cam.more }));
+          ({ ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, ranges: cam.ranges }));
         }
         uploadCrest(ridges, n);
       }
@@ -527,7 +533,9 @@ export default function MistCanvas({ recipe, onFail }) {
 
       const M = mistColour(stops);
       const haze = value[2];
-      const paint = ridgePaint(stops, ridges.slice(0, n), haze, h);
+      // Past the top, each ridge is lit for the slot it has reached (its `t`).
+      const lit_ = view.rest ? ridges.slice(0, n) : ridges.slice(0, n).map((rd, i) => ({ ...rd, t: view.ridges[i].t }));
+      const paint = ridgePaint(stops, lit_, haze, h);
       const f = (k, fn) => {
         const a = new Float32Array(MAX_RIDGES * k);
         for (let i = 0; i < n; i++) a.set([].concat(fn(ridges[i], i)), i * k);
@@ -557,7 +565,9 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(uniform('uFillC'), f(3, (_, i) => rgb01(paint[i].fill[2])));
       gl.uniform3fv(uniform('uRimCol'), f(3, (_, i) => rgb01(paint[i].rim)));
       gl.uniform1fv(uniform('uRimA'), f(1, (_, i) => paint[i].rimA));
-      gl.uniform1fv(uniform('uBlur'), f(1, (_, i) => paint[i].blur));
+      // The shader scales blur by the ridge's scale; the descent's blur is
+      // already its slot's, so hand it over unscaled.
+      gl.uniform1fv(uniform('uBlur'), f(1, (_, i) => (view.rest ? paint[i].blur : paint[i].blur / view.ridges[i].s)));
       gl.uniform1fv(uniform('uFade'), f(1, (_, i) => paint[i].fade));
       gl.uniform1f(uniform('uRimW'), rimWidth(h));
       gl.uniform3fv(uniform('uMist'), rgb01(M));
@@ -595,7 +605,9 @@ export default function MistCanvas({ recipe, onFail }) {
       return scene.veils.slice(0, MAX_RIDGES).map((v0, i) => {
         // Each veil moves and scales with its ridge (camera.js), drift and all.
         const rc = view.ridges[i];
-        const v = rc ? veilAt(v0, scene.ridges[i], rc, w) : v0;
+        let v = rc ? veilAt(v0, scene.ridges[i], rc, w) : v0;
+        // Its opacity follows the ridge's slot as it slides back.
+        if (rc && !view.rest) v = { ...v, a: veilAlpha(rc.t, view.haze, scene.ridges[i].fade) };
         // Timed by the ridge's own index, so its drift carries on as ranges join.
         const k = scene.ridges[i].noise ?? i;
         const { duration, amp: amp0 } = veilTiming(k, drift, w);
@@ -661,6 +673,9 @@ export default function MistCanvas({ recipe, onFail }) {
       stepOrbit(dt);
 
       let crestMoved = false;
+      // The idle drift (the ridges' slow breathing) runs at every scroll
+      // position, the same as at the top: the scroll itself only moves and
+      // scales the ridges.
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
       if (dirty) rebuild();

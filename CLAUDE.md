@@ -137,8 +137,10 @@ npm run test      # Playwright e2e tests
 - The atmosphere: a WebGL2 renderer (`components/gradient/gl/`) drawing the
   animated mountain scene from recipe files, with a layered DOM renderer
   (`components/gradient/layers/`) as the fallback.
-- **Lenis** smooths wheel scrolling (`components/SmoothScroll.jsx`, loaded
-  when the browser is idle, in its own chunk). **GSAP + ScrollTrigger** are
+- **Lenis** smooths wheel scrolling on desktop (`components/SmoothScroll.jsx`,
+  loaded when the browser is idle, in its own chunk). Touch-first devices
+  (`(hover: none) and (pointer: coarse)`) and reduced motion never load it:
+  they scroll natively. **GSAP + ScrollTrigger** are
   installed but only the unused primitives import them; nothing ships them.
 - Plain CSS, structured rather than monolithic: **CSS Modules** beside each
   component (`Component.module.css`), with `app/globals.css` limited to
@@ -176,7 +178,7 @@ components/
                                         renderer pick (GL/layers), sun toggle
   SunToggle.jsx (+ .module.css)       — hit target on the painted sun; sits out each switch,
                                         fades out over `about` .05 → .1 and is inert past it
-  SmoothScroll.jsx (+ .module.css)    — the scroll layer (root layout): Lenis, and publishes
+  SmoothScroll.jsx (+ .module.css)    — the scroll layer (root layout): Lenis (desktop), publishes
                                         the descent's progress; a 100lvh probe for the span
   scroll/
     descent.js         — the descent's progress store (`about`), outside React; `?scroll=` pins it
@@ -250,7 +252,8 @@ scroll: {                           // the 0.2 camera's time of day (camera.js)
   keys: [{ at: 0.5, stops: [...] }, ...], // palettes by `about`, like `via`
   body: { dx: -0.05, dy: -0.19 },   // sun/moon's screen offset by about = 1 (share of height; −dy up)
   meadow: '#8E8664',                // the meadow's tint at the viewer's feet
-  camera: { back, tilt, rise, more }, // optional: override CAMERA
+  descent: { back, tilt, rise, ranges }, // optional: override DESCENT (GL)
+  camera: { back, tilt, rise, more }, // optional: override CAMERA (layered fallback, 0.2.0)
 },
 ```
 
@@ -325,7 +328,8 @@ renderer was ported from (the gradient studio's export) was deleted in
     palette. (Reshaping means recomputing masks every frame, which is
     WebGL's job, and a cross-fade between two silhouettes looked worse.) The
     masks are rebuilt 120 ms after a resize. No idle drift.
-  - **Under the camera** each ridge is a masked edge band plus a solid body
+  - **Under the camera** (still the `0.2.0` one, `CAMERA`/`cameraAt`; not
+    yet ported to `0.2.1`'s `DESCENT`, see "The camera (0.2)") each ridge is a masked edge band plus a solid body
     below it, both in a camera wrapper (`translateY(foot − base) scale(s)`,
     `will-change`), cropped to what's on screen in 5% steps; the sky is
     taller than the frame and slides up. Masks are built once, for every
@@ -343,18 +347,22 @@ renderer was ported from (the gradient studio's export) was deleted in
     time over four switches (GL 1.5–1.9 s; the SVG engine took ~3.3 s and
     dropped 52 frames per run at 3440×1440). Idle 31–63 ms/s. `0.2.0`
     (headless M4): switches 120 fps, p95 8.4 ms; scroll 119.4–119.7 fps, at
-    most one frame over 20 ms; idle 86–103 ms/s. Parity with GL: worst mean
-    .67, p99 3 (at rest and mid-scroll).
+    most one frame over 20 ms; idle 86–103 ms/s. Parity with GL at `0.2.0`:
+    worst mean .67, p99 3 (at rest and mid-scroll).
 
 Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. Run it, and `npm run perf`, whenever a renderer
+above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.1`:** only
+the GL camera moved to the conveyor, so parity passes at scroll 0 (14/14) and
+fails at .5 and 1 (day mean 14–15, night 4–5.5). Accepted within `0.2.x`; the
+fallback must be ported (`0.2.1` and `0.2.2`), with all 42 cases passing,
+before any `0.3.x` work. Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
-(`orbit.js`) and the camera (`camera.js`). Hooks the renderers honour:
+(`orbit.js`) and the camera maths (`camera.js`). Hooks the renderers honour:
 
 | Hook | Meaning |
 |---|---|
@@ -467,7 +475,10 @@ Two clocks, each with one job:
   layout, not in the pages, so navigating (the 404's "Back to the
   mountains", later sections) keeps the same running scene: sky, theme,
   seed and veils carry straight on. It's `position: fixed` behind the
-  pages and comes after them in the DOM, click-through except for the sun
+  pages, sized to the large viewport (`top/left: 0`, `100% × 100lvh`, not
+  `inset: 0`) so a phone toolbar sliding in or out never resizes the scene
+  (the toolbar covers its foot instead); `Stage` uses `min-height: 100svh`
+  for the same reason. It comes after the pages in the DOM, click-through except for the sun
   button, so **page content that sits over it needs a z-index** (the error
   copy uses 3). `global-error` has no layout and paints the static sky.
 - **Backdrop.** `.atmosphere-field` paints each recipe's sky as a CSS
@@ -482,34 +493,53 @@ Two clocks, each with one job:
 
 Scrolling the home page's `about` track pulls the camera back from the
 mountains, with a slight tilt down and a small rise, while the sky turns
-toward evening. The maths is in `components/gradient/camera.js`, shared by
-both renderers: a **pure function of `about` and the recipe**, read every
+toward evening. The maths is in `components/gradient/camera.js` (GL runs
+the `0.2.1` descent, the layered fallback still the `0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
 frame and **never sprung**, so scrolling back retraces exactly. At
 `about` = 0 every function is the identity: the resting scene is
-pixel-identical to `0.1.11`.
+pixel-identical to `0.1.11` (and `0.2.0`).
 
 - **Progress.** `SmoothScroll` (root layout) publishes
   `about = (scrollY − trackTop) / (trackHeight − 100lvh)` to the store in
   `components/scroll/descent.js`, measured against a 100lvh probe so a
   collapsing URL bar doesn't move it. Track length is `TRACK_LVH` in
   `DescentTrack.jsx` (`about: 200`, so one screen of scroll). A page without
-  a track publishes 0. Lenis (`autoRaf`) is imported when the browser is
-  idle; before that, and under reduced motion, a passive native listener
-  publishes. Readers subscribe outside React, so a scroll frame renders
+  a track publishes 0. On desktop Lenis (`autoRaf`) is imported when the
+  browser is idle; before that, under reduced motion, and on touch-first
+  devices (no Lenis at all: its non-passive touch/wheel listeners made a
+  phone's toolbar judder in and out, a fix not yet confirmed on a real phone)
+  a passive native listener publishes. Readers subscribe outside React, so a scroll frame renders
   nothing.
-- **Camera.** `CAMERA = { back: .35, tilt: .26, rise: .75, more: 4 }`,
-  overridable per recipe (`scroll.camera`), scaled by `k` = the cosine ease
-  of `about` (× `REDUCED_CAMERA` .3 under reduced motion; the colour change
-  always runs in full). `layout`'s horizon `c` and ridge feet `base_b` imply
-  a ground plane: ridge b stands at depth `z_b = (h − c) / (base_b − c)`, is
-  drawn at `s_b = z_b / (z_b + back)` about (w/2, base_b), and its foot moves
-  to `c − tilt·h + (1 + rise)·s_b·(base_b − c)`. The sky, sun and moon shift
-  up by `tilt·h`.
-- **Extra ranges.** Up to `more` ranges join in the gaps between the
-  recipe's, farthest gap first, each at the geometric mean of its
-  neighbours' depths and `EXTRA_LOW` (0.8) of their height, fading in on the
-  fractional part. Every ridge keeps its `noise` index (crest rows are
-  ordered by it, `uCrestRow`), so a silhouette survives ranges joining.
+- **Camera (GL, `0.2.1`).** `DESCENT = { back: .4, tilt: .28, rise: .59,
+  ranges }`, overridable per recipe (`scroll.descent`), scaled by `k` = the
+  cosine ease of `about` (× `REDUCED_CAMERA` .3 under reduced motion; the
+  colour change always runs in full). `layout`'s horizon `c` and ridge feet
+  `base_b` imply a ground plane: ridge b stands at depth
+  `z_b = (h − c) / (base_b − c)`, is drawn at `s_b = z_b / (z_b + back)`
+  about (w/2, base_b), and its foot moves to
+  `c − tilt·h + (1 + rise)·s_b·(base_b − c)`. The sky, sun and moon shift up
+  by `tilt·h`. **A ridge's silhouette is fixed terrain**: the scroll only
+  moves it and scales it uniformly (`frameAt`), so the front ridge slides
+  back to about where the second was, and so on (the conveyor).
+- **Ranges enter by geometry, never alpha.** Past the top, `layout`'s
+  `ranges` add world ridges (depth `z`, world `height`, own `noise` index
+  5–8): one in front (z .78, `stretch` 1.6) that starts `drop` .5·h under
+  its place, wholly below the frame, and slides up from the bottom edge to
+  become the new front ridge by `until` .85; and three far ones (z 13, 20,
+  32) dropped .3·h under the far ridge's fill that rise into view from
+  behind it by `until` .6. All are opaque (`fade` 1). Depth reads through
+  colour: each ridge's `t` (colour, blur, rim, veil opacity) follows its
+  foot's slot on the frame (`slotT`, the studio's slot curve), so far ranges
+  merge into the haze. `stretch` widens a silhouette (its height is set
+  that much lower in `layout`, its scale that much larger), keeping its
+  proportions. Nine ridges in all, so no crest row is recycled; crest rows
+  are ordered by `noise` (`uCrestRow`).
+- **Idle drift** (the ridges' breathing) and the veils keep running at
+  every scroll position, the same as at the top.
+- **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
+  `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps). It must
+  be ported to `DESCENT` (and `0.2.2`'s changes) before any `0.3.x` work;
+  until then parity passes only at `?scroll=0`.
 - **Sun and moon** stay round (no squash) and keep their size; `scroll.body`
   is their screen offset by `about` = 1. Mid-switch the orbit is computed
   unscrolled and then offset; the edge clamp applies only at rest. The sun
@@ -525,22 +555,21 @@ pixel-identical to `0.1.11`.
 - **Sun toggle.** Fades out over `about` .05 → .1 and is inert past .1 (the
   painted sun moves; the target doesn't).
 - **GL cost.** The hash table is sized once for the widest scale
-  (`widestScales`), so a scroll frame only sets uniforms and runs one crest
-  pass. GPU/CPU crest parity is still 0. Measured on an M4 (prod, `0.2.0`):
-  scroll sweeps 119.7–120 fps, p95 9.1–9.3 ms, max ~17.6 ms, no frame over
-  20 ms; idle 64–72 ms/s with drift. Known gap: perf's headless wheel sweep
+  (`descentWidest`), so a scroll frame only sets uniforms and runs one crest
+  pass. GPU/CPU crest parity is still 0. Measured on an M4 (prod, `0.2.1`):
+  scroll sweeps 119.7–120 fps, p95 8.8–9.2 ms, max ~16.7 ms, no frame over
+  20 ms; idle 61–78 ms/s with drift. Known gap: perf's headless wheel sweep
   doesn't quite reach the bottom of the track.
 
-Planned for `0.2.1`/`0.2.2` (a ridge conveyor, sun/moon clickable and
-setting under scroll, a better day palette) and the fallback gate before
-`0.3`: see `ROADMAP.md`.
+Planned for `0.2.2` (sun/moon clickable and setting under scroll, a better
+day palette) and the fallback gate before `0.3`: see `ROADMAP.md`.
 
 ### Adding a scene
 
 1. Add a recipe under `components/gradient/recipes/`, with its `body`
    (`'sun'` or `'moon'`) and a `transition` (`springRate`/`ms`, `apex`, and
    any `via` skies on the way into it), and a `scroll` (`keys`, `body`,
-   `meadow`, optionally `camera`) for the `0.2` stretch.
+   `meadow`, optionally `descent` (GL) and `camera` (layered, until ported)) for the `0.2` stretch.
 2. Register it in `components/gradient/themes.js` with an `id`, `label` and
    `next` (the cycle is defined by the themes, not the provider).
 
@@ -550,7 +579,7 @@ setting under scroll, a better day palette) and the fallback gate before
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.1`/`0.2.2` and the layered-fallback gate before `0.3` (`ROADMAP.md`) |
+| `0.2.2` (sun/moon under scroll), then port the layered fallback to the `0.2.1`/`0.2.2` camera with parity passing, before any `0.3.x` (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |
 

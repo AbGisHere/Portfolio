@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line, from `0.2.0`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` next. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -146,7 +146,7 @@ How it should feel:
   spiral, not a circle, which gives real perspective on the keyboard. Narrow
   the field of view a little only at the very end, to flatten the screen so
   the project tiles read well.
-- **The camera is a pure function of scroll progress.** Lenis smooths the
+- **The camera is a pure function of scroll progress.** Lenis smooths wheel
   input and the scroll layer (`components/SmoothScroll.jsx`) computes the
   progress straight from the scroll position (no ScrollTrigger in `0.2`).
   There's no physics and no catching up, so scrolling back up retraces the
@@ -165,7 +165,8 @@ How it should feel:
   a depth from `layout`'s ground plane, so parallax comes from the maths:
   near ridges shrink more than far ones. GL sets uniforms; the layered
   fallback transforms each ridge's layers on the compositor. Extra ranges
-  fade in between the recipe's as the view opens.
+  faded in between the recipe's as the view opened (replaced in GL by
+  `0.2.1`'s conveyor; the fallback still does this).
 - **Time of day moves on top of the camera,** as recipe data (`scroll`:
   palette keys by progress, the body's offset, the meadow tint), through
   `skyKeys.js` like `via`. Day: the sun sinks and the palette warms toward a
@@ -175,17 +176,27 @@ How it should feel:
   the stretch and is inert past it (until `0.2.2`, below).
 - **Reduced motion:** 30% of the camera move, with the colour change kept.
 
-**`0.2.1`: ridges that behave like terrain.** Today the view morphs rather
-than pulls back: `rise` spreads the feet by (1 + rise)·s while the heights
-shrink by s, extra ranges fade in place, idle seed drift carries on during
-scroll, and the ridges are relit.
-- **A ridge conveyor.** The front ridge (n = 1) recedes smoothly into the
-  n = 2 slot while a new ridge emerges in front as the new n = 1. Every
-  property interpolates continuously, and each ridge keeps its own
-  silhouette.
-- **New distant ranges rise into view** from behind the horizon and the far
-  ridge, like a drone pulling back, instead of fading in place.
-- **Each silhouette stays fixed in world space.**
+**Shipped in `0.2.1`: ridges that behave like terrain (GL only).** The
+`0.2.0` view morphed rather than pulled back (feet spread by (1 + rise)·s,
+extra ranges faded in place). Now (`DESCENT` in `camera.js`, details in
+`CLAUDE.md`):
+- **Each silhouette is fixed in world space.** Scroll only moves a ridge and
+  scales it evenly (s = z/(z + back)), so its proportions hold.
+- **A ridge conveyor.** The front ridge recedes toward the second slot, and
+  so on down the line, while a new front ridge (depth .78) slides up from
+  below the frame's bottom edge.
+- **Distant ranges rise into view** (depths 13, 20, 32) from behind the far
+  ridge, like a drone pulling back. Nothing fades: every ridge is opaque,
+  and distance reads through colour (blur, rim and veil follow each ridge's
+  foot, `slotT`). Nine ridges, no crest row recycled.
+- **Idle drift and the veils** keep running at every scroll position.
+- The top of the page is pixel-identical to `0.2.0`; GPU/CPU crest parity is
+  still 0; scroll sweeps hold 119.7–120 fps (p95 8.8–9.2 ms, no frame over
+  20 ms).
+- **Phones:** Lenis no longer loads on touch-first devices, the scene is
+  sized to `100lvh` and `Stage` to `100svh`, so the browser toolbar should
+  stop popping in and out while scrolling. Not yet confirmed on a real
+  phone (emulation has no toolbar).
 
 **`0.2.2`: the sun and moon under scroll.**
 - **Clickable at any scroll position.** The switch arc keeps its full
@@ -198,9 +209,23 @@ scroll, and the ridges are relit.
 - **A believable sunset.** The day scroll palette is too orange. Balance it
   so the sky and the light on the ridges and meadow work together.
 
+Found in `0.2.1`, to fix in `0.2.2`:
+- From about `about` .64 by day, the taller distant ranges cover the sun's
+  lower half, so it reads as sitting behind them rather than setting.
+- Mid-switch, the orbit's `hidden` line still uses the unscrolled far ridge
+  (covered by the first item above).
+- The moon's linear glow has a visible edge: a slope break at 3.4r reads as
+  a Mach band. A candidate to soften.
+- The night portrait end frame looks sparse, since the distant ranges are
+  very hazy.
+
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
-starts.
+starts. **State at `0.2.1`:** the fallback still runs the `0.2.0` camera
+(`CAMERA`/`cameraAt`, ranges fading into gaps). Parity passes at scroll 0
+(14/14) and fails at .5 and 1 (day mean 14–15, night 4–5.5), as expected.
+To do before `0.3.x`: port `0.2.1`'s conveyor and `0.2.2`'s changes to the
+layered renderer, and pass all 42 parity cases.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the

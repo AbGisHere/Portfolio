@@ -16,10 +16,16 @@ import styles from './SmoothScroll.module.css';
  *   scrolling back retraces exactly. A page without a track publishes 0.
  *   `?scroll=` pins the store and nothing is published.
  * - Smooths wheel scrolling with Lenis, loaded after first paint (idle) so it
- *   stays out of first-load JS. Until then, and under reduced motion (no
- *   Lenis at all), a passive native scroll listener publishes instead.
- *   Keyboard scrolling stays native: Lenis doesn't touch keys, and nothing
- *   snaps.
+ *   stays out of first-load JS. Until then, under reduced motion, and on
+ *   touch-first devices (no Lenis at all), a passive native scroll listener
+ *   publishes instead. Keyboard scrolling stays native: Lenis doesn't touch
+ *   keys, and nothing snaps.
+ *
+ * Why not Lenis on phones: it only smooths the wheel (syncTouch stays off),
+ * so on touch it adds nothing, but it still puts non-passive touchstart/
+ * touchmove/wheel listeners on the window. Those make every touch scroll wait
+ * on the main thread, which redraws the scene each scroll frame, and the
+ * phone's collapsing toolbar juddered in and out while scrolling.
  *
  * The span is the track's height less the *large* viewport height (the probe
  * below, 100lvh), not innerHeight, so a mobile URL bar collapsing or
@@ -33,6 +39,10 @@ export default function SmoothScroll() {
   useEffect(() => {
     const pinned = isPinned();
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    // Touch-first (phones, tablets): native scrolling only. A laptop with a
+    // touchscreen still reports a fine pointer and keeps Lenis for its wheel.
+    const touch = window.matchMedia('(hover: none) and (pointer: coarse)');
+    const native = () => reduce.matches || touch.matches;
     let track = null;
     let start = 0;
     let span = 1;
@@ -63,11 +73,11 @@ export default function SmoothScroll() {
     const onLenis = (l) => publish(l.animatedScroll);
 
     const startLenis = () => {
-      if (dead || lenis || loading || reduce.matches) return;
+      if (dead || lenis || loading || native()) return;
       loading = true;
       import('lenis').then(({ default: Lenis }) => {
         loading = false;
-        if (dead || lenis || reduce.matches) return;
+        if (dead || lenis || native()) return;
         lenis = new Lenis({ autoRaf: true, smoothWheel: true, anchors: false });
         lenis.on('scroll', onLenis);
         window.removeEventListener('scroll', onNative);
@@ -86,17 +96,18 @@ export default function SmoothScroll() {
       measure();
     };
 
-    const onMotionPref = () => (reduce.matches ? stopLenis() : startLenis());
+    const onMotionPref = () => (native() ? stopLenis() : startLenis());
 
     window.addEventListener('scroll', onNative, { passive: true });
     window.addEventListener('resize', measure);
     reduce.addEventListener('change', onMotionPref);
+    touch.addEventListener('change', onMotionPref);
     // Catches the track mounting or unmounting, and content changing height.
     const ro = new ResizeObserver(measure);
     ro.observe(document.body);
     measure();
 
-    if (!reduce.matches) {
+    if (!native()) {
       if ('requestIdleCallback' in window) {
         idleId = window.requestIdleCallback(startLenis, { timeout: 1500 });
       } else {
@@ -114,6 +125,7 @@ export default function SmoothScroll() {
       window.removeEventListener('scroll', onNative);
       window.removeEventListener('resize', measure);
       reduce.removeEventListener('change', onMotionPref);
+      touch.removeEventListener('change', onMotionPref);
       ro.disconnect();
       lenis?.destroy();
     };

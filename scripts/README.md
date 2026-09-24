@@ -52,9 +52,16 @@ threshold or logs a console error, and 2 if the script itself crashes.
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same (`layers`
-against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A higher p99 with a low mean
-points at one local defect, and the `worst 32px block` coordinates say where
-to look.
+against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
+higher p99 with a low mean points at one local defect, and the `worst 32px
+block` coordinates say where to look.
+
+**Known gap in `0.2.1`.** The GL camera moved on (the ridge conveyor) and the
+layered fallback still runs the `0.2.0` camera, so a default run exits 1: the
+14 `-s0` cases pass (mean ≤ .49), the `-s0.5` and `-s1` cases fail (day mean
+14–15, night 4–5.5). This is accepted within `0.2.x`; use `--scrolls 0` for a
+passing check meanwhile. The fallback must be ported, with all 42 cases
+passing, before any `0.3.x` work (`ROADMAP.md`).
 
 ## `npm run perf`
 

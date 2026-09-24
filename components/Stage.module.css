@@ -4,7 +4,9 @@
 .stage {
   position: relative;
   min-height: 100vh;
-  min-height: 100dvh;
+  /* svh, not dvh: nothing in the page's flow resizes as a mobile toolbar
+     moves. */
+  min-height: 100svh;
   overflow: hidden;
   overflow: clip;
 }

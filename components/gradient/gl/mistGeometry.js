@@ -137,6 +137,10 @@ export function ridgePaint(stops, ridges, haze, h) {
   });
 }
 
+/** A veil's opacity for a ridge at depth t (as `layout` sets it). */
+export const veilAlpha = (t, haze = MIST_DEFAULTS.haze, fade = 1) =>
+  Math.min(0.92, (0.62 - 0.34 * t) * dial(haze, 0.25, 1, 1.6)) * fade;
+
 /** The crest rim's stroke width, CSS px. */
 export const rimWidth = h => Math.max(1, h * 0.0035);
 
@@ -209,7 +213,7 @@ export const EXTRA_LOW = 0.8; // an extra range's height, share of its neighbour
 export const crestExtension = (s, w, h, dx) =>
   s >= 1 ? 0 : Math.max(0, Math.ceil(((1 / s - 1) * (w / 2 + 0.03 * h)) / dx - 1e-9));
 
-export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0 }) {
+export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0, ranges = null }) {
   const U = aspect ? h * aspect : w;
   const Q = Math.max(POINTS, Math.ceil((POINTS * w) / U));
   const r = rangeCount(size);
@@ -271,6 +275,34 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
     }
   }
 
+  // The descent's world ranges (camera.js DESCENT.ranges): ridges placed by
+  // depth `z` (the frame's foot = 1) and world height (`height` × h at depth
+  // 1), which the camera brings into view by geometry alone — from below the
+  // frame (z < 1) or from behind the far ridge (z beyond it). Each has its
+  // own noise index; all ridges then go in depth order, far first.
+  if (ranges?.length) {
+    ranges.forEach((g, j) => {
+      const base = c + d / g.z;
+      // A `stretch` widens the silhouette: drawn `stretch` × larger by the
+      // camera (camera.js frameAt), so its height is set that much lower.
+      const L = (g.height * h) / g.z / (g.stretch ?? 1);
+      const noise = count + j;
+      ridges.push({ x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t: 0, fade: 1, noise, extra: true, z: g.z, stretch: g.stretch ?? 1, drop: g.drop ?? 0, until: g.until ?? 1 });
+      veils.push({
+        cx: (noise % 2 === 0 ? 0.32 : 0.68) * w + Math.sin(noise * 2.1) * 0.06 * w,
+        cy: base,
+        rx: 0.62 * Math.max(w, U),
+        ry: Math.max(0.05 * h, (0.6 * d) / g.z),
+        a: 0,
+      });
+    });
+    const order = ridges.map((rd, i) => i).sort((a, b) => ridges[a].base - ridges[b].base);
+    const rs = order.map(i => ridges[i]);
+    const vs = order.map(i => veils[i]);
+    ridges.splice(0, ridges.length, ...rs);
+    veils.splice(0, veils.length, ...vs);
+  }
+
   // Crests: each ridge's control points, over its scaled span (`scales` is
   // in this final order).
   if (crests) {
@@ -291,7 +323,7 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
     : (mist.sun / 100) * w;
   const sun = { x: sunX, y: Math.max(0.1 * h, c - 0.11 * h), r: 0.052 * h };
 
-  return { ridges, veils, sun, horizon: c };
+  return { ridges, veils, sun, horizon: c, ranges: r };
 }
 
 /**

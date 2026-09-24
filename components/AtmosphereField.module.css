@@ -4,7 +4,15 @@
    needs a z-index. */
 .field {
   position: fixed;
-  inset: 0;
+  /* The large viewport, not inset: 0, so a mobile toolbar collapsing or
+     expanding never resizes the scene: no canvas or mask rebuild, and the
+     sun and ridges don't reframe, on every frame of the toolbar's move.
+     With the toolbar out, its strip covers the scene's foot. */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
