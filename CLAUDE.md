@@ -13,9 +13,11 @@ See `PRODUCT.md` for the product record and `.impeccable/surfaces/home.md`
 for the visual direction contract. An earlier fake-desktop-OS build (boot →
 login → windows/dock/terminal) was retired and its branding dropped; do not
 resurrect that metaphor or its name unasked. `ROADMAP.md` holds agreed future
-plans: the ship-hygiene gate for `1.0.0`, and a device scene (not in scope
-for `0.1.x`) where projects open inside a laptop/phone. The device screen is
-a painted background with project cards, not an OS.
+plans: the ship-hygiene gate for `1.0.0`, and "the descent" (`0.2.x`–`0.3.x`,
+not in scope for `0.1.x`): one continuous scroll-driven camera move from the
+mountains down onto a desk in a meadow, ending on an open laptop (a tablet on
+portrait viewports) with the mountains behind it. The device screen is a
+painted background with project cards, not an OS.
 
 ## Versioning
 
@@ -24,8 +26,8 @@ The rebuild goes layer by layer, and the version line tracks which layer:
 | Line    | Scope                                                        |
 |---------|--------------------------------------------------------------|
 | `0.1.x` | Background / atmosphere layer (current, near complete)       |
-| `0.2.x` | The next scroll section, most likely about me                |
-| `0.3.x` | Projects: the laptop/phone device scene (`ROADMAP.md`)       |
+| `0.2.x` | About me: the camera starts its descent (`ROADMAP.md`)      |
+| `0.3.x` | Projects: the descent onto the desk and device (`ROADMAP.md`) |
 | `0.4.x` | Contact / reach out                                          |
 | `0.5.x` | Header navigation across the sections                        |
 | `0.6.x` | Real content throughout                                      |
@@ -103,6 +105,21 @@ silently. Items marked *(once built)* start applying when the matching
 - [ ] The atmosphere still adapts: phone portrait/landscape, iPad, laptop,
       ultrawide, and one odd aspect. No squashed ridges, no horizontal
       overflow, and the sun hit target sits on the painted sun.
+
+## Reading the repo (keep context lean)
+
+A project rule, for every session and every subagent brief:
+
+- **Search, then slice.** `grep -n` for the symbol, then read only that range
+  (`offset`/`limit`, or `sed -n 'a,bp'`). Read a file whole only if it's
+  short (under ~100 lines) or you are rewriting it.
+- **Never re-read** a file already in context, or one you just edited.
+- **Trim tool output.** Pipe test, build and harness runs through
+  `tail`/`grep` for the summary lines. Write long reports to a file and read
+  back only what's needed. Look at a screenshot only when you need to judge
+  something visually, and crop it to the region first.
+- **Delegate big sweeps** (docs passes, wide searches) to a subagent, which
+  returns a summary instead of the raw reads.
 
 ## Commands
 
@@ -443,7 +460,7 @@ Two clocks, each with one job:
 
 | Task |
 |---|
-| Content layers: real projects, resume, dev log, contact (projects: see the desk scene in `ROADMAP.md`) |
+| Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives (SplitText/Reveal/MagneticCard/SmoothScroll) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |

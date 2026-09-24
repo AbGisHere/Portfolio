@@ -10,9 +10,9 @@ as the site takes shape.
 
 | Line | Scope |
 |---|---|
-| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.9`. |
-| `0.2.x` | The next section down the scroll, most likely about me. Not yet designed. |
-| `0.3.x` | Projects: the desk scene below, a laptop or phone holding the projects. |
+| `0.1.x` | The atmosphere: the day/night mountain scene. Near complete as of `0.1.10`. |
+| `0.2.x` | About me: the first stretch of the descent. Scroll tilts the camera down, the ridges rise and the sky turns toward evening (see "The descent"). |
+| `0.3.x` | Projects: the descent carries on onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -25,7 +25,7 @@ tell-tale signs of a vibe-coded site. Each item below is built once. Keeping it
 from regressing afterwards is the per-push checklist in `CLAUDE.md`
 ("Pre-push checks").
 
-State at `0.1.9`: `lang`, title template, description, canonical, OG and
+State at `0.1.10`: `lang`, title template, description, canonical, OG and
 Twitter cards, Person JSON-LD, favicon, custom 404, robots, sitemap and
 llms.txt are in place. Browser source maps are off, and there is no
 boilerplate and no `three`. The `<h1>` and intro ship as server HTML but stay
@@ -77,57 +77,269 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       minified, 128 KB gzipped) is deleted. Neither renderer is in first-load
       JS. `three` is already gone. GSAP/Lenis load only when the scroll layer uses them.
 
-## The desk scene — projects inside a device
+## The descent — one camera from the sky to the desk
 
-**Status:** future plan, post-`0.1.x`. Recorded 2026-09-23. Planned for the
-`0.3.x` line (see "Version lines").
+**Status:** agreed in discussion 2026-09-24, for the `0.2.x` and `0.3.x`
+lines. Replaces the 2026-09-23 sequence (tilt down, a table rising from
+below, a CSS 3D device, zoom until the screen fills the viewport).
 
-### The sequence
+`0.1` → `0.2` → `0.3` is **one continuous camera move**, not three effects
+stitched together. Scroll position drives a camera along one path: from
+today's view of the mountains, down onto a desk in a meadow, and round to face
+an open laptop with the mountains behind it. Each version line ships the next
+stretch of the same path.
 
-One pinned, scroll-scrubbed GSAP ScrollTrigger timeline (Lenis smoothing the
-input), in four beats:
+### The camera path
 
-1. **Camera tilts down.** Scrolling moves the atmosphere up the viewport:
-   mountains rise, sky drops. Parallax per layer — sky slowest, far ridges
-   faster, near ridges fastest — so it reads as a camera, not a sliding
-   picture. The WebGL renderer draws each ridge as its own layer in one
-   shader, so per-ridge parallax is a per-ridge offset uniform, driven by
-   scroll. The layered fallback can do the same: each ridge is already its
-   own DOM layer, so parallax is a per-layer transform.
-2. **Table enters.** A tabletop rises from below as the ridges leave the top
-   and becomes the new horizon line.
-3. **Device reveals and unlocks.**
-   - **Laptop** (landscape viewports): MacBook Pro–like. Lid opens (CSS 3D,
-     `rotateX` on the lid under `perspective`), screen wakes to a login screen,
-     quick Touch ID–style unlock, into the projects background.
-   - **Phone** (portrait viewports): iPhone-like, lying on the table. Screen
-     wakes to a lock screen with a clock, the Face ID glyph plays (brackets
-     scan, morph into a checkmark), lock screen slides up to the projects background.
-4. **Zoom into the screen.** The desk group scales until the screen fills the
-   viewport, then the pin releases. The screen's contents are real DOM from the
-   start (rendered small inside the device), so the zoom has no swap seam.
+Side view: Z runs left to right, with the mountains off to the left (−Z), and
+Y points up.
 
-### Design decisions already made
+```
+ mountains  <-------- [cam 1]    facing the mountains (today's view)
+                          \
+                           \     arc 1: faces away from its centre
+                         [cam 2]  facing straight down
+                            |  \
+                            v   \    arc 2: faces toward its centre
+                         laptop <--- [cam 3]   facing the screen
+ ~~~~~~~~~~~~~~~~~~~~~~ grass ~~~~~~~~~~~~~~~~~~~~~~~
+```
 
-- **Device by viewport shape, not device detection.** CSS media query on
-  aspect ratio/width: portrait → phone, landscape → laptop. A narrow desktop
-  window gets the phone. Rebuild the timeline on change
-  (`ScrollTrigger.matchMedia` / `refresh`) so rotating mid-scroll doesn't break.
-- **Evocative, not literal.** Silhouette, notch and proportions — no Apple
-  logo or wordmarks. Stylised and flat-shaded to match the painted atmosphere.
-  CSS 3D, not three.js.
-- **Scroll drives transforms directly.** Don't animate the pan through recipe
-  fields (`glintHorizon`, `mist.height`): they pass through the rate-9
-  smoothing and would trail the scroll by ~half a second.
-- **Day/night carries down.** Night gets a warm lamp and a glowing screen; day
-  gets flatter light.
-- **The screen is not an OS.** [2026-09-23: user decision.] What unlocks is
-  another beautiful atmosphere-grade background, in the same painted world
-  as the mountains, with the projects laid over it as play-cards, widgets or
-  icons. No home-screen or desktop simulation, no dock, no windows,
-  multitasking or terminal. The exact form of the project tiles is to be
-  decided as the work develops. Opening a project is full-screen inside the
-  device.
+- **Arc 1** (`0.2`, then into `0.3`). The camera starts at (y 0, z −R) on a
+  circle in the YZ plane, facing outward (−Z), which is today's view. It
+  travels a quarter-turn to (y −R, z 0), still facing outward, which is now
+  straight down. It pitches down 90° as it drops and draws back.
+- **Arc 2** (`0.3`). A second circle, centred on the laptop, starts where arc
+  1 ends: at its top, facing inward, which is also straight down. The camera
+  orbits to the circle's +Z side, facing inward (−Z), toward the laptop's
+  screen. It pitches back up 90°.
+- **The two arcs form an S.** At the join they share a direction of travel
+  (+Z) and a facing (down), so there's no kink and no snap. The curvature
+  flips there. The camera never rolls.
+- **Cam 3 faces −Z, the same way as cam 1.** So the final shot has the
+  mountains behind the desk. The sky leaves the top of the frame during arc 1
+  and comes back behind the laptop in arc 2. The same scene, day or night and
+  any evening tint included, carries through the whole descent.
+
+How it should feel:
+
+- **One spline, not two circles.** The circles are only there to sketch the
+  shape. Build one path for the camera position and a second for what it
+  looks at: from a far point on the horizon, down to the laptop. Tune both
+  until the move feels right.
+- **Holds.** Leave short stretches of scroll where the camera barely moves:
+  at the top-down shot (the closed lid) and at the end (the reading
+  position).
+- **The end isn't exactly (0, Zmax).** Level with the laptop you'd be looking
+  along the keyboard. End slightly above the screen's centre, pitched a few
+  degrees down, framing the screen, its bezels and a strip of keyboard.
+- **Zoom by moving closer.** Arc 2's radius shrinks as it goes, so it's a
+  spiral, not a circle, which gives real perspective on the keyboard. Narrow
+  the field of view a little only at the very end, to flatten the screen so
+  the project tiles read well.
+- **The camera is a pure function of scroll progress.** Lenis smooths the
+  input and a ScrollTrigger `scrub` supplies the progress. There's no physics
+  and no catching up, so scrolling back up retraces the path exactly, and a
+  resize mid-descent lands in the right place.
+- **Scroll drives the camera directly, not recipe fields.** Recipe fields
+  (`glintHorizon`, `mist.height`) pass through the GL renderer's rest spring
+  and would trail the scroll by about half a second.
+
+### 0.2 — about me: the first stretch
+
+- **The ridges rise and the sky shrinks.** This is the camera pitching down
+  arc 1. Each ridge gets a depth, so the camera maths gives correct parallax
+  for free: near ridges move more than far ones. In the GL renderer that's a
+  per-ridge offset and scale from uniforms. In the layered fallback it's a
+  transform on each ridge's layer, handled by the compositor.
+- **Time of day moves on top of the camera.** This part isn't camera motion.
+  - **Day:** the sun sinks toward the ridges, and the palette warms toward
+    pink, like the first part of a switch into night. It stops there: the
+    moon doesn't rise.
+  - **Night:** the moon climbs, and the palette's lilac/pink cast fades into
+    a deeper night.
+  - This is recipe data, not renderer code: a new recipe field (working name
+    `scroll`: palette keyframes, where the body goes, how far the ridges
+    rise), interpolated with `skyKeys.js` like `via`.
+- **The sun toggle works only near the top.** It fades out after about 10% of
+  scroll, since the sun is sinking out of reach anyway. That avoids a switch
+  having to turn the sky between two scrolled states. The lamp takes over
+  further down (see below).
+- **Proposal:** the about text sits on the front ridge's fill as it rises,
+  so the mountains become the page. Not decided.
+- **Reduced motion:** a smaller rise, with the colour change kept.
+
+### 0.3 — the desk
+
+**The scene.** A meadow of flowing grass. On it, a square wooden table with a
+laptop, a desk lamp and stationery, plus whatever else makes it feel real and
+lived-in. Seen top-down at the join between the arcs, the laptop is closed.
+
+**The laptop** is MacBook Pro–like: silver by day, space black by night.
+- No Apple logo, and don't call it "MacBook" anywhere on the page. Both are
+  trademarks. Check any sourced model for logos.
+- The closed lid is what the top-down shot looks at. The AbG mark could go
+  there (proposed, not confirmed).
+- **The lid opens from 15% to 90% of arc 2,** finishing at about 105–110°. It
+  leads the camera slightly, so the screen faces the camera before the camera
+  gets low. Otherwise mid-arc you'd be looking at a half-open edge.
+
+**Theming: swapped versus relit.**
+- **Swapped per theme:** the laptop's and tablet's finish (silver or space
+  black), and at most one or two
+  accessories. Switching theme with the laptop on screen dissolves its
+  material over the switch's `ms`, so it reads as part of the scene turning,
+  not a swap.
+- **Relit per theme:** the grass, the wood and everything else. They take
+  their light from the sky palette, like the ridges do: warm sun at dusk,
+  cool moonlight and the lamp's pool of light at night.
+
+**The lamp is a theme toggle.** Lamp on means night, lamp off means day.
+It's the sun toggle's counterpart at the other end of the page.
+- It's a real `<button>` over the lamp, like `SunToggle`: keyboard-focusable,
+  labelled ("Switch to night"), and `data-busy` for the length of a switch.
+- Its hit target is projected from the 3D lamp to the screen every frame,
+  using the same camera maths as the drawing, so it can't drift off the lamp.
+- It's active only at the holds (the top-down and final shots). Mid-descent
+  it moves too fast to click.
+- The hint is a cursor change and a faint glow on hover, nothing more.
+- At the final shot the sky is visible behind the laptop, so a click plays
+  the whole sky turn in the background.
+
+**Portrait viewports get a tablet.** A 16:10 laptop screen in a portrait
+viewport leaves the project tiles tiny. [2026-09-24: user's idea, proposed.]
+An iPad-like tablet sits on the desk for everyone, as one of the
+accessories, and on portrait viewports the spline's last stretch aims at the
+tablet instead of the laptop: the same scene and path, a different end point.
+- **Why a tablet, not a phone:** a portrait tablet screen is about 3:4. It
+  matches portrait tablets exactly, and on a phone (about 9:19.5) it still
+  fills the width and leaves room above and below for the desk around it.
+  At a 390 px-wide phone, a width-fitted tablet screen is about 520 px tall,
+  against about 245 px for the laptop's. It also gives the tiles more width
+  than a phone screen would, and one layout covers phones and portrait
+  tablets.
+- **Its finish follows the theme, like the laptop's.** [2026-09-24: user
+  decision.] Landscape viewports see a silver laptop by day and a space
+  black one by night. Portrait viewports (phones and tablets) see a silver
+  tablet by day and a space black one by night. Both dissolve their material
+  over a switch.
+- **It needs a stand.** Lying flat, it would face the ceiling, not the final
+  camera. A folio stand or a desk stand props it toward the camera.
+- **The same trademark rule as the laptop:** no Apple logo, and don't call it
+  "iPad" on the page.
+- A phone can still lie on the desk as a prop, but no path ends at it.
+- Pick the device by viewport shape, not device detection: portrait gets the
+  tablet, and landscape (tablets in landscape included) gets the laptop.
+  Rebuild the path when the shape changes (`ScrollTrigger.matchMedia` /
+  `refresh`) so rotating mid-scroll works.
+
+### Rendering
+
+The mountains are effectively at infinity, so they can stay 2D. The desk
+can't be faked: a hinge opening while the camera orbits from above to the
+front needs real geometry.
+
+- **Sky, mountains and ground: extend the current shader.** Per-ridge depth
+  and the camera's pitch and height give the ridges' offsets and scale. The
+  ground is a per-pixel ray–plane intersection with a stylised meadow and
+  wind. Top-down, realistic grass mostly shows blade tips, so a soft meadow
+  that matches the ridges will look better. The ridges' mist band at their
+  feet (`stops[1]`) hides the seam between mountains and ground.
+- **Desk objects: a mesh pass in the same WebGL2 context.** The scene is
+  simple for 3D: only the camera and the lid hinge move, so the lighting can
+  be baked.
+  - Bake two lightmaps offline (Blender): day, and night with the lamp's pool
+    of light. Theming blends between them on the switch clock, which is the
+    relighting above at almost no runtime cost.
+  - Shading is texture × lightmap. No runtime shadows or PBR.
+  - A build-time script converts the glTF models into a small binary format
+    of our own (positions, UVs, indices), so no loader ships. Expect roughly
+    10–20 KB of our own code.
+  - One context and one canvas, driven by one camera: no sync issues between
+    the mountains and the desk.
+  - If writing the mesh pass ourselves proves a pain, the fallback option is
+    **OGL** (about 25–30 KB gzipped: meshes, cameras, a glTF loader).
+    **three.js is ruled out on weight** (about 150–180 KB gzipped with its
+    loader), and a full three.js scene would also discard both renderers and
+    the parity setup.
+- **Assets:** low-poly models with baked detail (only the laptop gets close),
+  KTX2 textures, meshopt-compressed geometry, and one lightmap resolution per
+  device class. Budget: under about 1–1.5 MB for the whole desk scene.
+- **The layered fallback** follows the mountains' part as layer transforms,
+  and shows the desk as stills with a crossfade.
+- **Parity:** add a scroll-position hook (for example `?scroll=0.5`) so
+  `npm run parity` compares the renderers mid-descent, not only at rest.
+
+### Loading
+
+Nothing should load all at once, and nobody should have to scroll and wait.
+
+1. **Open.** HTML, the server-rendered text and the CSS backdrop sky paint
+   first, then the `0.1` renderer, as today. Nothing else competes with it.
+2. **Once `0.1` has painted and the browser is idle:** load the `0.2`/`0.3`
+   code (the camera path, the ridges' depth, the ground). It's small, since
+   it mostly extends the running shader. Pre-compile the new shaders in the
+   background (`KHR_parallel_shader_compile`), so the first frame that needs
+   them doesn't stall.
+3. **The desk, in the background:**
+   - Fetch models and textures at low network priority, nearest-needed first:
+     the table and laptop, then the lamp, then the stationery.
+   - Load a low-resolution lightmap first and swap in the sharp one later.
+   - Decode textures off the main thread, in a worker.
+   - Upload to the GPU a piece at a time across idle frames. One large upload
+     in a single frame is the classic cause of a hitch while scrolling.
+   - Pause background work while a sun switch runs.
+
+- **Scrolling early.** Heading toward a section raises the priority of what
+  it needs. Scroll is never blocked or hijacked. The mountains and ground are
+  always ready, since they're the shader. The desk fades in when it arrives,
+  never popping in and never showing an empty table.
+- **Slow connections.** On data saver or a slow connection, load the lighter
+  tier, and fetch the desk only once the visitor heads that way.
+- **Repeat visits.** Content-hashed file names with long cache lifetimes, so
+  a second visit is near-instant.
+
+### Performance and feel
+
+The rule: it must never feel slow, laggy or buggy.
+
+- **Frame budget:** 120 fps on the M4 and 60 on mid-range phones, through the
+  whole descent. The switches already meet this (p95 about 9.5 ms). Nothing
+  heavy runs on the main thread during scroll: uniforms and the draws, as
+  today.
+- **Adaptive quality.** If frames run long, lower the canvas DPR, the grass
+  detail and the lightmap size before anything visibly stutters. Tiers: the
+  full scene; a lighter scene; stills of the desk with a crossfade; the
+  non-WebGL fallback.
+- **No visible seams** between the mountains and the ground at any aspect
+  ratio.
+- **Reduced motion:** a cut or crossfade between the three key shots (the
+  mountains, top-down, the final shot). An S-shaped 180° pitch is exactly the
+  move that bothers vestibular-sensitive visitors.
+- **Proof before each release in these lines:** `npm run perf` extended to
+  scroll the whole descent, and `npm run parity`, across the viewports in
+  `CLAUDE.md`'s pre-push checks. Run on a real mid-range phone, not only the
+  M4, plus throttled network and CPU runs of "open and scroll straight down".
+  First paint and first-load JS stay at today's baseline. No background task
+  runs longer than about 50 ms in the first 10 seconds, and no frame is blank
+  or broken. A stretch that misses its budget doesn't ship until it meets it.
+
+## The device screen — projects inside the laptop
+
+**Status:** recorded 2026-09-23, for the `0.3.x` line. The path to the
+device is "The descent" above.
+
+- **The screen is not an OS.** [2026-09-23: user decision.] What the laptop
+  (or tablet) shows is another beautiful atmosphere-grade background, in the
+  same painted world as the mountains, with the projects laid over it as
+  play-cards, widgets or icons. No home-screen or desktop simulation, no
+  dock, no windows, multitasking or terminal. The exact form of the project
+  tiles is to be decided as the work develops. Opening a project is
+  full-screen inside the device.
+- **The screen is real DOM** from the moment it's visible, placed on the
+  screen with the camera's projection, so it stays live and interactive.
+- **Day/night carries through:** at night the screen glows and the lamp is
+  warm; by day the light is flatter.
 
 ### Opening a project
 
@@ -137,7 +349,7 @@ Every project is already deployed. Each tile opens its live deployment in an
 ```js
 { slug: 'foo', name: 'Foo', icon: '/icons/foo.png', url: 'https://foo.vercel.app',
   embed: true,   // false → opens in a new tab instead
-  mobile: true } // false → scale a desktop view down inside the phone, or flag "best on desktop"
+  mobile: true } // false → scale a desktop view down inside the tablet, or flag "best on desktop"
 ```
 
 Known catches:
@@ -151,38 +363,76 @@ Known catches:
    `embed: false`.
 3. **Cold starts.** Free-tier hosts sleep (30s+). An app-launch splash (icon +
    loader) holds until the iframe's `onload`.
-4. **Responsiveness.** The phone gives projects a phone-width viewport — see
-   the `mobile` flag.
+4. **Responsiveness.** On a phone, the tablet's screen gives projects a
+   phone-width viewport — see the `mobile` flag.
 5. **Lazy loading.** No iframe exists until its app is opened; it unloads on
    close.
 6. **Closing and Back.** Iframe navigation adds history entries. Provide a
-   clear close (home-bar swipe on phone, close control on laptop) and handle
+   clear close (a home-bar swipe on the tablet, a close control on the laptop) and handle
    Back on the portfolio's own route.
 
 ### Routing and access
 
 - Each project gets a real URL, `/projects/<slug>`, for sharing, SEO and
-  screen readers. Landing on one skips the table/unlock and opens inside the
+  screen readers. Landing on one skips the descent and opens inside the
   device directly.
-- Returning visitors can skip the intro (skip control, or remember they've
-  seen it).
-- `prefers-reduced-motion`: a plain cut from sky to content, no scrubbed pan.
-- The GL renderer already pauses when the canvas is off-screen or the tab is
-  hidden. Keep that true as the pan moves the sky out of view.
+- Returning visitors can skip the descent (a skip control, or remember
+  they've seen it).
+- `prefers-reduced-motion`: see "Performance and feel" above.
+- The GL renderer already pauses when the tab is hidden or the canvas is
+  off-screen. Keep that true once the descent is built, and stop drawing the
+  desk while it's out of view.
 
 ### Still open
 
-- **What scroll does after the unlock.** Scroll inside the device (paging
-  through the project tiles), or release the pin and let more content (about,
-  contact) continue below. Decides the whole page structure — settle before
-  building.
+- **What happens after the final shot.** Push into the screen until it fills
+  the viewport, scroll through the project tiles inside the device, or let
+  more content (contact) continue below. This decides the page structure, so
+  settle it before building.
+- **Waking the screen.** The 2026-09-23 idea: a login screen and a quick
+  Touch ID–style unlock on the laptop, or a lock screen and Face ID glyph on
+  a portrait device. Not revisited since the descent was agreed.
+- The tablet's details: its stand, and where it sits on the desk (see
+  "Portrait viewports get a tablet").
+- The AbG mark on the lid, and where the about text sits in `0.2`.
 - The form of the project tiles (play-cards, widgets, icons) and the
   background they sit on.
 - Where the resume, dev log and contact live relative to the device.
 
 ### First steps, when it's picked up
 
-1. List every project with its deployed URL and check its response headers
-   for embeddability — this sizes how many projects need changes.
-2. Prototype beat 1 alone (the pan with per-ridge parallax) to validate that
-   the "camera" feels right before building the rest on top.
+1. **Prototype the camera** with the mountains and the ground plane only, and
+   a grey box for the table, to validate the spline and the holds before any
+   models exist.
+2. List every project with its deployed URL and check its response headers
+   for embeddability. This sizes how many projects need changes.
+3. Source or model the desk assets, bake the day and night lightmaps, and
+   check them against the asset budget.
+
+## Later — a notice for the fallback renderer
+
+**Status:** agreed in discussion 2026-09-24, deferred until the site is
+built.
+
+A small note in a bottom corner telling visitors on the layered fallback that
+they're seeing the lighter renderer. The fallback matches WebGL at rest, but
+the ridges don't breathe or reshape, and the desk shows as stills.
+
+- **Only for a lasting fallback:** no WebGL2, a shader that failed to build,
+  or all 3 lost-context retries used. Never during a lost-context recovery,
+  or it would flash for 2 seconds.
+- **A fact, not a warning.** For example: "Lighter renderer: WebGL2 isn't
+  available, so the ridges hold still." Never "error" or "your browser is
+  outdated". Many of these visitors turned WebGL off on purpose (Safari
+  Lockdown Mode, Tor, Firefox `resistFingerprinting`, some Brave settings).
+- **Dismissible and remembered** (`localStorage`, wrapped in try/catch).
+  Shown at most once per session. It lives in `AtmosphereField`, which
+  persists across routes. It fades in shortly after the scene paints and
+  fades out by itself after about 8s.
+- Small JetBrains Mono label on a palette-tinted scrim, like `ErrorScreen`,
+  following day/night, with a z-index above the scene.
+- Bottom-left: the moon rises on the right and the sun's target moves.
+  Recheck against the content sections and the `0.5.x` header when it's
+  built.
+- `role="status"`, a real close button, no motion under reduced motion, and
+  a Playwright check via `?renderer=layers`.
