@@ -56,12 +56,15 @@ against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look.
 
-**Known gap in `0.2.1`.** The GL camera moved on (the ridge conveyor) and the
-layered fallback still runs the `0.2.0` camera, so a default run exits 1: the
-14 `-s0` cases pass (mean ≤ .49), the `-s0.5` and `-s1` cases fail (day mean
-14–15, night 4–5.5). This is accepted within `0.2.x`; use `--scrolls 0` for a
-passing check meanwhile. The fallback must be ported, with all 42 cases
-passing, before any `0.3.x` work (`ROADMAP.md`).
+**Known gap in `0.2.2`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
+`0.2.2`'s look under scroll) and the layered fallback still runs the `0.2.0`
+camera, so a default run exits 1: the 14 `-s0` cases pass (night worst mean
+.81, p99 6, from the GL-only moon glow), the `-s0.5` and `-s1` cases fail
+(day mean 11–28, night 11–17). This is accepted within `0.2.x`; use
+`--scrolls 0` for a passing check meanwhile. `0.2.4` brings the ridge light
+to the resting scene in GL first, so scroll 0 will fail too until `0.2.5`
+ports `0.2.1`–`0.2.4` to the fallback, with all 42 cases passing, before any
+`0.3.x` work (`ROADMAP.md`).
 
 ## `npm run perf`
 

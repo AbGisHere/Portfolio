@@ -107,11 +107,24 @@ export function ridgeColour(stops, t, haze = MIST_DEFAULTS.haze) {
 
 // nr — how far a ridge's foot fades into the haze
 export const ridgeFootMix = (t, haze = MIST_DEFAULTS.haze) => Math.min(0.98, (0.95 - 0.4 * t) * dial(haze, 0.85, 1, 1.12));
+/** (0.2.2) The foot fade a distant range eases to under the descent (its
+ * `flat`, camera.js frameAt): each holds its colour as a flat layer down to
+ * the range in front of it, so the layers step instead of dissolving into
+ * one band of haze. */
+export const FAR_FOOT = 0.5;
+/** (0.2.2) …and its veil thins by this share, so the mist at its feet
+ * doesn't bury the layer in front of it. */
+export const FAR_VEIL = 0.5;
 // Qs / er — the lit rim along a ridge's crest
 export const rimColour = (stops, t, haze) => mix(ridgeColour(stops, t, haze), mistColour(stops), 0.8);
-export const rimOpacity = t => 0.2 + 0.22 * t;
-// Pt — Gaussian blur (stdDeviation, CSS px) on the far ridges; applied when > .4
-export const ridgeBlur = (t, h) => (1 - t) * (1 - t) * 0.006 * h;
+// (Past the far ridge, t < 0: the descent's distant ranges keep the far
+// ridge's rim, so each still reads as its own crest in the haze.)
+export const rimOpacity = t => 0.2 + 0.22 * Math.max(0, t);
+// Pt — Gaussian blur (stdDeviation, CSS px) on the far ridges; applied when > .4.
+// (Past the far ridge it eases off again, to .4 of the far ridge's, so the
+// distant crests stay distinct lines in the haze rather than smearing into
+// one band.)
+export const ridgeBlur = (t, h) => (t < 0 ? Math.max(0.4, 1 + t) : (1 - t) * (1 - t)) * 0.006 * h;
 // ar — opacity the air gradient reaches at the frame's foot
 export const airOpacity = (haze = MIST_DEFAULTS.haze) => dial(haze, 0.08, 0.26, 0.44);
 
@@ -127,8 +140,9 @@ export function ridgePaint(stops, ridges, haze, h) {
   return ridges.map(rd => {
     const A = ridgeColour(stops, rd.t, haze);
     const blur = ridgeBlur(rd.t, h);
+    const foot = ridgeFootMix(rd.t, haze);
     return {
-      fill: [A, mix(A, M, 0.16), mix(A, M, ridgeFootMix(rd.t, haze))],
+      fill: [A, mix(A, M, 0.16), mix(A, M, rd.flat ? foot + (FAR_FOOT - foot) * rd.flat : foot)],
       rim: rimColour(stops, rd.t, haze),
       rimA: rimOpacity(rd.t),
       blur: blur > 0.4 ? blur : 0,
@@ -137,9 +151,11 @@ export function ridgePaint(stops, ridges, haze, h) {
   });
 }
 
-/** A veil's opacity for a ridge at depth t (as `layout` sets it). */
+/** A veil's opacity for a ridge at depth t (as `layout` sets it). Past the
+ * far ridge (t < 0) it holds the far ridge's, or the veils would bury the
+ * distant ranges. */
 export const veilAlpha = (t, haze = MIST_DEFAULTS.haze, fade = 1) =>
-  Math.min(0.92, (0.62 - 0.34 * t) * dial(haze, 0.25, 1, 1.6)) * fade;
+  Math.min(0.92, (0.62 - 0.34 * Math.max(0, t)) * dial(haze, 0.25, 1, 1.6)) * fade;
 
 /** The crest rim's stroke width, CSS px. */
 export const rimWidth = h => Math.max(1, h * 0.0035);
@@ -213,7 +229,7 @@ export const EXTRA_LOW = 0.8; // an extra range's height, share of its neighbour
 export const crestExtension = (s, w, h, dx) =>
   s >= 1 ? 0 : Math.max(0, Math.ceil(((1 / s - 1) * (w / 2 + 0.03 * h)) / dx - 1e-9));
 
-export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0, ranges = null }) {
+export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0, ranges = null, drift = null }) {
   const U = aspect ? h * aspect : w;
   const Q = Math.max(POINTS, Math.ceil((POINTS * w) / U));
   const r = rangeCount(size);
@@ -292,7 +308,9 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
         cx: (noise % 2 === 0 ? 0.32 : 0.68) * w + Math.sin(noise * 2.1) * 0.06 * w,
         cy: base,
         rx: 0.62 * Math.max(w, U),
-        ry: Math.max(0.05 * h, (0.6 * d) / g.z),
+        // (A distant range's veil is as shallow as the range: the resting
+        // floor of .05h would bury it.)
+        ry: Math.max(g.z > 1 ? 0.012 * h : 0.05 * h, (0.6 * d) / g.z),
         a: 0,
       });
     });
@@ -304,14 +322,17 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
   }
 
   // Crests: each ridge's control points, over its scaled span (`scales` is
-  // in this final order).
+  // in this final order). `drift` ({ offset, gains }, the idle drift, gains
+  // in this order too) adds offset × gain to each ridge's seed; with no gains
+  // it's mist.seed + offset for all, as ever.
   if (crests) {
     ridges.forEach((rd, i) => {
       const E = scales ? crestExtension(scales[i] ?? 1, w, h, dx) : 0;
       const ys = new Float64Array(Q + 1 + 2 * E);
+      const n = drift ? (mist.seed + drift.offset * (drift.gains?.[i] ?? 1)) * 0.73 : seed;
       for (let I = -E; I <= Q + E; I++) {
         const X = x0 + I * dx;
-        ys[I + E] = rd.base - rd.L * ridgeProfile((X - w / 2) / U + 0.5, rd.noise, seed, mist.sharp);
+        ys[I + E] = rd.base - rd.L * ridgeProfile((X - w / 2) / U + 0.5, rd.noise, n, mist.sharp);
       }
       rd.ys = ys;
       rd.E = E;

@@ -43,7 +43,7 @@ uniform float uX0;             // first control point's x (−3% of height)
 uniform float uDx;             // control point spacing
 uniform int uLast;             // index of the last control point (Q)
 uniform float uDpr;            // device columns per CSS px
-uniform float uN;              // noise offset, (seed + drift) × 0.73
+uniform float uN[MAX_RIDGES];  // noise offset per ridge, (seed + drift × gain) × 0.73
 uniform float uSharp;          // sharp / 100
 uniform float uBase[MAX_RIDGES];
 uniform float uL[MAX_RIDGES];   // crest lift above the base
@@ -67,8 +67,8 @@ float noise1(float e, int row) {
   return s0 + (hashAt(n + 1, row) - s0) * o;
 }
 
-float octave(float e, float l, int row) {
-  float p = noise1(e * l + uN, row) * 2.0 - 1.0;
+float octave(float e, float l, int row, float n) {
+  float p = noise1(e * l + n, row) * 2.0 - 1.0;
   float m = 1.0 - abs(p);
   float f = 1.0 - p * p;
   return f + (m - f) * uSharp;
@@ -78,8 +78,9 @@ float octave(float e, float l, int row) {
 float profile(float e, int b) {
   float o = 1.7 + float(b) * 0.33;
   int row = b * 4;
-  float c = 0.52 * octave(e, o, row) + 0.3 * octave(e, o * 2.15, row + 1) + 0.18 * octave(e, o * 4.4, row + 2);
-  float d = 0.55 + 0.45 * pow(noise1(e * 1.13 + uN * 0.51, row + 3), 1.4);
+  float n = uN[b];
+  float c = 0.52 * octave(e, o, row, n) + 0.3 * octave(e, o * 2.15, row + 1, n) + 0.18 * octave(e, o * 4.4, row + 2, n);
+  float d = 0.55 + 0.45 * pow(noise1(e * 1.13 + n * 0.51, row + 3), 1.4);
   return pow(max(0.0, c), 1.0 + uSharp * 0.9) * d;
 }
 

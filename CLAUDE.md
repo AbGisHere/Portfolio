@@ -250,8 +250,9 @@ transition: {                       // how a switch INTO this scene runs
 },
 scroll: {                           // the 0.2 camera's time of day (camera.js)
   keys: [{ at: 0.5, stops: [...] }, ...], // palettes by `about`, like `via`
-  body: { dx: -0.05, dy: -0.19 },   // sun/moon's screen offset by about = 1 (share of height; −dy up)
-  meadow: '#8E8664',                // the meadow's tint at the viewer's feet
+  body: { dx: -0.03, set: 0.1 },    // by about = 1: `set` radii below the horizon, `dx` left (share of height)
+  haze: 32,                         // optional: `mist.haze` by about = 1 (thinner evening air)
+  meadow: '#3E4466',                // the meadow's tint at the viewer's feet
   descent: { back, tilt, rise, ranges }, // optional: override DESCENT (GL)
   camera: { back, tilt, rise, more }, // optional: override CAMERA (layered fallback, 0.2.0)
 },
@@ -354,11 +355,13 @@ Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.1`:** only
-the GL camera moved to the conveyor, so parity passes at scroll 0 (14/14) and
-fails at .5 and 1 (day mean 14–15, night 4–5.5). Accepted within `0.2.x`; the
-fallback must be ported (`0.2.1` and `0.2.2`), with all 42 cases passing,
-before any `0.3.x` work. Run it, and `npm run perf`, whenever a renderer
+above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.2`:** the GL
+camera moved to the conveyor (`0.2.1`) and took on `0.2.2`'s look, and the
+fallback has neither, so parity passes at scroll 0 (14/14; night worst mean
+.81, p99 6, from the GL-only moon glow) and fails at .5 and 1 (day mean
+11–28, night 11–17). Accepted within `0.2.x`; the fallback catches up on
+`0.2.1`–`0.2.4` in `0.2.5`, with all 42 cases passing, before any `0.3.x`
+work (`0.2.4`'s resting ridge light will fail scroll 0 until then). Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
@@ -405,8 +408,10 @@ fill.
   `SUNSET_COLOUR` and flattens by up to `SQUASH` of its height; its sky wash
   is kept low (.2) so it never dissolves into a sunset sky.
 - **The moon** (`moonFace.js`): a greyscale shade map of seas, craters and
-  Tycho's rays, from a fixed seed, multiplied into its disc (`.85` opacity,
-  plain linear glow).
+  Tycho's rays, from a fixed seed, multiplied into its disc (`.85` opacity).
+  Its glow fades out to 3.4r on a smoothstep in GL (`0.2.2`: the old linear
+  fade left a visible edge there); the layered glow is still linear
+  (`LayeredScene.jsx`) until `0.2.5`.
 
 ### How the transition works
 
@@ -494,10 +499,12 @@ Two clocks, each with one job:
 Scrolling the home page's `about` track pulls the camera back from the
 mountains, with a slight tilt down and a small rise, while the sky turns
 toward evening. The maths is in `components/gradient/camera.js` (GL runs
-the `0.2.1` descent, the layered fallback still the `0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
+the `0.2.1` descent with `0.2.2`'s look, the layered fallback still the
+`0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
 frame and **never sprung**, so scrolling back retraces exactly. At
 `about` = 0 every function is the identity: the resting scene is
-pixel-identical to `0.1.11` (and `0.2.0`).
+pixel-identical to `0.1.11` (through `0.2.2` by day; at night `0.2.2`'s
+smoothstep moon glow differs by a mean of .15).
 
 - **Progress.** `SmoothScroll` (root layout) publishes
   `about = (scrollY − trackTop) / (trackHeight − 100lvh)` to the store in
@@ -534,16 +541,56 @@ pixel-identical to `0.1.11` (and `0.2.0`).
   that much lower in `layout`, its scale that much larger), keeping its
   proportions. Nine ridges in all, so no crest row is recycled; crest rows
   are ordered by `noise` (`uCrestRow`).
+- **Far ranges step into the haze by depth** (`0.2.2`): `FAR_HAZE` .4 per
+  doubling of depth past the far ridge, through a per-ridge `flat`
+  (`FAR_FOOT` .5, `FAR_VEIL` .5 in `mistGeometry.js`). The distant ranges keep
+  the far ridge's rim opacity, ease their blur to .4 of it, hold `veilAlpha`
+  at the far value and get shallower veils (`max(.012h, .6d/z)`).
 - **Idle drift** (the ridges' breathing) and the veils keep running at
-  every scroll position, the same as at the top.
+  every scroll position. Drift is in noise units, so on-screen motion scales
+  with a ridge's drawn size; under the camera each ridge's offset is scaled
+  by a gain `g = min(DRIFT_GAIN_MAX 2.5, max(1/s, far lift / drawn lift))`
+  (`driftGains`), so the shrunken and distant ranges visibly breathe too
+  (mean motion per .1 seed at 1440×900: 5.26 px at rest, 4.40 at the end;
+  3.61 in `0.2.1`). The crest pass takes a per-ridge offset (`uN[]`) and
+  `layout` a `drift: { offset, gains }`, so GPU/CPU crest parity stays 0.00.
+  Trade-off: the gain moves with scroll, so a drifted ridge reshapes slightly
+  while scrolling (it still retraces exactly). Known: the drift still slows
+  near zero at the ends of its 60 s sine.
+- **Sky** (`0.2.2`). `SKY { top: .08, horizon: .24 }`, `skyAt` and the
+  shader's `uSkyScale` redraw the ramp under the camera, so by the end the
+  frame's top sits on `stops[0]` and the horizon on `stops[1]`. The haze
+  thins toward the recipe's `scroll.haze` (`scrollHaze`).
+- **Painted ridge colours** (`0.2.2`). `PAINT { crest: .1, foot: [.2, .55],
+  rim: .3, rimA: .5 }`, `paintTone`, `descentPaint` and `blendPaint`: a clean
+  ramp `stops[5]` → `[4]` → `[3]` → `[2]` → `[1]`, blended in over the
+  studio's colours as the camera moves. The veils thin by up to
+  `DESCENT_VEIL` .5 and the air band by up to `DESCENT_AIR` .5, which keeps
+  the near ridges a rich violet rather than grey.
+- **Ridge light** (`0.2.2`, scroll only). `RIDGE_LIGHT` in `sunLook.js`
+  (shader `uLitA`, `uShadeA`, `uLitCol`, `uShadeCol`, `uLitAt`, `uLitBase`):
+  warm crest light, strongest in the sun's or moon's column and slanted per
+  depth (parallax), over a cool multiplied shadow below. `0.2.4` brings it
+  to the resting scene.
 - **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
-  `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps). It must
-  be ported to `DESCENT` (and `0.2.2`'s changes) before any `0.3.x` work;
-  until then parity passes only at `?scroll=0`.
-- **Sun and moon** stay round (no squash) and keep their size; `scroll.body`
-  is their screen offset by `about` = 1. Mid-switch the orbit is computed
-  unscrolled and then offset; the edge clamp applies only at rest. The sun
-  deepens toward `SUNSET_COLOUR` as it sinks.
+  `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps) and
+  ignores `0.2.2`'s fields. `0.2.5` ports `0.2.1`–`0.2.4` to it, before any
+  `0.3.x` work; until then parity passes only at `?scroll=0`.
+- **Sun and moon set** (`0.2.2`, `bodyAt`). The gap between the body and the
+  horizon closes, on `k^SET_EASE` (1.6), to `scroll.body.set` radii below
+  it, while `dx` leans it left, so it sinks into the ridges (by day about
+  15% hidden at .64 and 50–70% by the end at 1440×900, depending on the
+  silhouette). It stays round and the same size. The edge clamp applies
+  only at rest; mid-switch the orbit is computed unscrolled and then
+  offset, and a position-only probe (the hit target's landing spot, GL
+  passes `look: false`) skips the setting look. While scrolling the sun no
+  longer leans toward the sky colour, so it stays its own light source.
+  Its setting layers (`sunLook.js`, none at rest): `SET_COLOUR` `#F8B45E`
+  at `SET_MIX` .5, a hot core (`SET_CORE` .8), a warm limb (`SET_LIFT`
+  .18), `SET_BLOOM`, a low wide halo (`SET_HALO`) and `SET_WASH`, a horizon
+  wash that tints the sky, lights the rims and spills over the crests. The
+  moon warms to an ember amber (`MOONSET`) with its seas still readable;
+  the warmth shows clearly only late in the scroll.
 - **Meadow.** `groundPaint` (4 stops, `GROUND_AT`) fills below the front
   ridge's foot, painted between its rim and its veil; the air band ends at
   that foot (`airAt`). Wind over it (`WIND`) is GL-only and off under
@@ -556,20 +603,25 @@ pixel-identical to `0.1.11` (and `0.2.0`).
   painted sun moves; the target doesn't).
 - **GL cost.** The hash table is sized once for the widest scale
   (`descentWidest`), so a scroll frame only sets uniforms and runs one crest
-  pass. GPU/CPU crest parity is still 0. Measured on an M4 (prod, `0.2.1`):
-  scroll sweeps 119.7–120 fps, p95 8.8–9.2 ms, max ~16.7 ms, no frame over
-  20 ms; idle 61–78 ms/s with drift. Known gap: perf's headless wheel sweep
+  pass. GPU/CPU crest parity is still 0 (24 cases, `driftAt` .25/.4).
+  Measured on an M4 (prod, `0.2.2`): scroll sweeps 118.8–119.5 fps, p95
+  9.0–9.3 ms, no frame over 20 ms; idle 62–65 ms/s with drift; switches
+  120 fps. Known gap: perf's headless wheel sweep
   doesn't quite reach the bottom of the track.
 
-Planned for `0.2.2` (sun/moon clickable and setting under scroll, a better
-day palette) and the fallback gate before `0.3`: see `ROADMAP.md`.
+Planned: `0.2.3` (the sun and moon clickable at any scroll, and switching
+while scrolling), `0.2.4` (the ridge light at rest) and `0.2.5` (the
+fallback gate before `0.3`): see `ROADMAP.md`.
 
 ### Adding a scene
 
 1. Add a recipe under `components/gradient/recipes/`, with its `body`
    (`'sun'` or `'moon'`) and a `transition` (`springRate`/`ms`, `apex`, and
    any `via` skies on the way into it), and a `scroll` (`keys`, `body`,
-   `meadow`, optionally `descent` (GL) and `camera` (layered, until ported)) for the `0.2` stretch.
+   `meadow`, optionally `haze`, `descent` (GL) and `camera` (layered, until
+   ported)) for the `0.2` stretch. Under the camera `stops[0]` is the sky
+   overhead, `stops[1]` the horizon glow and the haze the distant ranges
+   fade into, and `stops[2]`–`[5]` the ridges far to near.
 2. Register it in `components/gradient/themes.js` with an `id`, `label` and
    `next` (the cycle is defined by the themes, not the provider).
 
@@ -579,7 +631,7 @@ day palette) and the fallback gate before `0.3`: see `ROADMAP.md`.
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.2` (sun/moon under scroll), then port the layered fallback to the `0.2.1`/`0.2.2` camera with parity passing, before any `0.3.x` (`ROADMAP.md`) |
+| `0.2.3` (sun/moon clickable at any scroll), `0.2.4` (ridge light at rest), then `0.2.5`: the layered fallback catches up on `0.2.1`–`0.2.4` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |
 

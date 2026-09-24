@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` next. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), then `0.2.3` the sun and moon at any scroll, `0.2.4` ridge light at rest, `0.2.5` the fallback catches up. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -173,7 +173,7 @@ How it should feel:
   sunset, stopping short of one. Night: the moon climbs and the lilac cast
   fades into a deeper night.
 - **The sun toggle works only near the top.** It fades out over 5–10% of
-  the stretch and is inert past it (until `0.2.2`, below).
+  the stretch and is inert past it (until `0.2.3`, below).
 - **Reduced motion:** 30% of the camera move, with the colour change kept.
 
 **Shipped in `0.2.1`: ridges that behave like terrain (GL only).** The
@@ -198,34 +198,65 @@ extra ranges faded in place). Now (`DESCENT` in `camera.js`, details in
   stop popping in and out while scrolling. Not yet confirmed on a real
   phone (emulation has no toolbar).
 
-**`0.2.2`: the sun and moon under scroll.**
+**Shipped in `0.2.2`: the look (GL only).** The ridge layout is unchanged
+from `0.2.1` (same `DESCENT`, ranges and conveyor); what changed is how the
+stretch is lit and painted (details in `CLAUDE.md`, "The camera (0.2)"):
+- **Idle drift is visible at every scroll position.** Drift is in noise
+  units, so the shrunken and distant ridges barely moved under the camera
+  (about 1 px per .1 seed on the far ranges, against 2.6 at rest). A
+  per-ridge drift gain (up to 2.5) fixes it: mean motion at the end is now
+  4.40 px per .1 seed (3.61 in `0.2.1`). The gain moves with scroll, so a
+  drifted ridge reshapes slightly while scrolling (it still retraces
+  exactly).
+- **Distance reads as air.** Far ranges step into the haze by depth, with
+  softer edges and shallower veils; the sky is redrawn under the camera so
+  the top of the frame ends on the sky's top colour and the horizon on its
+  glow; the haze thins toward evening.
+- **Painted ridge colours.** A clean ramp from the near ridge to the haze,
+  blended in over the studio's colours as the camera moves, with the veils
+  and air thinned, so the near ridges stay a rich violet rather than grey.
+- **Ridge light** (scroll only): warm crest light strongest in the sun's or
+  moon's column, slanted per depth (parallax), over a cool shadow below.
+- **The sun sets.** Its gap to the horizon closes until it sinks into the
+  ridges (about half to two thirds hidden by the end at 1440×900), round
+  and the same size, with a hot core, a warm limb, bloom and a wash along
+  the horizon that lights the rims. The moon sinks too and warms to an
+  ember amber. The moon's glow fades on a smoothstep, so its edge at 3.4r
+  is gone (GL; the layered glow is still linear).
+- **Palettes.** The day reads as golden hour into sunset: dusk blue-violet
+  overhead, a gold/rose horizon, a dim violet-green meadow. Night ends
+  deeper and cooler, with the distant ranges paling step by step.
+- The top of the page is pixel-identical to `0.2.1` by day; at night only
+  the moon glow differs (mean .15). Scroll sweeps hold 118.8–119.5 fps (p95
+  9.0–9.3 ms, no frame over 20 ms); first-load JS is unchanged (+6 B).
+- **Known:** the drift still slows near zero at the ends of its 60 s sine,
+  and the moon's warmth shows clearly only late in the scroll.
+
+**`0.2.3`: the sun and moon at any scroll.**
 - **Clickable at any scroll position.** The switch arc keeps its full
   unscrolled shape, shifted by the camera tilt, and a body may leave the
   frame mid-arc. The hit target follows the painted body. The orbit's
-  `hidden` line comes from the transformed far ridge.
-- **The sun visibly sets.** On scroll it drifts up and left, keeping a fixed
-  gap to the ridges, so it doesn't read as setting. It must sink toward and
-  into the ridges. The moon gets the same fix.
-- **A believable sunset.** The day scroll palette is too orange. Balance it
-  so the sky and the light on the ridges and meadow work together.
+  `hidden` line comes from the transformed far ridge (today mid-switch it
+  still uses the unscrolled one).
+- **Switching while scrolling** blends smoothly, with no jump when either
+  the switch or the scroll finishes.
 
-Found in `0.2.1`, to fix in `0.2.2`:
-- From about `about` .64 by day, the taller distant ranges cover the sun's
-  lower half, so it reads as sitting behind them rather than setting.
-- Mid-switch, the orbit's `hidden` line still uses the unscrolled far ridge
-  (covered by the first item above).
-- The moon's linear glow has a visible edge: a slope break at 3.4r reads as
-  a Mach band. A candidate to soften.
-- The night portrait end frame looks sparse, since the distant ranges are
-  very hazy.
+**`0.2.4`: ridge light at rest.** `0.2.2`'s ridge light (the sun's or
+moon's column, the parallax slant) also lights the resting scene at
+`about` = 0, and follows the body through a switch. GL first: scroll-0
+parity fails until `0.2.5`, an accepted gap.
+
+**`0.2.5`: the fallback catches up.** The layered renderer takes on
+`0.2.1`–`0.2.4` (the conveyor, the look, the ridge light), and all 42 parity
+cases pass.
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
-starts. **State at `0.2.1`:** the fallback still runs the `0.2.0` camera
-(`CAMERA`/`cameraAt`, ranges fading into gaps). Parity passes at scroll 0
-(14/14) and fails at .5 and 1 (day mean 14–15, night 4–5.5), as expected.
-To do before `0.3.x`: port `0.2.1`'s conveyor and `0.2.2`'s changes to the
-layered renderer, and pass all 42 parity cases.
+starts. **State at `0.2.2`:** the fallback still runs the `0.2.0` camera
+(`CAMERA`/`cameraAt`, ranges fading into gaps) and ignores `0.2.2`'s look.
+Parity passes at scroll 0 (14/14; night worst mean .81, p99 6, from the
+GL-only moon glow) and fails at .5 and 1 (day mean 11–28, night 11–17), as
+expected. `0.2.5` closes it.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
@@ -255,6 +286,9 @@ lived-in. Seen top-down at the join between the arcs, the laptop is closed.
 - **Relit per theme:** the grass, the wood and everything else. They take
   their light from the sky palette, like the ridges do: warm sun at dusk,
   cool moonlight and the lamp's pool of light at night.
+
+**The lamp is a real table lamp,** and a hook for a later about-me layer.
+What that layer is hasn't been decided.
 
 **The lamp is a theme toggle.** Lamp on means night, lamp off means day.
 It's the sun toggle's counterpart at the other end of the page.

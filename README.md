@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.1](https://img.shields.io/badge/version-0.2.1-informational)
+![Version 0.2.2](https://img.shields.io/badge/version-0.2.2-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -62,12 +62,15 @@ contact come in later lines (see [Versioning](#versioning)).
   slight tilt, with a faint strip of sky above and a little meadow at the
   bottom. Since `0.2.1` the ridges behave like terrain: each keeps its
   silhouette, the front one recedes as a new one slides up from below, and
-  distant ranges rise from behind the far ridge. `0.2.2` is next: the sun
-  and moon clickable at any scroll position, a sun that visibly sets, and a
-  better sunset palette. The layered fallback still runs the `0.2.0` camera
-  and is catching up (see [`ROADMAP.md`](./ROADMAP.md)).
-- Time of day moves with scroll. By day the sun sinks and the sky warms; by
-  night the moon climbs.
+  distant ranges rise from behind the far ridge. Since `0.2.2` distance
+  reads as air: far ranges step into the haze, warm light catches the crests
+  in the sun's column, and the ridges keep breathing at every scroll
+  position. `0.2.3` is next: the sun and moon clickable at any scroll position.
+  The layered fallback still runs the `0.2.0` camera and catches up in
+  `0.2.5` (see [`ROADMAP.md`](./ROADMAP.md)).
+- Time of day moves with scroll. By day the sky turns from golden hour to
+  sunset and the sun sets into the ridges; by night the moon sinks too,
+  warming toward amber.
 - The sun toggle only works near the top of the page. It fades out as you
   scroll and can't be clicked once it's gone.
 
@@ -197,9 +200,10 @@ silhouette computed as a mask from the shader's own maths. Both are loaded
 dynamically after mount, with a CSS gradient of the sky painted behind them
 until they arrive. They share the switch maths (`orbit.js`), the camera maths
 (`camera.js`), the sky ramp, and the sun and moon looks, and `npm run parity`
-keeps them visually identical. In `0.2.1` only the WebGL camera has moved on,
-so they match at the top of the page but not mid-scroll until the fallback is
-ported (before `0.3`).
+keeps them visually identical. Since `0.2.1` only the WebGL camera has moved
+on (and in `0.2.2` its look under scroll), so they match at the top of the
+page but not mid-scroll until the fallback catches up in `0.2.5` (before
+`0.3`).
 
 **One clock per job.** At rest, an exponential smoothing step holds the scene.
 During a switch, one eased clock carries the sun and moon along their arc,

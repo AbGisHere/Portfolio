@@ -15,7 +15,7 @@
  * `about` = 0 they're all identities, and the picture is 0.1's exactly.
  */
 
-import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SUN_GLOW } from '../sunLook';
+import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
 import { hexToRgb } from './mistGeometry';
 
 export const MAX_RIDGES = 9; // "Ranges" tops out at 9
@@ -46,6 +46,8 @@ uniform float uBodyA[2];     // disc opacity (the moon fades with daylight)
 uniform float uBodyWash[2];  // how far the colour leans to the sky behind it
 uniform float uBodyFace[2];  // 1: the moon (face shaded in), 0: the sun
 uniform float uBodySquash[2]; // a low sun's flattening, share of its height
+uniform vec2 uBodyHalo[2];   // glow spread: x wider, y taller (1, 1 at rest; camera.js bodyAt)
+uniform float uBodySet[2];   // how far a body has set under the descent (0 at rest; sunLook.js SET_*)
 uniform sampler2D uMoon;     // moonFace.js shade map, across the disc
 uniform sampler2D uCrest;    // R32F: crest y per device column, one row per ridge
 uniform int uCount;
@@ -59,6 +61,14 @@ uniform vec3 uRimCol[MAX_RIDGES];
 uniform float uRimA[MAX_RIDGES];
 uniform float uBlur[MAX_RIDGES];   // Gaussian sigma, 0 = crisp
 uniform float uFade[MAX_RIDGES];
+// (0.2.2) A setting body's light on the ridges (sunLook.js RIDGE_LIGHT):
+// per ridge, the crest light's strength (0: none, as at rest) and the shadow's.
+uniform float uLitA[MAX_RIDGES];
+uniform float uShadeA[MAX_RIDGES];
+uniform vec3 uLitCol;         // the crest light's colour
+uniform vec3 uShadeCol;       // the shadow's tint (the sky overhead's hue, max channel 1)
+uniform vec3 uLitAt;          // the body's x, the light's spread (px), its depth below a crest (px)
+uniform float uLitBase;       // share of the light away from the body
 uniform vec4 uVeil[MAX_RIDGES];    // cx (drift applied), cy, rx, ry
 uniform float uVeilA[MAX_RIDGES];
 uniform float uRimW;
@@ -67,6 +77,7 @@ uniform float uAirA;
 uniform sampler2D uGrain;    // 256² noise, tiled at 256 CSS px, nearest
 uniform float uGrainA;
 uniform float uSkyShift;     // the camera's tilt: the sky moves up this far, CSS px
+uniform float uSkyScale;     // and is drawn this much denser (camera.js skyAt; 1 at rest)
 uniform float uScale[MAX_RIDGES]; // each ridge's camera scale (1 at rest)
 uniform float uFront;        // the front ridge's foot: the meadow's top (≥ height: none)
 uniform float uHorizon;      // the ground's vanishing line
@@ -126,10 +137,25 @@ void main() {
   vec2 p = vec2(xPx, uRes.y - gl_FragCoord.y) * uSize / uRes;
 
   // Sky: the gradient spans the full frame height.
-  vec3 col = texture(uSky, vec2((p.y + uSkyShift) / uSize.y, 0.5)).rgb;
+  vec3 col = texture(uSky, vec2((p.y * uSkyScale + uSkyShift) / uSize.y, 0.5)).rgb;
+
+  // A setting sun's wash (sunLook.js SET_WASH): a very wide, faint Gaussian
+  // hugging the horizon that tints the sky here, then lights the ridge rims
+  // under it and spills over the crests. None at rest.
+  float washA = 0.0;
+  vec3 washCol = vec3(0.0);
+  for (int i = 0; i < 2; i++) {
+    if (i >= uBodies || uBodySet[i] <= 0.0 || uBodyFace[i] > 0.5) continue;
+    vec2 u = (p - uBody[i].xy) / (uBody[i].z * vec2(${f(SET_WASH.wide)}, ${f(SET_WASH.tall)}));
+    washA = ${f(SET_WASH.a)} * uBodySet[i] * uBodyA[i] * exp(-min(dot(u, u), 40.0));
+    washCol = mix(uBodyCol[i], DISC_WHITE, ${f(SET_WASH.lift)});
+  }
+  col = over(col, washCol, washA);
 
   // Sun and moon (both mid-switch), then the disc at .85, antialiased over a
-  // device pixel. The moon: glow radial at .4 fading linearly to 0 at 3.4r,
+  // device pixel. The moon: glow radial at .4 easing to 0 at 3.4r (a
+  // smoothstep: a straight fade left a Mach band at its rim; GL only, the
+  // layered fallback still fades linearly),
   // disc multiplied by its face (seas and craters). The sun (sunLook.js):
   // two-layer glow, disc darker and warmer toward the limb, flattened low.
   for (int i = 0; i < 2; i++) {
@@ -138,17 +164,31 @@ void main() {
     vec2 q = p - uBody[i].xy;
     float d = length(q);
     bool moon = uBodyFace[i] > 0.5;
-    vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp((uBody[i].y + uSkyShift) / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
-    float glow = moon ? 0.4 * max(0.0, 1.0 - d / (r * 3.4)) : sunGlow(d / r);
+    vec3 bc = mix(uBodyCol[i], texture(uSky, vec2(clamp((uBody[i].y * uSkyScale + uSkyShift) / uSize.y, 0.0, 1.0), 0.5)).rgb, uBodyWash[i]);
+    // A setting body's glow spreads low along the horizon (uBodyHalo).
+    float dg = uBodyHalo[i] == vec2(1.0) ? d : length(q / uBodyHalo[i]);
+    float glow = moon ? 0.4 * (1.0 - smoothstep(0.0, r * 3.4, dg)) : sunGlow(dg / r);
     col = over(col, bc, uBodyGlow[i] * glow);
     // The disc: an ellipse, r wide and r·(1 - squash) tall.
     vec2 e = q / vec2(r, r * (1.0 - uBodySquash[i]));
     float rho = length(e);
-    vec3 dc = moon
-      ? bc * texture(uMoon, e * 0.5 + 0.5).r
-      : mix(bc, DISC_WHITE, ${f(DISC_LIFT)}) * mix(vec3(1.0), LIMB_EDGE, pow(min(rho, 1.0), ${f(LIMB_POWER)}));
+    float st = moon ? 0.0 : uBodySet[i];
+    vec3 limb = mix(vec3(1.0), LIMB_EDGE, pow(min(rho, 1.0), ${f(LIMB_POWER)}));
+    vec3 dc;
+    if (moon) dc = bc * texture(uMoon, e * 0.5 + 0.5).r;
+    else if (st > 0.0) {
+      // Setting: a hot core that stays near-white, the limb warming outward.
+      vec3 core = mix(bc, DISC_WHITE, mix(${f(DISC_LIFT)}, ${f(SET_CORE)}, st));
+      vec3 edge = mix(bc, DISC_WHITE, mix(${f(DISC_LIFT)}, ${f(SET_LIFT)}, st));
+      dc = mix(core, edge, smoothstep(0.0, 1.0, min(rho, 1.0))) * limb;
+    } else dc = mix(bc, DISC_WHITE, ${f(DISC_LIFT)}) * limb;
     float da = moon ? 0.85 : ${f(DISC_ALPHA)};
     col = over(col, dc, da * uBodyA[i] * clamp((1.0 - rho) * r * uDpr + 0.5, 0.0, 1.0));
+    // Setting: a tight bloom just past the disc's edge, so it isn't crisp.
+    if (st > 0.0 && rho > 1.0) {
+      float x = (rho - 1.0) / ${f(SET_BLOOM.out)};
+      col = over(col, mix(bc, DISC_WHITE, 0.5), ${f(SET_BLOOM.a)} * st * uBodyA[i] * exp(-min(x * x, 40.0)));
+    }
   }
 
   // Antialiasing width, as a Gaussian of ~half a device pixel.
@@ -179,12 +219,26 @@ void main() {
     vec3 fill = t < 0.45
       ? mix(uFillA[i], uFillB[i], t / 0.45)
       : mix(uFillB[i], uFillC[i], (t - 0.45) / 0.55);
+    // Setting light: warm along the crest, strongest toward the body, the
+    // body below falling into cool, soft shadow. None at rest.
+    // The light is screened on (it brightens toward the warm colour, never
+    // greys the violet); the shadow multiplies the body by the sky's cool hue.
+    if (uLitA[i] > 0.0) {
+      float edge = exp(-max(0.0, p.y - crest) / max(1.0, uLitAt.z * uScale[i]));
+      float sx = (p.x - uLitAt.x) / uLitAt.y;
+      float toward = uLitBase + (1.0 - uLitBase) * exp(-min(sx * sx, 40.0));
+      fill *= mix(vec3(1.0), uShadeCol, uShadeA[i] * (1.0 - edge));
+      fill = 1.0 - (1.0 - fill) * (1.0 - uLitCol * (uLitA[i] * edge * toward));
+    }
     col = over(col, fill, Phi(d / sigma) * fade);
 
     // Crest rim: a stroke centred on the curve, blurred with the ridge.
     float hw = uRimW * 0.5 * uScale[i];
     float rim = Phi((d + hw) / sigma) - Phi((d - hw) / sigma);
-    col = over(col, uRimCol[i], rim * uRimA[i] * fade);
+    // A setting sun's wash lights the rims under it (none at rest).
+    vec3 rimCol = washA > 0.0 ? mix(uRimCol[i], washCol, min(1.0, washA * ${f(SET_WASH.rim / SET_WASH.a)})) : uRimCol[i];
+    float rimA = washA > 0.0 ? min(1.0, uRimA[i] + washA * ${f(SET_WASH.rimA / SET_WASH.a)}) : uRimA[i];
+    col = over(col, rimCol, rim * rimA * fade);
 
     // The meadow, in front of every ridge and under the front one's veil.
     if (i == uCount - 1 && p.y > uFront) col = meadow(p);
@@ -196,6 +250,9 @@ void main() {
     float va = rho < 0.55 ? mix(0.9, 0.42, rho / 0.55) : rho < 1.0 ? mix(0.42, 0.0, (rho - 0.55) / 0.45) : 0.0;
     col = over(col, uMist, va * uVeilA[i] * fade);
   }
+
+  // A setting sun's light spilling over the crests along the horizon.
+  if (washA > 0.0) col = over(col, washCol, washA * ${f(SET_WASH.spill)});
 
   // Air: the mist colour rising from 0 to uAirA over the 14% of the height
   // above the front foot (the frame's foot at rest), then thinning out over

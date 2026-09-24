@@ -91,25 +91,32 @@ const duskEmber = {
   // 0.2 stretch (`about` 0 → 1) while the camera draws back. Ours, not the
   // studio's.
   scroll: {
-    // Palettes the sky passes on the way down, like `transition.via`: the
-    // evening turns into a real sunset and stops short of it. Warm amber
-    // mist and orange low down where the sun is, a narrow dusky rose above,
-    // cooling to soft violet-blue overhead (off the top of the frame by the
-    // end). The far ridges take the orange glow; the near ones (stops[4],
-    // stops[5]) stay dark plum so the front ridge holds. Same six bands as
-    // `stops`.
+    // Palettes the day passes on the way down, like `transition.via`: from
+    // the resting afternoon through golden hour to sunset, darkening as it
+    // goes. Under the camera the frame's top shows stops[0] and the horizon
+    // stops[1] by the end (camera.js SKY), and the ridges are painted from
+    // stops[2]–[5] toward stops[1] (camera.js descentPaint), so: stops[0] the
+    // sky overhead, hazy mauve at golden hour deepening to dusky blue-violet;
+    // stops[1] the glow on the horizon and the haze the distant ranges fade
+    // into (pale gold, then a pale rose); stops[2]–[5] the ridges far to
+    // near, one clean violet family: rose-mauve, dusty violet, slate-violet,
+    // deep indigo in front (the near ones, stops[4] and stops[5], darkest, so
+    // the front ridge holds). Same six bands as `stops`.
     keys: [
-      { at: 0.5, stops: ['#D8C3C6', '#F7C88F', '#E5966B', '#B2716F', '#72496D', '#412C53'] },
-      { at: 1, stops: ['#8C88B2', '#F5B878', '#DE8A5A', '#A8665E', '#6A4468', '#382850'] },
+      { at: 0.5, stops: ['#B2A7C2', '#F1CFA6', '#C7A0A6', '#957893', '#655A82', '#3C395F'] },
+      { at: 1, stops: ['#4B5389', '#DDAAA8', '#A98799', '#77648C', '#48408A', '#282463'] },
     ],
-    // Where the sun is on screen by the end, from its resting spot, in
-    // shares of the height (−dy is up). The camera tilting down lifts the
-    // sky faster than this, so it sinks toward the ridges, leaning left the
-    // way it sets, and ends on the far crests without setting.
-    body: { dx: -0.05, dy: -0.19 },
+    // The sun sets as the camera pulls back (camera.js bodyAt): its gap to
+    // the horizon closes to `set` radii below it by the end (so the distant
+    // ranges take the lower part of the disc), leaning `dx` (share of the
+    // height) left the way it sets.
+    body: { dx: -0.03, set: 0.1 },
+    // The haze by the end (`mist.haze` is 50 at rest): thinner evening air,
+    // so the ridges darken toward silhouettes (camera.js scrollHaze).
+    haze: 32,
     // The meadow's tint at the viewer's feet, leaned into the front ridge's
-    // colour: a dusty sage that sits with the mauve ranges.
-    meadow: '#8E8664',
+    // colour: a dim violet-green that sits with the indigo front ridge.
+    meadow: '#3E4466',
   },
 
   // Unused by MIST, kept so the recipe stays a drop-in studio export.

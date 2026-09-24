@@ -1,7 +1,7 @@
-import { mix, ridgeColour } from './gl/mistGeometry';
+import { mix, ridgeBlur, ridgeColour, rimOpacity } from './gl/mistGeometry';
 import { ease } from './orbit';
 import { paletteAt } from './skyKeys';
-import { SUNSET_COLOUR, SUNSET_MIX } from './sunLook';
+import { MOONSET, SET_COLOUR, SET_HALO, SET_MIX } from './sunLook';
 
 /**
  * The descent's camera over the mountains (the 0.2 stretch, ROADMAP.md "The
@@ -186,15 +186,137 @@ export function frameAt(scene, h, cam) {
   // stretch (under the frame, or behind the far ridge), and each ridge's
   // light follows its slot (`slotT`). A `stretch`ed range is drawn that
   // much larger (its height is set that much lower in `layout`).
+  // (0.2.2) Ranges beyond the recipe's far ridge step further into the haze
+  // by depth (FAR_HAZE), and every ridge's idle drift is scaled so its flow
+  // reads on screen as it does at the top (DRIFT_GAIN_MAX, `g`).
+  const own = ridges.filter(rd => !rd.extra);
+  const zFar = Math.max(...own.map(rd => depthOf(rd.base, c, h)));
+  const lift = Math.min(...own.map(rd => rd.L ?? Infinity));
   const out = ridges.map(rd => {
     const s = ridgeScales([rd], c, h, cam)[0];
     const foot = horizon + (1 + cam.rise) * s * (rd.base - c);
     const u = rd.drop ? Math.min(1, (cam.k ?? 1) / (rd.until ?? 1)) : 1;
     const dropped = rd.drop ? rd.drop * h * (1 - u * u * (3 - 2 * u)) : 0;
-    return { s: s * (rd.stretch ?? 1), foot: foot + dropped, t: slotT(foot, horizon, h, scene.ranges ?? 5) };
+    const z = rd.z ?? depthOf(rd.base, c, h);
+    const far = z > zFar ? FAR_HAZE * Math.log2(z / zFar) : 0;
+    const drawn = s * (rd.stretch ?? 1);
+    const g = Math.min(DRIFT_GAIN_MAX, Math.max(1 / drawn, rd.L ? lift / (rd.L * drawn) : 1));
+    // Ridges flatten into layers as the camera goes (mistGeometry.js
+    // FAR_FOOT, FAR_VEIL): the distant ranges fully, the recipe's by how far
+    // back they sit, so a crest that dips into a valley (a narrow portrait
+    // frame shows few peaks) still reads as its own layer, not as haze.
+    const t = slotT(foot, horizon, h, scene.ranges ?? 5) - far;
+    const flat = z > zFar + 1e-6 ? 1 : (cam.k ?? 1) * clamp01(1 - t);
+    return { s: drawn, foot: foot + dropped, t, g, flat };
   });
   return { rest: false, k: cam.k ?? 1, shift, horizon, ridges: out, front: out.length ? out[out.length - 1].foot : h };
 }
+
+/**
+ * (0.2.2) The sky under the camera. Tilting down lifts the sky with the
+ * horizon, which left the palette's horizon band (stops[2], the far ridge's
+ * own colour) right behind the distant ranges: they merged into it, and the
+ * sky strip at the end showed only the warm bands, never the cool top.
+ * Instead the sky is redrawn over the strip above the horizon: the frame's
+ * top shows the ramp at SKY.top and the horizon at SKY.horizon by the end
+ * (stops sit at 1/12, 3/12 … of the ramp: .083 is stops[0], .25 stops[1]),
+ * so the strip runs from the cool top down to the haze (stops[1], the colour
+ * the distant ranges fade into), glowing behind the ranges. Both move on the
+ * camera's clock; below the horizon the ramp carries on at the same density.
+ * Returns { scale, shift } for `(y × scale + shift) / h`: 1 and the plain
+ * tilt shift at rest.
+ */
+export const SKY = { top: 0.08, horizon: 0.24 };
+export function skyAt(frame, h) {
+  if (frame.rest) return { scale: 1, shift: frame.shift };
+  const k = frame.k;
+  const c = frame.horizon + frame.shift;
+  const a = SKY.top * k * h;
+  const b = c + (SKY.horizon * h - c) * k;
+  return { scale: (b - a) / Math.max(1, frame.horizon), shift: a };
+}
+
+/**
+ * (0.2.2) The ridges' colour under the descent, painted for the camera
+ * rather than derived the studio's way (which mixes every ridge toward the
+ * haze, so the ranges muddied into one wash as they multiplied). Aerial
+ * perspective is the backbone: each ridge takes its body colour from a clean
+ * ramp by its depth t (the slot it has reached, camera.js frameAt), front to
+ * back through the palette's ridge stops, stops[5] (t = 1, deepest and
+ * richest) → stops[4] (⅔) → stops[3] (⅓) → stops[2] (0, the far ridge), and
+ * past it (t < 0, the distant ranges) on toward the haze, stops[1], which by
+ * the end is the sky just above them (camera.js SKY): each range lighter,
+ * cooler and softer than the one in front. Each still eases into the haze
+ * at its foot (PAINT.foot, more for farther ranges), so the mist between the
+ * ranges stays, and keeps a soft, lighter crest line (PAINT.rim, at PAINT.rimA
+ * of the studio's opacity). Light is
+ * a separate layer on top (sunLook.js RIDGE_LIGHT), never baked in here.
+ * MistCanvas blends this in over the studio's colours on the camera's clock,
+ * so the top of the page is untouched.
+ */
+export const PAINT = { crest: 0.1, foot: [0.2, 0.55], rim: 0.3, rimA: 0.5 };
+/** Past the top every veil thins by up to this share (MistCanvas.jsx). */
+export const DESCENT_VEIL = 0.5;
+/** …and the air band at the frame's foot by up to this share, so the near
+ * ridges keep their hue (the pale haze over them greyed them out). */
+export const DESCENT_AIR = 0.5;
+
+const RAMP_AT = [1, 2 / 3, 1 / 3, 0, -1];
+export function paintTone(stops, t) {
+  const ramp = [stops[5], stops[4], stops[3], stops[2], stops[1]];
+  const x = Math.min(1, Math.max(-1, t));
+  let j = 0;
+  while (j < RAMP_AT.length - 2 && x < RAMP_AT[j + 1]) j++;
+  return mix(ramp[j], ramp[j + 1], (RAMP_AT[j] - x) / (RAMP_AT[j] - RAMP_AT[j + 1]));
+}
+
+/** One ridge's paint under the descent (the shape `ridgePaint` returns). */
+export function descentPaint(stops, rd, h) {
+  const A = paintTone(stops, rd.t);
+  const M = stops[1];
+  const far = clamp01(1 - rd.t);
+  const blur = ridgeBlur(rd.t, h);
+  return {
+    fill: [A, mix(A, M, PAINT.crest), mix(A, M, PAINT.foot[0] + (PAINT.foot[1] - PAINT.foot[0]) * far)],
+    rim: mix(A, M, PAINT.rim),
+    rimA: rimOpacity(rd.t) * PAINT.rimA,
+    blur: blur > 0.4 ? blur : 0,
+    fade: rd.fade,
+  };
+}
+
+/** Two paints blended (oklab for colours), `k` of the way from a to b. */
+export function blendPaint(a, b, k) {
+  if (k <= 0) return a;
+  if (k >= 1) return b;
+  return {
+    fill: a.fill.map((c, i) => mix(c, b.fill[i], k)),
+    rim: mix(a.rim, b.rim, k),
+    rimA: a.rimA + (b.rimA - a.rimA) * k,
+    blur: a.blur + (b.blur - a.blur) * k,
+    fade: b.fade,
+  };
+}
+
+/** (0.2.2) How far each range beyond the recipe's far ridge steps into the
+ * haze: its `t` drops by FAR_HAZE per doubling of depth past the far ridge's,
+ * so the distant ranges read as separate layers, each paler than the last. */
+export const FAR_HAZE = 0.4;
+
+/**
+ * (0.2.2) The idle drift (the ridges' breathing, MistCanvas.jsx) is in noise
+ * units, so its motion on screen scales with a ridge's drawn size: under the
+ * camera the recipe's ridges shrink to s ≈ .7–.95, and the distant ranges,
+ * with a world lift ∝ 1/z, barely moved at all. Each ridge's drift is scaled
+ * by `g` (frameAt): 1/s, so a ridge flows as many px as it did at the top, and
+ * at least enough that its crest moves as far as the recipe's far ridge does
+ * at rest; capped at DRIFT_GAIN_MAX (the hash table's slack covers it). All
+ * 1 at rest.
+ */
+export const DRIFT_GAIN_MAX = 2.5;
+
+/** Each ridge's drift gain in `frame` (paint order), or null at rest. */
+export const driftGains = frame => (frame.rest ? null : frame.ridges.map(rc => rc.g ?? 1));
 
 /** The smallest scale each ridge reaches over the whole stretch (about = 1,
  * full camera): what the crest noise's range (the hash table) must cover. */
@@ -238,39 +360,54 @@ export function scrollPaletteSwitch(base, prev, next, about, e) {
 }
 
 /**
- * A sun or moon under the descent, moved from its resting spot by its
- * recipe's `scroll.body` ({ dx, dy }: where it is on screen by `about` = 1,
- * relative to that spot, in shares of the height; −dy is up), on the
- * camera's clock and reach (`frame.k`). That's the net of the camera
- * tilting (the sky goes up by `frame.shift`) and the body's own move: the
- * sun ends lower in the sky, just clear of the far ridges, and deepens
- * toward the sunset colour (sunLook.js) as it sinks. It stays round and
- * keeps its size: it's at infinity, so the camera moving back doesn't
- * change it, and the low-sun flattening belongs to a real sunset (a switch).
- * `hidden` is where a disc is fully under the far ridge (orbit.js). Bodies
- * mid-switch (`look: false`) keep their switch look and only move: the arc
- * is orbit.js's, in the unscrolled sky, offset whole, never squeezed into
- * the visible sky, so a body can leave the top of the frame mid-arc.
+ * A sun or moon under the descent (0.2.2: it sets). Its gap to the horizon
+ * (the ground's vanishing line, `frame.horizon`) closes on the camera's clock
+ * and reach (`frame.k`) from the resting one to its recipe's `scroll.body.set`
+ * radii below it by `about` = 1 (positive: the centre ends under the line, so
+ * the ranges on the horizon cover the lower part of the disc), while `dx`
+ * (share of the height) leans it the way it sets. The camera tilting down
+ * still lifts the sky, but the ridges climb faster than the body does, so the
+ * crests close in on it and take it: it reads as setting, not floating at a
+ * fixed gap. It stays round and keeps its size (it's at infinity; the low-sun
+ * flattening belongs to a switch), and the sun deepens toward the sunset
+ * colour (sunLook.js) as it sinks. Bodies mid-switch (`look: false`) keep
+ * their switch look and only move: the arc is orbit.js's, in the unscrolled
+ * sky, offset whole, so a body can leave the top of the frame mid-arc.
  */
-export function bodyAt(b, recipe, frame, { w, h, hidden, restY, look = true }) {
+export function bodyAt(b, recipe, frame, { w, h, restY, look = true }) {
   const m = recipe?.scroll?.body;
-  const dx = (m?.dx ?? 0) * h * frame.k;
-  const dy = (m?.dy ?? 0) * h * frame.k;
-  if (!dx && !dy) return b;
+  const k = frame.k;
+  if (!m || frame.rest || !k) return b;
+  const r = b.r;
+  // How far it has set: the gap closes slowly at first, then takes it
+  // (SET_EASE), so the crests catch it late in the stretch, not halfway.
+  const low = clamp01(k) ** SET_EASE;
+  // The resting gap (negative: above the line) and the one it ends on.
+  const g0 = restY - (frame.horizon + frame.shift);
+  const g1 = (m.set ?? 0) * r;
+  const dx = (m.dx ?? 0) * h * k;
   // At rest the body stays clear of the frame's edges (the sun clamp); a
   // switch's arc keeps its full shape, off the frame and all.
-  const r = b.r;
   const x = look ? Math.min(Math.max(b.x + dx, 1.5 * r), Math.max(w - 1.5 * r, w / 2)) : b.x + dx;
-  const out = { ...b, x, y: b.y + dy };
-  // How far it has sunk in the sky: its move, less the sky's.
-  const sink = dy + frame.shift;
-  if (look && b.face === 0 && sink > 0) {
-    const low = clamp01(sink / Math.max(1, hidden - restY));
-    out.col = mix(b.col, SUNSET_COLOUR, SUNSET_MIX * low);
-    out.wash = 0.2 * low;
-  }
+  const out = { ...b, x, y: b.y - frame.shift + (g1 - g0) * low };
+  // Only a painted body takes the setting look. Both renderers also ask
+  // for a bare position mid-switch (where the resting body will land, for the
+  // hit target): that probe carries no colour, only x/y/r.
+  if (!look || b.col == null) return out;
+  // Its setting look (sunLook.js): the sun warms (hot core, gold-orange
+  // limb, bloom, a low wash along the horizon: the shader builds those from
+  // `set`), the moon barely changes; both glows spread low.
+  const set = b.face === 0 ? { ...SET_HALO, colour: SET_COLOUR, mix: SET_MIX, dim: 0 } : MOONSET;
+  out.col = mix(b.col, set.colour, set.mix * low);
+  out.halo = [1 + set.wide * low, 1 - set.flat * low];
+  out.glow = b.glow * (1 + set.gain * low);
+  out.alpha = b.alpha * (1 - set.dim * low);
+  out.set = low;
   return out;
 }
+
+/** How the body's set follows the camera: low = k^SET_EASE. */
+export const SET_EASE = 1.6;
 
 /**
  * The meadow below the front ridge: { top, stops: [[y, hex], …] }, a vertical
@@ -294,6 +431,16 @@ export function groundPaint(stops, meadow, foot, frame, h, haze) {
       return [y, mix(near, foot, q ** GROUND_FOG)];
     }),
   };
+}
+
+/** (0.2.2) The haze (ATMOSPHERE · Haze, `mist.haze`) at `about`: it thins
+ * from the resting value toward the recipe's `scroll.haze` by the end, so the
+ * ridges darken toward silhouettes and the veils and air thin as evening
+ * comes. Mid-switch both scenes' targets blend on the switch's progress `e`. */
+export function scrollHaze(base, prev, next, e, about) {
+  const a = prev?.scroll?.haze ?? base;
+  const b = next?.scroll?.haze ?? base;
+  return base + (a + (b - a) * e - base) * clamp01(about);
 }
 
 /** The meadow tint mid-switch. */
