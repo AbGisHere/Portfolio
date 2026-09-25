@@ -176,8 +176,8 @@ components/
   Stage.jsx (+ .module.css)           — full-viewport shell for every scene
   AtmosphereField.jsx (+ .module.css) — the scene, fixed behind every page: backdrop sky,
                                         renderer pick (GL/layers), sun toggle
-  SunToggle.jsx (+ .module.css)       — hit target on the painted sun; sits out each switch,
-                                        fades out over `about` .05 → .1 and is inert past it
+  SunToggle.jsx (+ .module.css)       — hit target on the painted sun or moon, at any scroll;
+                                        follows `sunSpot.js`, sits out each switch
   SmoothScroll.jsx (+ .module.css)    — the scroll layer (root layout): Lenis (desktop), publishes
                                         the descent's progress; a 100lvh probe for the span
   scroll/
@@ -198,6 +198,8 @@ components/
     orbit.js           — a switch: the sky turning, bodies, palette keys (both renderers)
     camera.js          — the descent's camera over the mountains (0.2): per-ridge scale/foot,
                          sky shift, extra ranges, meadow, time-of-day palette and bodies (both renderers)
+    sunSpot.js         — the painted sun's (or moon's) centre, outside React: renderers publish,
+                         SunToggle follows
     moonFace.js        — the moon's seas and craters, a shade map for its disc
     sunLook.js         — the sun's two-layer glow, warm limb, low-sun squash
     skyKeys.js         — a palette partway through a switch's keyframes
@@ -355,17 +357,19 @@ Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.2`:** the GL
+above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.3`:** the GL
 camera moved to the conveyor (`0.2.1`) and took on `0.2.2`'s look, and the
 fallback has neither, so parity passes at scroll 0 (14/14; night worst mean
 .81, p99 6, from the GL-only moon glow) and fails at .5 and 1 (day mean
-11–28, night 11–17). Accepted within `0.2.x`; the fallback catches up on
+17–29, night 11–17). The hit-target check (`--sun-tolerance`) passes at every
+scroll for both renderers, within .02 px. Accepted within `0.2.x`; the fallback catches up on
 `0.2.1`–`0.2.4` in `0.2.5`, with all 42 cases passing, before any `0.3.x`
 work (`0.2.4`'s resting ridge light will fail scroll 0 until then). Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
-(`orbit.js`) and the camera maths (`camera.js`). Hooks the renderers honour:
+(`orbit.js`), the camera maths (`camera.js`) and where the body is painted
+(`sunSpot.js`, which the hit target follows). Hooks the renderers honour:
 
 | Hook | Meaning |
 |---|---|
@@ -437,9 +441,13 @@ Two clocks, each with one job:
     the incoming one rises from behind it on the right, in parallel; both
     turn through the same angle. The arc meets the ridges at `SET_ANGLE`
     (0.3 rad), not straight down, and sideways travel past the resting spots
-    is stretched by `SET_SPREAD` (1.3), so the sun slants left as it sets. A
-    body's glow fades as its disc goes under. Each keeps its own colour but
-    leans toward the sky behind it (`wash`): the moon is pale in a bright sky.
+    is stretched by `SET_SPREAD` (1.3), so the sun slants left as it sets. On
+    portrait frames the stretch narrows (`spreadAt`: `SET_SPREAD` ×
+    min(1, aspect / `REACH_ASPECT` 1.2)), so the legs stay inside the frame:
+    at 393×852 the arc spans .24–.80 of the width (was .17–.87); landscape is
+    unchanged. A body's glow fades as its disc goes under. Each keeps its own
+    colour but leans toward the sky behind it (`wash`): the moon is pale in a
+    bright sky.
     The moon fades out over the first ~30% of a morning (a 6 a.m. moon)
     rather than setting, and fades in as it clears the ridges at dusk.
   - **Palette.** The sky passes through the target's `via` keyframes on a
@@ -462,9 +470,17 @@ Two clocks, each with one job:
   - It starts from what was last painted (captured before the spring steps),
     so a switch never jumps on its first frame. Under reduced motion it's a
     cut.
-- **The hit target doesn't follow the sun.** `SunToggle` jumps straight to
-  where the sun will land and ignores clicks (`data-busy`) for the switch's
-  `ms`. At rest it sits exactly on the painted sun.
+- **The hit target follows the painted body, except mid-switch** (`0.2.3`).
+  Each rebuild the renderer that paints publishes the body's centre to
+  `sunSpot.js` (outside React, like the descent store), and `SunToggle`
+  writes it to `--spot-x` / `--spot-y`; before a renderer has painted it
+  places itself from the recipe, in CSS. Mid-switch the published spot is
+  where the incoming body will land, so the target jumps straight there and
+  ignores clicks (`data-busy`) for the switch's `ms`. At rest, at any scroll,
+  it sits exactly on the painted sun or moon.
+- **The landing (GL).** When a switch ends, the spring's vector is set to the
+  target, so the landing frame no longer steps the whole sky slightly (a
+  step there since the switch palette was keyframed).
 - The sky **interpolates its stops**; it is not a crossfade. Two stacked
   opaque layers fading on opacity looked symmetric but wasn't: compositing a
   dark layer over a light one kills brightness far faster than the reverse.
@@ -499,8 +515,8 @@ Two clocks, each with one job:
 Scrolling the home page's `about` track pulls the camera back from the
 mountains, with a slight tilt down and a small rise, while the sky turns
 toward evening. The maths is in `components/gradient/camera.js` (GL runs
-the `0.2.1` descent with `0.2.2`'s look, the layered fallback still the
-`0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
+the `0.2.1` descent with `0.2.2`'s look and `0.2.3`'s switching at any
+scroll, the layered fallback still the `0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
 frame and **never sprung**, so scrolling back retraces exactly. At
 `about` = 0 every function is the identity: the resting scene is
 pixel-identical to `0.1.11` (through `0.2.2` by day; at night `0.2.2`'s
@@ -567,11 +583,13 @@ smoothstep moon glow differs by a mean of .15).
   studio's colours as the camera moves. The veils thin by up to
   `DESCENT_VEIL` .5 and the air band by up to `DESCENT_AIR` .5, which keeps
   the near ridges a rich violet rather than grey.
-- **Ridge light** (`0.2.2`, scroll only). `RIDGE_LIGHT` in `sunLook.js`
+- **Ridge light** (`0.2.2`; mid-switch from `0.2.3`). `RIDGE_LIGHT` in `sunLook.js`
   (shader `uLitA`, `uShadeA`, `uLitCol`, `uShadeCol`, `uLitAt`, `uLitBase`):
   warm crest light, strongest in the sun's or moon's column and slanted per
-  depth (parallax), over a cool multiplied shadow below. `0.2.4` brings it
-  to the resting scene.
+  depth (parallax), over a cool multiplied shadow below. Mid-switch it
+  follows the outgoing body and fades out over the first half, then comes
+  up with the incoming one over the second (zero at e = .5), so it never
+  jumps. `0.2.4` brings it to the resting scene.
 - **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
   `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps) and
   ignores `0.2.2`'s fields. `0.2.5` ports `0.2.1`–`0.2.4` to it, before any
@@ -580,10 +598,20 @@ smoothstep moon glow differs by a mean of .15).
   horizon closes, on `k^SET_EASE` (1.6), to `scroll.body.set` radii below
   it, while `dx` leans it left, so it sinks into the ridges (by day about
   15% hidden at .64 and 50–70% by the end at 1440×900, depending on the
-  silhouette). It stays round and the same size. The edge clamp applies
-  only at rest; mid-switch the orbit is computed unscrolled and then
-  offset, and a position-only probe (the hit target's landing spot, GL
-  passes `look: false`) skips the setting look. While scrolling the sun no
+  silhouette). It stays round and the same size.
+  `bodyAt(b, recipe, frame, { w, h, restY, look })` takes `look` as a 0…1
+  weight on the edge clamp and the setting look (colour, halo, glow gain,
+  alpha, `set`). At rest it's 1; mid-switch (`0.2.3`) the orbit is computed
+  unscrolled and then offset, and the outgoing body carries 1 − e, the
+  incoming e (both renderers), so switching and scrolling combine on every
+  frame. The hit target's landing probe is a bare position (no `col`), with
+  the clamp. `bodyDrop` gives the descent's move of a body (dx, dy, low).
+  `hiddenAt` (GL only; the fallback in `0.2.5`) sets the arc's "fully
+  hidden" line, which `orbitBodies` takes as `hidden`: the far ridge's foot
+  as the camera has moved it, plus 1.25r, taken back into the unscrolled
+  sky (the incoming body's dy undone), never above restY + r. Under scroll
+  the arc can leave the top of the frame (down to −.04h at `about` 1).
+  While scrolling the sun no
   longer leans toward the sky colour, so it stays its own light source.
   Its setting layers (`sunLook.js`, none at rest): `SET_COLOUR` `#F8B45E`
   at `SET_MIX` .5, a hot core (`SET_CORE` .8), a warm limb (`SET_LIFT`
@@ -599,19 +627,21 @@ smoothstep moon glow differs by a mean of .15).
   one, through `skyKeys.js`. Mid-switch, `scrollPaletteSwitch` blends both
   recipes' overlays on the switch's progress, and the camera amounts blend
   too.
-- **Sun toggle.** Fades out over `about` .05 → .1 and is inert past .1 (the
-  painted sun moves; the target doesn't).
+- **Sun toggle.** Clickable at every scroll position (`0.2.3`): it follows
+  the painted body (`sunSpot.js`). Verified with a scripted switch-and-scroll
+  harness on a fake clock (prod, headless): the largest frame step against
+  its neighbours fell from 167–175 at `about` 1 and 28–33 at .5 (`0.2.2`) to
+  2.0–4.4; scrolling 0 → .7 at night during a switch, from 10–13 to 2.1–2.5.
 - **GL cost.** The hash table is sized once for the widest scale
   (`descentWidest`), so a scroll frame only sets uniforms and runs one crest
   pass. GPU/CPU crest parity is still 0 (24 cases, `driftAt` .25/.4).
   Measured on an M4 (prod, `0.2.2`): scroll sweeps 118.8–119.5 fps, p95
   9.0–9.3 ms, no frame over 20 ms; idle 62–65 ms/s with drift; switches
-  120 fps. Known gap: perf's headless wheel sweep
+  120 fps. `0.2.3`, run back to back with a `0.2.2` build on the same day (1440×900@2): scroll sweeps 109.6–112.2 fps against `0.2.2`'s 111.3–112.5 (both p95 16.6 ms, no frame over 20 ms), so no regression; idle 53–57 ms/s against 71–75; switches 120 fps, p95 9.3 ms. A switch started at the bottom of the track holds 105–120 fps. Known gap: perf's headless wheel sweep
   doesn't quite reach the bottom of the track.
 
-Planned: `0.2.3` (the sun and moon clickable at any scroll, and switching
-while scrolling), `0.2.4` (the ridge light at rest) and `0.2.5` (the
-fallback gate before `0.3`): see `ROADMAP.md`.
+Planned: `0.2.4` (the ridge light at rest) and `0.2.5` (the fallback gate
+before `0.3`): see `ROADMAP.md`.
 
 ### Adding a scene
 
@@ -631,7 +661,7 @@ fallback gate before `0.3`): see `ROADMAP.md`.
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.3` (sun/moon clickable at any scroll), `0.2.4` (ridge light at rest), then `0.2.5`: the layered fallback catches up on `0.2.1`–`0.2.4` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
+| `0.2.4` (ridge light at rest), then `0.2.5`: the layered fallback catches up on `0.2.1`–`0.2.4` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |
 

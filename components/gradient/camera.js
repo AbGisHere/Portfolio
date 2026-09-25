@@ -370,40 +370,74 @@ export function scrollPaletteSwitch(base, prev, next, about, e) {
  * crests close in on it and take it: it reads as setting, not floating at a
  * fixed gap. It stays round and keeps its size (it's at infinity; the low-sun
  * flattening belongs to a switch), and the sun deepens toward the sunset
- * colour (sunLook.js) as it sinks. Bodies mid-switch (`look: false`) keep
- * their switch look and only move: the arc is orbit.js's, in the unscrolled
- * sky, offset whole, so a body can leave the top of the frame mid-arc.
+ * colour (sunLook.js) as it sinks.
+ *
+ * `look` (0…1) is how much of the resting look it takes: the edge clamp and
+ * the setting colours. A resting body takes all of it. Mid-switch (0.2.3) the
+ * outgoing body carries 1 − e and the incoming one e, so a switch started
+ * or landing part-way down hands the look over with no jump; the arc is
+ * orbit.js's, in the unscrolled sky, offset whole, so a body can leave the
+ * top of the frame mid-arc.
  */
-export function bodyAt(b, recipe, frame, { w, h, restY, look = true }) {
+export function bodyAt(b, recipe, frame, { w, h, restY, look = 1 }) {
   const m = recipe?.scroll?.body;
   const k = frame.k;
   if (!m || frame.rest || !k) return b;
   const r = b.r;
-  // How far it has set: the gap closes slowly at first, then takes it
-  // (SET_EASE), so the crests catch it late in the stretch, not halfway.
-  const low = clamp01(k) ** SET_EASE;
-  // The resting gap (negative: above the line) and the one it ends on.
-  const g0 = restY - (frame.horizon + frame.shift);
-  const g1 = (m.set ?? 0) * r;
-  const dx = (m.dx ?? 0) * h * k;
+  const weight = look === true ? 1 : look === false ? 0 : clamp01(look);
+  const { dx, dy, low } = bodyDrop(recipe, frame, { h, restY, r });
   // At rest the body stays clear of the frame's edges (the sun clamp); a
   // switch's arc keeps its full shape, off the frame and all.
-  const x = look ? Math.min(Math.max(b.x + dx, 1.5 * r), Math.max(w - 1.5 * r, w / 2)) : b.x + dx;
-  const out = { ...b, x, y: b.y - frame.shift + (g1 - g0) * low };
-  // Only a painted body takes the setting look. Both renderers also ask
-  // for a bare position mid-switch (where the resting body will land, for the
-  // hit target): that probe carries no colour, only x/y/r.
-  if (!look || b.col == null) return out;
+  const free = b.x + dx;
+  const clamped = Math.min(Math.max(free, 1.5 * r), Math.max(w - 1.5 * r, w / 2));
+  const out = { ...b, x: free + (clamped - free) * weight, y: b.y + dy };
+  // A bare position (where the resting body will land, for the hit target)
+  // carries no colour, only x/y/r.
+  if (!weight || b.col == null) return out;
   // Its setting look (sunLook.js): the sun warms (hot core, gold-orange
   // limb, bloom, a low wash along the horizon: the shader builds those from
   // `set`), the moon barely changes; both glows spread low.
   const set = b.face === 0 ? { ...SET_HALO, colour: SET_COLOUR, mix: SET_MIX, dim: 0 } : MOONSET;
-  out.col = mix(b.col, set.colour, set.mix * low);
-  out.halo = [1 + set.wide * low, 1 - set.flat * low];
-  out.glow = b.glow * (1 + set.gain * low);
-  out.alpha = b.alpha * (1 - set.dim * low);
-  out.set = low;
+  const lw = low * weight;
+  out.col = mix(b.col, set.colour, set.mix * lw);
+  out.halo = [1 + set.wide * lw, 1 - set.flat * lw];
+  out.glow = b.glow * (1 + set.gain * lw);
+  out.alpha = b.alpha * (1 - set.dim * lw);
+  out.set = lw;
   return out;
+}
+
+/**
+ * How the descent moves a body: { dx, dy, low }, with `low` how far it has
+ * set (the gap closes slowly at first, then takes it: SET_EASE, so the crests
+ * catch it late in the stretch, not halfway). `restY` is where it rests in the
+ * unscrolled sky.
+ */
+export function bodyDrop(recipe, frame, { h, restY, r }) {
+  const m = recipe?.scroll?.body;
+  const k = frame.k;
+  if (!m || frame.rest || !k) return { dx: 0, dy: 0, low: 0 };
+  const low = clamp01(k) ** SET_EASE;
+  // The resting gap (negative: above the line) and the one it ends on.
+  const g0 = restY - (frame.horizon + frame.shift);
+  const g1 = (m.set ?? 0) * r;
+  return { dx: (m.dx ?? 0) * h * k, dy: -frame.shift + (g1 - g0) * low, low };
+}
+
+/**
+ * The switch arc's "fully hidden" line under the descent (0.2.3): a radius and
+ * a quarter under the far ridge's foot where the camera has put it, taken
+ * back into the unscrolled sky the arc is drawn in (the incoming body's
+ * offset undone), so a body goes under exactly behind the ridge on screen.
+ * Null at rest: orbit.js uses the far ridge's own base. `far` is the index in
+ * `frame.ridges` of the recipe's far ridge.
+ */
+export function hiddenAt(recipe, frame, { h, restY, r, far = 0 }) {
+  const rc = frame.ridges?.[far];
+  if (frame.rest || !rc) return null;
+  const { dy } = bodyDrop(recipe, frame, { h, restY, r });
+  // Never above the resting body, or the arc would fold.
+  return Math.max(rc.foot + 1.25 * r - dy, restY + r);
 }
 
 /** How the body's set follows the camera: low = k^SET_EASE. */

@@ -40,6 +40,7 @@ import {
   driftGains,
   frameAt,
   groundPaint,
+  hiddenAt,
   meadowOf,
   scrollPalette,
   scrollHaze,
@@ -48,6 +49,7 @@ import {
   veilAt,
 } from '../camera';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
+import { publishSunSpot } from '../sunSpot';
 import styles from './MistCanvas.module.css';
 
 const SKY_TEXELS = 1024;
@@ -282,6 +284,10 @@ export default function MistCanvas({ recipe, onFail }) {
       if (orbit.t >= orbit.dur) {
         // The scene now rests on the switch's seed, not the recipe's.
         seedShift = orbit.seedTo - mistOf(orbit.next.mist).seed;
+        // The switch drew the target's palette exactly on its last frame;
+        // the spring's colours ran alongside and may still be a step short
+        // of it, so land them too, or the sky shifts a level on handover.
+        value = targetNow();
         orbit = null;
         shownStops = null;
         // Landed on the target seed exactly: breathe from here (sin 0 = 0).
@@ -519,22 +525,28 @@ export default function MistCanvas({ recipe, onFail }) {
       // At rest, one body where `layout` put it; mid-switch, both on the arc
       // (whose far end is the target's resting spot — same height, its x).
       // Then the descent moves them: each sets toward the horizon as the
-      // camera tilts the sky up (camera.js bodyAt).
+      // camera tilts the sky up (camera.js bodyAt). Mid-switch the resting
+      // look passes from the outgoing body to the incoming one on the
+      // switch's clock, and the arc goes under behind the far ridge where the
+      // camera has put it (camera.js hiddenAt), so a switch and a scroll
+      // combine on every frame.
       const { sun } = scene;
       // (The recipe's own ranges, not the descent's extra far ones.)
       const own = scene.ridges.filter(rd => !rd.extra);
       const place = { w, h, restY: sun.y };
+      const hidden = orbit?.scene ? hiddenAt(r, view, { ...place, r: sun.r, far: scene.ridges.indexOf(own[0]) }) : null;
       const lit = orbit?.scene
-        ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: own }).map((b, i) =>
-            bodyAt(b, i === 0 ? orbit.prev : orbit.next, view, { ...place, look: false }),
+        ? orbitBodies(orbit, orbit.e, { w, h, sun: { ...sun, x: restX(target.sun, w, h) }, ridges: own, hidden }).map((b, i) =>
+            bodyAt(b, i === 0 ? orbit.prev : orbit.next, view, { ...place, look: i === 0 ? 1 - orbit.e : orbit.e }),
           )
         : [bodyAt({ ...sun, col: rgbToHex(value, 7), face: r.body === 'moon' ? 1 : 0, glow: 1, alpha: 1, wash: 0, squash: 0 }, r, view, place)];
-      // The painted sun's centre, for the harness's hit-target check (and a
-      // hit target that follows it under scroll): at rest the body as
-      // painted; mid-switch where it will land, moved by the descent too.
+      // The painted sun's centre, for the hit target (SunToggle, through
+      // ../sunSpot.js) and the harness: at rest the body as painted;
+      // mid-switch where it will land, moved by the descent too.
       const host = canvas.parentElement;
+      const painted = orbit?.scene ? bodyAt({ ...sun, x: restX(target.sun, w, h) }, r, view, place) : lit[0];
+      publishSunSpot(painted.x, painted.y);
       if (host) {
-        const painted = orbit?.scene ? bodyAt({ ...sun, x: restX(target.sun, w, h), face: 1 }, r, view, { ...place, look: false }) : lit[0];
         host.dataset.sunCx = painted.x.toFixed(2);
         host.dataset.sunCy = painted.y.toFixed(2);
         host.dataset.seed = (value[6] + builtOffset).toFixed(4);
@@ -601,9 +613,12 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uFade'), f(1, (_, i) => paint[i].fade));
       gl.uniform1f(uniform('uRimW'), rimWidth(h));
       // (0.2.2) The setting body's light on the ridges (sunLook.js
-      // RIDGE_LIGHT): only at rest in a scene (not mid-switch), past the top.
-      const body = !orbit?.scene ? lit[0] : null;
-      const st = body?.set ?? 0;
+      // RIDGE_LIGHT), past the top. Mid-switch (0.2.3) it goes down with the
+      // outgoing body over the first half and comes up with the incoming one
+      // over the second, so it's gone at the handover and never jumps.
+      const handover = orbit?.scene ? (orbit.e < 0.5 ? 1 - ease(orbit.e * 2) : ease(orbit.e * 2 - 1)) : 1;
+      const body = orbit?.scene ? lit[orbit.e < 0.5 ? 0 : 1] : lit[0];
+      const st = (body?.set ?? 0) * handover;
       const L = RIDGE_LIGHT;
       const moonLit = body?.face === 1;
       gl.uniform1fv(

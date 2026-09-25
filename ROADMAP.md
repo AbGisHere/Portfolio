@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), then `0.2.3` the sun and moon at any scroll, `0.2.4` ridge light at rest, `0.2.5` the fallback catches up. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, then `0.2.4` ridge light at rest, `0.2.5` the fallback catches up. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -172,8 +172,8 @@ How it should feel:
   `skyKeys.js` like `via`. Day: the sun sinks and the palette warms toward a
   sunset, stopping short of one. Night: the moon climbs and the lilac cast
   fades into a deeper night.
-- **The sun toggle works only near the top.** It fades out over 5–10% of
-  the stretch and is inert past it (until `0.2.3`, below).
+- **The sun toggle worked only near the top.** It faded out over 5–10% of
+  the stretch and was inert past it. Lifted in `0.2.3`, below.
 - **Reduced motion:** 30% of the camera move, with the colour change kept.
 
 **Shipped in `0.2.1`: ridges that behave like terrain (GL only).** The
@@ -232,18 +232,30 @@ stretch is lit and painted (details in `CLAUDE.md`, "The camera (0.2)"):
 - **Known:** the drift still slows near zero at the ends of its 60 s sine,
   and the moon's warmth shows clearly only late in the scroll.
 
-**`0.2.3`: the sun and moon at any scroll.**
-- **Clickable at any scroll position.** The switch arc keeps its full
-  unscrolled shape, shifted by the camera tilt, and a body may leave the
-  frame mid-arc. The hit target follows the painted body. The orbit's
-  `hidden` line comes from the transformed far ridge (today mid-switch it
-  still uses the unscrolled one).
-- **Switching while scrolling** blends smoothly, with no jump when either
-  the switch or the scroll finishes.
+**Shipped in `0.2.3`: the sun and moon at any scroll (GL; the fallback
+shares the first two).** Details in `CLAUDE.md`:
+- **Clickable at any scroll position.** The renderers publish where the
+  body is painted (`sunSpot.js`) and the hit target follows it. Mid-switch
+  it still jumps to where the incoming body lands and sits out the switch.
+  The fade and `inert` past 10% are gone.
+- **Switching and scrolling combine on every frame.** The setting look is a
+  weight: mid-switch the outgoing body carries 1 − e of it, the incoming e.
+  The arc's `hidden` line follows the far ridge as the camera has moved it
+  (GL only), and the arc may leave the top of the frame late in the scroll.
+  The ridge light follows the outgoing body out and the incoming one in.
+- **A clean landing.** The GL spring lands on the target when a switch
+  ends, removing a small whole-sky step on the landing frame.
+- **A narrower arc on portrait frames** (`REACH_ASPECT` 1.2): at 393×852 it
+  spans .24–.80 of the width (was .17–.87); landscape is unchanged.
+- In a scripted switch-and-scroll harness the largest frame step against
+  its neighbours fell from 167–175 (`about` 1) to 2.0–4.4. The hit target
+  sits within .02 px of the painted body at every scroll, in both
+  renderers. First-load JS +12 B.
 
 **`0.2.4`: ridge light at rest.** `0.2.2`'s ridge light (the sun's or
 moon's column, the parallax slant) also lights the resting scene at
-`about` = 0, and follows the body through a switch. GL first: scroll-0
+`about` = 0 (under scroll it already follows the body through a switch,
+from `0.2.3`). GL first: scroll-0
 parity fails until `0.2.5`, an accepted gap.
 
 **`0.2.5`: the fallback catches up.** The layered renderer takes on
@@ -252,11 +264,12 @@ cases pass.
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
-starts. **State at `0.2.2`:** the fallback still runs the `0.2.0` camera
-(`CAMERA`/`cameraAt`, ranges fading into gaps) and ignores `0.2.2`'s look.
-Parity passes at scroll 0 (14/14; night worst mean .81, p99 6, from the
-GL-only moon glow) and fails at .5 and 1 (day mean 11–28, night 11–17), as
-expected. `0.2.5` closes it.
+starts. **State at `0.2.3`:** the fallback still runs the `0.2.0` camera
+(`CAMERA`/`cameraAt`, ranges fading into gaps) and ignores `0.2.2`'s look
+and `0.2.3`'s `hidden` line; it shares the hit target and the switch's look
+weight. Parity passes at scroll 0 (14/14; night worst mean .81, p99 6, from
+the GL-only moon glow) and fails at .5 and 1 (day mean 17–29, night 11–17),
+as expected. The hit-target check passes at every scroll. `0.2.5` closes it.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the

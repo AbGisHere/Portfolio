@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeProvider';
-import { getDescent, subscribeDescent } from './scroll/descent';
+import { getSunSpot, subscribeSunSpot } from './gradient/sunSpot';
 import styles from './SunToggle.module.css';
 
 /**
@@ -20,14 +20,12 @@ import styles from './SunToggle.module.css';
  * will land and ignores clicks until the switch has finished
  * (`transition.ms`).
  *
- * Once the descent starts, the painted sun moves with the camera and this
- * target doesn't follow it: it fades over `about` 0.05 → 0.1 (which mostly
- * matters for the focus ring) and past 0.1 is inert, so it can't be clicked
- * or focused. Written straight to the element from the descent store, not
- * through React state, so scrolling never re-renders it.
+ * It works at any scroll (0.2.3). Once a renderer has painted, it sits on the
+ * painted body, which the descent moves as it sets (gradient/sunSpot.js):
+ * written straight to the element as CSS variables, not through React state,
+ * so scrolling never re-renders it. The recipe's numbers above only place it
+ * before then.
  */
-const FADE_FROM = 0.05;
-const FADE_TO = 0.1;
 export default function SunToggle({ recipe }) {
   const { theme, toggle } = useTheme();
   const night = theme === 'night';
@@ -37,24 +35,13 @@ export default function SunToggle({ recipe }) {
 
   useEffect(() => {
     const el = button.current;
-    let off = null;
-    const apply = ({ about = 0 }) => {
-      const fade = Math.min(1, Math.max(0, (about - FADE_FROM) / (FADE_TO - FADE_FROM)));
-      el.style.setProperty('--descent-fade', String(1 - fade));
-      const gone = about > FADE_TO;
-      if (gone === off) return;
-      off = gone;
-      el.inert = gone;
-      if (gone) {
-        el.tabIndex = -1;
-        el.setAttribute('aria-hidden', 'true');
-      } else {
-        el.removeAttribute('tabindex');
-        el.removeAttribute('aria-hidden');
-      }
+    const apply = spot => {
+      if (!spot) return;
+      el.style.setProperty('--spot-x', `${spot.x}px`);
+      el.style.setProperty('--spot-y', `${spot.y}px`);
     };
-    apply(getDescent());
-    return subscribeDescent(apply);
+    apply(getSunSpot());
+    return subscribeSunSpot(apply);
   }, []);
 
   useEffect(() => {
@@ -72,7 +59,7 @@ export default function SunToggle({ recipe }) {
 
   const style = {
     '--sun-x': `${recipe.mist?.sun ?? 50}%`,
-    top: `${Math.max(0.1, horizon - 0.11) * 100}%`,
+    '--sun-top': `${Math.max(0.1, horizon - 0.11) * 100}%`,
   };
 
   return (

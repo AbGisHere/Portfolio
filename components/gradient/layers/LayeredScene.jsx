@@ -21,6 +21,7 @@ import { skyRamp } from '../skyRamp';
 import { bodyAt, cameraAt, frameAt, groundPaint, meadowOf, scrollPalette, scrollPaletteSwitch } from '../camera';
 import themes from '../themes';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
+import { publishSunSpot } from '../sunSpot';
 import { ridgeMasks } from './ridgeMasks';
 import styles from './LayeredScene.module.css';
 
@@ -375,7 +376,7 @@ export default function LayeredScene({ recipe }) {
       const place = { w, h, hidden, restY: scene.sun.y };
       const lit = o
         ? orbitBodies(o, e, { w, h, sun: { ...scene.sun, x: restX(target.sun, w, h) }, ridges: own }).map((b, i) =>
-            bodyAt(b, i === 0 ? o.prev : o.next, view, { ...place, look: false }),
+            bodyAt(b, i === 0 ? o.prev : o.next, view, { ...place, look: i === 0 ? 1 - e : e }),
           )
         : [
             bodyAt(
@@ -394,8 +395,10 @@ export default function LayeredScene({ recipe }) {
             ),
           ];
       // The painted sun's centre: at rest the body as painted; mid-switch
-      // where it will land, moved by the descent too (as the GL renderer).
+      // where it will land, moved by the descent too (as the GL renderer),
+      // for the hit target (../sunSpot.js) and the harness.
       const painted = o ? bodyAt({ ...scene.sun, x: restX(target.sun, w, h), face: 1 }, r, view, place) : lit[0];
+      publishSunSpot(painted.x, painted.y);
       wrap.dataset.sunCx = painted.x.toFixed(2);
       wrap.dataset.sunCy = painted.y.toFixed(2);
       wrap.dataset.seed = gSeed.toFixed(4);

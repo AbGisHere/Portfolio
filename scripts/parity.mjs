@@ -119,9 +119,8 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
     }
     return { target, painted: null, via: 'none (renderer exposes no sun position)' };
   });
-  // Mid-descent the hit target stays put (and goes inert) while the painted
-  // sun moves: only the resting frame checks the target against it.
-  if (sun.painted && scroll === 0) {
+  // The hit target follows the painted sun at every scroll (0.2.3).
+  if (sun.painted) {
     sun.offset = Math.hypot(sun.target.x - sun.painted.x, sun.target.y - sun.painted.y);
   }
 

@@ -41,6 +41,15 @@ export const SET_ANGLE = 0.3;
 export const SET_SPREAD = 1.3;
 
 /**
+ * A narrow frame gets a tighter loop (0.2.3): below this aspect (width over
+ * height) the legs into and out of the ridges narrow in step with it, so on a
+ * portrait phone the bodies drop steeply past their resting spots instead of
+ * swinging out toward the edges. Landscape frames keep SET_SPREAD.
+ */
+export const REACH_ASPECT = 1.2;
+export const spreadAt = (w, h) => SET_SPREAD * Math.min(1, w / h / REACH_ASPECT);
+
+/**
  * With `forward`, a switch's seed only ever increases, at this many seeds a
  * second, so the ridges drift the way the sky turns (right to left) in both
  * directions and at the same pace: +6 over the 4s into dusk, +2.25 over the
@@ -101,17 +110,21 @@ export function orbitScene(orbit, e) {
  * The arc is an ellipse through both resting spots, topping out
  * `transition.apex` of the height from the top and meeting the "fully hidden"
  * line (a radius and a quarter under the far ridge's base) at SET_ANGLE.
+ * Under the descent the renderer passes `hidden` itself: the far ridge as the
+ * camera has moved it, taken back into the unscrolled sky the arc lives in
+ * (camera.js hiddenAt), so the bodies still go under exactly behind it.
  *
  * @param {{x:number,y:number,r:number}} sun the target's resting sun
  * @param {{base:number}[]} ridges this frame's ridges (far first)
+ * @param {number} [hidden] the "fully hidden" line, if not the far ridge's
  */
-export function orbitBodies(orbit, e, { w, h, sun, ridges }) {
+export function orbitBodies(orbit, e, { w, h, sun, ridges, hidden: under = null }) {
   const pa = mistOf(orbit.prev.mist).sun;
   const pb = mistOf(orbit.next.mist).sun;
   const xa = restX(pa, w, h);
   const xb = restX(pb, w, h);
   const cx = (xa + xb) / 2;
-  const hidden = ridges[0] ? ridges[0].base + 1.25 * sun.r : sun.y + 3 * sun.r;
+  const hidden = under ?? (ridges[0] ? ridges[0].base + 1.25 * sun.r : sun.y + 3 * sun.r);
   const top = Math.min(sun.y, (orbit.next.transition?.apex ?? 0.12) * h);
   const sa = Math.sin(SET_ANGLE);
   const cy = (hidden - top * sa) / (1 - sa);
@@ -124,6 +137,7 @@ export function orbitBodies(orbit, e, { w, h, sun, ridges }) {
   const angleAt = (x, fallback) => (x > cx ? rest0 : x < cx ? Math.PI - rest0 : fallback);
   const from = angleAt(xa, Math.PI - rest0);
   const to = angleAt(xb, rest0);
+  const spread = spreadAt(w, h);
   // 0 night … 1 day, for the moon's paleness.
   const daylight = orbit.next.body === 'sun' ? e : orbit.prev.body === 'sun' ? 1 - e : 1;
 
@@ -133,7 +147,7 @@ export function orbitBodies(orbit, e, { w, h, sun, ridges }) {
     const moon = recipe.body === 'moon';
     const c = rx * Math.cos(a);
     return {
-      x: cx + (Math.abs(c) > edge ? Math.sign(c) * (edge + (Math.abs(c) - edge) * SET_SPREAD) : c),
+      x: cx + (Math.abs(c) > edge ? Math.sign(c) * (edge + (Math.abs(c) - edge) * spread) : c),
       y,
       r: sun.r,
       // A low sun deepens toward orange and flattens a little (sunLook.js),

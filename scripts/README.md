@@ -31,7 +31,7 @@ draws a diff between them.
 | `--scrolls` | `0,0.5,1` | Descent positions (`about`), each pinned with `?scroll=`. Case ids end in `-s<about>` |
 | `--threshold` | `2` | Max **mean** absolute channel difference, on the 0–255 scale |
 | `--p99` | `24` | Max **99th-percentile** per-pixel difference (the largest channel), 0–255. Catches a localised defect, like a misplaced sun or ridge, that the mean would dilute |
-| `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun (at `scroll` 0 only: mid-descent the target stays put and goes inert while the sun moves), and between the two renderers' painted suns (every case) |
+| `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun (at every `scroll`: the target follows the painted sun), and between the two renderers' painted suns (every case) |
 | `--settle` | `2500` | ms to wait after load before capturing |
 | `--grain` | off | Include grain in the comparison. It's off by default because grain is random noise that no two renderers can match pixel for pixel. Judge grain by eye in the report instead. |
 | `--query`, `--query-a`, `--query-b` | none | Extra URL params (`k=v&k=v`) for both sides or one side. For example, `--a gl --b gl --query driftAt=0.25 --query-b crest=cpu` compares the GL crest paths mid-drift. `perf.mjs` takes `--query` too. |
@@ -56,11 +56,12 @@ against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look.
 
-**Known gap in `0.2.2`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
+**Known gap in `0.2.3`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
 `0.2.2`'s look under scroll) and the layered fallback still runs the `0.2.0`
 camera, so a default run exits 1: the 14 `-s0` cases pass (night worst mean
 .81, p99 6, from the GL-only moon glow), the `-s0.5` and `-s1` cases fail
-(day mean 11–28, night 11–17). This is accepted within `0.2.x`; use
+(day mean 17–29, night 11–17). The hit-target check passes at every
+scroll. This is accepted within `0.2.x`; use
 `--scrolls 0` for a passing check meanwhile. `0.2.4` brings the ridge light
 to the resting scene in GL first, so scroll 0 will fail too until `0.2.5`
 ports `0.2.1`–`0.2.4` to the fallback, with all 42 cases passing, before any

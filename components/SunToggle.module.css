@@ -3,10 +3,14 @@
 .toggle {
   position: absolute;
   z-index: 2;
-  /* Same edge clamp as the renderers (mistGeometry.js `layout`): 1.5 sun radii (0.078 of height) clear of
+  /* Once a renderer has painted, the painted body's centre (SunToggle.jsx
+     writes --spot-x/y from gradient/sunSpot.js), which the descent moves.
+     Before that, the recipe's spot with the renderers' edge clamp
+     (mistGeometry.js `layout`): 1.5 sun radii (0.078 of height) clear of
      either side, or dead centre on a frame too narrow for both. cqh resolves
      against AtmosphereField, which is a size container. */
-  left: clamp(7.8cqh, var(--sun-x, 50%), max(100% - 7.8cqh, 50%));
+  left: var(--spot-x, clamp(7.8cqh, var(--sun-x, 50%), max(100% - 7.8cqh, 50%)));
+  top: var(--spot-y, var(--sun-top, 31%));
   /* The painted sun is 10.4% of the height across; on short frames that
      drops under a usable touch target, so the hit area floors at 44px. */
   height: max(10.4cqh, 44px);
@@ -19,14 +23,11 @@
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
-  /* Fades out as the descent starts (SunToggle.jsx writes the variable). */
-  opacity: var(--descent-fade, 1);
   /* No transition: the target jumps to where the sun will land and sits out
      the switch (see SunToggle.jsx). */
 }
 
-.toggle[data-busy],
-.toggle[inert] {
+.toggle[data-busy] {
   pointer-events: none;
 }
 

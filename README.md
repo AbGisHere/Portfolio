@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.2](https://img.shields.io/badge/version-0.2.2-informational)
+![Version 0.2.3](https://img.shields.io/badge/version-0.2.3-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -65,14 +65,14 @@ contact come in later lines (see [Versioning](#versioning)).
   distant ranges rise from behind the far ridge. Since `0.2.2` distance
   reads as air: far ranges step into the haze, warm light catches the crests
   in the sun's column, and the ridges keep breathing at every scroll
-  position. `0.2.3` is next: the sun and moon clickable at any scroll position.
-  The layered fallback still runs the `0.2.0` camera and catches up in
+  position. Since `0.2.3` the sun and moon can be clicked at any scroll
+  position, and a switch mid-scroll blends with the camera. The layered fallback still runs the `0.2.0` camera and catches up in
   `0.2.5` (see [`ROADMAP.md`](./ROADMAP.md)).
 - Time of day moves with scroll. By day the sky turns from golden hour to
   sunset and the sun sets into the ridges; by night the moon sinks too,
   warming toward amber.
-- The sun toggle only works near the top of the page. It fades out as you
-  scroll and can't be clicked once it's gone.
+- The sun toggle's hit target follows the painted sun or moon at every
+  scroll position.
 
 ## Tech stack
 
@@ -248,9 +248,7 @@ These are Next.js 16's default targets, which the build compiles for. The
 site's own features fit inside them: WebGL2, `lvh`/`svh` viewport units,
 container query units (`cqh`) for the sun's hit target, CSS masks and
 `OffscreenCanvas`. `requestIdleCallback` is used where it exists, with a timer
-fallback for Safari. On Firefox 111 only, `inert` isn't supported yet (it
-arrived in 112), so the hidden sun button is kept out of reach by
-`tabindex="-1"`, `aria-hidden` and `pointer-events: none` instead.
+fallback for Safari.
 
 **Renderers.** Any browser with WebGL2 gets the WebGL renderer. Without it, or
 if the shader fails to build or the GL context is lost, the layered fallback
