@@ -192,6 +192,7 @@ components/
       mistShader.js    — the fullscreen fragment shader
       crestShader.js   — GPU crest pass (ridge outlines → R32F texture)
       hashTable.js     — precomputed noise lattice hashes for the crest pass
+      adaptiveQuality.js — the resolution step from frame intervals (pure; `npm run test:adaptive`)
     layers/
       LayeredScene.jsx (+ .module.css) — fallback renderer: the scene as CSS layers
       ridgeMasks.js    — ridge silhouettes as alpha masks, with the shader's maths
@@ -280,8 +281,40 @@ renderer was ported from (the gradient studio's export) was deleted in
   sun/moon glow and disc (two mid-switch) → per ridge (fill, blurred edge,
   crest rim, veil) → air → grain, and `MistCanvas.jsx` runs the spring and
   the switch clock (`orbit.js`). At rest the veils' drift uniforms change
-  and the frame is redrawn once they've moved ~0.2 device px. Canvas DPR is
-  capped at 2. Reduced motion freezes the veils and makes the switch a cut.
+  and the frame is redrawn, on the idle tick (below), once they've moved
+  ~0.2 device px. Canvas DPR is capped at 2 (`MAX_DPR`) and the frame at
+  4K's pixel count (`MAX_PIXELS`, `0.2.4`: a larger frame renders at a lower
+  DPR). Reduced motion freezes the veils and makes the switch a cut.
+  - **Hidden ridges skipped** (`0.2.4`). Ridges are opaque and painted back
+    to front, so a front-to-back pre-pass finds the nearest ridge that fully
+    covers the pixel (at least 6σ under its crest with fade 1: `Phi`
+    clamps at ±6, so its fill is exactly 1) and the loop starts there,
+    skipping the sky, the bodies and farther ridges; below the meadow's top
+    it starts at the front ridge. Depth is tested unslanted first, so a sky
+    pixel pays one crest read per ridge. Exact trims too: no fill 6σ or more
+    above the crest, no rim at hw + 6σ or more from it, no veil outside its
+    ellipse. Pixel-identical to `0.2.3` (76/76 cases, zero differing
+    pixels).
+  - **Adaptive quality** (`0.2.4`, `adaptiveQuality.js`, `QUALITY` [1,
+    .875, .75] of the DPR). Pure, so its decisions are unit-tested with
+    synthetic frame intervals (`npm run test:adaptive`). The refresh is the
+    median interval of recent frames at rest (the fastest single interval
+    was timer jitter). Busy (scroll, switch) intervals are judged in windows
+    of 60: two windows in a row whose median runs over 1.5× the refresh
+    (most frames missed: a GPU that can't keep up) step down; 5 s of
+    windows with the p90 within 1.3× step up; a level that fails within 3 s
+    of being tried is locked out until the frame is resized. The first 2 s
+    and 60 busy frames of a load don't count (the first scroll's one-off
+    costs). Earlier rules (the fastest interval, p90/p75 over 30 frames)
+    dropped a level on ordinary sweeps at 1728×1117@2, from bunched missed
+    vsyncs in headless Chromium. It needs frames at rest to learn the
+    refresh, so it doesn't engage under `?freeze=1` or reduced motion (the
+    loop sleeps at rest). `?adapt=0` holds full resolution; `data-quality`
+    gives the current step. Verified in headless Chromium on the M4: holds
+    1 through repeated full sweeps at 1728×1117@2 (9 fresh loads),
+    1440×900@2 and 393×852@2; steps down under a forced overload
+    (`?off=skip`) and climbs back after a resize; no blank frame at a
+    change.
   - **Crests on the GPU.** The ridge outlines (the control points'
     noise heights and the Catmull-Rom→Bézier curve through them, one sample
     per device column) come from a render-to-texture pass,
@@ -299,9 +332,12 @@ renderer was ported from (the gradient studio's export) was deleted in
     mid-drift). `data-crest="gpu|cpu"` on the scene wrapper says which ran.
   - **Idle drift.** A recipe's `idle: { seedDrift, period }` breathes the seed
     ±`seedDrift` on a `period`-second sine at rest, so the ridges slowly
-    shift. Crest updates are capped at `IDLE_HZ` (60) in `MistCanvas.jsx`:
-    at this speed ridges move under a pixel per update, so 120 looks the same
-    and doubles the GPU work. It's off under reduced motion and `?freeze=1`,
+    shift. At rest the drift, the wind and the veils share one `IDLE_HZ`
+    (30) tick in `MistCanvas.jsx` (`0.2.4`; it was 60 for the crests, and
+    every frame for a moving veil): at the drift's fastest a ridge moves
+    about .09 px per update, so a faster rate looks the same and costs GPU
+    work. About 48 → 26 draws a second at rest. Scroll, switches and the
+    spring still redraw every frame. It's off under reduced motion and `?freeze=1`,
     and only runs while the scene is on screen. It pauses for a switch: the
     switch starts from the drifted seed and, on landing, the drift restarts
     from zero at the target, so the ridges never jump back to the base seed
@@ -309,7 +345,8 @@ renderer was ported from (the gradient studio's export) was deleted in
     main-thread ms/s at 1440×900@2 / 393×852@2 / 3440×1440@1): drift off
     36/35/42, GPU crests at 60/s 56/39/59, CPU crests at 60/s 92/72/91.
     Switches (`0.1.7`, sky turn with keyframed palettes): GL holds 120 fps,
-    p95 ~9.5 ms, max 10.4 ms, no frame over 20 ms at every viewport.
+    p95 ~9.5 ms, max 10.4 ms, no frame over 20 ms at every viewport. (These
+    are historical, from the 60 Hz tick; `0.2.4`'s are under "GL cost".)
   - **Lost context.** `onFail` gets `err.lost`; `AtmosphereField` shows the
     layered fallback and retries WebGL every 2s, up to 3 times.
 - **Layered (fallback)** — `components/gradient/layers/`, used when WebGL2 is
@@ -357,14 +394,14 @@ Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.3`:** the GL
+above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.4`:** the GL
 camera moved to the conveyor (`0.2.1`) and took on `0.2.2`'s look, and the
 fallback has neither, so parity passes at scroll 0 (14/14; night worst mean
 .81, p99 6, from the GL-only moon glow) and fails at .5 and 1 (day mean
 17–29, night 11–17). The hit-target check (`--sun-tolerance`) passes at every
 scroll for both renderers, within .02 px. Accepted within `0.2.x`; the fallback catches up on
-`0.2.1`–`0.2.4` in `0.2.5`, with all 42 cases passing, before any `0.3.x`
-work (`0.2.4`'s resting ridge light will fail scroll 0 until then). Run it, and `npm run perf`, whenever a renderer
+`0.2.1`–`0.2.3` and `0.2.5` in `0.2.6`, with all 42 cases passing, before any `0.3.x`
+work (`0.2.5`'s resting ridge light will fail scroll 0 until then). Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
@@ -385,6 +422,10 @@ the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
 | `data-seed` on the scene wrapper | The seed last painted (GL: drift included) |
 | `data-ready` on the layered scene | Set once its ridge masks are painted |
 | `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
+| `?off=rim,veil` (GL) | Compile shader features out, for profiling (`OFF_FLAGS` in `mistShader.js`: `skip`, `wash`, `bodies`, `ridges`, `slope`, `light`, `rim`, `meadow`, `veil`, `air`, `grain`); `#define`s at the `// @defines` marker, no cost without the flag |
+| `?bench=200` (GL) | Redraw the settled frame that many times, synced by a 1-px `readPixels`; writes `data-bench` and `data-bench-base` (a bare clear) on the scene wrapper, as "median p90" ms |
+| `?adapt=0` (GL) | Hold full resolution (no adaptive quality) |
+| `data-quality` on the scene wrapper (GL) | The current resolution step (1, .875 or .75 of the DPR) |
 
 When changing the look, change `mistGeometry.js` / `mistShader.js` and the
 layered renderer together, then re-run parity. One trap already hit: pass
@@ -415,7 +456,7 @@ fill.
   Tycho's rays, from a fixed seed, multiplied into its disc (`.85` opacity).
   Its glow fades out to 3.4r on a smoothstep in GL (`0.2.2`: the old linear
   fade left a visible edge there); the layered glow is still linear
-  (`LayeredScene.jsx`) until `0.2.5`.
+  (`LayeredScene.jsx`) until `0.2.6`.
 
 ### How the transition works
 
@@ -589,10 +630,10 @@ smoothstep moon glow differs by a mean of .15).
   depth (parallax), over a cool multiplied shadow below. Mid-switch it
   follows the outgoing body and fades out over the first half, then comes
   up with the incoming one over the second (zero at e = .5), so it never
-  jumps. `0.2.4` brings it to the resting scene.
+  jumps. `0.2.5` brings it to the resting scene.
 - **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
   `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps) and
-  ignores `0.2.2`'s fields. `0.2.5` ports `0.2.1`–`0.2.4` to it, before any
+  ignores `0.2.2`'s fields. `0.2.6` ports `0.2.1`–`0.2.3` and `0.2.5` to it, before any
   `0.3.x` work; until then parity passes only at `?scroll=0`.
 - **Sun and moon set** (`0.2.2`, `bodyAt`). The gap between the body and the
   horizon closes, on `k^SET_EASE` (1.6), to `scroll.body.set` radii below
@@ -606,7 +647,7 @@ smoothstep moon glow differs by a mean of .15).
   incoming e (both renderers), so switching and scrolling combine on every
   frame. The hit target's landing probe is a bare position (no `col`), with
   the clamp. `bodyDrop` gives the descent's move of a body (dx, dy, low).
-  `hiddenAt` (GL only; the fallback in `0.2.5`) sets the arc's "fully
+  `hiddenAt` (GL only; the fallback in `0.2.6`) sets the arc's "fully
   hidden" line, which `orbitBodies` takes as `hidden`: the far ridge's foot
   as the camera has moved it, plus 1.25r, taken back into the unscrolled
   sky (the incoming body's dy undone), never above restY + r. Under scroll
@@ -637,10 +678,26 @@ smoothstep moon glow differs by a mean of .15).
   pass. GPU/CPU crest parity is still 0 (24 cases, `driftAt` .25/.4).
   Measured on an M4 (prod, `0.2.2`): scroll sweeps 118.8–119.5 fps, p95
   9.0–9.3 ms, no frame over 20 ms; idle 62–65 ms/s with drift; switches
-  120 fps. `0.2.3`, run back to back with a `0.2.2` build on the same day (1440×900@2): scroll sweeps 109.6–112.2 fps against `0.2.2`'s 111.3–112.5 (both p95 16.6 ms, no frame over 20 ms), so no regression; idle 53–57 ms/s against 71–75; switches 120 fps, p95 9.3 ms. A switch started at the bottom of the track holds 105–120 fps. Known gap: perf's headless wheel sweep
-  doesn't quite reach the bottom of the track.
+  120 fps. `0.2.3`, run back to back with a `0.2.2` build on the same day
+  (1440×900@2): scroll sweeps 109.6–112.2 fps against `0.2.2`'s 111.3–112.5
+  (both p95 16.6 ms, no frame over 20 ms), so no regression; idle 53–57 ms/s
+  against 71–75; switches 120 fps, p95 9.3 ms. A switch started at the
+  bottom of the track holds 105–120 fps. `0.2.4` (the hidden-ridge skip,
+  under "Renderers"): GPU ms per frame (`?bench`, median of three
+  interleaved runs, scroll 0 / scroll 1, budget 8.33) 1728×1117@2 6.8 → 5.2
+  / 12.8 → 6.0; 1440×900@2 4.5 → 3.4 / 8.1 → 4.3; 393×852@2 .9 → .7 /
+  1.9 → .5; 3440×1440@1 4.4 → 3.2 / 7.8 → 3.7. `npm run perf` with
+  `?adapt=0`: 1728×1117@2 scroll sweeps 117–118 fps, p95 9.1 ms, no frame
+  over 20 ms (was 70–73 with 12–15 over); 1440×900@2 120 (was 89–112); idle
+  main thread about 43 ms/s (was ~50); switches level. The profile that
+  led there: the ridge loop was 80–90% of a frame (rims 2.6 ms, ridge light
+  1.4, veils 1.3, bodies 1.3, slope 1.0, meadow .7, wash .5), and scroll 1
+  cost about double scroll 0 (nine ridges instead of five, plus the
+  scroll-only light, meadow and wash). 1728×1117@2 now meets the budget.
+  Known gap: perf's headless wheel sweep doesn't quite reach the bottom of
+  the track.
 
-Planned: `0.2.4` (the ridge light at rest) and `0.2.5` (the fallback gate
+Planned: `0.2.5` (the ridge light at rest) and `0.2.6` (the fallback gate
 before `0.3`): see `ROADMAP.md`.
 
 ### Adding a scene
@@ -661,7 +718,7 @@ before `0.3`): see `ROADMAP.md`.
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.4` (ridge light at rest), then `0.2.5`: the layered fallback catches up on `0.2.1`–`0.2.4` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
+| `0.2.5` (ridge light at rest), then `0.2.6`: the layered fallback catches up on `0.2.1`–`0.2.3` and `0.2.5` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Decide whether an admin surface is still wanted |
 

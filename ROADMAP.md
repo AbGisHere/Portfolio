@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, then `0.2.4` ridge light at rest, `0.2.5` the fallback catches up. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), then `0.2.5` ridge light at rest, `0.2.6` the fallback catches up. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out. |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -252,24 +252,65 @@ shares the first two).** Details in `CLAUDE.md`:
   sits within .02 px of the painted body at every scroll, in both
   renderers. First-load JS +12 B.
 
-**`0.2.4`: ridge light at rest.** `0.2.2`'s ridge light (the sun's or
+**Shipped in `0.2.4`: performance headroom (GL only; the layered fallback is
+untouched).** At `0.2.3`, 1728×1117@2, a 16" laptop's default, scrolled at
+76–77 fps against a 120 budget. The cost was the fragment shader: every
+device pixel ran the whole ridge loop, though ridges are opaque and painted
+back to front, so most of that work was overwritten. Details in `CLAUDE.md`:
+- **Profiling hooks.** `?off=a,b` compiles shader features out
+  (`OFF_FLAGS`), and `?bench=N` times the settled frame on the GPU. The
+  profile at `0.2.3` (M4, GPU ms per frame, budget 8.33): 1728×1117@2
+  6.6–7.6 at scroll 0 and 11.9–13.4 at scroll 1; 1440×900@2 4.8 / 8.3;
+  3440×1440@1 4.3 / 8.0; 393×852@2 .9 / 1.8. The ridge loop was 80–90% of a
+  frame: rims 2.6 ms, ridge light 1.4, veils 1.3, bodies 1.3, slope 1.0,
+  meadow .7, wash .5, air and grain about 0. Scroll 1 cost about double
+  scroll 0: nine ridges instead of five, plus the scroll-only ridge light,
+  meadow and wash.
+- **Hidden ridges skipped.** A front-to-back pre-pass finds the nearest
+  ridge that fully covers the pixel (at least 6σ under its crest, where the
+  fill is exactly 1) and the loop starts there, skipping the sky, the bodies
+  and every farther ridge. Plus exact trims: no fill 6σ above the crest, no
+  rim past its half-width + 6σ, no veil outside its ellipse.
+- **A resolution cap** by pixel count (`MAX_PIXELS`, 4K), beside `MAX_DPR`
+  2. 1728×1117@2 sits under it.
+- **Adaptive quality.** When most frames of a scroll or switch miss the
+  display's refresh, twice in a row, the resolution steps down (1 → .875 →
+  .75 of the DPR), and it steps back up after 5 s of smooth frames. Bursts
+  of hitches and the first scroll after a load don't count. It needs frames
+  at rest to learn the refresh rate, so it stays off under `?freeze=1` and
+  reduced motion. Its decisions are unit-tested (`npm run test:adaptive`).
+- **Fewer redraws at rest.** Drift, wind and veils share one 30 Hz tick:
+  about 48 → 26 draws a second. Scroll, switches and the spring keep the
+  full rate.
+- Pixel-identical to `0.2.3`: 76 of 76 cases (5 viewports, both themes,
+  seven scroll positions, with and without drift). GPU/CPU crest parity
+  42/42 at 0.00; layers-vs-GL parity unchanged. GPU ms per frame, scroll 0 /
+  scroll 1: 1728×1117@2 6.8 → 5.2 / 12.8 → 6.0; 1440×900@2 4.5 → 3.4 /
+  8.1 → 4.3; 393×852@2 .9 → .7 / 1.9 → .5; 3440×1440@1 4.4 → 3.2 /
+  7.8 → 3.7. `npm run perf` (`?adapt=0`): scroll sweeps at 1728×1117@2 from
+  70–73 fps with 12–15 frames over 20 ms to 117–118 fps, p95 9.1 ms, none
+  over 20 ms; 1440×900@2 from 89–112 to 120 fps. Idle main thread about
+  50 → 43 ms/s; switches level. Not yet run on a real mid-range phone or
+  an older Intel Mac.
+
+**`0.2.5`: ridge light at rest.** `0.2.2`'s ridge light (the sun's or
 moon's column, the parallax slant) also lights the resting scene at
 `about` = 0 (under scroll it already follows the body through a switch,
 from `0.2.3`). GL first: scroll-0
-parity fails until `0.2.5`, an accepted gap.
+parity fails until `0.2.6`, an accepted gap.
 
-**`0.2.5`: the fallback catches up.** The layered renderer takes on
-`0.2.1`–`0.2.4` (the conveyor, the look, the ridge light), and all 42 parity
+**`0.2.6`: the fallback catches up.** The layered renderer takes on
+`0.2.1`–`0.2.3` and `0.2.5` (the conveyor, the look, the ridge light), and all 42 parity
 cases pass.
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
-starts. **State at `0.2.3`:** the fallback still runs the `0.2.0` camera
+starts. **State at `0.2.4`** (unchanged since `0.2.3`; `0.2.4` is GL-only): the fallback still runs the `0.2.0` camera
 (`CAMERA`/`cameraAt`, ranges fading into gaps) and ignores `0.2.2`'s look
 and `0.2.3`'s `hidden` line; it shares the hit target and the switch's look
 weight. Parity passes at scroll 0 (14/14; night worst mean .81, p99 6, from
 the GL-only moon glow) and fails at .5 and 1 (day mean 17–29, night 11–17),
-as expected. The hit-target check passes at every scroll. `0.2.5` closes it.
+as expected. The hit-target check passes at every scroll. `0.2.6` closes it.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
@@ -417,7 +458,8 @@ The rule: it must never feel slow, laggy or buggy.
   whole descent. The switches already meet this (p95 about 9.5 ms). Nothing
   heavy runs on the main thread during scroll: uniforms and the draws, as
   today.
-- **Adaptive quality.** If frames run long, lower the canvas DPR, the grass
+- **Adaptive quality** (the resolution step is live from `0.2.4`; `0.3`
+  adds its own knobs). If frames run long, lower the canvas DPR, the grass
   detail and the lightmap size before anything visibly stutters. Tiers: the
   full scene; a lighter scene; stills of the desk with a crossfade; the
   non-WebGL fallback.

@@ -56,15 +56,15 @@ against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look.
 
-**Known gap in `0.2.3`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
+**Known gap in `0.2.4`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
 `0.2.2`'s look under scroll) and the layered fallback still runs the `0.2.0`
 camera, so a default run exits 1: the 14 `-s0` cases pass (night worst mean
 .81, p99 6, from the GL-only moon glow), the `-s0.5` and `-s1` cases fail
 (day mean 17–29, night 11–17). The hit-target check passes at every
 scroll. This is accepted within `0.2.x`; use
-`--scrolls 0` for a passing check meanwhile. `0.2.4` brings the ridge light
-to the resting scene in GL first, so scroll 0 will fail too until `0.2.5`
-ports `0.2.1`–`0.2.4` to the fallback, with all 42 cases passing, before any
+`--scrolls 0` for a passing check meanwhile. `0.2.5` brings the ridge light
+to the resting scene in GL first, so scroll 0 will fail too until `0.2.6`
+ports `0.2.1`–`0.2.3` and `0.2.5` to the fallback, with all 42 cases passing, before any
 `0.3.x` work (`ROADMAP.md`).
 
 ## `npm run perf`
@@ -94,6 +94,30 @@ prints a table, the GPU string Chromium reported, and writes
 the CPU (SwiftShader). Compare renderers **within one run** rather than trusting
 absolute fps, or pass `--headed` for the real GPU.
 
+GL steps its resolution down when busy frames run long (adaptive quality,
+`0.2.4`), which would flatter a slow build. For a comparison between builds,
+hold it off with `--query adapt=0`.
+
+`npm run test:adaptive` (`adaptive-test.mjs`, `node --test`) checks adaptive
+quality's decisions without a GPU, by feeding `adaptiveQuality.js` synthetic
+frame intervals: smooth scrolls, bunched hitches, the first scroll after a
+load, a GPU at half the refresh (120 and 60 Hz), stepping back up, the
+lock-out and a resize.
+
+### Profiling the shader (GL)
+
+`perf` times whole frames. To see where a frame's GPU time goes, load a
+pinned frame with `?bench=N` and read the scene wrapper's `data-bench` and
+`data-bench-base`, then repeat with features compiled out by `?off=`:
+
+```
+/?renderer=gl&freeze=1&scroll=1&adapt=0&bench=200&off=rim,veil
+```
+
+Subtract `data-bench-base` (the sync's own overhead) from `data-bench`; the
+drop against a run without `off` is that feature's cost. Run builds
+interleaved and take the median of a few, since the GPU's clocks drift.
+
 ## Contract a renderer honours
 
 | Hook | Who | Meaning |
@@ -112,3 +136,8 @@ absolute fps, or pass `--headed` for the real GPU.
 | `data-seed` | scene wrapper | The seed last painted (GL: idle drift included, and it only increases across switches). Sample it per frame to check a switch starts from the drifted seed with no jump and never runs backward. |
 | `data-ready` | layered scene | Set once the layered renderer's ridge masks are painted. |
 | `data-busy` | sun button | Present while a switch runs; clicks are ignored until it clears. `perf.mjs` records each switch until then. |
+| `?off=<a,b>` | GL renderer | Compile shader features out, for profiling: `skip` (the hidden-ridge skip), `wash`, `bodies`, `ridges`, `slope`, `light`, `rim`, `meadow`, `veil`, `air`, `grain` (`OFF_FLAGS` in `mistShader.js`). Each becomes a `#define` at the shader's `// @defines` marker, so there's no cost without the flag. Unknown names are ignored. |
+| `?bench=<N>` | GL renderer | Once the frame settles (about 2.5 s after load), redraw it N times, each synced by a 1-px `readPixels`, and time a bare clear the same way. |
+| `data-bench`, `data-bench-base` | scene wrapper | The `?bench` results as "median p90" ms: the frame, and the bare clear (the sync's overhead). |
+| `?adapt=0` | GL renderer | Hold full resolution: no adaptive quality. Use it when comparing builds. |
+| `data-quality` | scene wrapper | The current resolution step as a share of the DPR (1, .875 or .75). |

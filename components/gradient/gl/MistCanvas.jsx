@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { FRAGMENT, MAX_RIDGES, VERTEX } from './mistShader';
+import { FRAGMENT, MAX_RIDGES, OFF_FLAGS, VERTEX } from './mistShader';
 import { CREST_FRAGMENT, CREST_VERTEX } from './crestShader';
 import { LAYERS, buildHashTable } from './hashTable';
+import { QUALITY, adaptiveQuality } from './adaptiveQuality';
 import {
   FAR_VEIL,
   airOpacity,
@@ -55,7 +56,16 @@ import styles from './MistCanvas.module.css';
 const SKY_TEXELS = 1024;
 const GRAIN_SIZE = 256;
 const MAX_DPR = 2;
-const IDLE_HZ = 60; // cap on idle-drift crest updates per second
+// (0.2.4) The shader's cost grows with device pixels, so past a 4K frame
+// the resolution scales down instead (a 5K display at 2× would be 14.7 M; a
+// 16" laptop at 2× is 7.7 M, under it): the scene is haze, blur and soft
+// edges, which hide the difference.
+const MAX_PIXELS = 3840 * 2160;
+// At rest (no scroll, switch or spring), the idle drift, the wind and the
+// veils redraw together at most this often (0.2.4: was 60 for the crests,
+// and every frame a veil moved). At the drift's fastest a ridge moves about
+// .09 px per update, so it looks the same, and the GPU gets to rest between.
+const IDLE_HZ = 30;
 
 // Everything the transition springs, in the SVG engine's order (its `Wl`
 // call): geometry dials, then the sun colour, then each colour stop, colours
@@ -158,7 +168,10 @@ export default function MistCanvas({ recipe, onFail }) {
     try {
       gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false });
       if (!gl) throw new Error('webgl2 unavailable');
-      prog = createProgram(gl);
+      // Profiling (harness only): `?off=grain,veil` compiles those features
+      // out of the shader (mistShader.js OFF_FLAGS).
+      const off = (new URLSearchParams(window.location.search).get('off') ?? '').split(',').filter(k => OFF_FLAGS.includes(k));
+      prog = createProgram(gl, VERTEX, FRAGMENT.replace('// @defines', off.map(k => `#define OFF_${k.toUpperCase()}\n`).join('')));
     } catch (err) {
       onFail?.(err);
       return undefined;
@@ -219,9 +232,9 @@ export default function MistCanvas({ recipe, onFail }) {
     let view = null;
     let groundShown = false;
     let windPhase = 0;
-    let lastWindAt = -Infinity;
     let raf = 0;
     let last = 0;
+    let woke = true;
     let visible = !document.hidden;
     let onScreen = true;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -240,7 +253,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // veils', only runs while the scene is on screen.
     let idleT = 0;
     let builtOffset = 0;
-    let lastCrestAt = -Infinity;
+    let lastIdleAt = -Infinity;
     // `?driftAt=0.25` pins the drift offset (harness: compare crest paths
     // mid-drift); it applies even with `?freeze=1`.
     const driftAt = params.has('driftAt') ? Number(params.get('driftAt')) : null;
@@ -302,18 +315,26 @@ export default function MistCanvas({ recipe, onFail }) {
       return target.every((t, i) => t === value[i]);
     };
 
+    // Adaptive quality (0.2.4, ./adaptiveQuality.js): the resolution step,
+    // from frame intervals. `?adapt=0` holds the full level (harness);
+    // `data-quality` on the scene wrapper says which is set.
+    const quality = params.get('adapt') === '0' ? null : adaptiveQuality(() => resize());
+    const level = () => quality?.level ?? 0;
+
     function resize() {
       const rect = canvas.getBoundingClientRect();
       const nw = Math.round(rect.width);
       const nh = Math.round(rect.height);
       if (!nw || !nh) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      const cap = Math.sqrt(MAX_PIXELS / (nw * nh));
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR, cap) * QUALITY[level()];
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
       w = nw;
       h = nh;
       dirty = true;
       lastDrawn = null;
+      if (canvas.parentElement) canvas.parentElement.dataset.quality = String(QUALITY[level()]);
     }
 
     // ---- GPU crest pass (crestShader.js)
@@ -710,6 +731,32 @@ export default function MistCanvas({ recipe, onFail }) {
       lastDrawn = vs;
     }
 
+    // Profiling (harness only): `?bench=200` redraws the frame that many
+    // times once the scene has settled, each draw followed by a one-pixel
+    // read so the GPU has finished it, and puts the median and p90 GPU ms on
+    // the scene wrapper (`data-bench`, "median p90"), with the same loop
+    // around a bare clear as the read's own overhead (`data-bench-base`).
+    const benchN = Number(params.get('bench')) || 0;
+    function bench() {
+      const host = canvas.parentElement;
+      if (!host || !lastDrawn || dirty) return void setTimeout(bench, 250);
+      const px = new Uint8Array(4);
+      const time = fn => {
+        const ms = [];
+        for (let i = 0; i < benchN + 10; i++) {
+          const t0 = performance.now();
+          fn();
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          if (i >= 10) ms.push(performance.now() - t0);
+        }
+        ms.sort((a, b) => a - b);
+        return `${ms[ms.length >> 1].toFixed(3)} ${ms[Math.floor(ms.length * 0.9)].toFixed(3)}`;
+      };
+      host.dataset.benchBase = time(() => gl.clear(gl.COLOR_BUFFER_BIT));
+      host.dataset.bench = time(() => draw(lastDrawn));
+    }
+    if (benchN) setTimeout(bench, 2500);
+
     // Redraw at rest only once a veil has moved a visible amount.
     const changed = vs =>
       !lastDrawn ||
@@ -720,7 +767,8 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!w) resize();
       if (!w) return;
       // dt exactly as the engine's Wl: seconds, clamped to [.001, .05].
-      const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+      const gap = now - last;
+      const dt = Math.min(0.05, Math.max(0.001, gap / 1000));
       last = now;
 
       startOrbit();
@@ -751,21 +799,29 @@ export default function MistCanvas({ recipe, onFail }) {
       // scales the ridges.
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
-      if (dirty) rebuild();
-      else if (now - lastCrestAt >= 1000 / IDLE_HZ && Math.abs(seedOffset() - builtOffset) > 1e-5) {
-        driftCrests();
-        lastCrestAt = now;
-        crestMoved = true;
-      }
-      // The wind over the meadow redraws at most IDLE_HZ times a second.
+      // A scroll, a switch or the spring redraws every frame; at rest the
+      // drift, the wind and the veils share one IDLE_HZ tick.
+      const busy = dirty;
+      // (The first frame after a wake is timed from the kick, not a frame.)
+      quality?.sample(woke ? -1 : gap, woke ? false : busy, now);
+      woke = false;
+      if (busy) rebuild();
+      const tick = !busy && now - lastIdleAt >= 1000 / IDLE_HZ;
       let windMoved = false;
-      if (!dirty && groundShown && !frozen && !motion.matches && now - lastWindAt >= 1000 / IDLE_HZ) {
-        setWind();
-        lastWindAt = now;
-        windMoved = true;
+      if (tick) {
+        lastIdleAt = now;
+        if (Math.abs(seedOffset() - builtOffset) > 1e-5) {
+          driftCrests();
+          crestMoved = true;
+        }
+        // The wind over the meadow.
+        if (groundShown && !frozen && !motion.matches) {
+          setWind();
+          windMoved = true;
+        }
       }
       const vs = veils(dt);
-      if (crestMoved || windMoved || changed(vs)) draw(vs);
+      if (busy || crestMoved || windMoved || (tick && changed(vs))) draw(vs);
 
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
@@ -777,12 +833,15 @@ export default function MistCanvas({ recipe, onFail }) {
     const kick = () => {
       if (!raf && visible && onScreen) {
         last = performance.now();
+        woke = true;
         raf = requestAnimationFrame(frame);
       }
     };
     kickRef.current = kick;
 
     const ro = new ResizeObserver(() => {
+      // A new frame size is a new load: every level may be tried again.
+      quality?.reset();
       resize();
       kick();
     });

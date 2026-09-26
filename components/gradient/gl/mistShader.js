@@ -18,6 +18,10 @@
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
 import { hexToRgb } from './mistGeometry';
 
+/** Shader features `?off=` can compile out, to profile what a frame costs
+ * (harness only: without the flag, no define and no cost). */
+export const OFF_FLAGS = ['skip', 'wash', 'bodies', 'ridges', 'slope', 'light', 'rim', 'meadow', 'veil', 'air', 'grain'];
+
 export const MAX_RIDGES = 9; // "Ranges" tops out at 9
 
 const f = v => v.toFixed(6);
@@ -31,6 +35,8 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
 export const FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
+// Profiling defines go on the next line (MistCanvas.jsx, \`?off=\`).
+// @defines
 
 #define MAX_RIDGES ${MAX_RIDGES}
 
@@ -136,14 +142,49 @@ void main() {
   float xPx = gl_FragCoord.x;
   vec2 p = vec2(xPx, uRes.y - gl_FragCoord.y) * uSize / uRes;
 
+  // Antialiasing width, as a Gaussian of ~half a device pixel.
+  float aa = 0.5 / uDpr;
+  int cols = textureSize(uCrest, 0).x;
+  int cx = clamp(int(xPx), 0, cols - 1);
+  int cl = max(cx - 1, 0);
+  int cr = min(cx + 1, cols - 1);
+  float span = float(cr - cl) * uSize.x / uRes.x;
+
+  // (0.2.4) The ridges are opaque and painted back to front, so a pixel
+  // deep inside one ridge's body shows nothing from behind it: its fill's
+  // edge is Phi(6) there (Phi clamps at 6), exactly 1 in float32, and
+  // replaces everything painted before. Find the nearest such ridge,
+  // front to back, and start there: the sky, the bodies and the ridges
+  // behind it are never computed. Below the front ridge's foot the meadow
+  // replaces everything anyway. The depth is tested unslanted first (it's
+  // never smaller than the slope-corrected one), so a pixel in the sky pays
+  // one crest read per ridge.
+  int first = -1;
+#ifndef OFF_SKIP
+  if (uCount > 0 && p.y > uFront) first = uCount - 1;
+  for (int i = MAX_RIDGES - 1; i >= 0 && first < 0; i--) {
+    if (i >= uCount || uFade[i] < 1.0) continue;
+    int row = uCrestRow[i];
+    float bl = uBlur[i] * uScale[i];
+    float deep = 6.0 * sqrt(bl * bl + aa * aa);
+    float dy = p.y - texelFetch(uCrest, ivec2(cx, row), 0).r;
+    if (dy < deep) continue;
+    float slope = span > 0.0
+      ? (texelFetch(uCrest, ivec2(cr, row), 0).r - texelFetch(uCrest, ivec2(cl, row), 0).r) / span
+      : 0.0;
+    if (dy / sqrt(1.0 + slope * slope) >= deep) first = i;
+  }
+#endif
+
   // Sky: the gradient spans the full frame height.
-  vec3 col = texture(uSky, vec2((p.y * uSkyScale + uSkyShift) / uSize.y, 0.5)).rgb;
+  vec3 col = first < 0 ? texture(uSky, vec2((p.y * uSkyScale + uSkyShift) / uSize.y, 0.5)).rgb : vec3(0.0);
 
   // A setting sun's wash (sunLook.js SET_WASH): a very wide, faint Gaussian
   // hugging the horizon that tints the sky here, then lights the ridge rims
   // under it and spills over the crests. None at rest.
   float washA = 0.0;
   vec3 washCol = vec3(0.0);
+#ifndef OFF_WASH
   for (int i = 0; i < 2; i++) {
     if (i >= uBodies || uBodySet[i] <= 0.0 || uBodyFace[i] > 0.5) continue;
     vec2 u = (p - uBody[i].xy) / (uBody[i].z * vec2(${f(SET_WASH.wide)}, ${f(SET_WASH.tall)}));
@@ -151,6 +192,7 @@ void main() {
     washCol = mix(uBodyCol[i], DISC_WHITE, ${f(SET_WASH.lift)});
   }
   col = over(col, washCol, washA);
+#endif
 
   // Sun and moon (both mid-switch), then the disc at .85, antialiased over a
   // device pixel. The moon: glow radial at .4 easing to 0 at 3.4r (a
@@ -158,8 +200,9 @@ void main() {
   // layered fallback still fades linearly),
   // disc multiplied by its face (seas and craters). The sun (sunLook.js):
   // two-layer glow, disc darker and warmer toward the limb, flattened low.
+#ifndef OFF_BODIES
   for (int i = 0; i < 2; i++) {
-    if (i >= uBodies) break;
+    if (i >= uBodies || first >= 0) break;
     float r = uBody[i].z;
     vec2 q = p - uBody[i].xy;
     float d = length(q);
@@ -190,66 +233,85 @@ void main() {
       col = over(col, mix(bc, DISC_WHITE, 0.5), ${f(SET_BLOOM.a)} * st * uBodyA[i] * exp(-min(x * x, 40.0)));
     }
   }
+#endif
 
-  // Antialiasing width, as a Gaussian of ~half a device pixel.
-  float aa = 0.5 / uDpr;
-  int cols = textureSize(uCrest, 0).x;
-  int cx = clamp(int(xPx), 0, cols - 1);
-  int cl = max(cx - 1, 0);
-  int cr = min(cx + 1, cols - 1);
-  float span = float(cr - cl) * uSize.x / uRes.x;
-
+#ifndef OFF_RIDGES
   for (int i = 0; i < MAX_RIDGES; i++) {
     if (i >= uCount) break;
+    if (i < first) continue;
     float fade = uFade[i];
 
     // Signed distance to the crest (positive below it), corrected for slope
     // so the blurred and antialiased edges keep an even width on steep flanks.
     int row = uCrestRow[i];
     float crest = texelFetch(uCrest, ivec2(cx, row), 0).r;
+#ifdef OFF_SLOPE
+    float slope = 0.0;
+#else
     float slope = span > 0.0
       ? (texelFetch(uCrest, ivec2(cr, row), 0).r - texelFetch(uCrest, ivec2(cl, row), 0).r) / span
       : 0.0;
+#endif
     float d = (p.y - crest) / sqrt(1.0 + slope * slope);
     float bl = uBlur[i] * uScale[i];
     float sigma = sqrt(bl * bl + aa * aa);
 
+    // (0.2.4) Phi clamps at ±6, so past 6 sigma from the crest the edges are
+    // exact constants: above it the fill adds nothing (Phi(-6) is 0) and the
+    // rim's two edges cancel, so neither is computed there.
+    float far = 6.0 * sigma;
     // Fill: vertical gradient in user space from top to base, clamped past both.
-    float t = clamp((p.y - uTop[i]) / max(1e-3, uBase[i] - uTop[i]), 0.0, 1.0);
-    vec3 fill = t < 0.45
-      ? mix(uFillA[i], uFillB[i], t / 0.45)
-      : mix(uFillB[i], uFillC[i], (t - 0.45) / 0.55);
-    // Setting light: warm along the crest, strongest toward the body, the
-    // body below falling into cool, soft shadow. None at rest.
-    // The light is screened on (it brightens toward the warm colour, never
-    // greys the violet); the shadow multiplies the body by the sky's cool hue.
-    if (uLitA[i] > 0.0) {
-      float edge = exp(-max(0.0, p.y - crest) / max(1.0, uLitAt.z * uScale[i]));
-      float sx = (p.x - uLitAt.x) / uLitAt.y;
-      float toward = uLitBase + (1.0 - uLitBase) * exp(-min(sx * sx, 40.0));
-      fill *= mix(vec3(1.0), uShadeCol, uShadeA[i] * (1.0 - edge));
-      fill = 1.0 - (1.0 - fill) * (1.0 - uLitCol * (uLitA[i] * edge * toward));
+    if (d > -far) {
+      float t = clamp((p.y - uTop[i]) / max(1e-3, uBase[i] - uTop[i]), 0.0, 1.0);
+      vec3 fill = t < 0.45
+        ? mix(uFillA[i], uFillB[i], t / 0.45)
+        : mix(uFillB[i], uFillC[i], (t - 0.45) / 0.55);
+      // Setting light: warm along the crest, strongest toward the body, the
+      // body below falling into cool, soft shadow. None at rest.
+      // The light is screened on (it brightens toward the warm colour, never
+      // greys the violet); the shadow multiplies the body by the sky's cool hue.
+#ifndef OFF_LIGHT
+      if (uLitA[i] > 0.0) {
+        float edge = exp(-max(0.0, p.y - crest) / max(1.0, uLitAt.z * uScale[i]));
+        float sx = (p.x - uLitAt.x) / uLitAt.y;
+        float toward = uLitBase + (1.0 - uLitBase) * exp(-min(sx * sx, 40.0));
+        fill *= mix(vec3(1.0), uShadeCol, uShadeA[i] * (1.0 - edge));
+        fill = 1.0 - (1.0 - fill) * (1.0 - uLitCol * (uLitA[i] * edge * toward));
+      }
+#endif
+      col = over(col, fill, Phi(d / sigma) * fade);
     }
-    col = over(col, fill, Phi(d / sigma) * fade);
 
+#ifndef OFF_RIM
     // Crest rim: a stroke centred on the curve, blurred with the ridge.
     float hw = uRimW * 0.5 * uScale[i];
-    float rim = Phi((d + hw) / sigma) - Phi((d - hw) / sigma);
-    // A setting sun's wash lights the rims under it (none at rest).
-    vec3 rimCol = washA > 0.0 ? mix(uRimCol[i], washCol, min(1.0, washA * ${f(SET_WASH.rim / SET_WASH.a)})) : uRimCol[i];
-    float rimA = washA > 0.0 ? min(1.0, uRimA[i] + washA * ${f(SET_WASH.rimA / SET_WASH.a)}) : uRimA[i];
-    col = over(col, rimCol, rim * rimA * fade);
+    if (abs(d) < hw + far) {
+      float rim = Phi((d + hw) / sigma) - Phi((d - hw) / sigma);
+      // A setting sun's wash lights the rims under it (none at rest).
+      vec3 rimCol = washA > 0.0 ? mix(uRimCol[i], washCol, min(1.0, washA * ${f(SET_WASH.rim / SET_WASH.a)})) : uRimCol[i];
+      float rimA = washA > 0.0 ? min(1.0, uRimA[i] + washA * ${f(SET_WASH.rimA / SET_WASH.a)}) : uRimA[i];
+      col = over(col, rimCol, rim * rimA * fade);
+    }
+#endif
 
     // The meadow, in front of every ridge and under the front one's veil.
+#ifndef OFF_MEADOW
     if (i == uCount - 1 && p.y > uFront) col = meadow(p);
+#endif
 
     // Veil: radial gradient in the ellipse's box — .9 at the centre, .42 at
     // 55%, 0 at the rim — times the veil's (breathing) opacity.
+#ifndef OFF_VEIL
     vec4 v = uVeil[i];
     float rho = length((p - v.xy) / v.zw);
-    float va = rho < 0.55 ? mix(0.9, 0.42, rho / 0.55) : rho < 1.0 ? mix(0.42, 0.0, (rho - 0.55) / 0.45) : 0.0;
-    col = over(col, uMist, va * uVeilA[i] * fade);
+    // (Nothing outside its ellipse.)
+    if (rho < 1.0) {
+      float va = rho < 0.55 ? mix(0.9, 0.42, rho / 0.55) : mix(0.42, 0.0, (rho - 0.55) / 0.45);
+      col = over(col, uMist, va * uVeilA[i] * fade);
+    }
+#endif
   }
+#endif
 
   // A setting sun's light spilling over the crests along the horizon.
   if (washA > 0.0) col = over(col, washCol, washA * ${f(SET_WASH.spill)});
@@ -257,19 +319,23 @@ void main() {
   // Air: the mist colour rising from 0 to uAirA over the 14% of the height
   // above the front foot (the frame's foot at rest), then thinning out over
   // the meadow (camera.js airAt).
+#ifndef OFF_AIR
   float airTop = uSize.y * 0.86 + (uFront < uSize.y ? uFront - uSize.y : 0.0);
   float air = p.y > uFront
     ? uAirA * (1.0 - (p.y - uFront) / max(1.0, uSize.y - uFront))
     : p.y > airTop ? (p.y - airTop) / (uSize.y * 0.14) * uAirA : 0.0;
   col = over(col, uMist, air);
+#endif
 
   // Grain: CSS mix-blend-mode overlay at uGrainA, texels one CSS px square.
+#ifndef OFF_GRAIN
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(p), 256.0));
     float n = texelFetch(uGrain, g, 0).r;
     vec3 ov = mix(2.0 * col * n, 1.0 - 2.0 * (1.0 - col) * (1.0 - n), step(0.5, col));
     col = mix(col, ov, uGrainA);
   }
+#endif
 
   outColor = vec4(col, 1.0);
 }

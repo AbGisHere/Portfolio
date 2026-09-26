@@ -1,6 +1,6 @@
 {
   "name": "portfolio",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Abhinav Gupta's personal site: one continuous, scroll-driven scene.",
   "private": true,
   "scripts": {
@@ -9,7 +9,8 @@
     "start": "next start",
     "test": "playwright test",
     "parity": "node scripts/parity.mjs",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "test:adaptive": "node --test scripts/adaptive-test.mjs"
   },
   "keywords": [],
   "author": "Abhinav Gupta",

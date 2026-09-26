@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.3](https://img.shields.io/badge/version-0.2.3-informational)
+![Version 0.2.4](https://img.shields.io/badge/version-0.2.4-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -66,8 +66,12 @@ contact come in later lines (see [Versioning](#versioning)).
   reads as air: far ranges step into the haze, warm light catches the crests
   in the sun's column, and the ridges keep breathing at every scroll
   position. Since `0.2.3` the sun and moon can be clicked at any scroll
-  position, and a switch mid-scroll blends with the camera. The layered fallback still runs the `0.2.0` camera and catches up in
-  `0.2.5` (see [`ROADMAP.md`](./ROADMAP.md)).
+  position, and a switch mid-scroll blends with the camera. Since `0.2.4`
+  the WebGL renderer skips ridges hidden behind nearer ones, caps and adapts
+  its resolution, and redraws less at rest, so large high-DPI laptops hold
+  full frame rate. Next, `0.2.5` brings the crest light to the resting
+  scene. The layered fallback still runs the `0.2.0` camera and catches up in
+  `0.2.6` (see [`ROADMAP.md`](./ROADMAP.md)).
 - Time of day moves with scroll. By day the sky turns from golden hour to
   sunset and the sun sets into the ridges; by night the moon sinks too,
   warming toward amber.
@@ -202,7 +206,7 @@ until they arrive. They share the switch maths (`orbit.js`), the camera maths
 (`camera.js`), the sky ramp, and the sun and moon looks, and `npm run parity`
 keeps them visually identical. Since `0.2.1` only the WebGL camera has moved
 on (and in `0.2.2` its look under scroll), so they match at the top of the
-page but not mid-scroll until the fallback catches up in `0.2.5` (before
+page but not mid-scroll until the fallback catches up in `0.2.6` (before
 `0.3`).
 
 **One clock per job.** At rest, an exponential smoothing step holds the scene.
