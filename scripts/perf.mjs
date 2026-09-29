@@ -70,11 +70,11 @@ function recordFrames(page, ms, click) {
       } catch {}
       const ts = [];
       const t0 = performance.now();
-      if (click) document.querySelector('button[aria-pressed]')?.click();
+      if (click) document.querySelector('button[data-sun-toggle]')?.click();
       await new Promise(resolve => {
         const tick = t => {
           ts.push(t);
-          const busy = document.querySelector('button[aria-pressed][data-busy]');
+          const busy = document.querySelector('button[data-sun-toggle][data-busy]');
           const more = ms ? t - t0 < ms : t - t0 < 150 || (busy && t - t0 < 10000);
           if (more) requestAnimationFrame(tick);
           else resolve();

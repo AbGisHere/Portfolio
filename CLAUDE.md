@@ -87,6 +87,14 @@ npm run start`), not the dev server. Report what fails. Don't push around it
 silently. Items marked *(once built)* start applying when the matching
 `ROADMAP.md` "Before 1.0.0" item lands. Until then, note them as known gaps.
 
+`npm run hygiene` (`scripts/hygiene.mjs`) checks the machine-checkable items
+against a running production server: `lang`, titles and descriptions, the
+`<h1>` count, `<img>` alt, source maps, the 404, robots, sitemap, llms.txt,
+favicon, canonical, OG image and JSON-LD. CI (`.github/workflows/ci.yml`)
+runs it with the build and `npm run test:adaptive` on every push to `main` and
+every PR. CI has no GPU, so console errors, the atmosphere on each viewport,
+parity and perf stay local.
+
 - [ ] `<html lang="en">` present.
 - [ ] Every route has its own `<title>` and meta description. No duplicates, and
       no framework or boilerplate defaults ("Create Next App", "Vite + React").
@@ -128,7 +136,9 @@ A project rule, for every session and every subagent brief:
 npm run dev       # next dev
 npm run build     # next build
 npm run start     # next start
-npm run test      # Playwright e2e tests
+npm run test      # Playwright e2e tests (no specs yet)
+npm run test:adaptive  # adaptive-quality unit tests (no GPU)
+npm run hygiene   # pre-push checks against a running prod server (CI runs it)
 ```
 
 ## Tech Stack
@@ -212,6 +222,8 @@ components/
       moonlit.js       — night scene
   SplitText.jsx, Reveal.jsx, MagneticCard.jsx
                        — unused primitives (GSAP), kept for the content layers
+.github/workflows/ci.yml — CI: build, test:adaptive, hygiene (no GPU checks)
+scripts/          — parity, perf, adaptive-test, hygiene (see scripts/README.md)
 .env.example      — optional config (SITE_URL); copy to .env.local
 LICENSE           — all rights reserved: source visible for reference only
 ```
@@ -394,14 +406,15 @@ Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.4`:** the GL
+above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.5`:** the GL
 camera moved to the conveyor (`0.2.1`) and took on `0.2.2`'s look, and the
-fallback has neither, so parity passes at scroll 0 (14/14; night worst mean
-.81, p99 6, from the GL-only moon glow) and fails at .5 and 1 (day mean
-17–29, night 11–17). The hit-target check (`--sun-tolerance`) passes at every
-scroll for both renderers, within .02 px. Accepted within `0.2.x`; the fallback catches up on
-`0.2.1`–`0.2.3` and `0.2.5` in `0.2.6`, with all 42 cases passing, before any `0.3.x`
-work (`0.2.5`'s resting ridge light will fail scroll 0 until then). Run it, and `npm run perf`, whenever a renderer
+fallback has neither, so parity passes at scroll 0 (14/14; day worst mean
+.77, night 1.81, p99 7, from the GL-only moon glow and `0.2.5`'s resting
+ridge light, which is soft enough to stay inside the thresholds) and fails
+at .5 and 1 (day mean 17–29, night 11–17). The hit-target check
+(`--sun-tolerance`) passes at every scroll for both renderers, within .02
+px. Accepted within `0.2.x`; the fallback catches up on `0.2.1`–`0.2.3` and
+`0.2.5` in `0.2.6`, with all 42 cases passing, before any `0.3.x` work. Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
@@ -422,6 +435,7 @@ the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
 | `data-seed` on the scene wrapper | The seed last painted (GL: drift included) |
 | `data-ready` on the layered scene | Set once its ridge masks are painted |
 | `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
+| `data-sun-toggle` on the sun button | Stable selector for the harness (not `aria-pressed`: the button has none, its label says the action) |
 | `?off=rim,veil` (GL) | Compile shader features out, for profiling (`OFF_FLAGS` in `mistShader.js`: `skip`, `wash`, `bodies`, `ridges`, `slope`, `light`, `rim`, `meadow`, `veil`, `air`, `grain`); `#define`s at the `// @defines` marker, no cost without the flag |
 | `?bench=200` (GL) | Redraw the settled frame that many times, synced by a 1-px `readPixels`; writes `data-bench` and `data-bench-base` (a bare clear) on the scene wrapper, as "median p90" ms |
 | `?adapt=0` (GL) | Hold full resolution (no adaptive quality) |
@@ -561,7 +575,8 @@ scroll, the layered fallback still the `0.2.0` camera, below): a **pure function
 frame and **never sprung**, so scrolling back retraces exactly. At
 `about` = 0 every function is the identity: the resting scene is
 pixel-identical to `0.1.11` (through `0.2.2` by day; at night `0.2.2`'s
-smoothstep moon glow differs by a mean of .15).
+smoothstep moon glow differs by a mean of .15), apart from `0.2.5`'s
+resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
 
 - **Progress.** `SmoothScroll` (root layout) publishes
   `about = (scrollY − trackTop) / (trackHeight − 100lvh)` to the store in
@@ -630,11 +645,18 @@ smoothstep moon glow differs by a mean of .15).
   depth (parallax), over a cool multiplied shadow below. Mid-switch it
   follows the outgoing body and fades out over the first half, then comes
   up with the incoming one over the second (zero at e = .5), so it never
-  jumps. `0.2.5` brings it to the resting scene.
+  jumps. **At rest too** (`0.2.5`, `RIDGE_LIGHT.rest`): `rest.a` .4 of the
+  crest light and `rest.shade` .15 of the shadow; the sun's light is
+  `rest.warm` .5 of the way from its own colour to `SET_COLOUR` (warm, not
+  grey, on the violet), and the moon's is `rest.moon` .7 × the sun's (its
+  full-set `moon` .35 barely showed at rest). Each goes to its full setting
+  value on the body's `low`, so the end of the scroll is pixel-identical to
+  `0.2.4` and nothing jumps in between. GL only until `0.2.6`.
 - **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
   `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps) and
-  ignores `0.2.2`'s fields. `0.2.6` ports `0.2.1`–`0.2.3` and `0.2.5` to it, before any
-  `0.3.x` work; until then parity passes only at `?scroll=0`.
+  ignores `0.2.2`'s fields and `0.2.5`'s resting light. `0.2.6` ports
+  `0.2.1`–`0.2.3` and `0.2.5` to it, before any `0.3.x` work; until then
+  parity passes only at `?scroll=0`.
 - **Sun and moon set** (`0.2.2`, `bodyAt`). The gap between the body and the
   horizon closes, on `k^SET_EASE` (1.6), to `scroll.body.set` radii below
   it, while `dx` leans it left, so it sinks into the ridges (by day about
@@ -695,10 +717,15 @@ smoothstep moon glow differs by a mean of .15).
   cost about double scroll 0 (nine ridges instead of five, plus the
   scroll-only light, meadow and wash). 1728×1117@2 now meets the budget.
   Known gap: perf's headless wheel sweep doesn't quite reach the bottom of
-  the track.
+  the track. `0.2.5` (the ridge light now runs at rest), against a `0.2.4`
+  build on the same day, 1728×1117@2 at scroll 0: `?bench` median 7.0 /
+  6.6 ms (day / night) against 6.5 / 6.6, about +0–.5 ms, inside
+  run-to-run noise; `npm run perf` with `?adapt=0` (1728×1117@2,
+  1440×900@2, 393×852@2): switches 120 fps, p95 9.3 ms, 1.5–1.7 s main
+  thread over four (was 1.6–1.9); idle 32–38 ms/s (was 37–42); scroll
+  sweeps 118.8–120 fps, no frame over 20 ms. Level.
 
-Planned: `0.2.5` (the ridge light at rest) and `0.2.6` (the fallback gate
-before `0.3`): see `ROADMAP.md`.
+Planned: `0.2.6` (the fallback gate before `0.3`): see `ROADMAP.md`.
 
 ### Adding a scene
 
@@ -718,8 +745,9 @@ before `0.3`): see `ROADMAP.md`.
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.5` (ridge light at rest), then `0.2.6`: the layered fallback catches up on `0.2.1`–`0.2.3` and `0.2.5` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
+| `0.2.6`: the layered fallback catches up on `0.2.1`–`0.2.3` and `0.2.5` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
+| Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
 | Decide whether an admin surface is still wanted |
 
 <!-- BEGIN:nextjs-agent-rules -->

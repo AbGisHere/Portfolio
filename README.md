@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.4](https://img.shields.io/badge/version-0.2.4-informational)
+![Version 0.2.5](https://img.shields.io/badge/version-0.2.5-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -69,9 +69,10 @@ contact come in later lines (see [Versioning](#versioning)).
   position, and a switch mid-scroll blends with the camera. Since `0.2.4`
   the WebGL renderer skips ridges hidden behind nearer ones, caps and adapts
   its resolution, and redraws less at rest, so large high-DPI laptops hold
-  full frame rate. Next, `0.2.5` brings the crest light to the resting
-  scene. The layered fallback still runs the `0.2.0` camera and catches up in
-  `0.2.6` (see [`ROADMAP.md`](./ROADMAP.md)).
+  full frame rate. Since `0.2.5` the crest light shows at rest too: a soft
+  warm light under the sun, a faint silver one under the moon, deepening as
+  the body sets. The layered fallback still runs the `0.2.0` camera and
+  catches up in `0.2.6` (see [`ROADMAP.md`](./ROADMAP.md)).
 - Time of day moves with scroll. By day the sky turns from golden hour to
   sunset and the sun sets into the ridges; by night the moon sinks too,
   warming toward amber.
@@ -125,8 +126,14 @@ Chromium isn't installed yet, run `npx playwright install chromium` first.
 | `npm run test` | Runs `playwright test`. There are no Playwright specs in the repo yet, so it currently finds nothing to run. |
 | `npm run parity` | Compares the layered renderer against WebGL, pixel by pixel, across viewports, both themes and three scroll positions (`--scrolls`, default top, middle and end). Fails above a mean difference of 2/255 or a p99 of 24. |
 | `npm run perf` | Measures frame timing and main-thread time per renderer, during sky switches, at rest and through a scroll sweep |
+| `npm run test:adaptive` | Unit tests for the WebGL renderer's adaptive quality, fed synthetic frame timings (no GPU needed) |
+| `npm run hygiene` | Checks a running production server for the basics: `lang`, titles, descriptions, one `<h1>`, alt text, canonical, OG image, JSON-LD, the 404, robots, sitemap, llms.txt and no shipped source maps |
 
-Run `parity` and `perf` against a production server, not `next dev`. Flags,
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs the build,
+`test:adaptive` and `hygiene` on every push to `main` and every pull
+request. Parity and perf need a real GPU, so they run locally.
+
+Run `parity`, `perf` and `hygiene` against a production server, not `next dev`. Flags,
 output and how to read the numbers are in
 [`scripts/README.md`](./scripts/README.md).
 
@@ -180,7 +187,7 @@ components/
     layers/          layered DOM fallback
     recipes/         the day and night scenes, as data
 styles/              global utilities
-scripts/             renderer parity and perf harness
+scripts/             renderer parity and perf harness, hygiene checks
 .env.example         optional environment variables
 LICENSE              all rights reserved
 ```

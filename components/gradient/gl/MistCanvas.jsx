@@ -633,32 +633,38 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uBlur'), f(1, (_, i) => (view.rest ? paint[i].blur : paint[i].blur / view.ridges[i].s)));
       gl.uniform1fv(uniform('uFade'), f(1, (_, i) => paint[i].fade));
       gl.uniform1f(uniform('uRimW'), rimWidth(h));
-      // (0.2.2) The setting body's light on the ridges (sunLook.js
-      // RIDGE_LIGHT), past the top. Mid-switch (0.2.3) it goes down with the
-      // outgoing body over the first half and comes up with the incoming one
-      // over the second, so it's gone at the handover and never jumps.
+      // (0.2.2) The body's light on the ridges (sunLook.js RIDGE_LIGHT):
+      // (0.2.5) Softer at rest (`rest`), all of it once the body has set.
+      // Mid-switch (0.2.3) it goes down with the outgoing body over the
+      // first half and comes up with the incoming one over the second, so
+      // it's gone at the handover and never jumps.
       const handover = orbit?.scene ? (orbit.e < 0.5 ? 1 - ease(orbit.e * 2) : ease(orbit.e * 2 - 1)) : 1;
       const body = orbit?.scene ? lit[orbit.e < 0.5 ? 0 : 1] : lit[0];
-      const st = (body?.set ?? 0) * handover;
       const L = RIDGE_LIGHT;
+      const low = body?.set ?? 0;
+      const toSet = (atRest, full = 1) => atRest + (full - atRest) * low;
       const moonLit = body?.face === 1;
+      const moonK = moonLit ? toSet(L.rest.moon, L.moon) : 1;
+      const st = body ? toSet(L.rest.a) * handover * moonK : 0;
+      const sh = body ? toSet(L.rest.shade) * handover * moonK : 0;
       gl.uniform1fv(
         uniform('uLitA'),
-        f(1, (_, i) => (st > 0 ? st * L.a * (moonLit ? L.moon : 1) * (1 + L.far * Math.min(1, Math.max(0, -view.ridges[i].t + 0.3))) : 0)),
+        f(1, (_, i) => (st > 0 ? st * L.a * (1 + L.far * Math.min(1, Math.max(0, -lit_[i].t + 0.3))) : 0)),
       );
-      gl.uniform1fv(uniform('uShadeA'), f(1, () => (st > 0 ? st * L.shade * (moonLit ? L.moon : 1) : 0)));
+      gl.uniform1fv(uniform('uShadeA'), f(1, () => (st > 0 ? sh * L.shade : 0)));
+      // The sun's light warms from its own colour toward the setting one.
+      const glowCol = moonLit ? body.col : body ? mix(body.col, SET_COLOUR, toSet(L.rest.warm)) : SET_COLOUR;
       if (st > 0) {
-        gl.uniform3fv(uniform('uLitCol'), rgb01(moonLit ? mix(body.col, M, L.mix) : mix(SET_COLOUR, M, L.mix)));
+        gl.uniform3fv(uniform('uLitCol'), rgb01(mix(glowCol, M, L.mix)));
         const tint = rgb01(stops[0]);
         const top = Math.max(1e-3, ...tint);
         gl.uniform3fv(uniform('uShadeCol'), tint.map(c => c / top));
         gl.uniform3f(uniform('uLitAt'), body.x, L.spread * w, L.depth * h);
         gl.uniform1f(uniform('uLitBase'), L.base);
       }
-      // The veils and air: the haze, glowing with the setting light past the
-      // top, so the gaps between the ranges glow softly.
-      const glowCol = moonLit ? body.col : SET_COLOUR;
-      gl.uniform3fv(uniform('uMist'), rgb01(st > 0 ? mix(M, glowCol, L.veil * st * (moonLit ? L.moon : 1)) : M));
+      // The veils and air: the haze, glowing with the body's light (more as
+      // it sets), so the gaps between the ranges glow softly.
+      gl.uniform3fv(uniform('uMist'), rgb01(st > 0 ? mix(M, glowCol, L.veil * st) : M));
       gl.uniform1f(uniform('uAirA'), airOpacity(haze) * (view.rest ? 1 : 1 - DESCENT_AIR * view.k));
       gl.uniform1f(uniform('uGrainA'), noGrain ? 0 : grainOpacity(r));
       // The sky and the meadow.

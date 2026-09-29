@@ -56,16 +56,15 @@ against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look.
 
-**Known gap in `0.2.4`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
+**Known gap in `0.2.5`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
 `0.2.2`'s look under scroll) and the layered fallback still runs the `0.2.0`
-camera, so a default run exits 1: the 14 `-s0` cases pass (night worst mean
-.81, p99 6, from the GL-only moon glow), the `-s0.5` and `-s1` cases fail
-(day mean 17–29, night 11–17). The hit-target check passes at every
-scroll. This is accepted within `0.2.x`; use
-`--scrolls 0` for a passing check meanwhile. `0.2.5` brings the ridge light
-to the resting scene in GL first, so scroll 0 will fail too until `0.2.6`
-ports `0.2.1`–`0.2.3` and `0.2.5` to the fallback, with all 42 cases passing, before any
-`0.3.x` work (`ROADMAP.md`).
+camera, so a default run exits 1: the 14 `-s0` cases pass (day worst mean
+.77, night 1.81, p99 7, from the GL-only moon glow and `0.2.5`'s resting
+ridge light), the `-s0.5` and `-s1` cases fail (day mean 17–29, night
+11–17). The hit-target check passes at every scroll. This is accepted
+within `0.2.x`; use `--scrolls 0` for a passing check meanwhile. `0.2.6`
+ports `0.2.1`–`0.2.3` and `0.2.5` to the fallback, with all 42 cases
+passing, before any `0.3.x` work (`ROADMAP.md`).
 
 ## `npm run perf`
 
@@ -118,6 +117,26 @@ Subtract `data-bench-base` (the sync's own overhead) from `data-bench`; the
 drop against a run without `off` is that feature's cost. Run builds
 interleaved and take the median of a few, since the GPU's clocks drift.
 
+## `npm run hygiene`
+
+`hygiene.mjs` runs the machine-checkable half of CLAUDE.md's pre-push checks
+against a production server, with no browser. It reads the served HTML and
+text routes, and the build output on disk: every sitemap route resolves and
+has `lang="en"`, a unique title, a description, a canonical link, an
+`og:image`, at most one `<h1>` and alt on every `<img>`; the 404 is the custom
+page; robots.txt blocks nothing and points at the sitemap; llms.txt and the
+favicon resolve; and `.next/static` holds no `.map` files. It exits 1 on any
+failure.
+
+```bash
+npm run build && npx next start -p 3002
+npm run hygiene -- --base http://localhost:3002   # default http://localhost:3000
+```
+
+CI (`.github/workflows/ci.yml`) runs it on every push to `main` and every PR,
+after `npm run test:adaptive` and `npm run build`. The runners have no GPU,
+so parity, perf and console errors aren't part of CI.
+
 ## Contract a renderer honours
 
 | Hook | Who | Meaning |
@@ -128,7 +147,7 @@ interleaved and take the median of a few, since the GPU's clocks drift.
 | `?scroll=<0..1>` | descent store | Pins the descent's `about` (components/scroll/descent.js), so a frame mid-descent can be compared or timed without scrolling. |
 | `?grain=0` | renderer | Omit the grain layer. Parity compares grain-free frames by default. |
 | `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check. Without it, the check reports "none" and doesn't fail. |
-| `button[aria-pressed]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |
+| `button[data-sun-toggle]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |
 | `localStorage['abg-theme']` | theme | `day` or `night`, read before first paint. |
 | `?crest=cpu` | GL renderer | Compute ridge crests on the CPU instead of the GPU crest pass (the fallback path when float render targets are missing). |
 | `data-crest="gpu" \| "cpu"` | scene wrapper | Which crest path the GL renderer used. |

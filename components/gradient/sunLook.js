@@ -56,7 +56,7 @@ export const SQUASH = 0.16;
  * (0.2.2) Setting under the descent (camera.js bodyAt), by `low`, how far the
  * body has set (0 at rest … 1 at the end of the stretch). None of it applies
  * at rest (the shader takes the resting path exactly), so the resting look
- * above is unchanged. GL only for now; the layered fallback gets it in 0.2.4.
+ * above is unchanged. GL only for now; the layered fallback gets it in 0.2.6.
  *
  * The setting sun is built in layers, so it reads as light, not a sticker:
  * - its colour leans toward a gold SET_COLOUR by SET_MIX (never toward the
@@ -90,8 +90,12 @@ export const SET_WASH = { a: 0.3, wide: 18, tall: 2.4, lift: 0.35, rim: 0.7, rim
 export const MOONSET = { colour: '#E8A868', mix: 0.6, dim: 0.04, wide: 0.25, flat: 0.1, gain: 0.1 };
 
 /**
- * (0.2.2) The setting body's light on the ridges (GL; mistShader.js), by
- * `low` as above: none at rest. Rather than tinting whole ridges, it lights
+ * (0.2.2) The body's light on the ridges (GL; mistShader.js), by `low` as
+ * above. (0.2.5) At rest it's already there, softer: `rest.a` of the crest
+ * light and `rest.shade` of the shadow, the sun's light `rest.warm` of the
+ * way from its own colour to SET_COLOUR, and the moon's `rest.moon` × as
+ * strong as the sun's (not `moon`: its pale light needs more to show). Each
+ * goes to its full setting value as the body sinks (`low`). Rather than tinting whole ridges, it lights
  * them: a warm alpenglow along each crest (colour: SET_COLOUR leaned `mix`
  * into the haze), strongest near the body's x (a Gaussian `spread` × the
  * frame's width, `base` of it everywhere) and fading `depth` × the height
@@ -103,4 +107,4 @@ export const MOONSET = { colour: '#E8A868', mix: 0.6, dim: 0.04, wide: 0.25, fla
  * between the ranges take the light's colour by `veil`, so the gaps glow
  * softly. The moon's is `moon` × as strong, in its own pale light.
  */
-export const RIDGE_LIGHT = { a: 0.3, mix: 0.3, spread: 0.25, base: 0.05, depth: 0.022, far: 0.3, shade: 0.3, veil: 0.25, moon: 0.35 };
+export const RIDGE_LIGHT = { rest: { a: 0.4, shade: 0.15, warm: 0.5, moon: 0.7 }, a: 0.3, mix: 0.3, spread: 0.25, base: 0.05, depth: 0.022, far: 0.3, shade: 0.3, veil: 0.25, moon: 0.35 };

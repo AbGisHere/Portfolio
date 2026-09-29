@@ -1,0 +1,32 @@
+# The checks that don't need a GPU: build, unit tests, and the machine-checkable
+# pre-push items (scripts/hygiene.mjs) against a production server. Parity and
+# perf measure the real GPU, so they stay on the Mac (scripts/README.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npm run test:adaptive
+      - run: npm run build
+      - name: Hygiene checks against the production server
+        run: |
+          npx next start -p 3000 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000 && break; sleep 1; done
+          npm run hygiene

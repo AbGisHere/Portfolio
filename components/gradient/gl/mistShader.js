@@ -67,8 +67,8 @@ uniform vec3 uRimCol[MAX_RIDGES];
 uniform float uRimA[MAX_RIDGES];
 uniform float uBlur[MAX_RIDGES];   // Gaussian sigma, 0 = crisp
 uniform float uFade[MAX_RIDGES];
-// (0.2.2) A setting body's light on the ridges (sunLook.js RIDGE_LIGHT):
-// per ridge, the crest light's strength (0: none, as at rest) and the shadow's.
+// (0.2.2) The body's light on the ridges (sunLook.js RIDGE_LIGHT): per
+// ridge, the crest light's strength and the shadow's (0.2.5: some at rest too).
 uniform float uLitA[MAX_RIDGES];
 uniform float uShadeA[MAX_RIDGES];
 uniform vec3 uLitCol;         // the crest light's colour
@@ -266,8 +266,8 @@ void main() {
       vec3 fill = t < 0.45
         ? mix(uFillA[i], uFillB[i], t / 0.45)
         : mix(uFillB[i], uFillC[i], (t - 0.45) / 0.55);
-      // Setting light: warm along the crest, strongest toward the body, the
-      // body below falling into cool, soft shadow. None at rest.
+      // The body's light: along the crest, strongest toward the body, the
+      // body below falling into cool, soft shadow. Warm as the body sets.
       // The light is screened on (it brightens toward the warm colour, never
       // greys the violet); the shadow multiplies the body by the sky's cool hue.
 #ifndef OFF_LIGHT

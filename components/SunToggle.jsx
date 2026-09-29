@@ -71,7 +71,7 @@ export default function SunToggle({ recipe }) {
       onClick={busy ? undefined : toggle}
       aria-disabled={busy || undefined}
       data-busy={busy || undefined}
-      aria-pressed={night}
+      data-sun-toggle=""
       aria-label={night ? 'Moon — switch to day' : 'Sun — switch to night'}
       title={night ? 'Switch to day' : 'Switch to night'}
     />

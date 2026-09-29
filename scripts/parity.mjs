@@ -101,7 +101,7 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
 
   const painted = await readRenderer(page);
   const sun = await page.evaluate(() => {
-    const btn = document.querySelector('button[aria-pressed]');
+    const btn = document.querySelector('button[data-sun-toggle]');
     if (!btn) return { error: 'no sun toggle' };
     const b = btn.getBoundingClientRect();
     const target = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
