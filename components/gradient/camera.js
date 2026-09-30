@@ -484,8 +484,12 @@ export function airAt(y, frame, h, airA) {
  * the veils' and air's colour (hex), glowing with the light.
  */
 export function ridgeLightAt({ lit, orbit, stops, M, ts, w, h }) {
-  const handover = orbit?.scene ? (orbit.e < 0.5 ? 1 - ease(orbit.e * 2) : ease(orbit.e * 2 - 1)) : 1;
-  const body = orbit?.scene ? lit[orbit.e < 0.5 ? 0 : 1] : lit[0];
+  // Any switch, by its progress `e` (the GL renderer's orbit also carries a
+  // `scene`, the layered one's doesn't: keying on that left the layered
+  // switch lit by the outgoing body, and the light jumped on landing).
+  const e = orbit ? (orbit.e ?? 0) : 1;
+  const handover = orbit ? (e < 0.5 ? 1 - ease(e * 2) : ease(e * 2 - 1)) : 1;
+  const body = orbit ? lit[e < 0.5 ? 0 : 1] : lit[0];
   const L = RIDGE_LIGHT;
   const low = body?.set ?? 0;
   const toSet = (atRest, full = 1) => atRest + (full - atRest) * low;

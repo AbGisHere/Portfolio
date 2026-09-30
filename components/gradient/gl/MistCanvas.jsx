@@ -258,8 +258,10 @@ export default function MistCanvas({ recipe, onFail }) {
     const seedOffset = () => {
       if (driftAt != null) return driftAt;
       const idle = recipeRef.current.idle;
-      // Mid-switch the drift is folded into the switch's own start seed.
-      if (orbit || !idle?.seedDrift || motion.matches || frozen) return 0;
+      // Mid-switch the drift the switch started from fades out on its clock
+      // (see startOrbit).
+      if (orbit) return (orbit.drift ?? 0) * (1 - orbit.e);
+      if (!idle?.seedDrift || motion.matches || frozen) return 0;
       return idle.seedDrift * Math.sin((2 * Math.PI * idleT) / (idle.period ?? 60));
     };
 
@@ -281,6 +283,16 @@ export default function MistCanvas({ recipe, onFail }) {
       orbit = motion.matches
         ? null
         : { ...beginOrbit(sunRecipe, r, geo, shownStops ?? toHexStops(value), { forward: true }), t: 0, e: 0, scene: null };
+      // The idle drift stays per ridge, with its gain (camera.js driftGains),
+      // and fades out over the switch: folded into the start seed, it moved
+      // every ridge by the bare offset, so under the camera (gains up to
+      // DRIFT_GAIN_MAX) the ridges jumped on the switch's first frame. Where
+      // it lands is unchanged, and at the top (gain 1) so is every frame.
+      // (A pinned `?driftAt` stays pinned.)
+      if (orbit && driftAt == null) {
+        orbit.drift = builtOffset;
+        orbit.geo[6] -= builtOffset;
+      }
       sunRecipe = r;
       dirty = true;
     }
@@ -677,7 +689,11 @@ export default function MistCanvas({ recipe, onFail }) {
       const r = recipeRef.current;
       const still = motion.matches || frozen;
       const speedScale = veilSpeedScale(r.speed);
-      const drift = mistOf(r.mist).drift;
+      // Mid-switch the drift eases between the scenes' on the switch's
+      // clock, so the veils' swing never jumps when the theme changes.
+      const to = mistOf(r.mist).drift;
+      const from = orbit ? mistOf(orbit.prev.mist).drift : to;
+      const drift = from + (to - from) * (orbit ? orbit.e : 1);
       return scene.veils.slice(0, MAX_RIDGES).map((v0, i) => {
         // Each veil moves and scales with its ridge (camera.js), drift and all.
         const rc = view.ridges[i];

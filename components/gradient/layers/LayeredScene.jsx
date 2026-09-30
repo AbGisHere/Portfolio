@@ -403,7 +403,11 @@ export default function LayeredScene({ recipe }) {
     function animateVeils(count) {
       const still = motion.matches || frozen;
       const r = sunRecipe;
-      const drift = mistOf(r.mist).drift;
+      // Mid-switch the drift eases between the scenes' on the switch's
+      // clock (as the GL renderer), so the veils' swing never jumps.
+      const to = mistOf(r.mist).drift;
+      const from = orbit ? mistOf(orbit.prev.mist).drift : to;
+      const drift = from + (to - from) * (orbit ? orbit.e : 1);
       const key = `${w}|${drift}|${r.speed}|${still}|${count}`;
       if (key === veilKey) return;
       veilKey = key;

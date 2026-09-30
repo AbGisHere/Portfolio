@@ -93,7 +93,9 @@ against a running production server: `lang`, titles and descriptions, the
 favicon, canonical, OG image and JSON-LD. CI (`.github/workflows/ci.yml`)
 runs it with the build and `npm run test:adaptive` on every push to `main` and
 every PR. CI has no GPU, so console errors, the atmosphere on each viewport,
-parity and perf stay local.
+parity, perf and the switch check stay local: run `npm run parity`,
+`npm run perf` and `npm run switch` (`scripts/README.md`) whenever a
+renderer, the recipe maths or the switch changes.
 
 - [ ] `<html lang="en">` present.
 - [ ] Every route has its own `<title>` and meta description. No duplicates, and
@@ -139,6 +141,9 @@ npm run start     # next start
 npm run test      # Playwright e2e tests (no specs yet)
 npm run test:adaptive  # adaptive-quality unit tests (no GPU)
 npm run hygiene   # pre-push checks against a running prod server (CI runs it)
+npm run parity    # layered vs GL, pixel by pixel (local, GPU)
+npm run perf      # frame timing and main-thread cost (local, GPU)
+npm run switch    # no cut in a day/night switch, frame by frame (local, GPU)
 ```
 
 ## Tech Stack
@@ -224,7 +229,7 @@ components/
   SplitText.jsx, Reveal.jsx, MagneticCard.jsx
                        — unused primitives (GSAP), kept for the content layers
 .github/workflows/ci.yml — CI: build, test:adaptive, hygiene (no GPU checks)
-scripts/          — parity, perf, adaptive-test, hygiene (see scripts/README.md)
+scripts/          — parity, perf, switch, adaptive-test, hygiene (see scripts/README.md)
 .env.example      — optional config (SITE_URL); copy to .env.local
 LICENSE           — all rights reserved: source visible for reference only
 ```
@@ -351,9 +356,13 @@ renderer was ported from (the gradient studio's export) was deleted in
     work. About 48 → 26 draws a second at rest. Scroll, switches and the
     spring still redraw every frame. It's off under reduced motion and `?freeze=1`,
     and only runs while the scene is on screen. It pauses for a switch: the
-    switch starts from the drifted seed and, on landing, the drift restarts
-    from zero at the target, so the ridges never jump back to the base seed
-    first. The layered fallback doesn't drift. Measured on an M4 (prod, idle
+    drift, per ridge (with its scroll gain), is kept as the switch starts
+    and fades on the switch's clock (`orbit.drift`, `seedOffset()` =
+    `orbit.drift × (1 − e)`, `0.2.7`; a bare `+offset` in the start seed
+    made gain ≠ 1 ridges jump on a scrolled switch's first frame); on
+    landing the drift restarts from zero at the target. The fade (≤ 1.25)
+    is below the smallest seed advance (2.25), so the seed still only
+    increases. The layered fallback doesn't drift. Measured on an M4 (prod, idle
     main-thread ms/s at 1440×900@2 / 393×852@2 / 3440×1440@1): drift off
     36/35/42, GPU crests at 60/s 56/39/59, CPU crests at 60/s 92/72/91.
     Switches (`0.1.7`, sky turn with keyframed palettes): GL holds 120 fps,
@@ -667,7 +676,9 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   studio's colours as the camera moves. The veils thin by up to
   `DESCENT_VEIL` .5 and the air band by up to `DESCENT_AIR` .5, which keeps
   the near ridges a rich violet rather than grey.
-- **Ridge light** (`0.2.2`; mid-switch from `0.2.3`). `RIDGE_LIGHT` in `sunLook.js`
+- **Ridge light** (`0.2.2`; mid-switch from `0.2.3`, in the fallback from
+  `0.2.7`: `ridgeLightAt` keys on `orbit` and `orbit.e ?? 0`, not GL's
+  `orbit.scene`, so the layered light no longer snaps at landing). `RIDGE_LIGHT` in `sunLook.js`
   (shader `uLitA`, `uShadeA`, `uLitCol`, `uShadeCol`, `uLitAt`, `uLitBase`):
   warm crest light, strongest in the sun's or moon's column and slanted per
   depth (parallax), over a cool multiplied shadow below. Mid-switch it
@@ -720,6 +731,10 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   harness on a fake clock (prod, headless): the largest frame step against
   its neighbours fell from 167–175 at `about` 1 and 28–33 at .5 (`0.2.2`) to
   2.0–4.4; scrolling 0 → .7 at night during a switch, from 10–13 to 2.1–2.5.
+  Since `0.2.7`, `npm run switch` checks every switch frame by frame, both
+  renderers at scroll 0/.5/1 (worst step ×2.9 of its neighbours, limit
+  ×3). The veils' swing (`mist.drift`) blends from the outgoing scene's to
+  the incoming's on `e` in both renderers (it jumped on the first frame).
 - **GL cost.** The hash table is sized once for the widest scale
   (`descentWidest`), so a scroll frame only sets uniforms and runs one crest
   pass. GPU/CPU crest parity is still 0 (24 cases, `driftAt` .25/.4).
@@ -750,8 +765,7 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   thread over four (was 1.6–1.9); idle 32–38 ms/s (was 37–42); scroll
   sweeps 118.8–120 fps, no frame over 20 ms. Level.
 
-Planned: `0.2.7` (the switch cut) and `0.2.8` (the audit's clean-up): see
-`ROADMAP.md`.
+Planned: `0.2.8` (the audit's clean-up): see `ROADMAP.md`.
 
 ### Adding a scene
 
@@ -770,7 +784,6 @@ Planned: `0.2.7` (the switch cut) and `0.2.8` (the audit's clean-up): see
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.7`: fix the mountains cutting on a switch (layered; check GL scrolled down), with a frame-capture harness check (`ROADMAP.md`) |
 | `0.2.8`: the repo audit's low-risk clean-up (dead code, duplicate helpers, docs restructure), pushed after review (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

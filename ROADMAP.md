@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up (done), `0.2.7` the switch cut fix (next), then `0.2.8` the audit's clean-up. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix (done), then `0.2.8` the audit's clean-up (next). |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -439,19 +439,31 @@ takes on `0.2.1`–`0.2.3` and `0.2.5`, and all 42 parity cases pass (was
   thread over four (was 1.3–1.6); idle 54–80 ms/s (was 40–77). GL's path
   is unchanged apart from the shared helper, which is pixel-identical.
 
-**`0.2.7`: the switch cut** (agreed 2026-09-30, next).
-
-- **Fix: the mountains cut on a switch in the layered renderer.** The user
-  saw it both ways (day → night and night → day), at the top of the page and
-  scrolled down: the mountains suddenly look different, like a cut rather
-  than part of the sky turning. **Likely cause, unverified:** the fallback
-  keeps one silhouette through a switch, but the theme change hands the
-  scene a new recipe, and the masks may be rebuilt from its shape, so the
-  ridges swap at once. Measure it first, with frame-by-frame captures of a
-  switch at scroll 0 and 1 in both renderers. Fix it so nothing about the
-  ridges jumps, then add the capture to the harness so it can't come back.
-  Also check GL scrolled down: its switch reshapes the ridges on purpose,
-  and the distant ranges' drift gains may make that read as a cut there too.
+**Shipped in `0.2.7`: the switch cut.** The owner saw the layered
+mountains change all at once on a switch, both ways and at any scroll.
+Frame-by-frame captures showed the masks weren't the cause; three things
+were (details in `CLAUDE.md`):
+- **Layered: the ridge light snapped at landing** (the owner's cut).
+  `ridgeLightAt` took "mid-switch" from `orbit?.scene`, which only GL's
+  orbit has, so the layered light acted as at rest through the switch and
+  jumped to the incoming body's full light on landing (night → day at
+  scroll 1: strength .28 → 1.0, a ridge step ×22.7 its neighbours). It now
+  keys on `orbit` with `e = orbit.e ?? 0` and hands over as GL's does.
+- **GL, scrolled: the ridges jumped on a switch's first frame.** The idle
+  drift was folded into the start seed as a bare `+offset`, ignoring the
+  per-ridge scroll gains, so the distant ranges jumped by
+  `offset × (gain − 1)` (×3.7–6.7 at scroll .5/1, hidden under
+  `?freeze=1`). The drift is now kept per ridge and fades on the switch's
+  clock (`orbit.drift`); the landing seed is unchanged and scroll 0 is
+  frame-identical.
+- **Both: the veils' swing jumped at the start.** Its amplitude
+  (`mist.drift`, 55 day, 40 night) now blends between the scenes on `e`.
+- **`npm run switch`** (`scripts/switch.mjs`, `scripts/README.md`) checks
+  every switch on a fake clock, both renderers at scroll 0/.5/1: worst step
+  ×2.9 of its neighbours against a limit of ×3 (was up to ×22.7). Local
+  only (GPU). Parity still 42/42 (worst mean 1.06, p99 10); layered
+  switches 116.8–119.6 fps, ~2.0 s main thread over four (~.25 s more: the
+  ridge light now runs mid-switch); GL unchanged.
 
 **`0.2.8`: the audit's clean-up** (agreed 2026-09-30, after `0.2.7`;
 built, but pushed only once the user has reviewed the changes).

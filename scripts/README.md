@@ -1,9 +1,10 @@
 # Renderer harness
 
-Two scripts compare the atmosphere's renderers: WebGL (`gl`) and the layered
-DOM fallback (`layers`). By default they run `layers` against `gl`. Use them
-whenever a renderer changes. Parity proves the look didn't move, and perf
-proves the frames got cheaper.
+Three scripts check the atmosphere's renderers: WebGL (`gl`) and the layered
+DOM fallback (`layers`). By default parity and perf run `layers` against
+`gl`. Use them whenever a renderer or the switch changes. Parity proves the
+look didn't move, perf proves the frames got cheaper, and switch proves a
+day/night switch has no cut.
 
 Run them against a production server, not `next dev`. The dev build is
 slower, and its overlay and HMR add noise:
@@ -114,6 +115,55 @@ Subtract `data-bench-base` (the sync's own overhead) from `data-bench`; the
 drop against a run without `off` is that feature's cost. Run builds
 interleaved and take the median of a few, since the GPU's clocks drift.
 
+## `npm run switch`
+
+A switch is one sky turn, so no frame of it may jump against its neighbours
+(a "cut"). `switch.mjs` (`0.2.7`) runs each renderer × descent position
+(`?scroll=`) × direction (day → night, night → day) on Playwright's
+`page.clock`, paused and stepped in 16 ms rAF frames, with
+`?freeze=1&grain=0`: two frames at rest, a click on the sun, then a frame
+every 1/`fps` s through the switch and `after` ms past its landing.
+
+```bash
+npm run build && npx next start -p 3001
+npm run switch -- --base http://localhost:3001
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--base` | `http://localhost:3001` | Production server |
+| `--renderers` | `layers,gl` | Renderers to run |
+| `--scrolls` | `0,0.5,1` | Descent positions (`about`) |
+| `--viewport` | `1440x900@1` | One viewport, `WxH@dpr` |
+| `--fps` | `30` | Frames captured per second of switch |
+| `--after` | `1500` | ms captured past the landing |
+| `--limit` | `3` | Ratio above which a step is a cut |
+| `--live` | off | Drop `?freeze=1`: veils drift, wind runs |
+| `--steps` | off | Print every case's ridge steps |
+| `--save` | off | Write the frames to `scripts/out/switch/` |
+
+Each consecutive pair of frames is scored as a mean absolute difference
+(0–255) over the ridge area (below 45% of the height), the whole frame and
+the worst 64 px block. A step's ratio is its size over the median of the
+six steps around it, floored at .25; a **cut** is a ratio over `--limit`.
+It then reloads on the landed theme and reports the distance to the landed
+frame (`reload`), for information only: neither renderer lands on a fresh
+load's scene by design. Exits 1 on a cut or a console error. The default 12
+cases take about ten minutes.
+
+At `0.2.7` (1440×900@1) the worst ratio is ×2.9, the palette ticking
+through 8-bit levels in both renderers alike, and the smallest cut it
+caught before the fix was ×3.2, so the limit is tight: raise it if it
+flakes on other hardware. Before → after, day → night / night → day:
+layers ×7.0/3.2 → 1.5/2.8 at scroll 0, ×6.6/4.6 → 1.7/2.4 at .5, ×7.0/22.7
+→ 2.1/2.0 at 1; GL 1.3–2.9, unchanged; GL `--live` ×3.7/2.9 → 1.2/1.4 at
+.5, ×6.7/4.4 → 1.3/1.5 at 1.
+
+Caveats: layered `--live` runs are noisier (its veils run on the
+compositor's real clock, not the fake one). It doesn't judge GL's
+intended gradual reshape, only steps against their neighbours. It needs a
+GPU, so it's local, like parity and perf.
+
 ## `npm run hygiene`
 
 `hygiene.mjs` runs the machine-checkable half of CLAUDE.md's pre-push checks
@@ -132,7 +182,7 @@ npm run hygiene -- --base http://localhost:3002   # default http://localhost:300
 
 CI (`.github/workflows/ci.yml`) runs it on every push to `main` and every PR,
 after `npm run test:adaptive` and `npm run build`. The runners have no GPU,
-so parity, perf and console errors aren't part of CI.
+so parity, perf, switch and console errors aren't part of CI.
 
 ## Contract a renderer honours
 
