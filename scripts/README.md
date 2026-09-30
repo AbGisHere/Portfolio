@@ -52,19 +52,16 @@ threshold or logs a console error, and 2 if the script itself crashes.
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same (`layers`
-against `gl`, over `0.2.0`'s 42 default cases: worst mean .67, p99 3). A
+against `gl` over the 42 default cases: worst mean .67, p99 3 at `0.2.0`;
+1.06, p99 10 at `0.2.6`). A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look.
 
-**Known gap in `0.2.5`.** The GL camera moved on (`0.2.1`'s ridge conveyor,
-`0.2.2`'s look under scroll) and the layered fallback still runs the `0.2.0`
-camera, so a default run exits 1: the 14 `-s0` cases pass (day worst mean
-.77, night 1.81, p99 7, from the GL-only moon glow and `0.2.5`'s resting
-ridge light), the `-s0.5` and `-s1` cases fail (day mean 17–29, night
-11–17). The hit-target check passes at every scroll. This is accepted
-within `0.2.x`; use `--scrolls 0` for a passing check meanwhile. `0.2.6`
-ports `0.2.1`–`0.2.3` and `0.2.5` to the fallback, with all 42 cases
-passing, before any `0.3.x` work (`ROADMAP.md`).
+**At `0.2.6`** the layered fallback runs the same camera and light as GL,
+and a default run passes all 42 cases (worst mean 1.06, p99 10), with the
+hit target within .02 px of the painted body in every case. (`0.2.1`–`0.2.5`
+passed only the 14 `-s0` cases, while the fallback still ran the `0.2.0`
+camera.)
 
 ## `npm run perf`
 

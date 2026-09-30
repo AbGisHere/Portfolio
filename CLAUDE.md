@@ -208,7 +208,8 @@ components/
       ridgeMasks.js    — ridge silhouettes as alpha masks, with the shader's maths
     orbit.js           — a switch: the sky turning, bodies, palette keys (both renderers)
     camera.js          — the descent's camera over the mountains (0.2): per-ridge scale/foot,
-                         sky shift, extra ranges, meadow, time-of-day palette and bodies (both renderers)
+                         sky shift, world ranges, meadow, time-of-day palette, bodies and ridge
+                         light (`ridgeLightAt`) (both renderers)
     sunSpot.js         — the painted sun's (or moon's) centre, outside React: renderers publish,
                          SunToggle follows
     moonFace.js        — the moon's seas and craters, a shade map for its disc
@@ -268,8 +269,7 @@ scroll: {                           // the 0.2 camera's time of day (camera.js)
   body: { dx: -0.03, set: 0.1 },    // by about = 1: `set` radii below the horizon, `dx` left (share of height)
   haze: 32,                         // optional: `mist.haze` by about = 1 (thinner evening air)
   meadow: '#3E4466',                // the meadow's tint at the viewer's feet
-  descent: { back, tilt, rise, ranges }, // optional: override DESCENT (GL)
-  camera: { back, tilt, rise, more }, // optional: override CAMERA (layered fallback, 0.2.0)
+  descent: { back, tilt, rise, ranges }, // optional: override DESCENT (both renderers)
 },
 ```
 
@@ -367,7 +367,7 @@ renderer was ported from (the gradient studio's export) was deleted in
   filters and all, which is what made it choppy. Here the scene is stacked
   DOM layers in the shader's paint order, so the browser composites instead
   of repainting: sky, sun/moon glow and disc, and per ridge a fill, a crest
-  rim and a veil, then air and grain.
+  rim, a light glow and a veil, then air and grain.
   - All of it is CSS gradients except each ridge's silhouette:
     `ridgeMasks.js` computes it as an alpha mask with the shader's own maths
     (slope-corrected Gaussian edge, rim stroke) at the frame's device size,
@@ -380,15 +380,41 @@ renderer was ported from (the gradient studio's export) was deleted in
     palette. (Reshaping means recomputing masks every frame, which is
     WebGL's job, and a cross-fade between two silhouettes looked worse.) The
     masks are rebuilt 120 ms after a resize. No idle drift.
-  - **Under the camera** (still the `0.2.0` one, `CAMERA`/`cameraAt`; not
-    yet ported to `0.2.1`'s `DESCENT`, see "The camera (0.2)") each ridge is a masked edge band plus a solid body
-    below it, both in a camera wrapper (`translateY(foot − base) scale(s)`,
-    `will-change`), cropped to what's on screen in 5% steps; the sky is
-    taller than the frame and slides up. Masks are built once, for every
-    ridge the camera can show, over its widest span. A scroll frame is one
-    rAF paint: no React renders, no mask rebuilds. Accepted differences from
-    GL: no wind, an anti-aliased edge about s× narrower, and a possible faint
-    hairline on a range while it fades in.
+  - **Under the camera** (`0.2.6`: the same `0.2.1` descent as GL,
+    `DESCENT`/`descentAt`, `layout`'s `ranges`, `frameAt`) each ridge is a
+    masked edge band plus a solid body below it, both in a camera wrapper
+    (`translateY(foot − base) scale(s)`, `will-change`), cropped to what's
+    on screen in 5% steps; ridges hidden behind an opaque nearer one are
+    cropped out (as GL's hidden-ridge skip). The sky's ramp is stretched and
+    slid by a transform (`skyAt`). Masks are built once for all nine ridges
+    over their widest span (`frameAt(descentAt(about))` sampled at 41
+    points per recipe, reduced motion included): fill, rim and glow, 27 in
+    all. The recipe's own ridges keep their resting blur (exact at scroll
+    0, within a px or two of GL's under the camera); world ranges are baked
+    at their `about` 1 blur over their scale there. A scroll frame is one
+    rAF paint: no React renders, no mask rebuilds.
+  - **The `0.2.2`/`0.2.5` look.** `scrollHaze`, `descentPaint`/`blendPaint`,
+    `flat`/`FAR_VEIL`, `DESCENT_VEIL`, `DESCENT_AIR` and `hiddenAt`, as GL.
+    Ridge light from the shared `ridgeLightAt` (`camera.js`, which GL maps
+    to uniforms): a per-ridge glow mask (Phi × a falloff down from the
+    crest, baked in ridge space so it scales freely), the cool shade folded
+    into the fill/body stops, the light screened over the fill
+    (`background-blend-mode: screen`, no backdrop read), and its column
+    across the frame a fixed alpha mask (`BEAM`, exp(−u²) over ±3 spreads)
+    placed and sized by a transform; veils and air take the light's `mist`
+    colour. The setting sun and moon use `sunLook.js`'s helpers (`MOON_GLOW`,
+    `gaussStops`, `setDisc`, `sunWash`, `rimWash`, `mixRGB`): halo, setting
+    disc, bloom ring, horizon wash and spill (a solid colour under a
+    Gaussian mask, moved by a transform), rim tint.
+  - **Scroll cost.** Whatever moves is a transform on its own layer
+    (`will-change` on ridge parts, sky, bodies, beam, wash). While
+    scrolling, colour repaints are staggered: ridges take turns so no
+    layer's colour is more than `STAGGER_MS` (30 ms, 4 frames at 120 Hz)
+    old, every layer still moves every frame, and one full paint lands when
+    the scroll settles. Switches, resizes and rest paint everything.
+    Accepted differences from GL: no idle drift or reshaping, no wind, an
+    anti-aliased edge about s× narrower, and colours up to 30 ms behind
+    mid-scroll.
   - At rest nothing runs on the main thread: the veils drift and breathe on
     Web Animations (compositor), with the studio's CSS timings. A switch runs
     `orbit.js` on one rAF clock. The moon's face image is made when the
@@ -400,25 +426,26 @@ renderer was ported from (the gradient studio's export) was deleted in
     dropped 52 frames per run at 3440×1440). Idle 31–63 ms/s. `0.2.0`
     (headless M4): switches 120 fps, p95 8.4 ms; scroll 119.4–119.7 fps, at
     most one frame over 20 ms; idle 86–103 ms/s. Parity with GL at `0.2.0`:
-    worst mean .67, p99 3 (at rest and mid-scroll).
+    worst mean .67, p99 3 (at rest and mid-scroll). `0.2.6` (1440×900@2,
+    393×852@2, 3440×1440@1, against a `0.2.5` build the same day): scroll
+    sweeps 118.8–119.7 fps, p95 8.5 ms, no frame over 20 ms (was 111–119,
+    0–5 over; the ridge light before the stagger cost 1440×900@2 ~100 → 57
+    fps); switches 116–120 fps, at most one frame over 20 ms, 1.7–1.75 s
+    main thread over four (was 1.3–1.6); idle 54–80 ms/s (was 40–77, from
+    the extra layers).
 
 Both are dynamically imported, so neither is in first-load JS. They must stay
 visually identical at rest and under the camera: `npm run parity` (see
 `scripts/README.md`) compares `layers` against `gl` across viewports, themes
 and scroll positions (`--scrolls`, default 0, .5, 1: 42 cases) and fails
-above a mean of 2/255 or a p99 of 24. **Known gap in `0.2.5`:** the GL
-camera moved to the conveyor (`0.2.1`) and took on `0.2.2`'s look, and the
-fallback has neither, so parity passes at scroll 0 (14/14; day worst mean
-.77, night 1.81, p99 7, from the GL-only moon glow and `0.2.5`'s resting
-ridge light, which is soft enough to stay inside the thresholds) and fails
-at .5 and 1 (day mean 17–29, night 11–17). The hit-target check
-(`--sun-tolerance`) passes at every scroll for both renderers, within .02
-px. Accepted within `0.2.x`; the fallback catches up on `0.2.1`–`0.2.3` and
-`0.2.5` in `0.2.6`, with all 42 cases passing, before any `0.3.x` work. Run it, and `npm run perf`, whenever a renderer
+above a mean of 2/255 or a p99 of 24. At `0.2.6` all 42 pass (worst mean
+1.06, p99 10; `0.2.5` passed 14, at scroll 0 only), and the hit-target
+check (`--sun-tolerance`) is within .02 px in every case for both
+renderers. Run it, and `npm run perf`, whenever a renderer
 or the recipe maths changes. Shared, so the two can't drift: what a ridge is
 painted with (`ridgePaint`, `rimWidth`, `grainOpacity` in `mistGeometry.js`),
 the sun's look (`sunLook.js`), the moon's face (`moonFace.js`), the switch
-(`orbit.js`), the camera maths (`camera.js`) and where the body is painted
+(`orbit.js`), the camera maths and ridge light (`camera.js`) and where the body is painted
 (`sunSpot.js`, which the hit target follows). Hooks the renderers honour:
 
 | Hook | Meaning |
@@ -468,9 +495,9 @@ fill.
   is kept low (.2) so it never dissolves into a sunset sky.
 - **The moon** (`moonFace.js`): a greyscale shade map of seas, craters and
   Tycho's rays, from a fixed seed, multiplied into its disc (`.85` opacity).
-  Its glow fades out to 3.4r on a smoothstep in GL (`0.2.2`: the old linear
-  fade left a visible edge there); the layered glow is still linear
-  (`LayeredScene.jsx`) until `0.2.6`.
+  Its glow fades out to 3.4r on a smoothstep (GL from `0.2.2`, the layered
+  glow from `0.2.6` as `MOON_GLOW`'s 17 stops: the old linear fade left a
+  visible edge there).
 
 ### How the transition works
 
@@ -569,9 +596,10 @@ Two clocks, each with one job:
 
 Scrolling the home page's `about` track pulls the camera back from the
 mountains, with a slight tilt down and a small rise, while the sky turns
-toward evening. The maths is in `components/gradient/camera.js` (GL runs
-the `0.2.1` descent with `0.2.2`'s look and `0.2.3`'s switching at any
-scroll, the layered fallback still the `0.2.0` camera, below): a **pure function of `about` and the recipe**, read every
+toward evening. The maths is in `components/gradient/camera.js` (both
+renderers run the `0.2.1` descent with `0.2.2`'s look, `0.2.3`'s switching
+at any scroll and `0.2.5`'s resting light; the layered fallback caught up in
+`0.2.6`): a **pure function of `about` and the recipe**, read every
 frame and **never sprung**, so scrolling back retraces exactly. At
 `about` = 0 every function is the identity: the resting scene is
 pixel-identical to `0.1.11` (through `0.2.2` by day; at night `0.2.2`'s
@@ -589,7 +617,7 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   phone's toolbar judder in and out, a fix not yet confirmed on a real phone)
   a passive native listener publishes. Readers subscribe outside React, so a scroll frame renders
   nothing.
-- **Camera (GL, `0.2.1`).** `DESCENT = { back: .4, tilt: .28, rise: .59,
+- **Camera (`0.2.1`; the fallback from `0.2.6`).** `DESCENT = { back: .4, tilt: .28, rise: .59,
   ranges }`, overridable per recipe (`scroll.descent`), scaled by `k` = the
   cosine ease of `about` (× `REDUCED_CAMERA` .3 under reduced motion; the
   colour change always runs in full). `layout`'s horizon `c` and ridge feet
@@ -651,12 +679,9 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   grey, on the violet), and the moon's is `rest.moon` .7 × the sun's (its
   full-set `moon` .35 barely showed at rest). Each goes to its full setting
   value on the body's `low`, so the end of the scroll is pixel-identical to
-  `0.2.4` and nothing jumps in between. GL only until `0.2.6`.
-- **The layered fallback still runs the `0.2.0` camera** (`CAMERA`,
-  `cameraAt`, and `layout`'s `extra`: ranges fading into the gaps) and
-  ignores `0.2.2`'s fields and `0.2.5`'s resting light. `0.2.6` ports
-  `0.2.1`–`0.2.3` and `0.2.5` to it, before any `0.3.x` work; until then
-  parity passes only at `?scroll=0`.
+  `0.2.4` and nothing jumps in between. Both renderers take it from one pure
+  `ridgeLightAt({ lit, orbit, stops, M, ts, w, h })` in `camera.js`
+  (`0.2.6`; identical to GL's old inline code over 200,000 random cases).
 - **Sun and moon set** (`0.2.2`, `bodyAt`). The gap between the body and the
   horizon closes, on `k^SET_EASE` (1.6), to `scroll.body.set` radii below
   it, while `dx` leans it left, so it sinks into the ridges (by day about
@@ -669,7 +694,7 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   incoming e (both renderers), so switching and scrolling combine on every
   frame. The hit target's landing probe is a bare position (no `col`), with
   the clamp. `bodyDrop` gives the descent's move of a body (dx, dy, low).
-  `hiddenAt` (GL only; the fallback in `0.2.6`) sets the arc's "fully
+  `hiddenAt` (both renderers; the fallback from `0.2.6`) sets the arc's "fully
   hidden" line, which `orbitBodies` takes as `hidden`: the far ridge's foot
   as the camera has moved it, plus 1.25r, taken back into the unscrolled
   sky (the incoming body's dy undone), never above restY + r. Under scroll
@@ -725,15 +750,15 @@ resting ridge light (a mean of about .5 by day, .9 at night at 1440×900).
   thread over four (was 1.6–1.9); idle 32–38 ms/s (was 37–42); scroll
   sweeps 118.8–120 fps, no frame over 20 ms. Level.
 
-Planned: `0.2.6` (the fallback gate before `0.3`): see `ROADMAP.md`.
+Planned: `0.2.7` (the switch cut) and `0.2.8` (the audit's clean-up): see
+`ROADMAP.md`.
 
 ### Adding a scene
 
 1. Add a recipe under `components/gradient/recipes/`, with its `body`
    (`'sun'` or `'moon'`) and a `transition` (`springRate`/`ms`, `apex`, and
    any `via` skies on the way into it), and a `scroll` (`keys`, `body`,
-   `meadow`, optionally `haze`, `descent` (GL) and `camera` (layered, until
-   ported)) for the `0.2` stretch. Under the camera `stops[0]` is the sky
+   `meadow`, optionally `haze` and `descent`) for the `0.2` stretch. Under the camera `stops[0]` is the sky
    overhead, `stops[1]` the horizon glow and the haze the distant ranges
    fade into, and `stops[2]`–`[5]` the ridges far to near.
 2. Register it in `components/gradient/themes.js` with an `id`, `label` and
@@ -745,7 +770,8 @@ Planned: `0.2.6` (the fallback gate before `0.3`): see `ROADMAP.md`.
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | Compose the scroll primitives: SmoothScroll is live (`0.2.0`); SplitText/Reveal/MagneticCard still unused |
-| `0.2.6`: the layered fallback catches up on `0.2.1`–`0.2.3` and `0.2.5` with all 42 parity cases passing, before any `0.3.x` (`ROADMAP.md`) |
+| `0.2.7`: fix the mountains cutting on a switch (layered; check GL scrolled down), with a frame-capture harness check (`ROADMAP.md`) |
+| `0.2.8`: the repo audit's low-risk clean-up (dead code, duplicate helpers, docs restructure), pushed after review (`ROADMAP.md`) |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (404, OG, JSON-LD, robots/sitemap/llms.txt, favicon, H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
 | Decide whether an admin surface is still wanted |

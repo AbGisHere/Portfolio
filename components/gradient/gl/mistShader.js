@@ -196,8 +196,8 @@ void main() {
 
   // Sun and moon (both mid-switch), then the disc at .85, antialiased over a
   // device pixel. The moon: glow radial at .4 easing to 0 at 3.4r (a
-  // smoothstep: a straight fade left a Mach band at its rim; GL only, the
-  // layered fallback still fades linearly),
+  // smoothstep: a straight fade left a Mach band at its rim; the layered
+  // fallback traces it in stops, sunLook.js MOON_GLOW),
   // disc multiplied by its face (seas and craters). The sun (sunLook.js):
   // two-layer glow, disc darker and warmer toward the limb, flattened low.
 #ifndef OFF_BODIES

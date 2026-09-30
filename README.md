@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.5](https://img.shields.io/badge/version-0.2.5-informational)
+![Version 0.2.6](https://img.shields.io/badge/version-0.2.6-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -71,8 +71,8 @@ contact come in later lines (see [Versioning](#versioning)).
   its resolution, and redraws less at rest, so large high-DPI laptops hold
   full frame rate. Since `0.2.5` the crest light shows at rest too: a soft
   warm light under the sun, a faint silver one under the moon, deepening as
-  the body sets. The layered fallback still runs the `0.2.0` camera and
-  catches up in `0.2.6` (see [`ROADMAP.md`](./ROADMAP.md)).
+  the body sets. Since `0.2.6` the layered fallback does all of this too,
+  matching WebGL at every scroll position (see [`ROADMAP.md`](./ROADMAP.md)).
 - Time of day moves with scroll. By day the sky turns from golden hour to
   sunset and the sun sets into the ridges; by night the moon sinks too,
   warming toward amber.
@@ -210,11 +210,10 @@ layers, so the browser composites rather than repaints, with each ridge's
 silhouette computed as a mask from the shader's own maths. Both are loaded
 dynamically after mount, with a CSS gradient of the sky painted behind them
 until they arrive. They share the switch maths (`orbit.js`), the camera maths
-(`camera.js`), the sky ramp, and the sun and moon looks, and `npm run parity`
-keeps them visually identical. Since `0.2.1` only the WebGL camera has moved
-on (and in `0.2.2` its look under scroll), so they match at the top of the
-page but not mid-scroll until the fallback catches up in `0.2.6` (before
-`0.3`).
+(`camera.js`, ridge light included), the sky ramp, and the sun and moon
+looks, and `npm run parity` keeps them visually identical: since `0.2.6`,
+when the fallback caught up on the camera and light of `0.2.1`–`0.2.5`, at
+every scroll position (42 of 42 cases).
 
 **One clock per job.** At rest, an exponential smoothing step holds the scene.
 During a switch, one eased clock carries the sun and moon along their arc,
@@ -235,7 +234,7 @@ The details, including the measured numbers behind these choices, are in
   so none of them is in first-load JS. The scroll layer itself adds about
   1.4 KB gzipped.
 - **Cheap at rest.** The WebGL renderer redraws only when the haze has moved
-  visibly, and caps ridge-drift updates at 60 per second. The layered fallback
+  visibly, and caps ridge-drift updates at 30 per second. The layered fallback
   runs nothing on the main thread at rest: its haze drifts on the compositor.
 - **Measured, not guessed.** `npm run perf` records frame times and
   main-thread cost per renderer; `npm run parity` catches any visual drift

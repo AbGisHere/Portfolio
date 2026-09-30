@@ -23,6 +23,9 @@ export function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/** A hex colour as 0…1 channels (the shader's uniforms). */
+export const rgb01 = hex => hexToRgb(hex).map(c => c / 255);
+
 const toHex = ([r, g, b]) => `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 
 // Je — sRGB hex to oklab
@@ -97,7 +100,7 @@ export function sunColour(stops) {
 // sa — a ridge's base colour at depth t (0 far … 1 near)
 export function ridgeColour(stops, t, haze = MIST_DEFAULTS.haze) {
   const ramp = stops.length > 2 ? stops.slice(2) : stops;
-  // t < 0: the descent's extra far ranges (`layout`'s `extra`), the far
+  // t < 0: the descent's distant ranges (camera.js frameAt), the far
   // ridge's colour further into the haze.
   const o = Math.max(0, t) * (ramp.length - 1);
   const i = Math.floor(o);
@@ -215,21 +218,16 @@ const POINTS = 110; // jo
  * frame, so its control points run `E` extra spacings past each end (`ys[0]`
  * is point −E). With no scales, or all 1, it's the studio's layout exactly.
  *
- * `extra` (the descent camera, as it opens the view): up to that many more
- * ranges (fractional, the last fading in; at most MAX_RANGES in all), each
- * in a gap between two of the recipe's, farthest gap first: the ranges a
- * nearer one hid until the camera climbed. Each sits at the geometric mean
- * of its neighbours' depths, a little lower than them, coloured between
- * them. Every ridge carries `noise`, the index its noise is hashed with (its
- * own, so a ridge keeps its silhouette as ranges join), and `extra` on the
- * new ones. Ridges stay in paint order, far first.
+ * `ranges` (the descent camera's world ranges, camera.js DESCENT): more
+ * ridges placed by depth, below. Every ridge carries `noise`, the index its
+ * noise is hashed with (its own, so a ridge keeps its silhouette as ranges
+ * join), and `extra` on the world ones. Ridges stay in paint order, far
+ * first.
  */
-export const MAX_RANGES = 9;
-export const EXTRA_LOW = 0.8; // an extra range's height, share of its neighbours'
 export const crestExtension = (s, w, h, dx) =>
   s >= 1 ? 0 : Math.max(0, Math.ceil(((1 / s - 1) * (w / 2 + 0.03 * h)) / dx - 1e-9));
 
-export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, extra = 0, ranges = null, drift = null }) {
+export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true, scales = null, ranges = null, drift = null }) {
   const U = aspect ? h * aspect : w;
   const Q = Math.max(POINTS, Math.ceil((POINTS * w) / U));
   const r = rangeCount(size);
@@ -240,9 +238,6 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
   const hazeK = dial(mist.haze, 0.25, 1, 1.6);
   const seed = mist.seed * 0.73;
 
-  // The descent's extra ranges: how many (the last fractional).
-  const more = count > 1 ? Math.max(0, Math.min(extra, MAX_RANGES - count, count - 1)) : 0;
-  const m = more > 0 ? Math.ceil(more - 0.001) : 0;
   const x0 = -0.03 * h;
   const dx = (w + 0.06 * h) / Q;
 
@@ -266,30 +261,6 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
       a: Math.min(0.92, (0.62 - 0.34 * ridge.t) * hazeK) * ridge.fade,
     };
   });
-
-  // Extra ranges into the gaps, far gap first; then all in paint order.
-  if (m) {
-    const own = ridges.slice();
-    const depth = rd => d / Math.max(1e-3, rd.base - c);
-    for (let j = 0; j < m; j++) {
-      const a = own[j];
-      const n = own[j + 1];
-      const noise = count + j;
-      const base = c + d / Math.sqrt(depth(a) * depth(n));
-      const L = EXTRA_LOW * Math.sqrt(a.L * n.L);
-      const t = (a.t + n.t) / 2;
-      const fade = Math.max(0, Math.min(1, more - j));
-      const at = ridges.indexOf(n);
-      ridges.splice(at, 0, { x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t, fade, noise, extra: true });
-      veils.splice(at, 0, {
-        cx: (noise % 2 === 0 ? 0.32 : 0.68) * w + Math.sin(noise * 2.1) * 0.06 * w,
-        cy: base,
-        rx: 0.62 * Math.max(w, U),
-        ry: Math.max(0.05 * h, (base - a.base) * 0.6),
-        a: Math.min(0.92, (0.62 - 0.34 * t) * hazeK) * fade,
-      });
-    }
-  }
 
   // The descent's world ranges (camera.js DESCENT.ranges): ridges placed by
   // depth `z` (the frame's foot = 1) and world height (`height` × h at depth

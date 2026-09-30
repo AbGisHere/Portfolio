@@ -17,7 +17,7 @@
  * height is scaled onto the new foot, as `sampleCrest` does with `cam`.
  *
  * Rows are by a ridge's `noise` index (mistGeometry.js `layout`), not its
- * paint order, so the descent's extra ranges can slot in between without a
+ * paint order, so the descent's world ranges can slot in between without a
  * recipe ridge's maths changing at all; the scene shader looks each ridge's
  * row up (uCrestRow).
  */

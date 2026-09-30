@@ -19,13 +19,14 @@
   inset: 0;
 }
 
-/* The sky: taller than the frame, so the descent can slide it up. */
+/* The sky's ramp over the frame's height, which the descent stretches and
+   slides (a transform); its last colour fills the frame below it. */
 .sky {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  background-repeat: no-repeat;
+  transform-origin: 0 0;
   will-change: transform;
 }
 
@@ -39,6 +40,7 @@
 
 .glow,
 .disc,
+.wash,
 .ridge,
 .veil,
 .air,
@@ -48,6 +50,12 @@
   left: 0;
 }
 
+/* The sun and moon: moved on the compositor. */
+.glow,
+.disc {
+  will-change: transform;
+}
+
 .disc {
   border-radius: 50%;
   /* The moon's face multiplies into its colour, as in the GL shader. */
@@ -55,7 +63,25 @@
   background-blend-mode: multiply;
 }
 
+/* A ridge's parts: each its own layer, so a mask is applied on the
+   compositor, and one part's repaint never redraws the others. */
 .ridge {
+  will-change: transform;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+/* A ridge's light at full strength (camera.js ridgeLightAt), faded in across
+   its column by a fixed mask (LayeredScene.jsx BEAM), which the transform
+   places and sizes. */
+.beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 600px;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
   mask-repeat: no-repeat;
   -webkit-mask-repeat: no-repeat;
 }
@@ -69,6 +95,13 @@
 .air,
 .meadow {
   width: 100%;
+}
+
+/* A setting sun's wash and spill: a solid colour under a Gaussian (0.2.6). */
+.wash {
+  will-change: transform;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
 }
 
 .grain {

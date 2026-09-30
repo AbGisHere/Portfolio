@@ -1,7 +1,7 @@
-import { mix, ridgeBlur, ridgeColour, rimOpacity } from './gl/mistGeometry';
+import { mix, rgb01, ridgeBlur, ridgeColour, rimOpacity } from './gl/mistGeometry';
 import { ease } from './orbit';
 import { paletteAt } from './skyKeys';
-import { MOONSET, SET_COLOUR, SET_HALO, SET_MIX } from './sunLook';
+import { MOONSET, RIDGE_LIGHT, SET_COLOUR, SET_HALO, SET_MIX } from './sunLook';
 
 /**
  * The descent's camera over the mountains (the 0.2 stretch, ROADMAP.md "The
@@ -31,16 +31,10 @@ import { MOONSET, SET_COLOUR, SET_HALO, SET_MIX } from './sunLook';
  * So ridge b maps (x, y) → (w/2 + (x − w/2)·s_b, foot_b + (y − base_b)·s_b),
  * with foot_b = c − tilt·h + (1 + rise)·s_b·(base_b − c): one scale and one
  * translate per ridge, its veil included. Below the front ridge's foot is the
- * meadow (`groundPaint`). As the view opens, `more` ranges join in the gaps
- * between the recipe's (layout's `extra`), fading in. At `about` = 0 every
- * function here is the identity.
+ * meadow (`groundPaint`). As the view opens, world ranges come in by
+ * geometry (DESCENT below). At `about` = 0 every function here is the
+ * identity.
  */
-
-/** How far the camera goes by `about` = 1, and `more`: how many ranges
- * join behind the far one as the view opens (mistGeometry.js `layout`'s
- * `extra`, capped at MAX_RANGES in all; they fade in, never pop). A recipe
- * can override any of these under `scroll.camera`. */
-export const CAMERA = { back: 0.35, tilt: 0.26, rise: 0.75, more: 4 };
 
 /** Under reduced motion the camera goes this share of the way. The time of
  * day (palette, sun and moon) still runs in full. */
@@ -64,31 +58,13 @@ export const WIND = { amp: 0.06, bands: 24, speed: 0.2 };
 
 const clamp01 = x => Math.min(1, Math.max(0, x));
 
-/** The recipe's camera amounts, full. */
-export const cameraOf = recipe => ({ ...CAMERA, ...recipe?.scroll?.camera });
+export const cameraAtRest = cam => !cam || (cam.back === 0 && cam.tilt === 0 && cam.rise === 0);
 
 /**
- * The camera at `about`: { back, tilt, rise, more, k }, eased in and out so
- * the move starts and lands gently. Mid-switch, `from` and the switch's
- * progress `e` blend in the outgoing recipe's amounts.
- */
-export function cameraAt(about, recipe, { reduced = false, from = null, e = 1 } = {}) {
-  const k = ease(about) * (reduced ? REDUCED_CAMERA : 1);
-  const a = cameraOf(recipe);
-  const b = from ? cameraOf(from) : a;
-  const at = key => (b[key] + (a[key] - b[key]) * e) * k;
-  // `k`: how far along the camera is (0 … 1, or REDUCED_CAMERA at most).
-  return { back: at('back'), tilt: at('tilt'), rise: at('rise'), more: at('more'), k };
-}
-
-export const cameraAtRest = cam => !cam || (cam.back === 0 && cam.tilt === 0 && cam.rise === 0 && !cam.more);
-
-/**
- * The 0.2.1 descent (GL; the layered fallback still runs the 0.2.0 camera
- * above until it's ported). The same world model, taken literally: every
- * ridge is fixed terrain at depth z with a fixed silhouette, and the camera
- * only pulls back, climbs and tilts, so a ridge only moves and scales
- * (uniformly: its proportions hold). Nothing fades in. Instead:
+ * The 0.2.1 descent (both renderers). The same world model, taken
+ * literally: every ridge is fixed terrain at depth z with a fixed silhouette,
+ * and the camera only pulls back, climbs and tilts, so a ridge only moves
+ * and scales (uniformly: its proportions hold). Nothing fades in. Instead:
  *
  * - **The conveyor.** Pulling back slides every ridge up the frame and
  *   smaller: the front ridge ends about where the second was, and so on down
@@ -127,8 +103,12 @@ export const DESCENT = {
 /** The recipe's 0.2.1 descent amounts (`scroll.descent` overrides). */
 export const descentOf = recipe => ({ ...DESCENT, ...recipe?.scroll?.descent });
 
-/** The camera at `about` for the 0.2.1 descent: { back, tilt, rise, k,
- * ranges }, blended mid-switch like `cameraAt`. */
+/**
+ * The camera at `about`: { back, tilt, rise, k, ranges }, eased in and out
+ * so the move starts and lands gently. `k` is how far along it is (0 … 1, or
+ * REDUCED_CAMERA at most). Mid-switch, `from` and the switch's progress `e`
+ * blend in the outgoing recipe's amounts.
+ */
 export function descentAt(about, recipe, { reduced = false, from = null, e = 1 } = {}) {
   const k = ease(about) * (reduced ? REDUCED_CAMERA : 1);
   const a = descentOf(recipe);
@@ -138,7 +118,6 @@ export function descentAt(about, recipe, { reduced = false, from = null, e = 1 }
     back: at('back') * k,
     tilt: at('tilt') * k,
     rise: at('rise') * k,
-    more: 0,
     k,
     ranges: k > 0 ? a.ranges : null,
   };
@@ -318,14 +297,6 @@ export const DRIFT_GAIN_MAX = 2.5;
 /** Each ridge's drift gain in `frame` (paint order), or null at rest. */
 export const driftGains = frame => (frame.rest ? null : frame.ridges.map(rc => rc.g ?? 1));
 
-/** The smallest scale each ridge reaches over the whole stretch (about = 1,
- * full camera): what the crest noise's range (the hash table) must cover. */
-export function widestScales(scene, h, recipes) {
-  return scene.ridges.map(rd =>
-    Math.min(1, ...recipes.map(r => ridgeScales([rd], scene.horizon, h, cameraAt(1, r))[0])),
-  );
-}
-
 /** A veil ({ cx, cy, rx, ry, a }) moved with its ridge; `amp` (its drift) scales too. */
 export function veilAt(v, ridge, rc, w) {
   if (rc.s === 1 && rc.foot === ridge.base) return v;
@@ -494,4 +465,51 @@ export function airAt(y, frame, h, airA) {
   const top = frame.front - 0.14 * h;
   if (y <= frame.front) return y > top ? ((y - top) / (0.14 * h)) * airA : 0;
   return airA * (1 - (y - frame.front) / Math.max(1, h - frame.front));
+}
+
+/**
+ * The body's light on the ridges (sunLook.js RIDGE_LIGHT), for both
+ * renderers: warm crest light, strongest in the body's column, over a cool
+ * shadow below. (0.2.5) Softer at rest (`rest`), all of it once the body has
+ * set. Mid-switch (0.2.3) it goes down with the outgoing body over the first
+ * half and comes up with the incoming one over the second, so it's gone at
+ * the handover and never jumps.
+ *
+ * `lit` are the painted bodies, `orbit` the switch (or null), `stops` this
+ * frame's palette, `M` its mist colour and `ts` each ridge's `t` (its slot
+ * past the top). Returns `st` (0: no light at all) and, when lit: `la` per
+ * ridge (the light's strength), `sh` (the shadow's), `col` (the light's
+ * colour, hex), `shade` (the shadow's tint, 0…1, max channel 1), the body's
+ * `x`, the light's `spread` and `depth` (px) and `base`; and always `mist`,
+ * the veils' and air's colour (hex), glowing with the light.
+ */
+export function ridgeLightAt({ lit, orbit, stops, M, ts, w, h }) {
+  const handover = orbit?.scene ? (orbit.e < 0.5 ? 1 - ease(orbit.e * 2) : ease(orbit.e * 2 - 1)) : 1;
+  const body = orbit?.scene ? lit[orbit.e < 0.5 ? 0 : 1] : lit[0];
+  const L = RIDGE_LIGHT;
+  const low = body?.set ?? 0;
+  const toSet = (atRest, full = 1) => atRest + (full - atRest) * low;
+  const moonLit = body?.face === 1;
+  const moonK = moonLit ? toSet(L.rest.moon, L.moon) : 1;
+  const st = body ? toSet(L.rest.a) * handover * moonK : 0;
+  if (!(st > 0)) return { st: 0, mist: M };
+  const sh = toSet(L.rest.shade) * handover * moonK;
+  // The sun's light warms from its own colour toward the setting one.
+  const glowCol = moonLit ? body.col : mix(body.col, SET_COLOUR, toSet(L.rest.warm));
+  const tint = rgb01(stops[0]);
+  const top = Math.max(1e-3, ...tint);
+  return {
+    st,
+    la: ts.map(t => st * L.a * (1 + L.far * Math.min(1, Math.max(0, -t + 0.3)))),
+    sh: sh * L.shade,
+    col: mix(glowCol, M, L.mix),
+    shade: tint.map(c => c / top),
+    x: body.x,
+    spread: L.spread * w,
+    depth: L.depth * h,
+    base: L.base,
+    // The veils and air: the haze, glowing with the body's light (more as
+    // it sets), so the gaps between the ranges glow softly.
+    mist: mix(M, glowCol, L.veil * st),
+  };
 }

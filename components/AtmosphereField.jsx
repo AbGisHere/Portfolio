@@ -62,6 +62,8 @@ export default function AtmosphereField({ className = '' }) {
   const { theme } = useTheme();
   const { recipe } = themes[theme];
   // Decided after mount (it needs the browser); the CSS backdrop covers the gap.
+  // Once only: a browser's WebGL support doesn't change mid-visit, and a lost
+  // context is handled on its own below.
   const [renderer, setRenderer] = useState(null);
   useEffect(() => setRenderer(pickRenderer()), []);
   // WebGL failed. If the context was lost (a GPU reset, a backgrounded tab),

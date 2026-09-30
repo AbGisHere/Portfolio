@@ -11,9 +11,9 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), then `0.2.6` the fallback catches up. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up (done), `0.2.7` the switch cut fix (next), then `0.2.8` the audit's clean-up. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
-| `0.4.x` | Contact / reach out. |
+| `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
 | `1.0.0` | Ship, once "Before 1.0.0" below is clear. |
@@ -81,6 +81,19 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       JS. `three` is already gone. Since `0.2.0`, Lenis loads in its own chunk
       when the browser is idle (the scroll layer added ~1.4 KB gzip to
       first-load JS); GSAP ships nowhere, as only the unused primitives import it.
+- [ ] **A notice for the fallback renderer.** A small, kind, playful note
+      for visitors who are on the layered fallback for good. Spec in "Later —
+      a notice for the fallback renderer" below.
+- [ ] **Unit tests for the pure maths** (a small side task, any `0.x`). Only
+      `adaptiveQuality.js` is tested today (`npm run test:adaptive`, run in
+      CI). Next: round trips for `hexToLms`/`lmsToHex` (`skyRamp.js`) and
+      `paletteAt` hitting every keyframe exactly with no overshoot
+      (`skyKeys.js`), then `descentAt`/`frameAt`/`bodyAt` (`camera.js`) at
+      `about` 0 (the identity) and 1. The sky and every palette flow through
+      them, and a regression there is subtle on screen. Suggested by a Jules
+      pass (2026-09-30); its other suggestions were declined: `SmoothScroll`
+      re-queries the track on purpose (it persists across routes), and the
+      grain loops run once per load.
 
 ## Trust, privacy and accessibility
 
@@ -88,7 +101,7 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
 version line where it starts to matter, and all of it is part of the `1.0.0`
 gate. Standing rules apply from now on.
 
-**Today** (`0.2.5`) the site collects nothing. It has no analytics, forms,
+**Today** (`0.2.6`) the site collects nothing. It has no analytics, forms,
 accounts or cookies, and it makes no third-party requests at runtime
 (`next/font` self-hosts the fonts at build). The one thing stored is the
 theme choice in `localStorage` (`abg-theme`), a preference the visitor sets
@@ -390,18 +403,112 @@ light is soft enough that scroll-0 parity still passes (14/14), so the
 expected scroll-0 failure didn't happen. Cost: about +0–.5 ms GPU at rest
 at 1728×1117@2, inside the noise (CLAUDE.md, "GL cost").
 
-**`0.2.6`: the fallback catches up.** The layered renderer takes on
-`0.2.1`–`0.2.3` and `0.2.5` (the conveyor, the look, the ridge light), and all 42 parity
-cases pass.
+**Shipped in `0.2.6`: the fallback catches up.** The layered renderer
+takes on `0.2.1`–`0.2.3` and `0.2.5`, and all 42 parity cases pass (was
+14/42). Details in `CLAUDE.md`, "Layered (fallback)":
+- **The camera.** `descentAt`/`frameAt` and `layout`'s `ranges` replace
+  `CAMERA`/`cameraAt` and `extra`: the conveyor, with the world ranges
+  rising into place by geometry. Masks are built once for all nine ridges
+  over their widest span, never while scrolling. Also ported: the sky
+  redraw (`skyAt`), `scrollHaze`, the painted colours
+  (`descentPaint`/`blendPaint`), the far-range haze steps, the thinner
+  veils and air, and the `hiddenAt` line. Removed: `CAMERA`, `cameraOf`,
+  `cameraAt`, `widestScales`, `extra` (`MAX_RANGES`, `EXTRA_LOW`), the
+  `scroll.camera` recipe field and `descentAt`'s `more`; and the unused
+  `LAYERS` import in `MistCanvas.jsx`.
+- **The ridge light**, at rest and scrolled, from one shared pure
+  `ridgeLightAt` in `camera.js` that GL now uses too (identical to its old
+  inline code over 200,000 random cases). Each ridge gets a glow mask baked
+  in ridge space, screened over the fill (`background-blend-mode`, no
+  backdrop reads); the cool shade folds into the fill's gradient; the
+  light's column is one fixed mask moved by a transform. 27 masks at load
+  (was 18).
+- **The setting sun and moon**, from shared helpers in `sunLook.js`: halo
+  shape, setting disc, bloom, and the horizon wash over the sky, rims and
+  crests. The moon glow is the smoothstep in both renderers.
+- **Scroll cost.** The ridge light first cut the fallback's scroll at
+  1440×900@2 from about 100 to 57 fps. Fixed by putting whatever moves on
+  its own transformed layer, cropping ridges hidden behind an opaque nearer
+  one, and staggering colour repaints while scrolling (each layer's colour
+  at most `STAGGER_MS`, 30 ms, old; one full paint when it settles).
+- **Results** (prod, headless M4, against a `0.2.5` build the same day):
+  parity 42/42, worst mean 1.06, p99 10; the hit target within .02 px
+  everywhere (the painted suns were 3–29 px apart at `about` .5 and 1).
+  Layered scroll sweeps 118.8–119.7 fps, p95 8.5 ms, none over 20 ms (was
+  111–119, 0–5 over); switches 116–120 fps (was 119–120), 1.7–1.75 s main
+  thread over four (was 1.3–1.6); idle 54–80 ms/s (was 40–77). GL's path
+  is unchanged apart from the shared helper, which is pixel-identical.
+
+**`0.2.7`: the switch cut** (agreed 2026-09-30, next).
+
+- **Fix: the mountains cut on a switch in the layered renderer.** The user
+  saw it both ways (day → night and night → day), at the top of the page and
+  scrolled down: the mountains suddenly look different, like a cut rather
+  than part of the sky turning. **Likely cause, unverified:** the fallback
+  keeps one silhouette through a switch, but the theme change hands the
+  scene a new recipe, and the masks may be rebuilt from its shape, so the
+  ridges swap at once. Measure it first, with frame-by-frame captures of a
+  switch at scroll 0 and 1 in both renderers. Fix it so nothing about the
+  ridges jumps, then add the capture to the harness so it can't come back.
+  Also check GL scrolled down: its switch reshapes the ridges on purpose,
+  and the distant ranges' drift gains may make that read as a cut there too.
+
+**`0.2.8`: the audit's clean-up** (agreed 2026-09-30, after `0.2.7`;
+built, but pushed only once the user has reviewed the changes).
+
+- **The repo audit** (2026-09-30), the low-risk half:
+  - **Remove:**
+    - the unused GSAP primitives (`SplitText`, `Reveal`, `MagneticCard`)
+      and `gsap` itself;
+    - the `npm test` script, which has no specs and fails;
+    - the recipes' dead studio fields (`blur`, `fieldBlur`, `startT` and
+      the like);
+    - the callerless `airAt` and `bodyDrop` (`camera.js`);
+    - the unused `--line` token and `h2, h3` rules (`globals.css`), and the
+      unread `id`/`label` (`themes.js`);
+    - the stale comments (the SVG fallback, `SEED_CYCLE`).
+  - **Merge the duplicates:**
+    - one colour module for the oklab maths (`mistGeometry.js` and
+      `skyRamp.js`) and the RGB and hex helpers;
+    - one sky-colour lookup that takes the ramp, instead of two functions
+      named `skyAt`;
+    - shared `MAX_DPR`, `GRAIN_SIZE` and grain;
+    - one static sky for `ErrorScreen` and `AtmosphereField`.
+  - **Shared frame maths:** a pure `sceneAt()` for the chain both renderers
+    run every frame, from `descentAt` to `groundPaint`, unit-tested. Parity
+    has to hold.
+  - **Fonts:** drop the weight lists on the two variable fonts. Consider
+    not preloading them until the page shows text (81 KB today).
+  - **Share cards:** drop `twitter-image.jpg`, a byte-identical copy of the
+    OG image.
+  - **Docs:**
+    - move the release history and measurements out of CLAUDE.md
+      (48.7 KB, about 71% of it "The atmosphere") and out of ROADMAP's
+      "Shipped in 0.2.x" into one changelog;
+    - keep the parity state, the hook table and the version table in
+      one place each;
+    - fix the stale claims: the `next build` route sizes (Next 16 no longer
+      prints them), WebKit coverage (the scripts launch only Chromium), the
+      `fieldBlur` row, and the "(once built)" items that are done.
+- **Owner decisions the audit raised** (not taken in `0.2.8`; the user
+  decides):
+  - Should the fallback keep full pixel parity under the camera, or only at
+    rest and during a switch? Decide before `0.3`.
+  - `.impeccable/surfaces/home.md` is cited as the visual contract but is
+    gitignored and last revised at `0.1.7`: un-ignore it and update it, or
+    drop the references.
+  - `.claude/agents/impeccable-*` is committed but its skill is gitignored:
+    commit both or neither.
+  - Is the "admin surface" open task still wanted?
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
-starts. **State at `0.2.5`** (unchanged since `0.2.3`; `0.2.4` and `0.2.5` are GL-only): the fallback still runs the `0.2.0` camera
-(`CAMERA`/`cameraAt`, ranges fading into gaps) and ignores `0.2.2`'s look,
-`0.2.3`'s `hidden` line and `0.2.5`'s resting light; it shares the hit target and the switch's look
-weight. Parity passes at scroll 0 (14/14; day worst mean .77, night 1.81,
-p99 7, from the GL-only moon glow and resting light) and fails at .5 and 1 (day mean 17–29, night 11–17),
-as expected. The hit-target check passes at every scroll. `0.2.6` closes it.
+starts. **Met at `0.2.6`:** the fallback runs the `0.2.1` descent with
+`0.2.2`'s look, `0.2.3`'s `hidden` line and `0.2.5`'s resting light, and
+parity passes all 42 cases (worst mean 1.06, p99 10), with the hit target
+within .02 px at every scroll. Accepted differences: no idle drift or
+reshaping in the fallback, no wind, and its colours up to 30 ms behind
+mid-scroll.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
@@ -511,6 +618,60 @@ front needs real geometry.
 - **Parity:** `?scroll=` pins the progress, and `npm run parity` compares
   the renderers at the top, middle and end of the `0.2` stretch
   (`--scrolls`). Extend both to the `0.3` stretch.
+
+### Authoring in Spline, and a desk that's alive
+
+[2026-09-30: user decision.] **The desk objects are modelled in
+[Spline](https://spline.design).** It's the design tool, not the runtime:
+Spline's own embed would be a second WebGL engine (several hundred KB, its
+own camera and light, no fallback, scene files from its servers), so it's
+ruled out on the same grounds as three.js. The user models and dresses the
+scene in Spline. It exports glTF, which the mesh pass above draws in our
+own context, under our camera and light.
+
+**Handover from Spline:**
+- **glTF per object, in one scene file.** Every part that moves on its own
+  is its own node, with its pivot where it turns: the lid's hinge, the
+  pencil, the clock's hands, the lamp head.
+- **Lamp on and lamp off,** as two light setups on the same geometry. They
+  feed the two lightmaps: day, and night with the lamp's pool. Check
+  whether Spline can bake lightmaps; if not, bake them in Blender from the
+  same glTF.
+- **Reference renders** from the top-down hold and the final shot, to
+  check the result against by eye.
+- **Budget:** keep the whole scene within the asset budget above (under
+  about 1–1.5 MB), with low-poly models and detail in the textures.
+
+**The desk is alive.** Small things move on their own, so it never reads as
+a still image. **Nothing repeats on a schedule.** Each effect waits a random
+interval (a Poisson-like spacing, never a fixed period) and plays at a
+random speed and strength, from a noise curve rather than a loop. No two
+visits, and no two minutes, look the same. Rare beats constant: an effect
+every so often feels real, and a tight loop reads as a GIF.
+
+| Effect | How |
+|---|---|
+| **Pencil** | Every so often it rolls a little, or settles after a nudge. It's a rotation of its own mesh about its long axis, with a slight slide, easing to rest, and its shadow follows. |
+| **Lamp flicker** | Night only (the lamp is on). The light is mostly steady, with an occasional stutter: a few fast dips in the lamp's lightmap weight. The pool on the desk flickers with the bulb, since it's the same light. |
+| **Sparks** from the extension box | A rare, short burst: a few bright streaks with gravity, fading within about 300 ms, as particles in the shader. Each burst flashes the nearby surfaces for a frame or two. |
+| **Grass** | Sways in gusts: noise-driven, strongest at the tips and still at the roots, varying in strength and direction. It extends `0.2`'s meadow wind (`WIND`). |
+| **Desk clock** | Seen from above. It shows the visitor's real local time, read from the device clock (no data leaves the browser). The face is readable from the top-down hold. The hands are their own meshes, rotated in code; the seconds hand ticks. |
+
+Rules for all of them:
+- **One clock, one budget.** They run on the renderer's existing rest tick
+  (30 Hz, `IDLE_HZ`) and pause when the scene is off screen or the tab is
+  hidden. Everything scales with adaptive quality.
+- **Reduced motion:** all of it holds still. The clock still shows the right
+  time, updated once a minute. **No flicker or sparks at all**: flashing
+  light is an accessibility issue, not a matter of taste.
+- **The fallback** gets a lighter version: the pencil and the grass as CSS
+  transforms, the flicker as the lamp layer's opacity, and the clock hands
+  as rotated layers. Sparks are GL-only.
+- **Parity** compares the renderers with every effect held at rest
+  (`?freeze=1`, as the veils are today), with the clock pinned to a fixed
+  time.
+- **The lamp stays a theme toggle** (above): a flicker never changes the
+  theme. Sparks and flickers don't fire during a switch.
 
 ### Loading
 
@@ -640,7 +801,8 @@ Known catches:
 - The AbG mark on the lid, and where the about text sits in `0.2`.
 - The form of the project tiles (play-cards, widgets, icons) and the
   background they sit on.
-- Where the resume, dev log and contact live relative to the device.
+- Where the resume and dev log live relative to the device. Contact comes
+  after the desk, at the pool (`0.4`).
 
 ### First steps, when it's picked up
 
@@ -652,10 +814,118 @@ Known catches:
 3. Source or model the desk assets, bake the day and night lightmaps, and
    check them against the asset budget.
 
+## 0.4 — contact: the house and the pool
+
+**Status:** idea, 2026-09-30 (user). Not started; `0.3` comes first. The
+camera carries on from the desk, turns round to a house on the hill that
+looks out at the mountains, and comes down over a pool on its balcony. The
+person from the desk walks up to the house as the camera turns, and is
+stepping into the water when the pool comes into view. The contact form
+sits over the pool.
+
+### The camera path, continued
+
+It uses the same YZ plane and the same conventions as "The camera path"
+above: the mountains are at −Z and the camera never rolls.
+
+```
+                        ④ pool (balcony), top view   arc 4: faces inward,
+                              ^                      pitches down onto the pool
+                             /
+   mountains       [cam 3] ─╯ ...arc 3 ... [cam 4] ──> house on the hill
+   (−Z)          laptop hold    faces outward,   faces +Z: 180° from the
+                                turns 180°       start of the descent
+```
+
+- **Arc 3 (the bottom-right quarter).** From the desk the camera sweeps
+  round, facing outward, and turns **180°**. It ends facing +Z, away from
+  the mountains, toward **the house on the hill**, which faces the hills
+  and so looks straight back at the camera. The world is one place: a house
+  looking out over its meadow at the mountains, with the desk in the garden
+  between them.
+- **Arc 4 (the top-left quarter).** The camera turns inward and pans up and
+  over, onto **the pool on the house's balcony**, and ends looking straight
+  down at it. That top view is the contact hold.
+- The rules of the descent carry on: one spline, holds at the ends, the
+  camera a pure function of scroll, the scene's day or night and sky palette
+  all the way. With the camera facing +Z the mountains are behind it, so the
+  sky over the house is the far side of the same sky.
+- **Arc 3 starts looking down at the desk** (user decision, 2026-09-30).
+  `0.3` ends at cam 3, facing the laptop's screen (−Z), so `0.4` first
+  rises back to a top-down view of the desk: the chair pushed back, where
+  the person sat (below). Only then does it sweep round. Tune the rise with
+  the `0.3` camera prototype.
+
+### The story: the person walks up to the pool
+
+- **During arc 3** the person from the desk is seen from a distance walking
+  up the path to the house, putting on a robe on the way (or carrying a
+  towel: the details are open). **During arc 4** they reach the balcony. By
+  the time the pool's top view opens, they're stepping in, or almost in.
+- **The walk is scrubbed by scroll,** like the camera. Their place on the
+  path is a pure function of progress, so scrolling back walks them back.
+  They turn to face the way they're moving, so they never walk backwards.
+- **Once the pool hold is reached, time takes over.** The entry plays out
+  (the robe dropped, into the water), and then the swim runs on its own
+  clock.
+- **The person is at the desk only by implication** (user decision,
+  2026-09-30). The desk holds and the top-down shot that opens arc 3 look at
+  an empty chair, pushed back, perhaps with a mug still steaming, so the
+  visitor pictures who just sat there. The first time the person appears is
+  walking away as arc 3 sweeps round. Showing them seated would put a
+  character in every `0.3` shot.
+- **Deliberately not a likeness.** The swimmer stands for the user, but
+  stays stylised, small in the frame and without a detailed face. PRODUCT.md's
+  evidence rules still apply to any text around them.
+
+### The pool
+
+- **Water:** a GPU height-field simulation (the classic WebGL water
+  technique), around 256² cells. The pool floor is refracted through the
+  surface, with caustics on the tiles, all seen from above. It runs in the
+  same WebGL2 context, only while the pool is on screen.
+- **Mouse and touch make ripples.** Each pointer move drops a small splash
+  into the height field; the ripples spread, bounce off the walls and fade.
+  The swimmer disturbs the same water.
+- **The swimmer is alive, at random.** A small set of moods (laps, a lazy
+  float, treading water, resting at the wall, the odd dive), each for a
+  random time at a random pace, as with the desk's effects. No fixed
+  schedule and no visible loop. Some play with the visitor is welcome: they
+  notice the cursor, drift over, or dive away from a lot of splashing.
+- **The sky carries over:** the water reflects the scene's palette (warm at
+  dusk, moonlit at night, perhaps with underwater pool lights at night), and
+  the day/night toggle still works here.
+- **The contact form stays plain HTML over the scene,** keyboard- and
+  screen-reader-friendly. The pool is the backdrop, never the interface.
+  Form consent and the privacy route come from "Trust, privacy and
+  accessibility".
+
+### Assets and cost
+
+- **The house** is only ever seen from a distance, facing the camera. It can
+  be painted like the ridges (a lit silhouette, with windows lit at night)
+  rather than modelled, which is nearly free.
+- **The character** is the one heavy asset: a low-poly, rigged, stylised
+  figure with a walk, a robe, the entry into the water and the swim moods.
+  Mixamo (free rigs and animations) and Spline or Blender for the look,
+  exported as glTF. The renderer gains GPU skinning in the vertex shader (a
+  few KB of our own code). Budget about 1–2 MB for the character and its
+  animations, loaded while the desk is on screen.
+- **The pool** is mostly code (the simulation, refraction, caustics) plus
+  tile textures, so it's small.
+- **Reduced motion:** the camera moves as it does elsewhere (reduced), the
+  person is placed along the path with no walk cycle, and the water is
+  still, with the swimmer resting. Pointer ripples are off.
+- **The layered fallback:** stills for the house and the path, with the
+  person placed as a sprite, and the pool as a painted layer with slow CSS
+  caustics. No simulation and no pointer ripples. Parity compares the
+  renderers with the water and the swimmer frozen.
+
 ## Later — a notice for the fallback renderer
 
-**Status:** agreed in discussion 2026-09-24, deferred until the site is
-built.
+**Status:** agreed in discussion 2026-09-24. Built after the content
+layers, but **required before `1.0.0`** (user, 2026-09-30; it's on the
+"Before 1.0.0" list).
 
 A small note in a bottom corner telling visitors on the layered fallback that
 they're seeing the lighter renderer. The fallback matches WebGL at rest, but
@@ -664,9 +934,11 @@ the ridges don't breathe or reshape, and the desk shows as stills.
 - **Only for a lasting fallback:** no WebGL2, a shader that failed to build,
   or all 3 lost-context retries used. Never during a lost-context recovery,
   or it would flash for 2 seconds.
-- **A fact, not a warning.** For example: "Lighter renderer: WebGL2 isn't
-  available, so the ridges hold still." Never "error" or "your browser is
-  outdated". Many of these visitors turned WebGL off on purpose (Safari
+- **A fact, told kindly, with a light touch.** Playful is welcome
+  (user, 2026-09-30): for example "You're seeing the hand-painted version:
+  the mountains are holding still for you." The fact still has to come
+  through: this is the lighter renderer, and why. Never "error", "upgrade"
+  or "your browser is outdated". Many of these visitors turned WebGL off on purpose (Safari
   Lockdown Mode, Tor, Firefox `resistFingerprinting`, some Brave settings).
 - **Dismissible and remembered** (`localStorage`, wrapped in try/catch).
   Shown at most once per session. It lives in `AtmosphereField`, which

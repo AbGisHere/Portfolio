@@ -56,7 +56,8 @@ export const SQUASH = 0.16;
  * (0.2.2) Setting under the descent (camera.js bodyAt), by `low`, how far the
  * body has set (0 at rest … 1 at the end of the stretch). None of it applies
  * at rest (the shader takes the resting path exactly), so the resting look
- * above is unchanged. GL only for now; the layered fallback gets it in 0.2.6.
+ * above is unchanged. The layered fallback builds it from the helpers at the
+ * end of this file.
  *
  * The setting sun is built in layers, so it reads as light, not a sticker:
  * - its colour leans toward a gold SET_COLOUR by SET_MIX (never toward the
@@ -108,3 +109,58 @@ export const MOONSET = { colour: '#E8A868', mix: 0.6, dim: 0.04, wide: 0.25, fla
  * softly. The moon's is `moon` × as strong, in its own pale light.
  */
 export const RIDGE_LIGHT = { rest: { a: 0.4, shade: 0.15, warm: 0.5, moon: 0.7 }, a: 0.3, mix: 0.3, spread: 0.25, base: 0.05, depth: 0.022, far: 0.3, shade: 0.3, veil: 0.25, moon: 0.35 };
+
+// ---- the setting look as data for the layered fallback (0.2.6). Each
+// mirrors a line of mistShader.js, which evaluates the same maths per pixel.
+// Colours come back as 0–255 float RGB, mixed in gamma-encoded RGB like the
+// shader's mix().
+
+const rgbOf = c => (typeof c === 'string' ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : c);
+export const mixRGB = (a, b, t) => {
+  const A = rgbOf(a);
+  const B = rgbOf(b);
+  return A.map((v, i) => v + (B[i] - v) * t);
+};
+
+/** [share of the extent, Gaussian] stops, exp(−u²) for u over 0…ext. */
+export const gaussStops = (n, ext) =>
+  Array.from({ length: n }, (_, k) => {
+    const u = (ext * k) / (n - 1);
+    return [k / (n - 1), Math.exp(-u * u)];
+  });
+
+/** The moon's glow to 3.4r, .4 × (1 − smoothstep): [share of 3.4r, opacity]. */
+export const MOON_GLOW = Array.from({ length: 17 }, (_, k) => {
+  const t = k / 16;
+  return [t, 0.4 * (1 - t * t * (3 - 2 * t))];
+});
+
+/** A setting sun's disc (shader: `core`, `edge`), from its colour `bc` and `set`. */
+export const setDisc = (bc, st) => ({
+  core: mixRGB(bc, DISC_WHITE, DISC_LIFT + (SET_CORE - DISC_LIFT) * st),
+  edge: mixRGB(bc, DISC_WHITE, DISC_LIFT + (SET_LIFT - DISC_LIFT) * st),
+});
+
+/**
+ * The horizon wash (shader: `washA`, `washCol`): the last sun with `set` > 0
+ * wins, as the shader's loop. Its opacity at a point is `peak` × exp(−u²),
+ * u = (p − (x, y)) / (rx, ry). None (null) at rest.
+ */
+export function sunWash(bodies) {
+  const b = bodies.filter(b => b && !b.face && b.set > 0).at(-1);
+  if (!b) return null;
+  return {
+    x: b.x,
+    y: b.y,
+    rx: b.r * SET_WASH.wide,
+    ry: b.r * SET_WASH.tall,
+    peak: SET_WASH.a * b.set * b.alpha,
+    col: mixRGB(b.col, DISC_WHITE, SET_WASH.lift),
+  };
+}
+
+/** A rim's colour and opacity under `washA` of the wash (shader: `rimCol`, `rimA`). */
+export const rimWash = (rim, rimA, washA, col) => ({
+  col: mixRGB(rim, col, Math.min(1, (washA * SET_WASH.rim) / SET_WASH.a)),
+  a: Math.min(1, rimA + (washA * SET_WASH.rimA) / SET_WASH.a),
+});
