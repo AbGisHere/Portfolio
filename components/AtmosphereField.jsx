@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeProvider';
 import SunToggle from './SunToggle';
 import themes from './gradient/themes';
-import { skyGradient } from './gradient/sky';
+import { SKY_VARS } from './gradient/sky';
 import styles from './AtmosphereField.module.css';
 
 // Two renderers for the same recipe, both browser-only and kept out of the
@@ -37,15 +37,6 @@ function pickRenderer() {
   return hasWebGL2() ? 'gl' : 'layers';
 }
 
-// Painted behind the renderer: what shows before its chunk arrives, and in any
-// frame it drops, instead of the page's near-black. Both skies are handed to
-// CSS so the right one is up before hydration (see the theme script in
-// app/layout.jsx).
-const BACKDROP = {
-  '--sky-day': skyGradient(themes.day.recipe),
-  '--sky-night': skyGradient(themes.night.recipe),
-};
-
 /**
  * One scene, one clock. Switching theme hands the renderer a new recipe and
  * the sky turns to it (components/gradient/orbit.js): the sun and moon cross
@@ -58,7 +49,7 @@ const BACKDROP = {
  * arrived in a late rush. Interpolating the stops instead is symmetric by
  * construction, and it's the same animation the ridges are already on.
  */
-export default function AtmosphereField({ className = '' }) {
+export default function AtmosphereField() {
   const { theme } = useTheme();
   const { recipe } = themes[theme];
   // Decided after mount (it needs the browser); the CSS backdrop covers the gap.
@@ -81,10 +72,10 @@ export default function AtmosphereField({ className = '' }) {
   useEffect(() => () => clearTimeout(retry.current), []);
 
   return (
-    <div
-      className={`${styles.field} ${className}`}
-      style={BACKDROP}
-    >
+    // The backdrop (SKY_VARS) is painted behind the renderer: what shows
+    // before its chunk arrives, and in any frame it drops, instead of the
+    // page's near-black.
+    <div className={styles.field} style={SKY_VARS}>
       <div className={styles.scene} aria-hidden="true" data-renderer={renderer ?? undefined}>
         {renderer === 'gl' && <MistCanvas recipe={recipe} onFail={fallBack} />}
         {renderer === 'layers' && <LayeredScene recipe={recipe} />}

@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.vercel.app](https://abgupta.vercel.app)
 
-![Version 0.2.7](https://img.shields.io/badge/version-0.2.7-informational)
+![Version 0.2.8](https://img.shields.io/badge/version-0.2.8-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -60,26 +60,20 @@ contact come in later lines (see [Versioning](#versioning)).
   devices scroll natively, and keyboard scrolling stays native everywhere.
 - Scroll progress drives a camera that pulls back from the mountains with a
   slight tilt, with a faint strip of sky above and a little meadow at the
-  bottom. Since `0.2.1` the ridges behave like terrain: each keeps its
-  silhouette, the front one recedes as a new one slides up from below, and
-  distant ranges rise from behind the far ridge. Since `0.2.2` distance
-  reads as air: far ranges step into the haze, warm light catches the crests
-  in the sun's column, and the ridges keep breathing at every scroll
-  position. Since `0.2.3` the sun and moon can be clicked at any scroll
-  position, and a switch mid-scroll blends with the camera. Since `0.2.4`
-  the WebGL renderer skips ridges hidden behind nearer ones, caps and adapts
-  its resolution, and redraws less at rest, so large high-DPI laptops hold
-  full frame rate. Since `0.2.5` the crest light shows at rest too: a soft
-  warm light under the sun, a faint silver one under the moon, deepening as
-  the body sets. Since `0.2.6` the layered fallback does all of this too,
-  matching WebGL at every scroll position, and since `0.2.7` a switch
-  turns the mountains' light and shape smoothly in both renderers, with no
-  cut (see [`ROADMAP.md`](./ROADMAP.md)).
+  bottom. The ridges behave like terrain: each keeps its silhouette, the
+  front one recedes as a new one slides up from below, and distant ranges
+  rise from behind the far ridge and step into the haze. The ridges keep
+  breathing at every scroll position (WebGL), and both renderers draw all
+  of it alike. Release by release, see [`CHANGELOG.md`](./CHANGELOG.md).
+- Warm light catches the crests in the sun's column (a faint silver one
+  under the moon), softly at rest and deepening as the body sets.
 - Time of day moves with scroll. By day the sky turns from golden hour to
   sunset and the sun sets into the ridges; by night the moon sinks too,
   warming toward amber.
-- The sun toggle's hit target follows the painted sun or moon at every
-  scroll position.
+- The sun and moon can be clicked at any scroll position: the hit target
+  follows the painted body, and a switch mid-scroll blends with the camera.
+- The WebGL renderer skips ridges hidden behind nearer ones and adapts its
+  resolution under load, so large high-DPI laptops hold full frame rate.
 
 ## Tech stack
 
@@ -87,14 +81,15 @@ contact come in later lines (see [Versioning](#versioning)).
   (no TypeScript)
 - A hand-written WebGL2 renderer (fragment shaders, no three.js), with a
   layered DOM fallback
-- [Lenis](https://lenis.darkroom.engineering) for smooth scrolling.
-  [GSAP](https://gsap.com) is installed for later scroll choreography.
+- [Lenis](https://lenis.darkroom.engineering) for smooth scrolling, and no
+  other animation library
 - Plain CSS: CSS Modules per component, global tokens and reset in
   `app/globals.css`. No Tailwind.
 - Fonts via `next/font/google`: Unbounded (display) and JetBrains Mono
   (body and labels)
-- [Playwright](https://playwright.dev) for the renderer parity and performance
-  harness
+- [Playwright](https://playwright.dev) (Chromium) for the renderer parity,
+  performance and switch harness; Node's built-in test runner for the unit
+  tests
 
 ## Getting started
 
@@ -125,15 +120,15 @@ Chromium isn't installed yet, run `npx playwright install chromium` first.
 | `npm run dev` | Starts the Next.js dev server |
 | `npm run build` | Builds for production |
 | `npm run start` | Serves the production build |
-| `npm run test` | Runs `playwright test`. There are no Playwright specs in the repo yet, so it currently finds nothing to run. |
 | `npm run parity` | Compares the layered renderer against WebGL, pixel by pixel, across viewports, both themes and three scroll positions (`--scrolls`, default top, middle and end). Fails above a mean difference of 2/255 or a p99 of 24. |
 | `npm run perf` | Measures frame timing and main-thread time per renderer, during sky switches, at rest and through a scroll sweep |
 | `npm run switch` | Steps each day/night switch frame by frame on a fake clock, per renderer and scroll position, and fails on a cut: a frame step over 3× the steps around it |
 | `npm run test:adaptive` | Unit tests for the WebGL renderer's adaptive quality, fed synthetic frame timings (no GPU needed) |
+| `npm run test:unit` | Unit tests for the scene's pure maths: the colour conversions, the switch palette's keyframes, and one frame of the scene at rest, scrolled and mid-switch (no GPU needed) |
 | `npm run hygiene` | Checks a running production server for the basics: `lang`, titles, descriptions, one `<h1>`, alt text, canonical, OG image, JSON-LD, the 404, robots, sitemap, llms.txt and no shipped source maps |
 
-CI (GitHub Actions, `.github/workflows/ci.yml`) runs the build,
-`test:adaptive` and `hygiene` on every push to `main` and every pull
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs `test:adaptive`,
+`test:unit`, the build and `hygiene` on every push to `main` and every pull
 request. Parity, perf and switch need a real GPU, so they run locally.
 
 Run `parity`, `perf`, `switch` and `hygiene` against a production server, not `next dev`. Flags,
@@ -158,25 +153,17 @@ required locally. To set one, copy [`.env.example`](./.env.example) to
 
 ## Debug and test URL hooks
 
-Query parameters the scene honours, mostly for the harness and screenshots:
-
-| Parameter | Effect |
-|---|---|
-| `?renderer=gl` / `?renderer=layers` | Force a renderer |
-| `?freeze=1` | Hold the haze at its rest phase (no drift, full opacity) |
-| `?grain=0` | Drop the grain layer (grain is random per load) |
-| `?crest=cpu` | WebGL only: compute the ridge outlines on the CPU instead of the GPU |
-| `?driftAt=0.25` | WebGL only: pin the idle ridge drift, even with `?freeze=1` |
-| `?scroll=0.5` | Pin scroll progress (0 to 1), so a test can capture a scrolled state without scrolling |
-
-The scene also exposes `data-*` attributes for tests (which renderer painted,
-where the sun is, whether a switch is running). They're listed in
+The scene honours query parameters for the harness and screenshots, such as
+`?renderer=gl|layers` to force a renderer, `?freeze=1` to hold the haze still
+and `?scroll=0.5` to pin scroll progress, and exposes `data-*` attributes
+for tests (which renderer painted, where the sun is, whether a switch is
+running). The full list is the hook table in
 [`CLAUDE.md`](./CLAUDE.md#renderers).
 
 ## Project structure
 
 ```
-app/                 routes, metadata, JSON-LD, robots/sitemap/llms.txt, icons, share images
+app/                 routes, metadata, JSON-LD, robots/sitemap/llms.txt, icons, share image
   layout.jsx         root layout: mounts the atmosphere and the scroll layer once
   page.jsx           home
   site.js            shared site facts (URL, name, role, links)
@@ -190,7 +177,7 @@ components/
     layers/          layered DOM fallback
     recipes/         the day and night scenes, as data
 styles/              global utilities
-scripts/             renderer parity and perf harness, hygiene checks
+scripts/             renderer parity, perf and switch harness, unit tests, hygiene checks
 .env.example         optional environment variables
 LICENSE              all rights reserved
 ```
@@ -212,11 +199,11 @@ into a texture. The layered fallback draws the same scene as stacked DOM
 layers, so the browser composites rather than repaints, with each ridge's
 silhouette computed as a mask from the shader's own maths. Both are loaded
 dynamically after mount, with a CSS gradient of the sky painted behind them
-until they arrive. They share the switch maths (`orbit.js`), the camera maths
-(`camera.js`, ridge light included), the sky ramp, and the sun and moon
-looks, and `npm run parity` keeps them visually identical: since `0.2.6`,
-when the fallback caught up on the camera and light of `0.2.1`–`0.2.5`, at
-every scroll position (42 of 42 cases).
+until they arrive. Each frame's scene comes from one shared pure function
+(`sceneAt`), built on the shared switch, camera, colour and sky maths and the
+sun and moon looks, so a renderer only maps it to shader uniforms or CSS.
+`npm run parity` keeps them visually identical at every scroll position
+(the current state is in [`CLAUDE.md`](./CLAUDE.md#renderers)).
 
 **One clock per job.** At rest, an exponential smoothing step holds the scene.
 During a switch, one eased clock carries the sun and moon along their arc,
@@ -229,8 +216,8 @@ never crossfades two layers.
 to a small store outside React, so a scroll frame never re-renders a
 component. The renderers and the sun toggle subscribe to it.
 
-The details, including the measured numbers behind these choices, are in
-[`CLAUDE.md`](./CLAUDE.md#the-atmosphere).
+The details are in [`CLAUDE.md`](./CLAUDE.md#the-atmosphere), and the
+measured numbers behind these choices in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Performance and accessibility
 
@@ -270,25 +257,19 @@ takes over (after a lost context, WebGL is retried a few times). The GPU crest
 pass needs `EXT_color_buffer_float`, and without it the crests are computed on
 the CPU with identical output.
 
-**Tested in** Chromium and WebKit (Playwright), at phone, tablet, laptop and
-ultrawide sizes. Firefox isn't in the automated runs. On touch devices the
+**Tested in** Chromium (the Playwright harness), at phone, tablet, laptop and
+ultrawide sizes. WebKit (Safari) is checked by hand; Firefox isn't in the
+automated runs. On touch devices the
 page uses native scrolling; Lenis smooth scrolling is desktop only.
 
 ## Versioning
 
 The site is rebuilt layer by layer, and the version line tracks which layer:
-
-| Line | Scope |
-|---|---|
-| `0.1.x` | Background and atmosphere layer (done) |
-| `0.2.x` | About me: the camera pulls back from the mountains (current) |
-| `0.3.x` | Projects: the descent onto the desk and device |
-| `0.4.x` | Contact |
-| `0.5.x` | Header navigation across the sections |
-| `0.6.x` | Real content throughout |
-| `1.0.0` | Ship, once the hygiene gate in the roadmap is clear |
-
-The plan past the current line will change. See [`ROADMAP.md`](./ROADMAP.md).
+`0.1.x` the atmosphere (done), `0.2.x` the camera pull-back (current),
+then projects, contact, navigation and real content, and `1.0.0` to ship.
+The lines and the plan past the current one (which will change) are in
+[`ROADMAP.md`](./ROADMAP.md#version-lines); what each release changed is in
+[`CHANGELOG.md`](./CHANGELOG.md).
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org),
 with the version in the scope:

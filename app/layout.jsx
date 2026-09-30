@@ -7,8 +7,8 @@ import './globals.css';
 import '@/styles/utilities.css';
 
 // Routes set their own `title` and get "<title> · Abhinav Gupta"; `canonical`
-// resolves against metadataBase. The OG/Twitter image comes from the
-// opengraph-image / twitter-image files beside this layout.
+// resolves against metadataBase. The share image is the opengraph-image
+// file beside this layout; Next fills twitter:image (and its alt) from it.
 export const metadata = {
   metadataBase: new URL(SITE.url),
   title: { default: SITE.name, template: `%s · ${SITE.name}` },

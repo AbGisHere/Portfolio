@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix (done), then `0.2.8` the audit's clean-up (next). |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up (done); next, `0.2.9` the fallback's tile dropout in Chrome. Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -55,8 +55,9 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
 - [x] **Canonical URL.** `metadataBase` + `alternates.canonical` on every
       route. Needs the production domain, which is not decided yet.
 - [x] **Open Graph / Twitter cards.** `og:title`, `og:description`,
-      `og:image` (1200×630, generated via `app/opengraph-image.jsx` from the
-      atmosphere palette), `twitter:card=summary_large_image`. Per-project images
+      `og:image` (1200×630, `app/opengraph-image.jpg`, a render of the scene),
+      `twitter:card=summary_large_image`, with `twitter:image` filled by Next
+      from the OG image (`0.2.8` dropped the duplicate `twitter-image.jpg`). Per-project images
       once projects have routes.
 - [x] **Structured data.** JSON-LD `Person` (name, url, jobTitle, `sameAs`
       links) on the home page. Still to come: `CreativeWork`/`SoftwareSourceCode`
@@ -73,27 +74,27 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       links follow `SITE.url`: a plain-markdown summary of who Abhinav is and
       what's live, for LLM agents. Projects, resume and contact join as they
       ship.
-- [ ] **Bundle diet.** Set a budget and measure with `next build` output /
+- [ ] **Bundle diet.** Set a budget and measure with the gzip sizes of
+      `.next/static` (Next 16's `next build` no longer prints route sizes) /
       `@next/bundle-analyzer`. Since `0.1.4` the page draws with the small
       WebGL renderer. Since `0.1.8` the fallback is the layered DOM renderer
       (`components/gradient/layers/`), and the generated SVG engine (~360 KB
       minified, 128 KB gzipped) is deleted. Neither renderer is in first-load
       JS. `three` is already gone. Since `0.2.0`, Lenis loads in its own chunk
       when the browser is idle (the scroll layer added ~1.4 KB gzip to
-      first-load JS); GSAP ships nowhere, as only the unused primitives import it.
+      first-load JS). `gsap` and its unused primitives were removed in `0.2.8`.
 - [ ] **A notice for the fallback renderer.** A small, kind, playful note
       for visitors who are on the layered fallback for good. Spec in "Later —
       a notice for the fallback renderer" below.
-- [ ] **Unit tests for the pure maths** (a small side task, any `0.x`). Only
-      `adaptiveQuality.js` is tested today (`npm run test:adaptive`, run in
-      CI). Next: round trips for `hexToLms`/`lmsToHex` (`skyRamp.js`) and
-      `paletteAt` hitting every keyframe exactly with no overshoot
-      (`skyKeys.js`), then `descentAt`/`frameAt`/`bodyAt` (`camera.js`) at
-      `about` 0 (the identity) and 1. The sky and every palette flow through
-      them, and a regression there is subtle on screen. Suggested by a Jules
-      pass (2026-09-30); its other suggestions were declined: `SmoothScroll`
-      re-queries the track on purpose (it persists across routes), and the
-      grain loops run once per load.
+- [x] **Unit tests for the pure maths** (`0.2.8`). `npm run test:unit`
+      (`scripts/unit-test.mjs`, run in CI beside `npm run test:adaptive`):
+      round trips through the colour module (`colour.js`), `paletteAt`
+      hitting every keyframe exactly with no overshoot (`skyKeys.js`), and
+      `sceneAt` (`scene.js`, which runs `descentAt`/`frameAt`/`bodyAt`) at
+      `about` 0 (the identity) and 1, under reduced motion and mid-switch.
+      Suggested by a Jules pass (2026-09-30); its other suggestions were
+      declined: `SmoothScroll` re-queries the track on purpose (it persists
+      across routes), and the grain loops run once per load.
 
 ## Trust, privacy and accessibility
 
@@ -167,9 +168,8 @@ By version line:
       meaningful `alt`. Decorative ones use `alt=""`. `npm run hygiene`
       checks every `<img>` has one.
 - [ ] **Third-party audit** (every version line). Today's runtime
-      dependencies are `next`, `react`, `react-dom` and `lenis`. `gsap` is
-      installed but ships nowhere: use it in the content layers or remove
-      it by `1.0.0`. `0.3`'s project iframes load third-party pages, so
+      dependencies are `next`, `react`, `react-dom` and `lenis` (`gsap` was
+      removed in `0.2.8`). `0.3`'s project iframes load third-party pages, so
       sandbox them (`sandbox`, `allow` kept to what each project needs, no
       `allow-top-navigation`).
 - [x] **Unsupported claims** (audited at `0.2.4`). The site copy, metadata,
@@ -255,253 +255,26 @@ How it should feel:
 
 ### 0.2 — about me: the pull-back
 
-**Shipped in `0.2.0`** (the details are in `CLAUDE.md`, "The camera (0.2)"):
+**Shipped, `0.2.0`–`0.2.8`:** the pull-back (`0.2.0`), the ridge conveyor
+(`0.2.1`), the look (`0.2.2`), the sun and moon at any scroll (`0.2.3`),
+performance headroom (`0.2.4`), ridge light at rest (`0.2.5`), the fallback
+catching up (`0.2.6`), the switch cut (`0.2.7`) and the audit's clean-up
+(`0.2.8`). What each changed and measured is in `CHANGELOG.md`; how it works
+now is in `CLAUDE.md`, "The atmosphere".
 
-- **The camera pulls back** along +Z, walking away from the mountains, with
-  a slight downward tilt and a small rise. The end frame is mostly
-  mountains, a faint strip of sky and a thin band of meadow. Each ridge has
-  a depth from `layout`'s ground plane, so parallax comes from the maths:
-  near ridges shrink more than far ones. GL sets uniforms; the layered
-  fallback transforms each ridge's layers on the compositor. Extra ranges
-  faded in between the recipe's as the view opened (replaced in GL by
-  `0.2.1`'s conveyor; the fallback still does this).
-- **Time of day moves on top of the camera,** as recipe data (`scroll`:
-  palette keys by progress, the body's offset, the meadow tint), through
-  `skyKeys.js` like `via`. Day: the sun sinks and the palette warms toward a
-  sunset, stopping short of one. Night: the moon climbs and the lilac cast
-  fades into a deeper night.
-- **The sun toggle worked only near the top.** It faded out over 5–10% of
-  the stretch and was inert past it. Lifted in `0.2.3`, below.
-- **Reduced motion:** 30% of the camera move, with the colour change kept.
+**`0.2.8`: the audit's clean-up** (shipped 2026-09-30; details in
+`CHANGELOG.md`). The low-risk half of the 2026-09-30 repo audit: dead code
+out (the GSAP primitives and `gsap`, `npm test`, the recipes' studio-only
+fields, `airAt`, unused tokens and props), the duplicates merged (one
+colour module, `rampAt`, shared `MAX_DPR`/`GRAIN_SIZE`/grain, `SKY_VARS`),
+one pure per-frame `sceneAt` for both renderers with unit tests
+(`npm run test:unit`, in CI), Unbounded without a weight list,
+`twitter-image.jpg` dropped for the OG image, and the docs split: history
+and measurements to `CHANGELOG.md`, one home each for the hook table and
+parity state (CLAUDE.md) and the version lines (here), stale claims fixed.
+Considered and not taken: holding the fonts' preload (81 KB) until the
+page shows text.
 
-**Shipped in `0.2.1`: ridges that behave like terrain (GL only).** The
-`0.2.0` view morphed rather than pulled back (feet spread by (1 + rise)·s,
-extra ranges faded in place). Now (`DESCENT` in `camera.js`, details in
-`CLAUDE.md`):
-- **Each silhouette is fixed in world space.** Scroll only moves a ridge and
-  scales it evenly (s = z/(z + back)), so its proportions hold.
-- **A ridge conveyor.** The front ridge recedes toward the second slot, and
-  so on down the line, while a new front ridge (depth .78) slides up from
-  below the frame's bottom edge.
-- **Distant ranges rise into view** (depths 13, 20, 32) from behind the far
-  ridge, like a drone pulling back. Nothing fades: every ridge is opaque,
-  and distance reads through colour (blur, rim and veil follow each ridge's
-  foot, `slotT`). Nine ridges, no crest row recycled.
-- **Idle drift and the veils** keep running at every scroll position.
-- The top of the page is pixel-identical to `0.2.0`; GPU/CPU crest parity is
-  still 0; scroll sweeps hold 119.7–120 fps (p95 8.8–9.2 ms, no frame over
-  20 ms).
-- **Phones:** Lenis no longer loads on touch-first devices, the scene is
-  sized to `100lvh` and `Stage` to `100svh`, so the browser toolbar should
-  stop popping in and out while scrolling. Not yet confirmed on a real
-  phone (emulation has no toolbar).
-
-**Shipped in `0.2.2`: the look (GL only).** The ridge layout is unchanged
-from `0.2.1` (same `DESCENT`, ranges and conveyor); what changed is how the
-stretch is lit and painted (details in `CLAUDE.md`, "The camera (0.2)"):
-- **Idle drift is visible at every scroll position.** Drift is in noise
-  units, so the shrunken and distant ridges barely moved under the camera
-  (about 1 px per .1 seed on the far ranges, against 2.6 at rest). A
-  per-ridge drift gain (up to 2.5) fixes it: mean motion at the end is now
-  4.40 px per .1 seed (3.61 in `0.2.1`). The gain moves with scroll, so a
-  drifted ridge reshapes slightly while scrolling (it still retraces
-  exactly).
-- **Distance reads as air.** Far ranges step into the haze by depth, with
-  softer edges and shallower veils; the sky is redrawn under the camera so
-  the top of the frame ends on the sky's top colour and the horizon on its
-  glow; the haze thins toward evening.
-- **Painted ridge colours.** A clean ramp from the near ridge to the haze,
-  blended in over the studio's colours as the camera moves, with the veils
-  and air thinned, so the near ridges stay a rich violet rather than grey.
-- **Ridge light** (scroll only): warm crest light strongest in the sun's or
-  moon's column, slanted per depth (parallax), over a cool shadow below.
-- **The sun sets.** Its gap to the horizon closes until it sinks into the
-  ridges (about half to two thirds hidden by the end at 1440×900), round
-  and the same size, with a hot core, a warm limb, bloom and a wash along
-  the horizon that lights the rims. The moon sinks too and warms to an
-  ember amber. The moon's glow fades on a smoothstep, so its edge at 3.4r
-  is gone (GL; the layered glow is still linear).
-- **Palettes.** The day reads as golden hour into sunset: dusk blue-violet
-  overhead, a gold/rose horizon, a dim violet-green meadow. Night ends
-  deeper and cooler, with the distant ranges paling step by step.
-- The top of the page is pixel-identical to `0.2.1` by day; at night only
-  the moon glow differs (mean .15). Scroll sweeps hold 118.8–119.5 fps (p95
-  9.0–9.3 ms, no frame over 20 ms); first-load JS is unchanged (+6 B).
-- **Known:** the drift still slows near zero at the ends of its 60 s sine,
-  and the moon's warmth shows clearly only late in the scroll.
-
-**Shipped in `0.2.3`: the sun and moon at any scroll (GL; the fallback
-shares the first two).** Details in `CLAUDE.md`:
-- **Clickable at any scroll position.** The renderers publish where the
-  body is painted (`sunSpot.js`) and the hit target follows it. Mid-switch
-  it still jumps to where the incoming body lands and sits out the switch.
-  The fade and `inert` past 10% are gone.
-- **Switching and scrolling combine on every frame.** The setting look is a
-  weight: mid-switch the outgoing body carries 1 − e of it, the incoming e.
-  The arc's `hidden` line follows the far ridge as the camera has moved it
-  (GL only), and the arc may leave the top of the frame late in the scroll.
-  The ridge light follows the outgoing body out and the incoming one in.
-- **A clean landing.** The GL spring lands on the target when a switch
-  ends, removing a small whole-sky step on the landing frame.
-- **A narrower arc on portrait frames** (`REACH_ASPECT` 1.2): at 393×852 it
-  spans .24–.80 of the width (was .17–.87); landscape is unchanged.
-- In a scripted switch-and-scroll harness the largest frame step against
-  its neighbours fell from 167–175 (`about` 1) to 2.0–4.4. The hit target
-  sits within .02 px of the painted body at every scroll, in both
-  renderers. First-load JS +12 B.
-
-**Shipped in `0.2.4`: performance headroom (GL only; the layered fallback is
-untouched).** At `0.2.3`, 1728×1117@2, a 16" laptop's default, scrolled at
-76–77 fps against a 120 budget. The cost was the fragment shader: every
-device pixel ran the whole ridge loop, though ridges are opaque and painted
-back to front, so most of that work was overwritten. Details in `CLAUDE.md`:
-- **Profiling hooks.** `?off=a,b` compiles shader features out
-  (`OFF_FLAGS`), and `?bench=N` times the settled frame on the GPU. The
-  profile at `0.2.3` (M4, GPU ms per frame, budget 8.33): 1728×1117@2
-  6.6–7.6 at scroll 0 and 11.9–13.4 at scroll 1; 1440×900@2 4.8 / 8.3;
-  3440×1440@1 4.3 / 8.0; 393×852@2 .9 / 1.8. The ridge loop was 80–90% of a
-  frame: rims 2.6 ms, ridge light 1.4, veils 1.3, bodies 1.3, slope 1.0,
-  meadow .7, wash .5, air and grain about 0. Scroll 1 cost about double
-  scroll 0: nine ridges instead of five, plus the scroll-only ridge light,
-  meadow and wash.
-- **Hidden ridges skipped.** A front-to-back pre-pass finds the nearest
-  ridge that fully covers the pixel (at least 6σ under its crest, where the
-  fill is exactly 1) and the loop starts there, skipping the sky, the bodies
-  and every farther ridge. Plus exact trims: no fill 6σ above the crest, no
-  rim past its half-width + 6σ, no veil outside its ellipse.
-- **A resolution cap** by pixel count (`MAX_PIXELS`, 4K), beside `MAX_DPR`
-  2. 1728×1117@2 sits under it.
-- **Adaptive quality.** When most frames of a scroll or switch miss the
-  display's refresh, twice in a row, the resolution steps down (1 → .875 →
-  .75 of the DPR), and it steps back up after 5 s of smooth frames. Bursts
-  of hitches and the first scroll after a load don't count. It needs frames
-  at rest to learn the refresh rate, so it stays off under `?freeze=1` and
-  reduced motion. Its decisions are unit-tested (`npm run test:adaptive`).
-- **Fewer redraws at rest.** Drift, wind and veils share one 30 Hz tick:
-  about 48 → 26 draws a second. Scroll, switches and the spring keep the
-  full rate.
-- Pixel-identical to `0.2.3`: 76 of 76 cases (5 viewports, both themes,
-  seven scroll positions, with and without drift). GPU/CPU crest parity
-  42/42 at 0.00; layers-vs-GL parity unchanged. GPU ms per frame, scroll 0 /
-  scroll 1: 1728×1117@2 6.8 → 5.2 / 12.8 → 6.0; 1440×900@2 4.5 → 3.4 /
-  8.1 → 4.3; 393×852@2 .9 → .7 / 1.9 → .5; 3440×1440@1 4.4 → 3.2 /
-  7.8 → 3.7. `npm run perf` (`?adapt=0`): scroll sweeps at 1728×1117@2 from
-  70–73 fps with 12–15 frames over 20 ms to 117–118 fps, p95 9.1 ms, none
-  over 20 ms; 1440×900@2 from 89–112 to 120 fps. Idle main thread about
-  50 → 43 ms/s; switches level. Not yet run on a real mid-range phone or
-  an older Intel Mac.
-
-**Shipped in `0.2.5`: ridge light at rest** (GL). `0.2.2`'s ridge light
-(the sun's or moon's column, the parallax slant) also lights the resting
-scene at `about` = 0, softer (`RIDGE_LIGHT.rest`: .4 of the light, .15 of
-the shadow), and deepens to its full setting strength as the body sinks,
-so the end of the scroll is unchanged. By day it's halfway from the sun's
-own colour to the sunset one, so it reads as warm light rather than
-greying the violet; by night the moon's is stronger than its setting
-share, or it didn't show. A switch still hands it from body to body. The
-light is soft enough that scroll-0 parity still passes (14/14), so the
-expected scroll-0 failure didn't happen. Cost: about +0–.5 ms GPU at rest
-at 1728×1117@2, inside the noise (CLAUDE.md, "GL cost").
-
-**Shipped in `0.2.6`: the fallback catches up.** The layered renderer
-takes on `0.2.1`–`0.2.3` and `0.2.5`, and all 42 parity cases pass (was
-14/42). Details in `CLAUDE.md`, "Layered (fallback)":
-- **The camera.** `descentAt`/`frameAt` and `layout`'s `ranges` replace
-  `CAMERA`/`cameraAt` and `extra`: the conveyor, with the world ranges
-  rising into place by geometry. Masks are built once for all nine ridges
-  over their widest span, never while scrolling. Also ported: the sky
-  redraw (`skyAt`), `scrollHaze`, the painted colours
-  (`descentPaint`/`blendPaint`), the far-range haze steps, the thinner
-  veils and air, and the `hiddenAt` line. Removed: `CAMERA`, `cameraOf`,
-  `cameraAt`, `widestScales`, `extra` (`MAX_RANGES`, `EXTRA_LOW`), the
-  `scroll.camera` recipe field and `descentAt`'s `more`; and the unused
-  `LAYERS` import in `MistCanvas.jsx`.
-- **The ridge light**, at rest and scrolled, from one shared pure
-  `ridgeLightAt` in `camera.js` that GL now uses too (identical to its old
-  inline code over 200,000 random cases). Each ridge gets a glow mask baked
-  in ridge space, screened over the fill (`background-blend-mode`, no
-  backdrop reads); the cool shade folds into the fill's gradient; the
-  light's column is one fixed mask moved by a transform. 27 masks at load
-  (was 18).
-- **The setting sun and moon**, from shared helpers in `sunLook.js`: halo
-  shape, setting disc, bloom, and the horizon wash over the sky, rims and
-  crests. The moon glow is the smoothstep in both renderers.
-- **Scroll cost.** The ridge light first cut the fallback's scroll at
-  1440×900@2 from about 100 to 57 fps. Fixed by putting whatever moves on
-  its own transformed layer, cropping ridges hidden behind an opaque nearer
-  one, and staggering colour repaints while scrolling (each layer's colour
-  at most `STAGGER_MS`, 30 ms, old; one full paint when it settles).
-- **Results** (prod, headless M4, against a `0.2.5` build the same day):
-  parity 42/42, worst mean 1.06, p99 10; the hit target within .02 px
-  everywhere (the painted suns were 3–29 px apart at `about` .5 and 1).
-  Layered scroll sweeps 118.8–119.7 fps, p95 8.5 ms, none over 20 ms (was
-  111–119, 0–5 over); switches 116–120 fps (was 119–120), 1.7–1.75 s main
-  thread over four (was 1.3–1.6); idle 54–80 ms/s (was 40–77). GL's path
-  is unchanged apart from the shared helper, which is pixel-identical.
-
-**Shipped in `0.2.7`: the switch cut.** The owner saw the layered
-mountains change all at once on a switch, both ways and at any scroll.
-Frame-by-frame captures showed the masks weren't the cause; three things
-were (details in `CLAUDE.md`):
-- **Layered: the ridge light snapped at landing** (the owner's cut).
-  `ridgeLightAt` took "mid-switch" from `orbit?.scene`, which only GL's
-  orbit has, so the layered light acted as at rest through the switch and
-  jumped to the incoming body's full light on landing (night → day at
-  scroll 1: strength .28 → 1.0, a ridge step ×22.7 its neighbours). It now
-  keys on `orbit` with `e = orbit.e ?? 0` and hands over as GL's does.
-- **GL, scrolled: the ridges jumped on a switch's first frame.** The idle
-  drift was folded into the start seed as a bare `+offset`, ignoring the
-  per-ridge scroll gains, so the distant ranges jumped by
-  `offset × (gain − 1)` (×3.7–6.7 at scroll .5/1, hidden under
-  `?freeze=1`). The drift is now kept per ridge and fades on the switch's
-  clock (`orbit.drift`); the landing seed is unchanged and scroll 0 is
-  frame-identical.
-- **Both: the veils' swing jumped at the start.** Its amplitude
-  (`mist.drift`, 55 day, 40 night) now blends between the scenes on `e`.
-- **`npm run switch`** (`scripts/switch.mjs`, `scripts/README.md`) checks
-  every switch on a fake clock, both renderers at scroll 0/.5/1: worst step
-  ×2.9 of its neighbours against a limit of ×3 (was up to ×22.7). Local
-  only (GPU). Parity still 42/42 (worst mean 1.06, p99 10); layered
-  switches 116.8–119.6 fps, ~2.0 s main thread over four (~.25 s more: the
-  ridge light now runs mid-switch); GL unchanged.
-
-**`0.2.8`: the audit's clean-up** (agreed 2026-09-30, after `0.2.7`;
-built, but pushed only once the user has reviewed the changes).
-
-- **The repo audit** (2026-09-30), the low-risk half:
-  - **Remove:**
-    - the unused GSAP primitives (`SplitText`, `Reveal`, `MagneticCard`)
-      and `gsap` itself;
-    - the `npm test` script, which has no specs and fails;
-    - the recipes' dead studio fields (`blur`, `fieldBlur`, `startT` and
-      the like);
-    - the callerless `airAt` and `bodyDrop` (`camera.js`);
-    - the unused `--line` token and `h2, h3` rules (`globals.css`), and the
-      unread `id`/`label` (`themes.js`);
-    - the stale comments (the SVG fallback, `SEED_CYCLE`).
-  - **Merge the duplicates:**
-    - one colour module for the oklab maths (`mistGeometry.js` and
-      `skyRamp.js`) and the RGB and hex helpers;
-    - one sky-colour lookup that takes the ramp, instead of two functions
-      named `skyAt`;
-    - shared `MAX_DPR`, `GRAIN_SIZE` and grain;
-    - one static sky for `ErrorScreen` and `AtmosphereField`.
-  - **Shared frame maths:** a pure `sceneAt()` for the chain both renderers
-    run every frame, from `descentAt` to `groundPaint`, unit-tested. Parity
-    has to hold.
-  - **Fonts:** drop the weight lists on the two variable fonts. Consider
-    not preloading them until the page shows text (81 KB today).
-  - **Share cards:** drop `twitter-image.jpg`, a byte-identical copy of the
-    OG image.
-  - **Docs:**
-    - move the release history and measurements out of CLAUDE.md
-      (48.7 KB, about 71% of it "The atmosphere") and out of ROADMAP's
-      "Shipped in 0.2.x" into one changelog;
-    - keep the parity state, the hook table and the version table in
-      one place each;
-    - fix the stale claims: the `next build` route sizes (Next 16 no longer
-      prints them), WebKit coverage (the scripts launch only Chromium), the
-      `fieldBlur` row, and the "(once built)" items that are done.
 - **Owner decisions the audit raised** (not taken in `0.2.8`; the user
   decides):
   - Should the fallback keep full pixel parity under the camera, or only at
@@ -512,6 +285,42 @@ built, but pushed only once the user has reviewed the changes).
   - `.claude/agents/impeccable-*` is committed but its skill is gitignored:
     commit both or neither.
   - Is the "admin surface" open task still wanted?
+
+**`0.2.9`: the fallback's tile dropout in Chrome** (found 2026-09-30, after
+`0.2.8`). **Live since `0.2.6`**, on the layered fallback only, which WebGL
+browsers never pick unless it's forced.
+
+- **The symptom.** The user's screen recording (Chrome, `?renderer=layers`,
+  a 1792-wide window at 2×) shows whole blocks of the scene vanishing for a
+  frame or two while scrolling: rectangles of the dark sky colour, bands of
+  ridges drawn at the wrong height, a slab across the foot. Safari was fine.
+  Headless Chrome at its default GPU memory never shows it, so parity, perf
+  and `npm run switch` all passed.
+- **The cause.** `0.2.6`'s scroll-cost fix gave nearly every ridge part its
+  own GPU layer (`will-change: transform` on `.ridge`, `.beam`, `.glow`,
+  `.disc`, `.wash`, besides `.cam`, `.sky` and `.drift`). That makes 97
+  composited layers, about 537 MB of layer texture at 1792×1120@2, many of
+  them full-width and masked. Past Chrome's GPU memory budget, it drops
+  tiles. Reproduced headless with `--force-gpu-mem-available-mb=256`: 20
+  of 242 screencast frames had dark blocks in the sky.
+- **The naive fix fails the perf bar.** Dropping `will-change` from the
+  per-part layers, as `0.2.5` had it (only `.cam`, `.sky` and `.drift`
+  composited), clears the dropout (54 layers, 0 bad frames under the same
+  cap), but scroll falls to 62–64 fps at 1440×900@2 and 1792×1120@2 (from
+  118–119), with 42–61 frames over 20 ms.
+- **The plan.** Keep the scroll at 120 fps with a small layer budget:
+  - Fewer, smaller composited layers: crop each part to its visible band.
+  - Merge a ridge's parts where the paint order allows.
+  - Composite only the layers that move differently from their parent: the
+    ridge's camera wrapper, the light's beam.
+  - Measure layer count and texture memory per frame through CDP
+    `LayerTree`.
+  - Add a dropout check to the harness: a screencast under a capped GPU
+    memory, failing on dark blocks. It should also run at the owner's
+    window size (1792×1120@2) and at 3440×1440.
+- **The gate:** no dropout under the capped memory; scroll 118+ fps at
+  1440×900@2, 1792×1120@2 and 393×852@2; parity 42/42; `npm run switch`
+  12/12.
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work

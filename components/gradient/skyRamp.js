@@ -14,43 +14,14 @@
  * renderer's sky gradient and the CSS backdrop — so they can't diverge.
  */
 
+import { hexToLms, lmsToHex, mix } from './colour';
+
 // Stop positions: mid-band between the `divs` boundaries, as the studio does.
 export function stopPositions(count, divs) {
   const inner =
     divs?.length === count - 1 ? divs : Array.from({ length: count - 1 }, (_, i) => (i + 1) / count);
   const edges = [0, ...inner, 1];
   return Array.from({ length: count }, (_, i) => (edges[i] + edges[i + 1]) / 2);
-}
-
-// sRGB hex <-> oklab's cube-root LMS space (a linear map of oklab, so
-// interpolating here is interpolating in oklab).
-const toLinear = c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-const toSrgb = c => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.max(0, c) ** (1 / 2.4) - 0.055);
-
-export function hexToLms(hex) {
-  const [r, g, b] = [1, 3, 5].map(i => toLinear(parseInt(hex.slice(i, i + 2), 16) / 255));
-  return [
-    Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b),
-    Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b),
-    Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b),
-  ];
-}
-
-export function lmsToHex([l, m, s]) {
-  l **= 3;
-  m **= 3;
-  s **= 3;
-  const rgb = [
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-  ];
-  return (
-    '#' +
-    rgb
-      .map(c => Math.max(0, Math.min(255, Math.round(toSrgb(c) * 255))).toString(16).padStart(2, '0'))
-      .join('')
-  );
 }
 
 // Fritsch–Carlson tangents for one channel: zero at extrema and at the ends,
@@ -107,4 +78,22 @@ export function skyRamp(stops, divs, perSegment = 8) {
   }
   out.push([x[x.length - 1], stops[stops.length - 1]]);
   return out;
+}
+
+/**
+ * The colour at `f` (0 top … 1 bottom) of a ramp from skyRamp(), mixed in
+ * oklab between its samples. The layered renderer uses it for a body's
+ * `wash`; the GL renderer samples its sky texture instead.
+ */
+export function rampAt(ramp, f) {
+  const x = Math.min(1, Math.max(0, f));
+  if (x <= ramp[0][0]) return ramp[0][1];
+  for (let i = 1; i < ramp.length; i++) {
+    if (x <= ramp[i][0]) {
+      const [x0, c0] = ramp[i - 1];
+      const [x1, c1] = ramp[i];
+      return mix(c0, c1, (x - x0) / Math.max(1e-6, x1 - x0));
+    }
+  }
+  return ramp[ramp.length - 1][1];
 }

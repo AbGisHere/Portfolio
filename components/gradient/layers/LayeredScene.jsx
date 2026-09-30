@@ -3,18 +3,18 @@
 import { useEffect, useRef } from 'react';
 import {
   FAR_VEIL,
-  airOpacity,
+  GRAIN_SIZE,
+  MAX_DPR,
   grainOpacity,
-  hexToRgb,
+  grainTexels,
   layout,
-  mistColour,
   mistOf,
-  ridgePaint,
   sunColour,
   veilAlpha,
   veilSpeedScale,
   veilTiming,
 } from '../gl/mistGeometry';
+import { hexToRgb, mixRgb, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import {
   DISC_ALPHA,
@@ -28,58 +28,30 @@ import {
   SUN_GLOW,
   gaussStops,
   limbAt,
-  mixRGB,
   rimWash,
   setDisc,
   sunWash,
 } from '../sunLook';
-import { beginOrbit, ease, orbitBodies, orbitScene, restX, skyAt, targetGeo } from '../orbit';
+import { beginOrbit, ease, orbitScene, targetGeo } from '../orbit';
+import { sceneAt } from '../scene';
 import { skyGradient } from '../sky';
-import { skyRamp } from '../skyRamp';
-import {
-  DESCENT_AIR,
-  DESCENT_VEIL,
-  blendPaint,
-  bodyAt,
-  descentAt,
-  descentPaint,
-  frameAt,
-  groundPaint,
-  hiddenAt,
-  meadowOf,
-  ridgeLightAt,
-  scrollHaze,
-  scrollPalette,
-  scrollPaletteSwitch,
-  skyAt as skyUnder,
-} from '../camera';
+import { rampAt, skyRamp } from '../skyRamp';
+import { DESCENT_VEIL } from '../camera';
 import themes from '../themes';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
 import { publishSunSpot } from '../sunSpot';
 import { ridgeMasks } from './ridgeMasks';
 import styles from './LayeredScene.module.css';
 
-const MAX_DPR = 2;
-const GRAIN_SIZE = 256;
 const MASK_DEBOUNCE = 120; // ms after a resize before the masks are rebuilt
 const CROP_STEP = 0.05; // a ridge layer's crop grows in steps of this (share of the frame)
 
 const rgba = (hex, a) => `rgba(${hexToRgb(hex).join(',')},${a})`;
 // Mixed in gamma-encoded RGB, like the shader's mix() with the sky texture.
-const mixRgb = (a, b, t) => {
-  const A = hexToRgb(a);
-  const B = hexToRgb(b);
-  return `#${A.map((v, i) =>
-    Math.round(v + (B[i] - v) * t)
-      .toString(16)
-      .padStart(2, '0'),
-  ).join('')}`;
-};
+const mixHex = (a, b, t) => rgbToHex(mixRgb(a, b, t));
 const px = v => `${v}px`;
 // A colour scaled per channel (0…255 floats, unrounded: the shader's are).
 const scaled = (hex, k) => `rgb(${hexToRgb(hex).map((c, i) => Math.round(c * k[i])).join(',')})`;
-// The light across the frame (camera.js ridgeLightAt), as the shader's
-// Gaussian: stops every quarter of its spread, out to 3 spreads.
 // The light's column across the frame (camera.js ridgeLightAt), exp(−u²)
 // over u in ±3 spreads, as an alpha mask on a BEAM_W-wide box (the rest of
 // its light, `base`, is flat): placed and sized by a transform, so a scroll
@@ -95,7 +67,7 @@ const STAGGER_MS = 30;
 const SETTLE_MS = 60; // no scroll for this long: every colour is brought up to date
 // Screen blend, 0–255 channels.
 const screen = (a, b) => a.map((v, i) => v + b[i] - (v * b[i]) / 255);
-const rgbOf = c => `rgb(${c.map(v => Math.round(v)).join(',')})`;
+const cssRgb = c => `rgb(${c.map(v => Math.round(v)).join(',')})`;
 
 // The scenes whose descent camera can run, for the masks' widest reach.
 const DESCENT_RECIPES = Object.values(themes).map(t => t.recipe);
@@ -137,18 +109,18 @@ const LIMB = `radial-gradient(ellipse closest-side, ${LIMB_STOPS.map(
   .map(c => Math.round(c * 255))
   .join(',')}) 100%)`;
 
-// The GL renderer's grain (each texel the mean of two uniform draws) as a
-// tile, one texel per CSS px.
+// The GL renderer's grain (mistGeometry.js grainTexels) as a tile, one
+// texel per CSS px.
 function grainTile() {
   const c = document.createElement('canvas');
   c.width = GRAIN_SIZE;
   c.height = GRAIN_SIZE;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(GRAIN_SIZE, GRAIN_SIZE);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = Math.round(((Math.random() + Math.random()) / 2) * 255);
-    img.data[i] = img.data[i + 1] = img.data[i + 2] = n;
-    img.data[i + 3] = 255;
+  const texels = grainTexels();
+  for (let i = 0; i < texels.length; i++) {
+    img.data[4 * i] = img.data[4 * i + 1] = img.data[4 * i + 2] = texels[i];
+    img.data[4 * i + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
   return `url(${c.toDataURL()})`;
@@ -360,7 +332,7 @@ export default function LayeredScene({ recipe }) {
     let orbit = null; // beginOrbit(…) + { t0, e }
     let raf = 0;
 
-    function sceneAt(now) {
+    function sceneNow(now) {
       const o = orbit;
       if (!o) return { geo: targetGeo(sunRecipe), stops: sunRecipe.stops, e: 1 };
       o.e = ease((now - o.t0) / 1000 / o.dur);
@@ -371,7 +343,7 @@ export default function LayeredScene({ recipe }) {
       const r = recipeRef.current;
       if (r === sunRecipe) return;
       const now = performance.now();
-      const { geo, stops } = sceneAt(now);
+      const { geo, stops } = sceneNow(now);
       const prev = sunRecipe;
       sunRecipe = r;
       cancelAnimationFrame(raf);
@@ -442,38 +414,48 @@ export default function LayeredScene({ recipe }) {
       if (!w || dead) return;
       const r = sunRecipe;
       const o = orbit;
-      const { geo, stops: base, e } = sceneAt(now);
+      const { geo, stops: base, e } = sceneNow(now);
       const [size, horizon, haze, height, sharp, sunPct] = geo;
-      const target = mistOf(r.mist);
-      const mist = { ...target, haze, height, sharp, sun: sunPct };
+      const mist = { ...mistOf(r.mist), haze, height, sharp, sun: sunPct };
       const scene = layout(w, h, { size, horizon, mist, aspect: r.aspect, crests: false });
-      // The descent (camera.js): the camera, blended between the scenes'
-      // amounts mid-switch, and the time of day over the palette.
+      // The frame (../scene.js): the descent's camera, blended between the
+      // scenes' amounts mid-switch, and its time of day over the palette; the
+      // bodies; the paint, light and meadow. The ridges and their veils stay
+      // the loaded scene's (see `shape`), with the world ranges past the top
+      // (under the frame, or sunk behind the far ridge) for the camera to
+      // bring in.
       const { about } = getDescent();
-      const cam = descentAt(about, r, { reduced: motion.matches, from: o?.prev, e: o ? e : 1 });
-      const stops = o ? scrollPaletteSwitch(base, o.prev, o.next, about, e) : scrollPalette(base, r, about);
-      // The ridges and their veils stay the loaded scene's (see `shape`), with
-      // the world ranges past the top (under the frame, or sunk behind the
-      // far ridge) for the camera to bring in.
       const [gSize, gHorizon, , gHeight, gSharp, , gSeed] = targetGeo(shape);
-      const ground = layout(w, h, {
-        size: gSize,
-        horizon: gHorizon,
-        mist: { ...mistOf(shape.mist), haze, height: gHeight, sharp: gSharp, seed: gSeed },
-        aspect: shape.aspect,
-        crests: false,
-        ranges: cam.ranges,
+      const frame = sceneAt({
+        recipe: r,
+        orbit: o,
+        e,
+        base,
+        haze,
+        about,
+        reduced: motion.matches,
+        w,
+        h,
+        layoutAt: ranges =>
+          layout(w, h, {
+            size: gSize,
+            horizon: gHorizon,
+            mist: { ...mistOf(shape.mist), haze, height: gHeight, sharp: gSharp, seed: gSeed },
+            aspect: shape.aspect,
+            crests: false,
+            ranges,
+          }),
+        sun: scene.sun,
+        restCol: sunColour(base),
       });
-      const view = frameAt(ground, h, cam);
-      // (0.2.2) The haze thins toward evening (the recipe's `scroll.haze`).
-      const hz = view.rest ? haze : scrollHaze(haze, o ? o.prev : r, r, o ? e : 1, about);
-      const M = mistColour(stops);
+      const { stops, view, haze: hz, M, lit, painted, light } = frame;
+      const ground = frame.layout;
 
       // Sky: its gradient spans the frame's height and holds its last colour
       // below. Under the camera it's redrawn over the strip above the horizon
-      // (camera.js skyAt): frame row y shows the ramp at (y × scale + shift).
+      // (camera.js skyUnder): frame row y shows the ramp at (y × scale + shift).
       const ramp = skyRamp(stops, r.divs);
-      const sk = skyUnder(view, h);
+      const sk = frame.sky;
       set(sky, { backgroundColor: ramp[ramp.length - 1][1] }, 0);
       set(
         skyRampEl,
@@ -493,34 +475,9 @@ export default function LayeredScene({ recipe }) {
       // edge and a wash along the horizon (mistShader.js, the wash and the
       // bodies).
       // Mid-switch the arc goes under behind the far ridge where the camera
-      // has put it (camera.js hiddenAt), as in the GL renderer.
-      const own = ground.ridges.filter(rd => !rd.extra);
-      const place = { w, h, restY: scene.sun.y };
-      const hidden = o ? hiddenAt(r, view, { ...place, r: scene.sun.r, far: ground.ridges.indexOf(own[0]) }) : null;
-      const lit = o
-        ? orbitBodies(o, e, { w, h, sun: { ...scene.sun, x: restX(target.sun, w, h) }, ridges: own, hidden }).map((b, i) =>
-            bodyAt(b, i === 0 ? o.prev : o.next, view, { ...place, look: i === 0 ? 1 - e : e }),
-          )
-        : [
-            bodyAt(
-              {
-                ...scene.sun,
-                col: sunColour(base),
-                face: r.body === 'moon' ? 1 : 0,
-                glow: 1,
-                alpha: 1,
-                wash: 0,
-                squash: 0,
-              },
-              r,
-              view,
-              place,
-            ),
-          ];
-      // The painted sun's centre: at rest the body as painted; mid-switch
-      // where it will land, moved by the descent too (as the GL renderer),
-      // for the hit target (../sunSpot.js) and the harness.
-      const painted = o ? bodyAt({ ...scene.sun, x: restX(target.sun, w, h), face: 1 }, r, view, place) : lit[0];
+      // has put it (camera.js hiddenAt), as in the GL renderer. The painted
+      // sun's centre (`painted`) is for the hit target (../sunSpot.js) and the
+      // harness.
       publishSunSpot(painted.x, painted.y);
       wrap.dataset.sunCx = painted.x.toFixed(2);
       wrap.dataset.sunCy = painted.y.toFixed(2);
@@ -533,7 +490,7 @@ export default function LayeredScene({ recipe }) {
           set(b.bloom, { display: 'none' });
           return;
         }
-        const col = x.wash ? mixRgb(x.col, skyAt(stops, r.divs, (x.y * sk.scale + sk.shift) / h), x.wash) : x.col;
+        const col = x.wash ? mixHex(x.col, rampAt(ramp, (x.y * sk.scale + sk.shift) / h), x.wash) : x.col;
         const R = x.r * (x.face ? 3.4 : GLOW_EXTENT);
         const [hx, hy] = x.halo ?? [1, 1];
         const g = x.glow * x.alpha;
@@ -556,12 +513,12 @@ export default function LayeredScene({ recipe }) {
           transform: `translate(${x.x - x.r}px, ${x.y - ry}px)`,
           // Setting: core to edge on a smoothstep, times the limb (the
           // multiply blend, over white).
-          backgroundColor: x.face ? col : hot ? '#fff' : mixRgb(col, DISC_WHITE, DISC_LIFT),
+          backgroundColor: x.face ? col : hot ? '#fff' : mixHex(col, DISC_WHITE, DISC_LIFT),
           backgroundImage: x.face
             ? (moon ??= moonTile())
             : hot
               ? `${LIMB}, radial-gradient(ellipse closest-side, ${SMOOTH.map(
-                  t => `${rgbaF(mixRGB(hot.core, hot.edge, t * t * (3 - 2 * t)), 1)} ${t * 100}%`,
+                  t => `${rgbaF(mixRgb(hot.core, hot.edge, t * t * (3 - 2 * t)), 1)} ${t * 100}%`,
                 ).join(', ')})`
               : LIMB,
           opacity: String((x.face ? 0.85 : DISC_ALPHA) * x.alpha),
@@ -570,7 +527,7 @@ export default function LayeredScene({ recipe }) {
         if (hot) {
           const bx = x.r * BLOOM_EXT;
           const by = ry * BLOOM_EXT;
-          const bc = mixRGB(col, DISC_WHITE, 0.5);
+          const bc = mixRgb(col, DISC_WHITE, 0.5);
           const in0 = 100 / BLOOM_EXT;
           set(b.bloom, {
             display: '',
@@ -598,7 +555,7 @@ export default function LayeredScene({ recipe }) {
           width: px(2 * wide),
           height: px(2 * tall),
           transform: `translate(${ws.x - wide}px, ${ws.y - tall}px)`,
-          backgroundColor: rgbOf(ws.col),
+          backgroundColor: cssRgb(ws.col),
         };
         set(wash, { ...strip, opacity: String(ws.peak / SET_WASH.a) });
         set(spill, { ...strip, opacity: String((ws.peak * SET_WASH.spill) / SET_WASH.a) });
@@ -613,16 +570,11 @@ export default function LayeredScene({ recipe }) {
       // hides. Past the top each is lit for the slot it has reached (its
       // `t`), and takes the descent's painted colours (camera.js
       // descentPaint) on the camera's clock.
-      const slotted = view.rest
-        ? ground.ridges
-        : ground.ridges.map((rd, i) => ({ ...rd, t: view.ridges[i].t, flat: view.ridges[i].flat }));
-      const studio = ridgePaint(stops, slotted, hz, h);
-      const paints = view.rest ? studio : studio.map((p, i) => blendPaint(p, descentPaint(stops, slotted[i], h), view.k));
+      const paints = frame.paints;
       const at = new Map(ground.ridges.map((rd, i) => [rd.noise, i]));
       // The body's light on the ridges, as the GL renderer (camera.js
       // ridgeLightAt): the shadow scales the fill's colours, the light is
       // screened on in its own layer, and the veils and air glow with it.
-      const light = ridgeLightAt({ lit, orbit: o, stops, M, ts: slotted.map(rd => rd.t), w, h });
       const shade = light.st > 0 ? light.shade.map(c => 1 + (c - 1) * light.sh) : null;
       const litCol = light.st > 0 ? hexToRgb(light.col) : null;
       const mistCol = light.mist;
@@ -647,10 +599,7 @@ export default function LayeredScene({ recipe }) {
         };
       };
       const front = ground.ridges.length - 1;
-      const meadow =
-        front >= 0
-          ? groundPaint(stops, meadowOf(o ? o.prev : r, r, o ? e : 1), paints[front].fill[2], view, h, hz)
-          : null;
+      const meadow = frame.ground;
       // A layer's crop across the frame, in the ridge's own terms: in coarse
       // steps, so a scroll frame mostly only moves the layers (the
       // compositor's job) instead of resizing them (a repaint).
@@ -756,7 +705,7 @@ export default function LayeredScene({ recipe }) {
           const L = litCol.map(c => c * la);
           const F = p.fill.map(hexToRgb);
           const lit = k => {
-            const [a, b, c] = F.map(f => rgbOf(screen(f, k)));
+            const [a, b, c] = F.map(f => cssRgb(screen(f, k)));
             return `linear-gradient(${a} ${px(rd.top - glow.top)}, ${b} ${px(rd.top + 0.45 * (rd.base - rd.top) - glow.top)}, ${c} ${px(rd.base - glow.top)})`;
           };
           set(
@@ -840,10 +789,10 @@ export default function LayeredScene({ recipe }) {
 
       // Air: the mist colour rising from 0 to airOpacity over the 14% of the
       // height above the front ridge's foot (the frame's foot at rest), then
-      // thinning out over the meadow (camera.js airAt).
+      // thinning out over the meadow (as mistShader.js).
       const foot = meadow ? meadow.top : h;
       const airTop = 0.86 * h + (foot - h);
-      const A = airOpacity(hz) * (view.rest ? 1 : 1 - DESCENT_AIR * view.k);
+      const A = frame.air;
       set(
         air,
         {

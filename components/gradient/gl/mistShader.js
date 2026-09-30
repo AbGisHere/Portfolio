@@ -16,7 +16,7 @@
  */
 
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
-import { hexToRgb } from './mistGeometry';
+import { hexToRgb } from '../colour';
 
 /** Shader features `?off=` can compile out, to profile what a frame costs
  * (harness only: without the flag, no define and no cost). */
@@ -83,7 +83,7 @@ uniform float uAirA;
 uniform sampler2D uGrain;    // 256² noise, tiled at 256 CSS px, nearest
 uniform float uGrainA;
 uniform float uSkyShift;     // the camera's tilt: the sky moves up this far, CSS px
-uniform float uSkyScale;     // and is drawn this much denser (camera.js skyAt; 1 at rest)
+uniform float uSkyScale;     // and is drawn this much denser (camera.js skyUnder; 1 at rest)
 uniform float uScale[MAX_RIDGES]; // each ridge's camera scale (1 at rest)
 uniform float uFront;        // the front ridge's foot: the meadow's top (≥ height: none)
 uniform float uHorizon;      // the ground's vanishing line
@@ -318,7 +318,7 @@ void main() {
 
   // Air: the mist colour rising from 0 to uAirA over the 14% of the height
   // above the front foot (the frame's foot at rest), then thinning out over
-  // the meadow (camera.js airAt).
+  // the meadow (the layered air band traces the same).
 #ifndef OFF_AIR
   float airTop = uSize.y * 0.86 + (uFront < uSize.y ? uFront - uSize.y : 0.0);
   float air = p.y > uFront

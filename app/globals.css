@@ -9,7 +9,6 @@
   --accent: #ff5a1f;
   --ink: #f4f1ea;
   --ink-dim: #8b8b8f;
-  --line: rgba(244, 241, 234, 0.12);
 
   /* --font-display / --font-mono come from next/font (app/fonts.js) on <html>;
      redefining them here would override its size-adjusted fallbacks. */
@@ -31,9 +30,7 @@ body {
   overscroll-behavior: none;
 }
 
-h1,
-h2,
-h3 {
+h1 {
   font-family: var(--font-display), sans-serif;
   font-weight: 800;
   line-height: 0.98;

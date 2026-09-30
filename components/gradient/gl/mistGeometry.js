@@ -13,58 +13,12 @@
  * The GPU does the per-pixel work in mistShader.js.
  */
 
+import { hexToRgb, mix } from '../colour';
 import { skyRamp } from '../skyRamp';
 
 // ---------------------------------------------------------------- colour
 
-// be
-export function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** A hex colour as 0…1 channels (the shader's uniforms). */
-export const rgb01 = hex => hexToRgb(hex).map(c => c / 255);
-
-const toHex = ([r, g, b]) => `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-
-// Je — sRGB hex to oklab
-function oklab(hex) {
-  const [r, g, b] = hexToRgb(hex).map(c => {
-    const d = c / 255;
-    return d <= 0.04045 ? d / 12.92 : Math.pow((d + 0.055) / 1.055, 2.4);
-  });
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return [
-    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
-  ];
-}
-
-// Lt — oklab to rounded 8-bit sRGB
-function fromOklab(L, a, b) {
-  const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
-  const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
-  const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
-  return [
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-  ].map(i => {
-    const c = i <= 0.0031308 ? i * 12.92 : 1.055 * Math.pow(Math.max(0, i), 1 / 2.4) - 0.055;
-    return Math.min(255, Math.max(0, Math.round(c * 255)));
-  });
-}
-
-// q / Yn — mix two hex colours in oklab
-export function mix(a, b, t) {
-  const A = oklab(a);
-  const B = oklab(b);
-  return toHex(fromOklab(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t));
-}
+// Hex, RGB and oklab maths: ../colour.js.
 
 // Se — WCAG relative luminance
 function luminance(hex) {
@@ -162,6 +116,22 @@ export const veilAlpha = (t, haze = MIST_DEFAULTS.haze, fade = 1) =>
 
 /** The crest rim's stroke width, CSS px. */
 export const rimWidth = h => Math.max(1, h * 0.0035);
+
+/** Device pixels per CSS px, at most, in both renderers. */
+export const MAX_DPR = 2;
+
+/** The grain tile's side, in texels (GL: a texture; layered: a CSS tile). */
+export const GRAIN_SIZE = 256;
+
+/**
+ * The engine's grain: GRAIN_SIZE² texels, each the mean of two uniform
+ * draws, so it clusters around mid-grey (neutral under `overlay`).
+ */
+export function grainTexels() {
+  const px = new Uint8Array(GRAIN_SIZE * GRAIN_SIZE);
+  for (let i = 0; i < px.length; i++) px[i] = Math.round(((Math.random() + Math.random()) / 2) * 255);
+  return px;
+}
 
 /** The grain layer's opacity (FINISH · Noise). */
 export const grainOpacity = recipe => (Math.max(0, Math.min(100, recipe.grain ?? 0)) / 100) * 0.5;

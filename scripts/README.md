@@ -4,7 +4,10 @@ Three scripts check the atmosphere's renderers: WebGL (`gl`) and the layered
 DOM fallback (`layers`). By default parity and perf run `layers` against
 `gl`. Use them whenever a renderer or the switch changes. Parity proves the
 look didn't move, perf proves the frames got cheaper, and switch proves a
-day/night switch has no cut.
+day/night switch has no cut. They drive Playwright's Chromium only; WebKit
+is checked by hand. Two `node --test` suites (`test:adaptive`, `test:unit`)
+cover the pure maths without a browser, and `hygiene` checks the served
+site.
 
 Run them against a production server, not `next dev`. The dev build is
 slower, and its overlay and HMR add noise:
@@ -52,17 +55,11 @@ per-case PNGs and `results.json`. The script exits with 1 if any case breaks a
 threshold or logs a console error, and 2 if the script itself crashes.
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
-mean under 2 with a p99 under 24 means two renderers look the same (`layers`
-against `gl` over the 42 default cases: worst mean .67, p99 3 at `0.2.0`;
-1.06, p99 10 at `0.2.6`). A
+mean under 2 with a p99 under 24 means two renderers look the same. A
 higher p99 with a low mean points at one local defect, and the `worst 32px
-block` coordinates say where to look.
-
-**At `0.2.6`** the layered fallback runs the same camera and light as GL,
-and a default run passes all 42 cases (worst mean 1.06, p99 10), with the
-hit target within .02 px of the painted body in every case. (`0.2.1`–`0.2.5`
-passed only the 14 `-s0` cases, while the fallback still ran the `0.2.0`
-camera.)
+block` coordinates say where to look. The current `layers`-against-`gl`
+result is under "Parity" in [`CLAUDE.md`](../CLAUDE.md#renderers); past
+runs are in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## `npm run perf`
 
@@ -151,18 +148,27 @@ frame (`reload`), for information only: neither renderer lands on a fresh
 load's scene by design. Exits 1 on a cut or a console error. The default 12
 cases take about ten minutes.
 
-At `0.2.7` (1440×900@1) the worst ratio is ×2.9, the palette ticking
-through 8-bit levels in both renderers alike, and the smallest cut it
-caught before the fix was ×3.2, so the limit is tight: raise it if it
-flakes on other hardware. Before → after, day → night / night → day:
-layers ×7.0/3.2 → 1.5/2.8 at scroll 0, ×6.6/4.6 → 1.7/2.4 at .5, ×7.0/22.7
-→ 2.1/2.0 at 1; GL 1.3–2.9, unchanged; GL `--live` ×3.7/2.9 → 1.2/1.4 at
-.5, ×6.7/4.4 → 1.3/1.5 at 1.
+The limit is tight: a clean switch peaks at ×2.9 (1440×900@1, the palette
+ticking through 8-bit levels in both renderers alike), and the smallest cut
+it has caught was ×3.2. Raise it if it flakes on other hardware. The
+`0.2.7` before/after numbers are in [`CHANGELOG.md`](../CHANGELOG.md).
 
 Caveats: layered `--live` runs are noisier (its veils run on the
 compositor's real clock, not the fake one). It doesn't judge GL's
 intended gradual reshape, only steps against their neighbours. It needs a
 GPU, so it's local, like parity and perf.
+
+## `npm run test:unit`
+
+`unit-test.mjs` (`node --test`) checks the scene's pure maths without a
+browser or a GPU: the colour module's round trips (`colour.js`: hex ↔ RGB,
+hex ↔ oklab, `mix` landing on its ends, every recipe colour a 6-digit hex),
+`paletteAt` hitting every keyframe exactly with no overshoot (`skyKeys.js`),
+and `sceneAt` (`scene.js`) at rest, at `about` 1, under reduced motion and
+mid-switch. The components import each other without file extensions, as
+the bundler allows, so the script runs under a resolve hook,
+`lib/resolve-js.mjs` (`node --import ./scripts/lib/resolve-js.mjs`). CI runs
+it beside `test:adaptive`.
 
 ## `npm run hygiene`
 
@@ -181,29 +187,24 @@ npm run hygiene -- --base http://localhost:3002   # default http://localhost:300
 ```
 
 CI (`.github/workflows/ci.yml`) runs it on every push to `main` and every PR,
-after `npm run test:adaptive` and `npm run build`. The runners have no GPU,
+after `npm run test:adaptive`, `npm run test:unit` and `npm run build`. The runners have no GPU,
 so parity, perf, switch and console errors aren't part of CI.
 
 ## Contract a renderer honours
 
-| Hook | Who | Meaning |
-|---|---|---|
-| `?renderer=gl` / `?renderer=layers` | page | Forces a renderer. With no param the page chooses (GL where supported, else layers). |
-| `data-renderer="gl" \| "layers"` | scene wrapper | Which renderer actually painted. The harness reports it, so a silent fallback is visible. |
-| `?freeze=1` | renderer | Draws time-dependent motion at its resting phase: veil drift offset **0** and veil opacity at its full value, and (GL) no idle drift and no wind over the meadow. Both renderers freeze the same way. |
-| `?scroll=<0..1>` | descent store | Pins the descent's `about` (components/scroll/descent.js), so a frame mid-descent can be compared or timed without scrolling. |
-| `?grain=0` | renderer | Omit the grain layer. Parity compares grain-free frames by default. |
-| `data-sun-cx`, `data-sun-cy` | scene wrapper | The painted sun's centre in CSS px, relative to the element carrying the attributes. Used for the sun hit-target check. Without it, the check reports "none" and doesn't fail. |
-| `button[data-sun-toggle]` | sun toggle | The day/night control. Tests should find it by role and name `/switch to/i`. |
-| `localStorage['abg-theme']` | theme | `day` or `night`, read before first paint. |
-| `?crest=cpu` | GL renderer | Compute ridge crests on the CPU instead of the GPU crest pass (the fallback path when float render targets are missing). |
-| `data-crest="gpu" \| "cpu"` | scene wrapper | Which crest path the GL renderer used. |
-| `?driftAt=<offset>` | GL renderer | Pin the idle seed-drift offset, even with `?freeze=1`. Use it to compare the two crest paths mid-drift. |
-| `data-seed` | scene wrapper | The seed last painted (GL: idle drift included, and it only increases across switches). Sample it per frame to check a switch starts from the drifted seed with no jump and never runs backward. |
-| `data-ready` | layered scene | Set once the layered renderer's ridge masks are painted. |
-| `data-busy` | sun button | Present while a switch runs; clicks are ignored until it clears. `perf.mjs` records each switch until then. |
-| `?off=<a,b>` | GL renderer | Compile shader features out, for profiling: `skip` (the hidden-ridge skip), `wash`, `bodies`, `ridges`, `slope`, `light`, `rim`, `meadow`, `veil`, `air`, `grain` (`OFF_FLAGS` in `mistShader.js`). Each becomes a `#define` at the shader's `// @defines` marker, so there's no cost without the flag. Unknown names are ignored. |
-| `?bench=<N>` | GL renderer | Once the frame settles (about 2.5 s after load), redraw it N times, each synced by a 1-px `readPixels`, and time a bare clear the same way. |
-| `data-bench`, `data-bench-base` | scene wrapper | The `?bench` results as "median p90" ms: the frame, and the bare clear (the sync's overhead). |
-| `?adapt=0` | GL renderer | Hold full resolution: no adaptive quality. Use it when comparing builds. |
-| `data-quality` | scene wrapper | The current resolution step as a share of the DPR (1, .875 or .75). |
+The URL parameters and `data-*` attributes the scripts rely on (the
+renderer, freeze, scroll, grain and crest switches; the painted sun's centre;
+`data-busy`, `data-seed`, `data-ready`, `data-quality`, `?bench` and
+`?adapt=0`; the theme key in localStorage) are one table: "Hooks" under
+"Renderers" in [`CLAUDE.md`](../CLAUDE.md#renderers). Change a hook there
+and in the scripts together. What the harness assumes on top of it:
+
+- `?freeze=1` freezes both renderers the same way (veil drift 0 at full
+  opacity; GL also no idle drift or wind), or parity can't compare them.
+- Without `data-sun-cx`/`data-sun-cy` the hit-target check reports "none"
+  and doesn't fail.
+- The sun button is found by `button[data-sun-toggle]` (or by role and the
+  name `/switch to/i`), and `perf` times each switch until `data-busy`
+  clears.
+- `data-renderer` is reported with every result, so a silent fallback to
+  `layers` shows.

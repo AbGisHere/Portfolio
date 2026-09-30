@@ -14,6 +14,8 @@
  *   little, like refraction flattens a real one, and deepens toward orange.
  */
 
+import { mixRgb } from './colour';
+
 const halo = x => (x <= 1 ? 0.2 : 0.2 * Math.max(0, 1 - (x - 1) / 0.9) ** 2);
 const haze = x => 0.14 * Math.max(0, 1 - x / 6.5) ** 1.6;
 
@@ -115,12 +117,6 @@ export const RIDGE_LIGHT = { rest: { a: 0.4, shade: 0.15, warm: 0.5, moon: 0.7 }
 // Colours come back as 0–255 float RGB, mixed in gamma-encoded RGB like the
 // shader's mix().
 
-const rgbOf = c => (typeof c === 'string' ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : c);
-export const mixRGB = (a, b, t) => {
-  const A = rgbOf(a);
-  const B = rgbOf(b);
-  return A.map((v, i) => v + (B[i] - v) * t);
-};
 
 /** [share of the extent, Gaussian] stops, exp(−u²) for u over 0…ext. */
 export const gaussStops = (n, ext) =>
@@ -137,8 +133,8 @@ export const MOON_GLOW = Array.from({ length: 17 }, (_, k) => {
 
 /** A setting sun's disc (shader: `core`, `edge`), from its colour `bc` and `set`. */
 export const setDisc = (bc, st) => ({
-  core: mixRGB(bc, DISC_WHITE, DISC_LIFT + (SET_CORE - DISC_LIFT) * st),
-  edge: mixRGB(bc, DISC_WHITE, DISC_LIFT + (SET_LIFT - DISC_LIFT) * st),
+  core: mixRgb(bc, DISC_WHITE, DISC_LIFT + (SET_CORE - DISC_LIFT) * st),
+  edge: mixRgb(bc, DISC_WHITE, DISC_LIFT + (SET_LIFT - DISC_LIFT) * st),
 });
 
 /**
@@ -155,12 +151,12 @@ export function sunWash(bodies) {
     rx: b.r * SET_WASH.wide,
     ry: b.r * SET_WASH.tall,
     peak: SET_WASH.a * b.set * b.alpha,
-    col: mixRGB(b.col, DISC_WHITE, SET_WASH.lift),
+    col: mixRgb(b.col, DISC_WHITE, SET_WASH.lift),
   };
 }
 
 /** A rim's colour and opacity under `washA` of the wash (shader: `rimCol`, `rimA`). */
 export const rimWash = (rim, rimA, washA, col) => ({
-  col: mixRGB(rim, col, Math.min(1, (washA * SET_WASH.rim) / SET_WASH.a)),
+  col: mixRgb(rim, col, Math.min(1, (washA * SET_WASH.rim) / SET_WASH.a)),
   a: Math.min(1, rimA + (washA * SET_WASH.rimA) / SET_WASH.a),
 });

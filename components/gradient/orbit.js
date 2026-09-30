@@ -1,6 +1,6 @@
-import { mistOf, mix, sunColour } from './gl/mistGeometry';
+import { mix } from './colour';
+import { mistOf, sunColour } from './gl/mistGeometry';
 import { paletteAt } from './skyKeys';
-import { skyRamp } from './skyRamp';
 import { SQUASH, SUNSET_COLOUR, SUNSET_MIX } from './sunLook';
 
 /**
@@ -171,23 +171,4 @@ export function orbitBodies(orbit, e, { w, h, sun, ridges, hidden: under = null 
     at(from + (Math.PI - SET_ANGLE - from) * e, orbit.prev, true), // going
     at(SET_ANGLE + (to - SET_ANGLE) * e, orbit.next, false), // coming
   ];
-}
-
-/**
- * The sky's colour at `f` (0 top … 1 bottom) of the frame, from the same ramp
- * every renderer paints. The layered renderer uses it for a body's `wash`;
- * the GL renderer samples its sky texture instead.
- */
-export function skyAt(stops, divs, f) {
-  const ramp = skyRamp(stops, divs);
-  const x = Math.min(1, Math.max(0, f));
-  if (x <= ramp[0][0]) return ramp[0][1];
-  for (let i = 1; i < ramp.length; i++) {
-    if (x <= ramp[i][0]) {
-      const [x0, c0] = ramp[i - 1];
-      const [x1, c1] = ramp[i];
-      return mix(c0, c1, (x - x0) / Math.max(1e-6, x1 - x0));
-    }
-  }
-  return ramp[ramp.length - 1][1];
 }

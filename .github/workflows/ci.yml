@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:adaptive
+      - run: npm run test:unit
       - run: npm run build
       - name: Hygiene checks against the production server
         run: |

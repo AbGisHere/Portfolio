@@ -1,4 +1,5 @@
-import { hexToLms, lmsToHex, tangents } from './skyRamp';
+import { hexToLms, lmsToHex } from './colour';
+import { tangents } from './skyRamp';
 
 /**
  * A palette partway through a switch that passes through in-between skies.

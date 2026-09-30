@@ -13,8 +13,7 @@
  *              Drift   -> mist.drift    (veil speed)
  *              Shuffle -> mist.seed     (ridge silhouette)
  *   COLOURS            -> stops + divs  (sky ramp, top to bottom)
- *   FINISH     Soften  -> fieldBlur    (px; `blur` is unused by MIST)
- *              Noise   -> grain
+ *   FINISH     Noise   -> grain
  *
  * `body`, `idle` and `transition` are ours, not the studio's. `transition`
  * sets how a switch into this scene runs: its length (the spring that holds
@@ -22,22 +21,16 @@
  * and the skies passed on the way (components/gradient/orbit.js).
  */
 const moonlit = {
-  version: 1,
-  name: 'Moonlit',
-  type: 'MIST',
   // Which body this scene's sky holds (see components/gradient/orbit.js):
   // the moon fades with daylight, the sun warms near the horizon.
   body: 'moon',
-  animated: true,
-  width: 2048,
-  height: 1494,
+  // The studio canvas (2048×1494): ridge noise is sampled per unit of
+  // height × aspect, so any viewport crops the range rather than squashing it.
   aspect: 1.3708165997322623,
+  // Veil speed: their animation durations scale by 50 / speed.
   speed: 30,
-  startT: 21.04700000000003,
 
   // FINISH
-  blur: 0,
-  fieldBlur: 0,
   grain: 9,
 
   // COLOURS — night sky down to deep shadow
@@ -56,7 +49,7 @@ const moonlit = {
 
   // Ours, not the studio's: at rest the seed breathes ±seedDrift around its
   // value on a `period`-second sine, so the ridges slowly shift. GL only; the
-  // SVG fallback stays still. 0 turns it off.
+  // layered fallback stays still. 0 turns it off.
   idle: { seedDrift: 0.5, period: 60 },
 
   // How this scene animates when it becomes the active theme.
@@ -93,24 +86,6 @@ const moonlit = {
     // The meadow's tint at the viewer's feet: moonlit blue-green.
     meadow: '#22323A',
   },
-
-  // Unused by MIST, kept so the recipe stays a drop-in studio export.
-  mesh: null,
-  params: null,
-  hexStyle: 'hive',
-  ballStyle: 'convex',
-  city: null,
-  pixelStyle: 'quilt',
-  cover: 50,
-  rings: 12,
-  weave: 20,
-  cube: null,
-  shapeForm: null,
-  shapeSoften: 0,
-  lines: [],
-  tile: 'square',
-  warp: 0,
-  refract: 50,
 };
 
 export default moonlit;

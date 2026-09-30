@@ -1,4 +1,5 @@
-import { mix, rgb01, ridgeBlur, ridgeColour, rimOpacity } from './gl/mistGeometry';
+import { mix, rgb01 } from './colour';
+import { ridgeBlur, ridgeColour, rimOpacity } from './gl/mistGeometry';
 import { ease } from './orbit';
 import { paletteAt } from './skyKeys';
 import { MOONSET, RIDGE_LIGHT, SET_COLOUR, SET_HALO, SET_MIX } from './sunLook';
@@ -206,7 +207,7 @@ export function frameAt(scene, h, cam) {
  * tilt shift at rest.
  */
 export const SKY = { top: 0.08, horizon: 0.24 };
-export function skyAt(frame, h) {
+export function skyUnder(frame, h) {
   if (frame.rest) return { scale: 1, shift: frame.shift };
   const k = frame.k;
   const c = frame.horizon + frame.shift;
@@ -384,7 +385,7 @@ export function bodyAt(b, recipe, frame, { w, h, restY, look = 1 }) {
  * catch it late in the stretch, not halfway). `restY` is where it rests in the
  * unscrolled sky.
  */
-export function bodyDrop(recipe, frame, { h, restY, r }) {
+function bodyDrop(recipe, frame, { h, restY, r }) {
   const m = recipe?.scroll?.body;
   const k = frame.k;
   if (!m || frame.rest || !k) return { dx: 0, dy: 0, low: 0 };
@@ -421,7 +422,7 @@ export const SET_EASE = 1.6;
  * colour the front ridge's fill has below its foot (`foot`, fill[2]), so the
  * seam doesn't show, fogs toward the viewer by ground distance, and ends at
  * the meadow colour. Painted over the front ridge, under its veil (the mist
- * bank at its feet), then the air (`airAt`) over both.
+ * bank at its feet), then the air over both.
  */
 export function groundPaint(stops, meadow, foot, frame, h, haze) {
   const top = frame.front;
@@ -454,18 +455,6 @@ export const meadowOf = (prev, next, e) => {
   const b = next?.scroll?.meadow;
   return a && b ? mix(a, b, e) : (b ?? a);
 };
-
-/**
- * The air band (the mist rising at the frame's foot) under the descent: it
- * follows the front ridge's foot, rising to its full opacity over 14% of the
- * height above it as at rest, then thinning to nothing at the frame's foot
- * over the meadow. Returns its opacity at y, given the air's full opacity.
- */
-export function airAt(y, frame, h, airA) {
-  const top = frame.front - 0.14 * h;
-  if (y <= frame.front) return y > top ? ((y - top) / (0.14 * h)) * airA : 0;
-  return airA * (1 - (y - frame.front) / Math.max(1, h - frame.front));
-}
 
 /**
  * The body's light on the ridges (sunLook.js RIDGE_LIGHT), for both

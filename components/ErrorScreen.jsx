@@ -1,6 +1,6 @@
 import Stage from './Stage';
 import themes from './gradient/themes';
-import { skyGradient } from './gradient/sky';
+import { SKY_VARS } from './gradient/sky';
 import styles from './ErrorScreen.module.css';
 
 // The scrim takes its tint from each scene's deepest stop, so it belongs to
@@ -8,11 +8,6 @@ import styles from './ErrorScreen.module.css';
 const TINTS = {
   '--deep-day': themes.day.recipe.stops.at(-1),
   '--deep-night': themes.night.recipe.stops.at(-1),
-};
-
-const STATIC_SKY = {
-  '--sky-day': skyGradient(themes.day.recipe),
-  '--sky-night': skyGradient(themes.night.recipe),
 };
 
 /**
@@ -29,7 +24,7 @@ const STATIC_SKY = {
 export default function ErrorScreen({ title, message, children, live = true }) {
   return (
     <Stage>
-      {!live && <div className={styles.staticSky} style={STATIC_SKY} aria-hidden="true" />}
+      {!live && <div className={styles.staticSky} style={SKY_VARS} aria-hidden="true" />}
       <div className={styles.copy} style={TINTS}>
         <h1 className={styles.title}>{title}</h1>
         <p className={styles.message}>{message}</p>
