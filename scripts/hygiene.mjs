@@ -4,16 +4,21 @@
 // the same on a laptop and in CI. What needs a real GPU or a browser (console
 // errors, the atmosphere on each viewport, parity, perf) stays manual.
 //
-//   node scripts/hygiene.mjs [--base http://localhost:3000]
+//   node scripts/hygiene.mjs [--base http://localhost:3000] [--quiet]
+//
+// `--quiet` (as `npm run qa` runs it): only failures, then one summary line.
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const argAt = process.argv.indexOf('--base');
 const BASE = (argAt > -1 ? process.argv[argAt + 1] : 'http://localhost:3000').replace(/\/$/, '');
 
+const QUIET = process.argv.includes('--quiet');
 const failures = [];
+let checks = 0;
 const check = (ok, what) => {
-  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${what}`);
+  checks++;
+  if (!ok || !QUIET) console.log(`${ok ? 'ok  ' : 'FAIL'}  ${what}`);
   if (!ok) failures.push(what);
 };
 
@@ -81,5 +86,11 @@ const walk = dir => {
 walk('.next/static');
 check(maps.length === 0, `no .map files in .next/static (${maps.length})`);
 
-console.log(failures.length ? `\n${failures.length} failed` : '\nall passed');
+console.log(
+  QUIET
+    ? `hygiene: ${checks - failures.length}/${checks} passed`
+    : failures.length
+      ? `\n${failures.length} failed`
+      : '\nall passed',
+);
 process.exit(failures.length ? 1 : 0);

@@ -5,7 +5,7 @@
  *   npm run build && npm run start -- -p 3001
  *   npm run switch -- --base http://localhost:3001
  *     [--renderers layers,gl] [--scrolls 0,0.5,1] [--viewport 1440x900@1]
- *     [--fps 30] [--after 1500] [--limit 3] [--live] [--steps] [--save]
+ *     [--fps 30] [--after 1500] [--limit 3] [--live] [--steps] [--save] [--quiet]
  *
  * Per renderer × descent position (`?scroll=`) × direction (day → night,
  * night → day), on Playwright's fake clock (rAF and performance.now
@@ -29,12 +29,16 @@
  * `--steps` prints every case's ridge steps; `--save` writes its frames to
  * scripts/out/switch/.
  *
+ * `--quiet` (as `npm run qa` runs it) prints only failing cases, then one
+ * summary line.
+ *
  * Takes about ten minutes for the default 12 cases. Exits 1 on a cut or a
  * console error.
  */
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
+import { watchConsole } from './lib/console.mjs';
 import { OUT_DIR, ensureDir, parseArgs, parseViewport, sceneUrl, seedTheme } from './lib/harness.mjs';
 
 const args = parseArgs();
@@ -48,6 +52,7 @@ const LIMIT = Number(args.limit ?? 3);
 const SAVE = Boolean(args.save);
 const LIVE = Boolean(args.live);
 const STEPS = Boolean(args.steps);
+const QUIET = Boolean(args.quiet);
 // Steps under this (0–255 mean) never count as a cut: a still frame's noise.
 const FLOOR = 0.25;
 const RIDGE_TOP = 0.45;
@@ -123,13 +128,7 @@ async function open(browser, renderer, theme, scroll) {
   });
   await seedTheme(context, theme);
   const page = await context.newPage();
-  const errors = [];
-  // (Chromium's note on the screenshots' own readbacks isn't the page's.)
-  page.on(
-    'console',
-    m => (m.type() === 'error' || m.type() === 'warning') && !/GPU stall due to ReadPixels/.test(m.text()) && errors.push(m.text()),
-  );
-  page.on('pageerror', e => errors.push(String(e)));
+  const errors = watchConsole(page);
   // Paused: time moves only on runFor, so a slow screenshot skips nothing.
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(1000);
@@ -204,7 +203,10 @@ async function blank(browser) {
 
 const browser = await chromium.launch();
 let failed = false;
-console.log(`switch  ${VP.name}${LIVE ? '  live' : ''}  ${FPS} fps  limit ×${LIMIT}  (step: mean abs 0–255; ratio: over its neighbours' median)`);
+let cases = 0;
+let passed = 0;
+let worstStep = 0;
+if (!QUIET) console.log(`switch  ${VP.name}${LIVE ? '  live' : ''}  ${FPS} fps  limit ×${LIMIT}  (step: mean abs 0–255; ratio: over its neighbours' median)`);
 for (const renderer of RENDERERS) {
   for (const scroll of SCROLLS) {
     for (const dir of DIRS) {
@@ -215,15 +217,19 @@ for (const renderer of RENDERERS) {
       const pk = worst('peak');
       const cut = r.ratio > LIMIT || a.ratio > LIMIT || pk.ratio > LIMIT;
       failed ||= cut || errors.length > 0;
-      console.log(
-        `${cut ? 'FAIL' : 'ok  '} ${renderer.padEnd(6)} scroll ${String(scroll).padEnd(3)} ${dir.name.padEnd(9)}` +
+      cases++;
+      if (!cut && !errors.length) passed++;
+      worstStep = Math.max(worstStep, r.ratio, a.ratio, pk.ratio);
+      if (!QUIET || cut || errors.length) console.log(
+        `${cut || errors.length ? 'FAIL' : 'ok  '} ${renderer.padEnd(6)} scroll ${String(scroll).padEnd(3)} ${dir.name.padEnd(9)}` +
           `  ridges ×${r.ratio.toFixed(1)} (${r.d.toFixed(2)} @${r.i})  all ×${a.ratio.toFixed(1)} (${a.d.toFixed(2)} @${a.i})` +
           `  peak ×${pk.ratio.toFixed(1)} (${pk.d.toFixed(1)} @${pk.i})` +
           `  landed @${landedAt}  reload ${reload.all.toFixed(2)}${errors.length ? `  errors: ${errors.join(' | ')}` : ''}`,
       );
-      if (STEPS) console.log(`       ${steps.map(s => s.ridges.toFixed(2)).join(' ')}`);
+      if (STEPS && !QUIET) console.log(`       ${steps.map(s => s.ridges.toFixed(2)).join(' ')}`);
     }
   }
 }
 await browser.close();
+if (QUIET) console.log(`switch: ${passed}/${cases} passed · worst step ×${worstStep.toFixed(1)} (limit ×${LIMIT})`);
 process.exit(failed ? 1 : 0);

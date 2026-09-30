@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up (done); next, `0.2.9` the fallback's tile dropout in Chrome. Per-release history: `CHANGELOG.md`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome (done); next, `0.2.10` sharpness on large high-DPI displays. Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -95,6 +95,49 @@ every version-line bump (`0.x` → `0.y`) so they keep up with UI decisions.
       Suggested by a Jules pass (2026-09-30); its other suggestions were
       declined: `SmoothScroll` re-queries the track on purpose (it persists
       across routes), and the grain loops run once per load.
+
+## Testing: only what a change touches
+
+**Status:** agreed 2026-09-30, for every version from here on. `0.2.9`
+brought `npm run qa` with two tiers (docs-only against everything); the
+per-part selection below is built when `0.3` starts, since nearly every
+`0.2.x` file is shared by the whole scene.
+
+The rule: a push tests the parts it changed, **and every part those changes
+reach**, and nothing else. Parts that weren't touched were proven in the
+release that last changed them.
+
+- **Worked example.** `0.3.1` builds the desk: test the desk. `0.3.2` adds
+  the grass: test the grass. `0.3.3` fixes the desk: test the desk only.
+  `0.3.4` adds the table lamp, whose light falls on the grass and the table:
+  test the lamp, the grass and the desk. `0.3.5` changes the desk again:
+  the desk only, unless the change reaches something else.
+- **How "reaches" is decided: the import graph, not judgement.** Each part
+  (mountains, desk, grass, lamp, pool, header and so on) maps to its entry
+  files and its checks. `qa` takes the changed files, walks the imports
+  outward to every module that uses them, and runs the checks of every part
+  it lands in. The lamp's light lives in a module the grass and the desk
+  both import, so changing it selects all three by itself. Shared code (the
+  renderers, the camera, colour, the sky, scroll) reaches every part, so
+  changing it runs everything.
+- **Things imports can't see.** A part can affect another without an
+  import: a shared uniform, a DOM layer's stacking or GPU memory (the
+  `0.2.9` dropout came from one part's layers starving the rest), or a
+  frame budget two parts share. Declare those links in the part map by
+  hand, and always run perf over the whole descent when any rendering code
+  changes, since frame time is shared by everything on screen.
+- **Full sweeps at milestones:** everything, at full depth, when a line
+  closes (before `0.3.0`, `0.4.0`, …) and before `1.0.0`, to catch whatever
+  the map missed.
+- **The same map scopes reading.** Work on a part reads that part's files
+  and the interfaces of what it reaches, never the code, docs or renders of
+  parts that already work. When `0.3` starts, split the per-part detail out
+  of `CLAUDE.md` into one short doc per part (`docs/parts/<part>.md`: its
+  files, interfaces, hooks, links and gate), leaving `CLAUDE.md` the rules
+  and an index, so a session loads only the part it's changing.
+- **Keep checks lean:** one check lives in one place (`CLAUDE.md`,
+  "Pre-push checks"). A new part adds its cases to the existing harnesses
+  rather than a new script.
 
 ## Trust, privacy and accessibility
 
@@ -286,50 +329,57 @@ page shows text.
     commit both or neither.
   - Is the "admin surface" open task still wanted?
 
-**`0.2.9`: the fallback's tile dropout in Chrome** (found 2026-09-30, after
-`0.2.8`). **Live since `0.2.6`**, on the layered fallback only, which WebGL
-browsers never pick unless it's forced.
+**`0.2.9`: the fallback's tile dropout in Chrome** (done, 2026-09-30).
+`0.2.6` gave nearly every ridge part its own GPU layer to hold 120 fps: 97
+layers, about 537 MB at 1792×1120@2. Past Chrome's GPU memory, tiles dropped
+out mid-scroll (dark blocks, ridges at the wrong height); headless Chrome
+never showed it, so parity and perf passed. Fixed by moving colour into small
+canvases the compositor stretches, two masks per ridge instead of three,
+masks that never re-raster mid-scroll, and an exact ridge light; tiled
+layers 73 → 20, live tile memory 222 → 60 MB at 1792×1120@2 (`CHANGELOG.md`).
+`perf --gate` now checks for dropout under a capped GPU memory. The same
+release brought `npm run qa`.
 
-- **The symptom.** The user's screen recording (Chrome, `?renderer=layers`,
-  a 1792-wide window at 2×) shows whole blocks of the scene vanishing for a
-  frame or two while scrolling: rectangles of the dark sky colour, bands of
-  ridges drawn at the wrong height, a slab across the foot. Safari was fine.
-  Headless Chrome at its default GPU memory never shows it, so parity, perf
-  and `npm run switch` all passed.
-- **The cause.** `0.2.6`'s scroll-cost fix gave nearly every ridge part its
-  own GPU layer (`will-change: transform` on `.ridge`, `.beam`, `.glow`,
-  `.disc`, `.wash`, besides `.cam`, `.sky` and `.drift`). That makes 97
-  composited layers, about 537 MB of layer texture at 1792×1120@2, many of
-  them full-width and masked. Past Chrome's GPU memory budget, it drops
-  tiles. Reproduced headless with `--force-gpu-mem-available-mb=256`: 20
-  of 242 screencast frames had dark blocks in the sky.
-- **The naive fix fails the perf bar.** Dropping `will-change` from the
-  per-part layers, as `0.2.5` had it (only `.cam`, `.sky` and `.drift`
-  composited), clears the dropout (54 layers, 0 bad frames under the same
-  cap), but scroll falls to 62–64 fps at 1440×900@2 and 1792×1120@2 (from
-  118–119), with 42–61 frames over 20 ms.
-- **The plan.** Keep the scroll at 120 fps with a small layer budget:
-  - Fewer, smaller composited layers: crop each part to its visible band.
-  - Merge a ridge's parts where the paint order allows.
-  - Composite only the layers that move differently from their parent: the
-    ridge's camera wrapper, the light's beam.
-  - Measure layer count and texture memory per frame through CDP
-    `LayerTree`.
-  - Add a dropout check to the harness: a screencast under a capped GPU
-    memory, failing on dark blocks. It should also run at the owner's
-    window size (1792×1120@2) and at 3440×1440.
-- **The gate:** no dropout under the capped memory; scroll 118+ fps at
-  1440×900@2, 1792×1120@2 and 393×852@2; parity 42/42; `npm run switch`
-  12/12.
+**`0.2.10`: sharpness on large high-DPI displays** (the owner asked,
+2026-09-30). GL draws at most 4K's pixel count (`MAX_PIXELS`,
+`MistCanvas.jsx`) and 2× the CSS pixels (`MAX_DPR`), then scales up. A 5K
+display (5120×2880) is drawn at about .75 of its resolution per axis, and a
+6K one (6016×3384) at about .64. The mist and sky can't show it; the crest
+rims and the grain may read slightly soft.
+
+- **Measure first.** Render 5K@2 and 6K@2 frames (headless, `?freeze=1
+  &grain=0` and with grain, at scroll 0, .5 and 1, both themes) capped and
+  uncapped. Compare crops of the crests and the grain side by side, and
+  record GPU time per frame for each (`?bench`). If no difference shows,
+  keep the cap and record why.
+- **If it shows:** raise the cap only when the GPU has headroom. Adaptive
+  quality already measures frame time against the refresh; give it a step
+  above today's cap (up to native resolution) that it takes only after the
+  p90 has held well inside budget, and drops first when frames run long.
+  Same hysteresis and lockout as today's steps.
+- **The layered fallback:** check that its ridge masks and grain stay crisp
+  at 5K and 6K too (masks are built per viewport; a CSS gradient is always
+  native).
+- **The gate:** at 5K and 6K no visible softening against uncapped in the
+  crest and grain crops, or a recorded reason it's not worth the GPU cost;
+  120 fps kept at 1728×1117@2 and 1440×900@2 (`npm run perf`); parity 42/42;
+  `npm run test:adaptive` covers the new step.
+
+**Standing rule from `0.2.10` on: quality holds on every display.** Every
+new layer, scene and version (the desk, the pool, the header, the device
+screen) must look as sharp as the display allows, from a 393-wide phone at
+3× to a 6K monitor at 2×, and as smooth as its refresh allows (60, 120, 144
+Hz and up). Any resolution cap or quality step is measured on large
+high-DPI frames before it ships, and relaxed when the GPU has room. Checked
+before every push (`CLAUDE.md`, "Pre-push checks").
 
 **Gate.** Within `0.2.x` the layered fallback may lag GL, but every `0.2.x`
 feature is ported to it, with parity passing, before any `0.3.x` work
 starts. **Met at `0.2.6`:** the fallback runs the `0.2.1` descent with
 `0.2.2`'s look, `0.2.3`'s `hidden` line and `0.2.5`'s resting light, and
-parity passes all 42 cases (worst mean 1.06, p99 10), with the hit target
-within .02 px at every scroll. Accepted differences: no idle drift or
-reshaping in the fallback, no wind, and its colours up to 30 ms behind
-mid-scroll.
+parity passes all 42 cases (worst mean 1.06, p99 10; 0.96 and 4 since
+`0.2.9`), with the hit target within .02 px at every scroll. Accepted
+differences: no idle drift or reshaping in the fallback, and no wind.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the

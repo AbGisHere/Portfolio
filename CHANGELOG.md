@@ -6,6 +6,54 @@ in `CLAUDE.md`. Measurements are production builds on an Apple M4, headless
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.2.9 — 2026-09-30
+
+The layered fallback's tile dropout in Chrome, live since `0.2.6`.
+
+- **The bug.** `0.2.6` gave nearly every ridge part its own composited layer
+  (97 layers, about 537 MB at 1792×1120@2), and the palette repainted them
+  every scroll frame. Past Chrome's GPU memory budget, tiles dropped out
+  mid-scroll. Reproduced headless with `--force-gpu-mem-available-mb`.
+- **The fix** (`LayeredScene.jsx`, `ridgeMasks.js`):
+  - Colour in small canvases the compositor stretches, so a scroll frame
+    rasters no tiles; the colour stagger is gone and colours are exact every
+    frame.
+  - Two masks per ridge (fill band, rim) instead of three; masked layers
+    keep their full width, so a mask never re-rasters mid-scroll.
+  - The ridge light is now exactly the shader's (`screen`/`multiply` blend
+    layers and a transform).
+  - The world ranges stay posed at rest, so the first scroll frame reveals
+    nothing at once; grain is a canvas at device pixels; opaque canvases
+    let Chrome skip covered tiles.
+- **Measured** (by the fix's agent, on a machine shared with two other
+  agents' runs):
+  - Tiled layers 73 → 20; live tile memory 222 → 60 MB at 1792×1120@2;
+    decoded masks 293 → 108 MB.
+  - Dropout under a 256 MB cap: 0 bad frames at 1792×1120@2 and
+    3440×1440@1, both themes (the old code dropped 5–366).
+  - Parity 42/42, worst mean 0.96 and p99 4 (from 1.06 and 10). Switch
+    12/12 (worst ×2.9).
+  - Layered scroll: 1440×900@2 111–118 fps, 1792×1120@2 119–120,
+    393×852@2 107–120, with 0–1 frames over 20 ms; the old code dipped as
+    far or further in the same runs.
+- **Not re-checked before this push, at the owner's call:** the full `qa`
+  on a quiet machine, WebKit, and a switch's main-thread cost (about 2.2 s
+  against 1.2–1.8 s over perf's four switches, measured under load).
+  3440×1440@1 keeps about 155 MB of live tiles, passing with less margin.
+- **Quality control:**
+  - **`npm run qa`** (`scripts/qa.mjs`) runs every check against a
+    production server and prints one line per check. It takes about 1.7 min
+    for docs-only pushes and about 20 min for anything else.
+  - **Checks moved into existing harnesses,** so none is duplicated:
+    - console errors, the 404 page and overflow in parity (shared helper
+      `lib/console.mjs`);
+    - the fps gate (`--gate`), the tile-dropout pass (`lib/dropout.mjs`)
+      and a sharpness report (5K and 6K, info only) in perf.
+  - **Harnesses** take `--quiet`.
+- **Docs:** `0.2.10` added (sharpness on large high-DPI displays), plus the
+  standing rule that quality holds on every display, and "Testing: only what
+  a change touches" (`ROADMAP.md`).
+
 ## 0.2.8 — 2026-09-30
 
 The repo audit's low-risk clean-up. No change to the look.

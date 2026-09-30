@@ -8,13 +8,18 @@
  *        [--viewports 393x852@2,1440x900@2] [--themes day,night]
  *        [--scrolls 0,0.5,1]
  *        [--settle 2500] [--sun-tolerance 1] [--a layers --b gl] [--grain]
- *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v]
+ *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v] [--quiet]
+ *
+ * First it loads home and the 404 with each renderer and switches the sky
+ * once. Every page load fails on a console error or warning, a page error or
+ * sideways overflow (scripts/lib/console.mjs).
  *
  * Writes scripts/out/parity/index.html (a | b | diff per case) and exits
- * non-zero if any case breaks a threshold. Contract: scripts/README.md.
+ * non-zero if any case breaks a threshold. `--quiet` (as `npm run qa` runs
+ * it) prints only failing cases, then one summary line. Contract: scripts/README.md.
  */
 import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { chromium } from '@playwright/test';
 import {
   OUT_DIR,
@@ -26,6 +31,7 @@ import {
   sleep,
   viewportsFrom,
 } from './lib/harness.mjs';
+import { overflowsX, watchConsole } from './lib/console.mjs';
 
 const args = parseArgs();
 const BASE = args.base ?? 'http://localhost:3001';
@@ -35,6 +41,9 @@ const SETTLE = Number(args.settle ?? 2500);
 const SUN_TOL = Number(args['sun-tolerance'] ?? 1); // CSS px
 const A = args.a ?? 'layers';
 const B = args.b ?? 'gl';
+const QUIET = Boolean(args.quiet);
+// Per-case lines: every one by hand, only failures under --quiet.
+const say = (ok, line) => (!ok || !QUIET) && console.log(line);
 const GRAIN = Boolean(args.grain); // off by default: random noise can't match pixel-for-pixel
 // Extra query params: `--query` for both sides, `--query-a` / `--query-b` for
 // one (e.g. `--a gl --b gl --query-b crest=cpu` compares the GL crest paths).
@@ -89,9 +98,7 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
   await seedTheme(context, theme);
   await context.addInitScript(seedRandom);
   const page = await context.newPage();
-  const errors = [];
-  page.on('console', m => m.type() === 'error' && errors.push(m.text()));
-  page.on('pageerror', e => errors.push(String(e)));
+  const errors = watchConsole(page);
 
   const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), scroll: String(scroll), ...QUERY[side] };
   await page.goto(sceneUrl(BASE, renderer, query), { waitUntil: 'load' });
@@ -124,9 +131,10 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
     sun.offset = Math.hypot(sun.target.x - sun.painted.x, sun.target.y - sun.painted.y);
   }
 
+  const overflow = await overflowsX(page);
   const png = await page.screenshot({ type: 'png' });
   await context.close();
-  return { png, painted, sun, errors };
+  return { png, painted, sun, errors, overflow };
 }
 
 /**
@@ -228,11 +236,52 @@ async function diff(page, aPng, bPng) {
 
 const fmt = n => (n == null ? '—' : Number(n).toFixed(2));
 
+// Pages beyond the pinned scenes: home and the 404, per renderer, each with
+// one day/night switch, so a console error or warning on load or on the
+// toggle fails parity (Chromium only; WebKit stays a manual check).
+const PAGES = ['/', '/this-route-does-not-exist'];
+
+async function checkPage(browser, renderer, path) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors = watchConsole(page);
+  const problems = [];
+  const res = await page.goto(sceneUrl(new URL(path, BASE).toString(), renderer), { waitUntil: 'load' });
+  if (path !== '/' && res?.status() !== 404) problems.push(`status ${res?.status()}, expected 404`);
+  await page.waitForSelector('[data-renderer]', { timeout: 15000 }).catch(() => {});
+  await sleep(1500);
+  const painted = await readRenderer(page);
+  const sun = page.locator('button[data-sun-toggle]');
+  if (await sun.count()) {
+    await sun.click();
+    await page
+      .waitForFunction(() => !document.querySelector('button[data-sun-toggle][data-busy]'), null, { timeout: 10000 })
+      .catch(() => problems.push('switch never finished (data-busy stuck)'));
+    await sleep(300);
+  } else problems.push('no sun toggle');
+  if (await overflowsX(page)) problems.push('overflows sideways (scrollWidth > innerWidth)');
+  await context.close();
+  if (errors.length) problems.push(`console: ${errors.join(' | ')}`);
+  return { painted, problems };
+}
+
 async function main() {
   const browser = await chromium.launch();
   const differ = await (await browser.newContext()).newPage();
   const cases = [];
   let failed = 0;
+
+  for (const renderer of [...new Set([A, B])]) {
+    for (const path of PAGES) {
+      const { painted, problems } = await checkPage(browser, renderer, path);
+      if (problems.length) failed++;
+      say(
+        !problems.length,
+        `${problems.length ? 'FAIL' : 'ok  '} ${`page ${renderer} ${path}`.padEnd(28)} ` +
+          `painted ${painted}  load + switch: ${problems.length ? problems.join('; ') : 'no console errors, no overflow'}`,
+      );
+    }
+  }
 
   for (const vp of VIEWPORTS) {
     for (const theme of THEMES) {
@@ -262,6 +311,7 @@ async function main() {
             problems.push(`${label} sun target off by ${fmt(cap.sun.offset)}px`);
           }
           if (cap.errors.length) problems.push(`${label} console: ${cap.errors[0]}`);
+          if (cap.overflow) problems.push(`${label} overflows sideways (scrollWidth > innerWidth)`);
         }
         // Both renderers must report the same painted sun (they move it alike).
         const pa = a.sun.painted;
@@ -283,7 +333,8 @@ async function main() {
           problems,
         };
         cases.push(row);
-        console.log(
+        say(
+          !problems.length,
           `${problems.length ? 'FAIL' : 'ok  '} ${id.padEnd(28)} ` +
             `painted ${A}=${a.painted} ${B}=${b.painted}  ` +
             `mean ${fmt(d.mean)}  p99 ${d.p99 ?? '—'}  worst32 ${fmt(d.worst?.mean)}  ` +
@@ -297,7 +348,13 @@ async function main() {
 
   writeFileSync(join(OUT, 'results.json'), JSON.stringify({ base: BASE, A, B, cases }, null, 2));
   writeFileSync(join(OUT, 'index.html'), report(cases));
-  console.log(`\n${cases.length - failed}/${cases.length} passed · report: ${join(OUT, 'index.html')}`);
+  const total = cases.length + PAGES.length * new Set([A, B]).size;
+  const worst = k => Math.max(0, ...cases.map(c => c[k] ?? 0));
+  console.log(
+    QUIET
+      ? `parity: ${total - failed}/${total} passed · worst mean ${fmt(worst('mean'))}, p99 ${worst('p99')} · ${relative(process.cwd(), OUT)}`
+      : `\n${total - failed}/${total} passed · report: ${join(OUT, 'index.html')}`,
+  );
   process.exit(failed ? 1 : 0);
 }
 

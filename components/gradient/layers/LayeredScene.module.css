@@ -1,6 +1,8 @@
 /* The layered fallback (LayeredScene.jsx). Every layer is positioned from
    JS in CSS px from the top-left; transforms and opacity only, so moving
-   them is compositing, not repainting. */
+   them is compositing, not repainting. Colours are small canvases the
+   compositor stretches over their boxes (no tiles to raster when a colour
+   moves); only the ridge masks are rastered. */
 .scene {
   position: absolute;
   inset: 0;
@@ -14,9 +16,12 @@
   visibility: hidden;
 }
 
+/* (A canvas is sized by its box, never by its texels.) */
 .fill {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 /* The sky's ramp over the frame's height, which the descent stretches and
@@ -63,18 +68,32 @@
   background-blend-mode: multiply;
 }
 
-/* A ridge's parts: each its own layer, so a mask is applied on the
-   compositor, and one part's repaint never redraws the others. */
+/* A ridge's parts: its body, then its band (the fill and its light) and its
+   rim, each masked on the compositor. The hint keeps a mask rastered at one
+   scale while the camera scales it. */
 .ridge {
   will-change: transform;
   mask-repeat: no-repeat;
   -webkit-mask-repeat: no-repeat;
 }
 
-/* A ridge's light at full strength (camera.js ridgeLightAt), faded in across
-   its column by a fixed mask (LayeredScene.jsx BEAM), which the transform
-   places and sizes. */
-.beam {
+/* A ridge's light and shade over its fill, at the top of its band: the
+   unshaded fill, then the light as a group screened over it, the falloff
+   times the tint across the frame, which a transform places and sizes
+   (LayeredScene.jsx paintUnshade, paintFalloff, paintTint). */
+.light,
+.lit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.lit {
+  mix-blend-mode: screen;
+}
+
+.tint {
   position: absolute;
   top: 0;
   left: 0;
@@ -82,8 +101,7 @@
   height: 100%;
   transform-origin: 0 0;
   will-change: transform;
-  mask-repeat: no-repeat;
-  -webkit-mask-repeat: no-repeat;
+  mix-blend-mode: multiply;
 }
 
 .drift {
@@ -97,17 +115,16 @@
   width: 100%;
 }
 
-/* A setting sun's wash and spill: a solid colour under a Gaussian (0.2.6). */
+/* A setting sun's wash and spill: its colour under a Gaussian (0.2.6). */
 .wash {
   will-change: transform;
-  mask-repeat: no-repeat;
-  -webkit-mask-repeat: no-repeat;
 }
 
+/* A canvas at the device's pixels (LayeredScene.jsx layGrain). */
 .grain {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   mix-blend-mode: overlay;
-  background-size: 256px 256px;
-  image-rendering: pixelated;
 }

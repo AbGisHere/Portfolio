@@ -36,9 +36,11 @@ import { descentAt, descentOf, frameAt } from '../camera';
  *
  * The body's light on a ridge (../camera.js ridgeLightAt) falls off below the
  * crest over RIDGE_LIGHT.depth of the height, times the ridge's scale, so in
- * the ridge's own terms it doesn't depend on the camera: its `glow` mask is
- * the fill's edge times that falloff, baked once too. How strong the light
- * is, and where across the frame, is live CSS on the layer.
+ * the ridge's own terms it doesn't depend on the camera: that falloff is
+ * baked once too (`light`), as a small canvas of alpha, a texel per
+ * LIGHT_TEXEL CSS px (it's smooth; the fill's mask takes care of the edge).
+ * How strong the light is, and where across the frame, is painted live over
+ * it (LayeredScene.jsx paintLight).
  */
 
 // Past ±6σ the edge is fully on or off in 8 bits (the shader clamps there).
@@ -46,6 +48,8 @@ const REACH = 6;
 // The light's falloff below the crest, in its depths: past this it's under
 // half a level at its strongest (RIDGE_LIGHT: a × (1 + far) ≈ .39).
 const GLOW_REACH = 5.5;
+// CSS px per texel of the light's falloff.
+const LIGHT_TEXEL = 2;
 
 // The shader's standard normal CDF (mistShader.js `Phi`).
 function phi(x) {
@@ -64,6 +68,18 @@ function edgeSigma(ridge, rc, h, aa) {
 }
 
 const yieldToMain = () => new Promise(r => setTimeout(r, 0));
+
+// An alpha texture as a canvas (white), to draw from.
+function toCanvas(alpha, cols, rows) {
+  const data = new ImageData(cols, rows);
+  data.data.fill(255);
+  for (let i = 0, j = 3; i < alpha.length; i++, j += 4) data.data[j] = alpha[i];
+  const c = document.createElement('canvas');
+  c.width = cols;
+  c.height = rows;
+  c.getContext('2d').putImageData(data, 0, 0);
+  return c;
+}
 
 async function toUrl(alpha, cols, rows) {
   const data = new ImageData(cols, rows);
@@ -98,9 +114,9 @@ const SAMPLES = Array.from({ length: 41 }, (_, i) => i / 40);
  * ridge the descent can show under any of `recipes` (the scenes whose camera
  * may run). Resolves to { ridges: [{ noise, top, base, bottom, fill, rim,
  * glow }], revoke }, in paint order with the world ranges in depth order
- * among the recipe's; `fill`, `rim` and `glow` are { url, left, width, top,
- * height } bands in
- * CSS px, and `bottom` is how far down the fill must reach (in the ridge's
+ * among the recipe's; `fill` and `rim` are { url, left, width, top, height }
+ * bands in CSS px, `glow` the light's falloff as { image (a canvas), left,
+ * width, top, height }, and `bottom` is how far down the fill must reach (in the ridge's
  * own, unscaled terms) to cover the frame wherever the camera puts it.
  * Yields to the main thread between ridges.
  */
@@ -169,13 +185,10 @@ export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false, r
     const r0 = Math.floor(lo / sy - 0.5);
     const r1 = Math.ceil(hi / sy + 0.5);
     const rows = Math.max(1, r1 - r0);
-    // The glow runs on from the same top to where the light has died out.
+    // The light runs on from the same top to where it has died out.
     let low = -Infinity;
     for (let x = 0; x < cols; x++) low = Math.max(low, crest[x]);
     const g1 = Math.max(r0 + 1, Math.ceil((low + GLOW_REACH * depth) / sy + 0.5));
-    const glowRows = g1 - r0;
-    const glow = new Uint8ClampedArray(cols * glowRows);
-
     const fill = new Uint8ClampedArray(cols * rows);
     const rim = new Uint8ClampedArray(cols * rows);
     for (let x = 0; x < cols; x++) {
@@ -191,26 +204,27 @@ export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false, r
         fill[i] = Math.round(phi(d / sigma) * 255);
         rim[i] = Math.round((phi((d + hw) / sigma) - phi((d - hw) / sigma)) * 255);
       }
-      // The glow: the edge times the light's falloff straight down from the
-      // crest (the shader's, unslanted).
-      for (let y = from; y < g1; y++) {
-        const py = (y + 0.5) * sy;
-        const edge = y < to ? phi(((py - c) * kx) / sigma) : 1;
-        glow[(y - r0) * cols + x] = Math.round(edge * Math.exp(-Math.max(0, py - c) / depth) * 255);
+    }
+    // The light's falloff straight down from the crest (the shader's,
+    // unslanted), at each texel's centre.
+    const glowH = (g1 - r0) * sy;
+    const lc = Math.max(1, Math.round((cols * sx) / LIGHT_TEXEL));
+    const lr = Math.max(1, Math.round(glowH / LIGHT_TEXEL));
+    const light = new Uint8ClampedArray(lc * lr);
+    for (let i = 0; i < lc; i++) {
+      const c = crest[Math.min(cols - 1, Math.floor(((i + 0.5) * cols) / lc))];
+      for (let j = 0; j < lr; j++) {
+        const py = r0 * sy + ((j + 0.5) * glowH) / lr;
+        light[j * lc + i] = Math.round(Math.exp(-Math.max(0, py - c) / depth) * 255);
       }
     }
-
     const top = r0 * sy;
     const bandH = rows * sy;
-    const [fillImg, rimImg, glowImg] = await Promise.all([
-      toUrl(fill, cols, rows),
-      toUrl(rim, cols, rows),
-      toUrl(glow, cols, glowRows),
-    ]);
+    const [fillImg, rimImg] = await Promise.all([toUrl(fill, cols, rows), toUrl(rim, cols, rows)]);
     const fillUrl = fillImg.url;
     const rimUrl = rimImg.url;
-    urls.push(fillUrl, rimUrl, glowImg.url);
-    keep.push(fillImg.img, rimImg.img, glowImg.img);
+    urls.push(fillUrl, rimUrl);
+    keep.push(fillImg.img, rimImg.img);
     const left = -ext * sx;
     const width = cols * sx;
     out.push({
@@ -221,7 +235,7 @@ export async function ridgeMasks(recipe, w, h, dpr, isCancelled = () => false, r
       bottom: bottoms[b] + 0.02 * h + 2,
       fill: { url: fillUrl, left, width, top, height: bandH },
       rim: { url: rimUrl, left, width, top, height: bandH },
-      glow: { url: glowImg.url, left, width, top, height: glowRows * sy },
+      glow: { image: toCanvas(light, lc, lr), left, width, top, height: glowH },
     });
     await yieldToMain();
   }

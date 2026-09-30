@@ -85,12 +85,27 @@ against a running production server: `lang`, titles and descriptions, the
 `<h1>` count, `<img>` alt, source maps, the 404, robots, sitemap, llms.txt,
 favicon, canonical, OG image and JSON-LD. CI (`.github/workflows/ci.yml`)
 runs `npm run test:adaptive`, `npm run test:unit`, the build and hygiene on
-every push to `main` and every PR. CI has no GPU, so console errors, the
-atmosphere on each viewport, parity, perf and the switch check stay local:
-run `npm run parity`, `npm run perf` and `npm run switch`
-(`scripts/README.md`) whenever a renderer, the recipe maths or the switch
-changes. The committed scripts launch only Chromium; WebKit is checked by
-hand.
+every push to `main` and every PR. CI has no GPU, so the rest runs locally.
+
+**Quality control runs before every push** (the owner's rule, from
+`0.2.9`): `npm run qa` against the production server, in one of two tiers
+it picks from the diff against `origin/main` (`scripts/README.md`):
+
+| Push | Tier | Runs |
+|---|---|---|
+| Only docs (`*.md`, `*.txt`, `LICENSE`) | quick | both test suites, hygiene, parity at scroll 0 |
+| Anything else | full | the quick tier, plus parity at every scroll, perf with its gate, switch |
+
+From `0.3` on, the full tier narrows further: `qa` tests only the parts a
+change reaches, found through the import graph plus declared links, with a
+full sweep when a line closes and before `1.0.0` (`ROADMAP.md`, "Testing:
+only what a change touches").
+
+`qa` only runs the other scripts and prints one table; no check lives in
+two places. Console errors, overflow and the hit target are checked inside
+parity; tile dropout and the sharpness report inside perf. Report the table
+with the push; a failure blocks the push until it's fixed or the owner
+accepts it. The scripts launch only Chromium; WebKit is checked by hand.
 
 - [ ] `<html lang="en">` present.
 - [ ] Every route has its own `<title>` and meta description. No duplicates, and
@@ -113,6 +128,10 @@ hand.
 - [ ] The atmosphere still adapts: phone portrait/landscape, iPad, laptop,
       ultrawide, and one odd aspect. No squashed ridges, no horizontal
       overflow, and the sun hit target sits on the painted sun.
+- [ ] Quality holds on every display (the standing rule from `0.2.10`,
+      `ROADMAP.md`): no visible softening on large high-DPI frames (5K@2,
+      6K@2), and nothing tied to 120 Hz. Any new resolution cap or quality
+      step is measured there before it ships.
 
 ## Reading the repo (keep context lean)
 
@@ -128,6 +147,21 @@ A project rule, for every session and every subagent brief:
   something visually, and crop it to the region first.
 - **Delegate big sweeps** (docs passes, wide searches) to a subagent, which
   returns a summary instead of the raw reads.
+- **Passing checks cost one line.** Harnesses print a single summary line
+  per check when it passes; detail (per-case tables, diff images, frame
+  dumps) is written to their out dir and printed only for what failed.
+  Read only the failures, never a passing check's detail.
+- **Images only to judge a failure,** cropped to the region in question,
+  and never again once it's fixed. Nothing already verified gets re-read,
+  re-run or re-screenshotted to "double-check".
+- **Read only the part you're changing.** Working on one part (say the
+  grass) means reading its files and the interfaces of what it reaches (the
+  same reach `qa` uses, `ROADMAP.md`, "Testing: only what a change
+  touches"), not the code, docs or renders of parts that already work (the
+  desk). Subagent briefs name exactly those files.
+- **Subagents report short:** a final message of a few lines with the
+  numbers and the paths to their notes; no pasted logs, no images unless
+  asked.
 
 ## Commands
 
@@ -139,8 +173,9 @@ npm run test:adaptive  # adaptive-quality unit tests (no GPU; CI)
 npm run test:unit      # colour, paletteAt and sceneAt unit tests (no GPU; CI)
 npm run hygiene        # pre-push checks against a running prod server (CI)
 npm run parity         # layered vs GL, pixel by pixel (local, GPU)
-npm run perf           # frame timing and main-thread cost (local, GPU)
+npm run perf           # frame timing, fps gate, tile dropout (local, GPU)
 npm run switch         # no cut in a day/night switch, frame by frame (local, GPU)
+npm run qa             # runs the checks above, one table; before every push (local, GPU)
 ```
 
 ## Tech Stack
@@ -210,7 +245,8 @@ components/
     recipes/dusk-ember.js, moonlit.js — the day and night scenes
   (each component's styles sit beside it as Component.module.css)
 .github/workflows/ci.yml — test:adaptive, test:unit, build, hygiene (no GPU checks)
-scripts/          — parity, perf, switch, adaptive-test, unit-test (+ lib/resolve-js.mjs), hygiene
+scripts/          — qa (runs the rest), parity, perf, switch, adaptive-test, unit-test, hygiene;
+                    lib/: console (shared console check), dropout (tile dropout), resolve-js
 .env.example      — optional config (SITE_URL); LICENSE — all rights reserved
 ```
 
@@ -309,41 +345,51 @@ was ported from is in git history before `0.1.8`.)
   - **Lost context:** `AtmosphereField` shows the layered fallback and
     retries WebGL every 2s, up to 3 times.
 - **Layered (fallback)**, `components/gradient/layers/`: stacked DOM layers
-  in the shader's paint order (sky, glow and disc, per ridge a fill, rim,
-  light glow and veil, then air and grain), composited rather than
-  repainted.
-  - Everything is CSS gradients except each ridge's silhouette, an alpha
-    mask `ridgeMasks.js` computes with the shader's own maths, as a PNG
-    blob. **Decode each mask before CSS points at it**: Safari paints a
-    still-loading mask as no mask and never repaints.
+  in the shader's paint order (sky, glow and disc, per ridge a fill, light
+  and rim, veil, then air and grain), composited rather than repainted.
+  - **Colour lives in small canvases the compositor stretches** (`0.2.9`):
+    vertical gradients 1×512 texels, radial ones 128², rims 1×1. A colour
+    change redraws a few hundred texels, so a scroll frame rasters no
+    tiles, and colours are exact every frame. Opaque body and sky canvases
+    (`alpha: false`) let Chrome skip the tiles they cover. **Keep the
+    tiled-layer budget small:** past Chrome's GPU memory, tiles drop out
+    mid-scroll (the `0.2.6` regression: ~97 layers, ~537 MB at 1792×1120@2;
+    now 20 tiled layers, ~60 MB). `npm run perf -- --gate` checks it under
+    a capped GPU memory.
+  - Each ridge's silhouette is an alpha mask `ridgeMasks.js` computes with
+    the shader's own maths, as a PNG blob. **Decode each mask before CSS
+    points at it**: Safari paints a still-loading mask as no mask and never
+    repaints.
   - **One silhouette** through every switch (the scene it loaded with; only
-    the light changes). Masks are built once for all nine ridges over their
-    widest span under the camera (27: fill, rim, glow), and rebuilt 120 ms
-    after a resize, never while scrolling.
+    the light changes). Two masks per ridge (fill band and rim), built once
+    for all nine ridges over their widest span under the camera, and rebuilt
+    120 ms after a resize, never while scrolling. Masked layers keep their
+    full mask width (a static crop), so a mask never re-rasters mid-scroll;
+    only the opaque body canvases are cut to what's on screen.
   - **Under the camera** each ridge is a masked edge band plus a solid
-    body in a camera wrapper (`translateY(foot − base) scale(s)`), cropped
-    to what's on screen; ridges behind an opaque nearer one are cropped out.
-    Ridge light: a glow mask per ridge screened over the fill
-    (`background-blend-mode`, no backdrop reads) and one fixed column mask
-    (`BEAM`) moved by a transform. A scroll frame is one rAF paint: no React
-    renders, no mask rebuilds. Colour repaints are staggered while
-    scrolling (none more than `STAGGER_MS`, 30 ms, old).
+    body in a camera wrapper (`translateY(foot − base) scale(s)`). At rest
+    the world ranges stay in the DOM, posed at the descent's first frame,
+    so the first scroll frame reveals nothing at once.
+  - **Ridge light, exactly the shader's:** inside the band, the shaded
+    fill, the unshaded fill at the light's falloff alpha, and a `screen`
+    group of a static falloff canvas (`ridgeMasks.js`, 2 CSS px per texel)
+    `multiply`-tinted by a one-row canvas of the light across x, moved by a
+    transform: `screen(fill·S(F), L·F·toward)`. A scroll frame is one rAF
+    paint: no React renders, no mask rebuilds.
+  - Grain is a canvas at device pixels, drawn once per size (a CSS-pixel
+    canvas stretched `pixelated` under the overlay blend cost ~50 fps).
   - At rest nothing runs on the main thread: the veils animate on Web
     Animations (compositor).
   - Accepted differences from GL: no idle drift or reshaping, no wind, an
-    edge about s× narrower, colours up to 30 ms behind mid-scroll.
-  - **Known issue (`0.2.9`, `ROADMAP.md`):** its ~97 composited layers
-    overrun Chrome's GPU memory at large windows, and tiles drop out
-    mid-scroll.
+    edge about s× narrower.
 
 **Parity.** The two must look the same at rest, under the camera and
 through a switch. `npm run parity` compares `layers` against `gl` over 7
 viewports × 2 themes × `--scrolls` 0, .5, 1 (42 cases) and fails above a
-mean of 2/255 or a p99 of 24. **Current state (since `0.2.6`): 42/42**
-(worst mean 1.06, p99 10), the hit target within .02 px of the painted body
+mean of 2/255 or a p99 of 24. **Current state (since `0.2.9`): 42/42**
+(worst mean 0.96, p99 4), the hit target within .02 px of the painted body
 in every case. `npm run switch` passes 12/12 (worst step ×2.9, limit ×3).
-Run parity, perf and switch whenever a renderer, the recipe maths or the
-switch changes.
+They run before every push (`npm run qa`, two tiers).
 
 **Shared, so the two can't drift:** `sceneAt` (`scene.js`), ridge paint
 (`ridgePaint`, `rimWidth`, `grainOpacity`, `grainTexels` in
@@ -539,7 +585,7 @@ identity.
   8.33), 1440×900@2 and 393×852@2 (M4, `?adapt=0`). Perf's headless wheel
   sweep stops a little short of `about` 1.
 
-Next: `0.2.9` (the fallback's tile dropout in Chrome), in `ROADMAP.md`.
+Next: `0.2.10` (sharpness on large high-DPI displays), in `ROADMAP.md`.
 
 ### Adding a scene
 
@@ -560,7 +606,7 @@ Next: `0.2.9` (the fallback's tile dropout in Chrome), in `ROADMAP.md`.
 | Task |
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
-| `0.2.9`: the layered fallback's tile dropout in Chrome, with scroll kept at 120 fps (`ROADMAP.md`) |
+| `0.2.10`: sharpness on large high-DPI displays, and the standing quality rule (`ROADMAP.md`) |
 | Owner decisions from the `0.2.8` audit (`ROADMAP.md`): fallback parity under the camera, `.impeccable/surfaces/home.md`, `.claude/agents/impeccable-*` |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

@@ -2,12 +2,52 @@
 
 Three scripts check the atmosphere's renderers: WebGL (`gl`) and the layered
 DOM fallback (`layers`). By default parity and perf run `layers` against
-`gl`. Use them whenever a renderer or the switch changes. Parity proves the
-look didn't move, perf proves the frames got cheaper, and switch proves a
-day/night switch has no cut. They drive Playwright's Chromium only; WebKit
-is checked by hand. Two `node --test` suites (`test:adaptive`, `test:unit`)
-cover the pure maths without a browser, and `hygiene` checks the served
-site.
+`gl`. They all run before every push (`npm run qa`). Parity proves the
+look didn't move (and that no page logs an error or scrolls sideways), perf
+proves the frames hold 120 fps, and switch proves a day/night switch has no
+cut. They drive Playwright's Chromium only; WebKit is checked by hand. Two
+`node --test` suites (`test:adaptive`, `test:unit`) cover the pure maths
+without a browser, and `hygiene` checks the served site. Each check lives in
+exactly one script; `qa` only runs them.
+
+## `npm run qa`
+
+Every check before a push, in one command, against one production server:
+
+```bash
+npm run build && npx next start -p 3001
+npm run qa                                   # --base http://localhost:3001
+```
+
+It picks a tier from what changed against `origin/main` (committed,
+uncommitted and untracked files):
+
+| Tier | When | Runs | Time (M4) |
+|---|---|---|---|
+| quick | only docs changed (`*.md`, `*.txt`, `LICENSE`) | `test:adaptive`, `test:unit`, `hygiene`, `parity --scrolls 0` | ~2 min |
+| full | anything else | all of the above with parity at every scroll, then `perf --gate` (with its dropout pass) and `switch` | ~20 min (parity 4, perf 8, switch 8) |
+
+| Flag | Meaning |
+|---|---|
+| `--base` | The production server every check runs against (default `http://localhost:3001`) |
+| `--full`, `--quick` | Force a tier |
+| `--only a,b`, `--skip a,b` | Run a subset, by the names in the table |
+
+It is quiet: it runs each script with `--quiet` and prints one line per
+check (its key numbers and time), then a table. A failing check adds only
+its failing cases (ten at most) and where the detail is (`scripts/out/<check>/`:
+per-case reports, diff PNGs, dropped-tile frames). It keeps going after a
+failure and exits 1 if any check failed; a check that needs the server fails
+at once if nothing answers at `--base`. A passing full run prints 16
+lines.
+
+Every script takes `--quiet` (one summary line, or the failing cases then the
+summary); without it, run by hand, each prints its full output as before.
+
+Console errors, warnings and page errors fail parity, perf `--gate` and
+switch on every page they load, through one helper (`lib/console.mjs`).
+That's Chromium only: WebKit stays a manual check (CLAUDE.md, "Pre-push
+checks").
 
 Run them against a production server, not `next dev`. The dev build is
 slower, and its overlay and HMR add noise:
@@ -40,6 +80,13 @@ draws a diff between them.
 | `--grain` | off | Include grain in the comparison. It's off by default because grain is random noise that no two renderers can match pixel for pixel. Judge grain by eye in the report instead. |
 | `--query`, `--query-a`, `--query-b` | none | Extra URL params (`k=v&k=v`) for both sides or one side. For example, `--a gl --b gl --query driftAt=0.25 --query-b crest=cpu` compares the GL crest paths mid-drift. `perf.mjs` takes `--query` too. |
 
+Before the cases it loads home and the 404 with each renderer at 1440×900,
+switches the sky once and waits for `data-busy` to clear. Every load, there
+and in the cases, fails on a console error or warning, a page error, or
+sideways overflow (`scrollWidth > innerWidth`). The default viewports
+already span a phone both ways, an iPad, a laptop, a 3440×1440 ultrawide
+and an odd 1600×300 strip, so parity is also the viewport sweep.
+
 How it works:
 1. Each case loads `?renderer=<a>&freeze=1&grain=0&scroll=<about>` and the same for `<b>`,
    with the theme already in localStorage and `Math.random` seeded, so each
@@ -51,8 +98,9 @@ How it works:
 
 Output in `scripts/out/parity/`: `index.html` shows a | b | diff for every case
 (the diff heatmap is amplified ×8, so faint drift still shows). There are also
-per-case PNGs and `results.json`. The script exits with 1 if any case breaks a
-threshold or logs a console error, and 2 if the script itself crashes.
+per-case PNGs and `results.json`. The script exits with 1 if any case or page
+breaks a threshold, logs a console error or warning, or overflows, and 2 if
+the script itself crashes.
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same. A
@@ -87,6 +135,38 @@ prints a table, the GPU string Chromium reported, and writes
 `scripts/out/perf/perf-<timestamp>.json`. Headless Chromium may rasterise on
 the CPU (SwiftShader). Compare renderers **within one run** rather than trusting
 absolute fps, or pass `--headed` for the real GPU.
+
+### `--gate`
+
+`npm run qa` runs `perf --gate`, which makes perf pass/fail:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--min-fps` | `118` | Floor for each scroll sweep's fps |
+| `--max-long` | `3` | Most frames over 20 ms a sweep may have |
+| `--retries` | `1` | Re-measure a failing case this many times; the last try counts |
+| `--dropout` | on | `--dropout 0` skips the dropout pass |
+
+It gates GL at 1440×900@2, 1728×1117@2 and 393×852@2, and layers at
+1440×900@2, 1792×1120@2 and 393×852@2 (`--renderers`/`--viewports`, if
+given, replace that with their product), with one switch and 1 s of idle
+per case, and fails on any console error. A clean sweep here holds 120 fps
+with 0–1 frames over 20 ms, so the floor leaves ~2 fps of noise; the
+retry absorbs a sweep that a busy machine (another build, another browser)
+stalls. It then prints, for information, GL's drawing buffer against native
+at 5K@2 (2560×1440) and 6K@2 (3008×1692): `MAX_PIXELS` holds both to
+3840×2160 (75% and 64% per axis). `0.2.10` turns that into a rule.
+
+Last comes the **dropout pass** (`lib/dropout.mjs`): the layered renderer
+under a capped GPU memory budget (`--force-gpu-mem-available-mb`, one
+browser per cap), day and night, wheel-scrolled down the track and back
+while a screencast records every frame. A frame where a block of the scene
+shows the clear colour or sits at the wrong height, briefly or held, is a
+dropped tile, and any one fails the gate. The caps (`DROPOUT_CASES`: 384 MB
+at 1792×1120@2 and 1440×900@2, 768 MB at 3440×1440@1) are the tightest the
+`0.2.5`-style layering survives; bad frames are saved, outlined in red, to
+`scripts/out/perf/dropout/<case>/`. On `0.2.8` it fails 1792 and 3440 (the
+`0.2.9` bug). It takes about 8 of the gate's minutes.
 
 GL steps its resolution down when busy frames run long (adaptive quality,
 `0.2.4`), which would flatter a slow build. For a comparison between builds,
@@ -145,8 +225,8 @@ the worst 64 px block. A step's ratio is its size over the median of the
 six steps around it, floored at .25; a **cut** is a ratio over `--limit`.
 It then reloads on the landed theme and reports the distance to the landed
 frame (`reload`), for information only: neither renderer lands on a fresh
-load's scene by design. Exits 1 on a cut or a console error. The default 12
-cases take about ten minutes.
+load's scene by design. Exits 1 on a cut or a console error or warning.
+The default 12 cases take about ten minutes.
 
 The limit is tight: a clean switch peaks at ×2.9 (1440×900@1, the palette
 ticking through 8-bit levels in both renderers alike), and the smallest cut
@@ -188,7 +268,8 @@ npm run hygiene -- --base http://localhost:3002   # default http://localhost:300
 
 CI (`.github/workflows/ci.yml`) runs it on every push to `main` and every PR,
 after `npm run test:adaptive`, `npm run test:unit` and `npm run build`. The runners have no GPU,
-so parity, perf, switch and console errors aren't part of CI.
+so parity, perf and switch (and with them the console and overflow checks)
+aren't part of CI: `npm run qa` runs them locally.
 
 ## Contract a renderer honours
 
