@@ -128,7 +128,7 @@ accepts it. The scripts launch only Chromium; WebKit is checked by hand.
 - [ ] The atmosphere still adapts: phone portrait/landscape, iPad, laptop,
       ultrawide, and one odd aspect. No squashed ridges, no horizontal
       overflow, and the sun hit target sits on the painted sun.
-- [ ] Quality holds on every display (the standing rule from `0.2.10`,
+- [ ] Quality holds on every display (the standing rule from `0.2.11`,
       `ROADMAP.md`): no visible softening on large high-DPI frames (5K@2,
       6K@2), and nothing tied to 120 Hz. Any new resolution cap or quality
       step is measured there before it ships.
@@ -585,7 +585,7 @@ identity.
   8.33), 1440×900@2 and 393×852@2 (M4, `?adapt=0`). Perf's headless wheel
   sweep stops a little short of `about` 1.
 
-Next: `0.2.10` (sharpness on large high-DPI displays), in `ROADMAP.md`.
+Next: `0.2.11` (sharpness on large high-DPI displays), in `ROADMAP.md`.
 
 ### Adding a scene
 
@@ -606,7 +606,7 @@ Next: `0.2.10` (sharpness on large high-DPI displays), in `ROADMAP.md`.
 | Task |
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
-| `0.2.10`: sharpness on large high-DPI displays, and the standing quality rule (`ROADMAP.md`) |
+| `0.2.11`: sharpness on large high-DPI displays, and the standing quality rule (`ROADMAP.md`) |
 | Owner decisions from the `0.2.8` audit (`ROADMAP.md`): fallback parity under the camera, `.impeccable/surfaces/home.md`, `.claude/agents/impeccable-*` |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

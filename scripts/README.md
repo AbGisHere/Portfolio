@@ -155,7 +155,7 @@ with 0–1 frames over 20 ms, so the floor leaves ~2 fps of noise; the
 retry absorbs a sweep that a busy machine (another build, another browser)
 stalls. It then prints, for information, GL's drawing buffer against native
 at 5K@2 (2560×1440) and 6K@2 (3008×1692): `MAX_PIXELS` holds both to
-3840×2160 (75% and 64% per axis). `0.2.10` turns that into a rule.
+3840×2160 (75% and 64% per axis). `0.2.11` turns that into a rule.
 
 Last comes the **dropout pass** (`lib/dropout.mjs`): the layered renderer
 under a capped GPU memory budget (`--force-gpu-mem-available-mb`, one

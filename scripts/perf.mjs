@@ -87,7 +87,7 @@ const CASES =
     ? GATE_CASES.map(([renderer, vp]) => ({ renderer, vp: viewportsFrom(vp, [])[0] }))
     : VIEWPORTS.flatMap(vp => RENDERERS.map(renderer => ({ renderer, vp })));
 
-// Sharpness (info until 0.2.10 sets a rule): GL's drawing buffer against the
+// Sharpness (info until 0.2.11 sets a rule): GL's drawing buffer against the
 // native pixel count on large panels, where MAX_PIXELS caps it.
 const SHARP_VIEWPORTS = viewportsFrom(null, ['2560x1440@2', '3008x1692@2']);
 

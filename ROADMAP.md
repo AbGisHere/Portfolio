@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome (done); next, `0.2.10` sharpness on large high-DPI displays. Per-release history: `CHANGELOG.md`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs; done); next, `0.2.11` sharpness on large high-DPI displays. Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -340,7 +340,7 @@ layers 73 → 20, live tile memory 222 → 60 MB at 1792×1120@2 (`CHANGELOG.md`
 `perf --gate` now checks for dropout under a capped GPU memory. The same
 release brought `npm run qa`.
 
-**`0.2.10`: sharpness on large high-DPI displays** (the owner asked,
+**`0.2.11`: sharpness on large high-DPI displays** (the owner asked,
 2026-09-30). GL draws at most 4K's pixel count (`MAX_PIXELS`,
 `MistCanvas.jsx`) and 2× the CSS pixels (`MAX_DPR`), then scales up. A 5K
 display (5120×2880) is drawn at about .75 of its resolution per axis, and a
@@ -365,7 +365,7 @@ rims and the grain may read slightly soft.
   120 fps kept at 1728×1117@2 and 1440×900@2 (`npm run perf`); parity 42/42;
   `npm run test:adaptive` covers the new step.
 
-**Standing rule from `0.2.10` on: quality holds on every display.** Every
+**Standing rule from `0.2.11` on: quality holds on every display.** Every
 new layer, scene and version (the desk, the pool, the header, the device
 screen) must look as sharp as the display allows, from a 393-wide phone at
 3× to a 6K monitor at 2×, and as smooth as its refresh allows (60, 120, 144
@@ -822,3 +822,22 @@ the ridges don't breathe or reshape, and the desk shows as stills.
   built.
 - `role="status"`, a real close button, no motion under reduced motion, and
   a Playwright check via `?renderer=layers`.
+
+## Reference — objects on the terrain (shan-shui-inf)
+
+**Status:** a reference, noted 2026-10-01 (user). Not planned; brought in
+only if a layer needs it.
+
+[shan-shui-inf](https://github.com/LingDong-/shan-shui-inf) (LingDong) is a
+procedural, infinitely scrolling Chinese ink landscape in SVG. Its ranges
+are close cousins of ours, but what the user liked is what sits *on* them:
+trees, pavilions, bridges, boats and small figures, each generated from a
+few strokes and placed along the ridge lines.
+
+- **Where it could help:** the meadow at the end of `0.2`, the walk to the
+  desk in `0.3`, or the house and the pool in `0.4`, if the terrain wants
+  life beyond ridges and grass.
+- **Take the idea, not the look.** Its ink-wash brush style isn't ours. Any
+  objects would be drawn in the scene's palette and light (`sceneAt`), in
+  both renderers, and stay within parity and the frame budget.
+- **Licence:** check the repo's LICENSE before borrowing any code.

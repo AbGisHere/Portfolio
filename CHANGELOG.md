@@ -6,6 +6,20 @@ in `CLAUDE.md`. Measurements are production builds on an Apple M4, headless
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.2.10 — 2026-10-01
+
+Docs only: the custom domain, and a reference for later.
+
+- **Domain:** the site lives at [abgupta.me](https://abgupta.me), the
+  primary production domain since 2026-09-30 (www.abgupta.me and the
+  earlier `*.vercel.app` domains redirect to it). README, PRODUCT.md and
+  `.env.example` (`SITE_URL`) updated; no code change, since `app/site.js`
+  reads `SITE_URL`, else Vercel's primary production domain.
+- **Roadmap:** a reference note on shan-shui-inf's objects on the terrain
+  (trees, pavilions, bridges, figures), not planned. Sharpness on large
+  high-DPI displays moves from `0.2.10` to `0.2.11`.
+- `package-lock.json`'s version, left at `0.2.8`, caught up.
+
 ## 0.2.9 — 2026-09-30
 
 The layered fallback's tile dropout in Chrome, live since `0.2.6`.
