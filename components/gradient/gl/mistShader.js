@@ -112,6 +112,13 @@ uniform vec3 uCloudLit;
 uniform vec3 uCloudShade;
 uniform vec3 uBirdCol;
 uniform float uSkyT;         // its clock, seconds
+// (0.3.1) The meadow's ground under the desk camera.
+uniform vec3 uCamM;          // the camera, metres from the desk's centre
+uniform vec3 uGrassGround;   // the ground's colour up close
+uniform vec3 uGrassFar;      // and where the blades are too small to see
+uniform vec3 uGrassSky;      // the sky's tint on it (deskCamera.js grassLit)
+uniform vec2 uHazeAt;        // metres: its haze starts, it's all painted meadow
+uniform vec2 uDepthAB;       // perspective depth A, B (metres; grassShader.js)
 
 out vec4 outColor;
 
@@ -504,24 +511,23 @@ void main() {
   col = over(col, uMist, air);
 #endif
 
-  // (0.3, prototype) The ground under the desk camera, as a grid a metre
-  // apart (every tenth stronger) so the move reads before the meadow has
-  // grass, and the desk as a grey box.
+  // (0.3) Birds, in front of the ridges.
   if (uLifeA > 0.0 && uLifeMix.x > 0.0 && p.y < uFront) col = birds(col, p, aa);
+  // (0.3.1) The ground under the desk camera: the meadow's own ground near
+  // (in clumps), hazing out into the painted 0.2 meadow by GRASS_HAZE's far
+  // end, so from where the descent starts it's that meadow exactly. The
+  // grass stands on it (grassShader.js). Then the desk's grey box, which
+  // writes its depth so the grass behind it stays hidden.
+  float depth = 1.0;
   if (uPitched == 1) {
     vec3 dir = vec3(ray.x, -ray.y, ray.z);
-    // (fwidth outside the branch: derivatives need every pixel of a quad.)
-    float t = uEye.x / max(-dir.y, 1e-6);
-    vec2 m = vec2(dir.x * t, dir.z * t - uEye.y) * ${f(WORLD_M)};
-    vec2 fw = max(fwidth(m), vec2(1e-4));
     if (dir.y < 0.0 && p.y > uFront) {
-      vec2 d1 = abs(fract(m - 0.5) - 0.5) / fw;
-      vec2 d10 = abs(fract(m / 10.0 - 0.5) - 0.5) * 10.0 / fw;
-      float thin = 1.0 - min(min(d1.x, d1.y), 1.0);
-      float thick = 1.0 - min(min(d10.x, d10.y) * 0.5, 1.0);
-      // Lines finer than a few pixels apart fade out (no moiré).
-      float far = clamp(1.0 - (max(fw.x, fw.y) - 0.15) / 0.25, 0.0, 1.0);
-      col = mix(col, col * 0.55, max(thin * 0.35 * far, thick * 0.6));
+      float t = uEye.x / -dir.y;
+      float dist = t * length(dir) * ${f(WORLD_M)};
+      // Near, the ground between the blades; farther, where the blades are
+      // too small to see, the colour the grass reads as from afar.
+      vec3 near = mix(uGrassGround, uGrassFar, smoothstep(4.0, 24.0, dist)) * mix(vec3(1.0), uGrassSky, 0.25);
+      col = mix(near, col, smoothstep(uHazeAt.x, uHazeAt.y, dist));
     }
     vec3 inv = 1.0 / (dir + vec3(1e-9));
     vec3 t0 = uBoxMin * inv;
@@ -533,6 +539,9 @@ void main() {
     if (tn < tf && tn > 0.0) {
       float shade = tn == tn3.y ? 0.66 : tn == tn3.z ? 0.5 : 0.4;
       col = vec3(shade);
+      vec3 hit = tn * dir;
+      float zp = (-hit.y * uPitch.y + hit.z * uPitch.x) * ${f(WORLD_M)};
+      depth = 0.5 * (uDepthAB.x + uDepthAB.y / zp) + 0.5;
     }
   }
 
@@ -547,5 +556,6 @@ void main() {
 #endif
 
   outColor = vec4(col, 1.0);
+  gl_FragDepth = depth;
 }
 `;

@@ -86,6 +86,11 @@ const moonlit = {
     // The meadow's tint at the viewer's feet: moonlit blue-green.
     meadow: '#22323A',
   },
+  // (0.3) The meadow up close (deskCamera.js grassOf): the same cel bands
+  // under the moon, blue-green, the tips catching its light.
+  desk: {
+    grass: { root: '#101C22', mid: '#20393B', tip: '#55807C', ground: '#15262A' },
+  },
 };
 
 export default moonlit;

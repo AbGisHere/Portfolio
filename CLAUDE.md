@@ -237,7 +237,8 @@ components/
     layers/LayeredScene.jsx, ridgeMasks.js — fallback renderer: CSS layers, ridge alpha masks
     scene.js    — `sceneAt`: one frame of the scene, pure, for both renderers
     camera.js   — the descent (0.2): ridges, sky, ranges, meadow, palette, bodies, `ridgeLightAt`
-    deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky
+    deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light
+    gl/grassShader.js, gl/footsteps.js — the meadow's instanced grass; the footprints (0.3.1)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
     skyRamp.js  — the sky ramp every sky path uses; `rampAt`
@@ -263,7 +264,7 @@ being changed (`ROADMAP.md`, "Testing: only what a change touches"):
 
 | Part | Doc | Covers |
 |---|---|---|
-| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2` and `0.3` cameras, the URL and `data-` hooks |
+| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2` and `0.3` cameras, the meadow and grass, the URL and `data-` hooks |
 
 The invariants any change must keep, whatever part it touches:
 
@@ -290,7 +291,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.1`: the meadow ground and the anime grass with footsteps (`ROADMAP.md`, "0.3") |
+| `0.3.2`: boot prints, the boot drawn fresh each page load (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

@@ -305,3 +305,61 @@ export function deskSkyAt(view, h, pitch, life) {
   const k = life.amount;
   return { scale: base.scale + (scale - base.scale) * k, shift: base.shift + (shift - base.shift) * k };
 }
+
+/**
+ * (0.3.1) The grass's colours under the desk camera (the recipe's
+ * `desk.grass`: root, mid, tip, ground), blended mid-switch on `e`.
+ */
+export function grassOf(recipe, { prev = null, e = 1 } = {}) {
+  const b = recipe?.desk?.grass;
+  const a = prev?.desk?.grass;
+  if (!b) return null;
+  const g = a ? Object.fromEntries(Object.keys(b).map(k => [k, mix(a[k], b[k], e)])) : b;
+  // `far`: the colour a field of blades reads as from afar (the ground
+  // takes it where the blades get too small to see).
+  return { ...g, far: mix(g.mid, g.tip, 0.35) };
+}
+
+/** The camera in metres, the desk's centre on the ground at the origin: y
+ * up, z forward (toward the mountains). */
+export const cameraMetres = cam => ({ x: 0, y: cam.eye * WORLD_M, z: -cam.ahead * WORLD_M });
+
+/** The near and far planes for depth (world units): the grass and the
+ * desk's things lie between. */
+export const DEPTH = { near: 0.04 / WORLD_M, far: 160 / WORLD_M };
+
+/**
+ * Where a screen point (CSS px) meets the ground, in metres from the desk's
+ * centre ({ x, z, d }: d the distance from the camera's foot), or null when
+ * it points at the sky.
+ */
+export function groundAt(P, cam, x, y) {
+  if (!P) return null;
+  const u = (x - P.sx) / P.zoom;
+  const v = (y - P.sy) / P.zoom;
+  // The ray before the pitch (y down, z forward), then y up.
+  const ry = v * P.cos + P.f * P.sin;
+  const rz = P.f * P.cos - v * P.sin;
+  if (ry <= 1e-6) return null;
+  const c = cameraMetres(cam);
+  const t = c.y / ry;
+  const dx = u * t;
+  const dz = rz * t;
+  return { x: c.x + dx, z: c.z + dz, d: Math.hypot(dx, dz) };
+}
+
+/**
+ * (0.3.1) The grass lit by the scene, like the ridges: `sun` the body's
+ * light (warm and low by evening, the moon's cool light at night; the
+ * ridges' crest light when it's up, else the air's glow), `sky` the tint of
+ * the sky overhead (max channel 1), and `dir` where the light comes from
+ * across the ground (x, z: toward the body, beyond the mountains).
+ */
+export function grassLit(g, { stops, light, body, pitch, w }) {
+  if (!g) return null;
+  const sun = light.st > 0 ? light.col : light.mist;
+  const [r, gr, b] = [0, 2, 4].map(i => parseInt(mix(stops[0], stops[1], 0.5).slice(1 + i, 3 + i), 16));
+  const top = Math.max(r, gr, b, 1);
+  const az = pitch ? Math.atan((body.x - w / 2) / pitch.f) : 0;
+  return { ...g, sun, sky: [r / top, gr / top, b / top], dir: [Math.sin(az), Math.cos(az)] };
+}

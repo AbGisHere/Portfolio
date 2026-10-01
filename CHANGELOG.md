@@ -6,6 +6,38 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.1 — 2026-10-02
+
+The meadow: under the desk camera the grid is gone, and the ground and the
+grass are real.
+
+- **The ground** fades in from the painted `0.2` meadow through the haze as
+  the camera comes down (unchanged where the descent starts), green near,
+  the colour of a field of grass farther out, tinted by the sky.
+- **The grass** (`gl/grassShader.js`): instanced blades in a second pass,
+  depth-tested against the desk's box (the canvas gains a depth buffer,
+  written only while grass shows). Five rings of world-anchored cells, a
+  density falling with distance and crossfaded between rings, blades
+  growing in rather than popping, sub-pixel blades culled. Short and even,
+  every blade its own shape (kind, height, width, taper, curl, tip, twist)
+  and a slight lean in colour, one soft run root to tip into the ground,
+  lit by the scene (the body's light glowing through the tips, the sky's
+  tint, the moon by night), in rolling wind.
+- **Footsteps** (`gl/footsteps.js`, the scene's third clock): the pointer
+  cast onto the ground leaves alternating prints a stride apart; a touch
+  taps one. Blades press flat into shade, hold, then spring back. Reduced
+  motion eases them back and stills the wind.
+- Colours live in the recipes (`desk.grass`). Unit tests for the walker,
+  the ground cast and the grass's colours (19).
+
+Measured (M4, GL, warm, `perf --query desk=…`): 1728×1117@2 holds
+118–120 fps at rest and through a switch from the top-down shot to the
+closing one; 3008×1692@2 116–120 at rest, a switch on the low shots
+107–108 (as in `0.3.0`). Getting there: blades under a pixel culled, the
+grass's reach 45 → 32 m, the density right by the camera capped (600 per
+m²), no noise on the ground. The `0.2` stretch is unchanged (parity 46/46,
+worst mean 0.96, p99 4).
+
 ## 0.3.0 — 2026-10-01
 
 The first of the `0.3` line: the camera's whole path from the pull-back down

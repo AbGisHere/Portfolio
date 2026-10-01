@@ -14,7 +14,8 @@ import { descentAt, groundPaint, scrollPalette } from '../components/gradient/ca
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
-import { deskCameraAt, deskHolds, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
+import { deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
+import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -291,6 +292,38 @@ test('the closing sky: birds by day, stars by night, none before arc 2', () => {
   assert.equal(day.amount, 1);
   assert.deepEqual([day.birds, day.stars], [1, 0]);
   assert.deepEqual([night.birds, night.stars], [0, 1]);
+});
+
+test('footsteps: a stride apart, alternating feet, gone after their life', () => {
+  const w = createWalker();
+  assert.equal(w.move({ x: 0, z: 0 }, 0), false, 'the first point only starts the walk');
+  assert.equal(w.move({ x: STRIDE * 0.5, z: 0 }, 0.1), false);
+  assert.equal(w.move({ x: STRIDE * 1.1, z: 0 }, 0.2), true);
+  assert.equal(w.move({ x: STRIDE * 2.2, z: 0 }, 0.3), true);
+  const [a, b] = w.live(0.3);
+  assert.ok(Math.sign(a.z) === -Math.sign(b.z), 'left, then right');
+  assert.ok(Math.abs(a.angle - Math.PI / 2) < 1e-9, 'turned along the walk');
+  assert.equal(w.move({ x: 50, z: 0 }, 0.4), false, 'a jump restarts the walk');
+  assert.equal(w.live(0.3 + LIFE + 0.01).length, 0);
+});
+
+test('the pointer meets the ground under the desk camera, and misses it in the sky', () => {
+  const f = frame(duskEmber, { about: 1, desk: 0.5 }).f;
+  const below = groundAt(f.pitch, f.cam, f.pitch.sx, f.pitch.sy);
+  assert.ok(below && Math.abs(below.x) < 1e-9 && Math.abs(below.z) < 1e-6, 'looking straight down at the desk');
+  const end = frame(duskEmber, { about: 1, desk: 1 }).f;
+  assert.equal(groundAt(end.pitch, end.cam, W / 2, 0), null, 'the top of the closing shot is sky');
+  assert.equal(groundAt(null, end.cam, 0, 0), null);
+});
+
+test('the grass: each scene its own colours, lit by its light; blended mid-switch', () => {
+  const day = frame(duskEmber, { about: 1, desk: 1 }).f.grass;
+  const night = frame(moonlit, { about: 1, desk: 1 }).f.grass;
+  assert.equal(day.root, duskEmber.desk.grass.root);
+  assert.equal(night.root, moonlit.desk.grass.root);
+  assert.ok(Math.max(...day.sky) === 1 && day.dir.length === 2);
+  assert.equal(grassOf(moonlit, { prev: duskEmber, e: 0 }).root.toLowerCase(), duskEmber.desk.grass.root.toLowerCase());
+  assert.equal(frame(duskEmber, { about: 1 }).f.grass, null, 'none before the desk stretch');
 });
 
 function geoArgs(r) {

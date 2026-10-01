@@ -16,7 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
-import { deskCameraAt, deskFrameAt, deskSkyAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
+import { deskCameraAt, deskFrameAt, deskSkyAt, grassLit, grassOf, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -137,6 +137,8 @@ export function sceneAt({
     sky: onDesk ? deskSkyAt(view, h, pitch, life) : skyUnder(view, h),
     // (0.3) The closing shot's sky: clouds, birds, stars (null: none).
     life,
+    // (0.3.1) The grass's colours under the desk camera (null: none).
+    grass: onDesk ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: painted, pitch, w }) : null,
     // The air band's opacity, thinned under the camera.
     air: airOpacity(hz) * (view.rest ? 1 : 1 - DESCENT_AIR * view.k),
   };

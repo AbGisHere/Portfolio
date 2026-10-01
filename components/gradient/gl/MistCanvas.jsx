@@ -27,7 +27,9 @@ import { hexToRgb, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
-import { deskBox, deskWidest, pitchSpan } from '../deskCamera';
+import { DEPTH, cameraMetres, deskBox, deskWidest, groundAt, pitchSpan } from '../deskCamera';
+import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
+import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import {
   DESCENT_VEIL,
   DRIFT_GAIN_MAX,
@@ -139,7 +141,9 @@ export default function MistCanvas({ recipe, onFail }) {
     let gl;
     let prog;
     try {
-      gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false });
+      // (0.3.1) A depth buffer, for the grass and the desk (the scene's
+      // fullscreen pass only writes it under the desk camera).
+      gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: true, stencil: false });
       if (!gl) throw new Error('webgl2 unavailable');
       // Profiling (harness only): `?off=grain,veil` compiles those features
       // out of the shader (mistShader.js OFF_FLAGS).
@@ -161,6 +165,28 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const U = {};
     const uniform = name => (U[name] ??= gl.getUniformLocation(prog, name));
+
+    // (0.3.1) The grass pass (grassShader.js): its own program, and an empty
+    // vertex array (every blade comes from its instance number). Built on
+    // the way down to the meadow, not before.
+    let grass = null;
+    const grassProgram = () => {
+      if (grass) return grass;
+      const gp = createProgram(gl, GRASS_VERTEX, GRASS_FRAGMENT);
+      const GU = {};
+      grass = { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
+      return grass;
+    };
+    const DEPTH_AB = (() => {
+      const n = DEPTH.near * 40;
+      const f = DEPTH.far * 40;
+      return [(f + n) / (f - n), (-2 * f * n) / (f - n)];
+    })();
+    // What the grass draws with, from the last rebuild (null: no grass).
+    let grassAt = null;
+    // The footsteps: the walker, and the camera they're cast through.
+    const walker = createWalker();
+    let footCam = null;
 
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.activeTexture(gl.TEXTURE0);
@@ -220,6 +246,8 @@ export default function MistCanvas({ recipe, onFail }) {
     // phase (no drift, full opacity), as the layered renderer does.
     const params = new URLSearchParams(window.location.search);
     const noGrain = params.get('grain') === '0';
+    // `?grass=0` leaves the grass out (profiling: what the blades cost).
+    const noGrass = params.get('grass') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -677,7 +705,23 @@ export default function MistCanvas({ recipe, onFail }) {
         const box = deskBox(cam);
         gl.uniform3fv(uniform('uBoxMin'), box.min);
         gl.uniform3fv(uniform('uBoxMax'), box.max);
+        const cm = cameraMetres(cam);
+        gl.uniform3f(uniform('uCamM'), cm.x, cm.y, cm.z);
+        gl.uniform2f(uniform('uDepthAB'), ...DEPTH_AB);
+        gl.uniform2f(uniform('uHazeAt'), ...GRASS_HAZE);
+        if (frame.grass) {
+          gl.uniform3fv(uniform('uGrassGround'), rgb01(frame.grass.ground));
+          gl.uniform3fv(uniform('uGrassFar'), rgb01(frame.grass.far));
+          gl.uniform3fv(uniform('uGrassSky'), frame.grass.sky);
+        }
       }
+      // The grass, once the camera is low enough to see blades.
+      const cmY = pitch ? cam.eye * 40 : Infinity;
+      grassAt = pitch && frame.grass && cmY < GRASS.reach && !noGrass
+        ? { pitch, cam: cameraMetres(cam), colours: frame.grass, haze: frame.ground ? frame.ground.stops[1][1] : frame.grass.ground }
+        : null;
+      footCam = grassAt ? { pitch, cam } : null;
+      if (!footCam) walker.lift();
       const { life } = frame;
       lifeShown = !!life;
       gl.uniform1f(uniform('uLifeA'), life ? life.amount : 0);
@@ -736,6 +780,43 @@ export default function MistCanvas({ recipe, onFail }) {
       });
     }
 
+    function drawGrass() {
+      const g = grassProgram();
+      const { pitch: P, cam: c, colours, haze } = grassAt;
+      gl.useProgram(g.prog);
+      gl.bindVertexArray(g.vao);
+      gl.depthFunc(gl.LESS);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform1f(g.u('uT'), windPhase / WIND.speed);
+      gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
+      gl.uniform1f(g.u('uRebound'), motion.matches ? 0 : 1);
+      const now = performance.now() / 1000;
+      const prints = walker.live(now);
+      const pr = new Float32Array(MAX_PRINTS * 4);
+      prints.forEach((q, i) => pr.set([q.x, q.z, q.angle, now - q.t], i * 4));
+      gl.uniform4fv(g.u('uPrints'), pr);
+      gl.uniform1i(g.u('uPrintN'), prints.length);
+      gl.uniform3fv(g.u('uRoot'), rgb01(colours.root));
+      gl.uniform3fv(g.u('uMid'), rgb01(colours.mid));
+      gl.uniform3fv(g.u('uTip'), rgb01(colours.tip));
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform1f(g.u('uPxCss'), w / canvas.width);
+      gl.uniform3fv(g.u('uHaze'), rgb01(haze));
+      gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, GRASS_INSTANCES);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
     function draw(vs) {
       const pos = new Float32Array(MAX_RIDGES * 4);
       const alpha = new Float32Array(MAX_RIDGES);
@@ -746,7 +827,21 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform4fv(uniform('uVeil'), pos);
       gl.uniform1fv(uniform('uVeilA'), alpha);
       gl.viewport(0, 0, canvas.width, canvas.height);
+      if (!grassAt) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        lastDrawn = vs;
+        return;
+      }
+      // (0.3.1) The scene writes its depth (far, or the desk's box), then
+      // the grass draws against it.
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.depthFunc(gl.ALWAYS);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      drawGrass();
+      gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
     }
 
@@ -818,7 +913,9 @@ export default function MistCanvas({ recipe, onFail }) {
       // scales the ridges.
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
-      const living = lifeShown && !motion.matches && !frozen;
+      // The closing sky and the grass in the wind move every frame, not on
+      // the idle tick; so do footprints springing back.
+      const living = ((lifeShown || !!grassAt) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
       if (living) skyT += dt;
       // A scroll, a switch or the spring redraws every frame; at rest the
       // drift, the wind and the veils share one IDLE_HZ tick.
@@ -848,7 +945,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
-      if ((moving || drifting) && visible && onScreen) raf = requestAnimationFrame(frame);
+      if ((moving || drifting || living) && visible && onScreen) raf = requestAnimationFrame(frame);
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is
@@ -902,6 +999,28 @@ export default function MistCanvas({ recipe, onFail }) {
     };
     canvas.addEventListener('webglcontextlost', onLost);
 
+    // (0.3.1) Footsteps: the pointer cast onto the ground while the grass
+    // shows. A moving mouse walks; a touch taps one step.
+    function onPointer(e) {
+      if (!footCam) return;
+      const rect = canvas.getBoundingClientRect();
+      const g = groundAt(footCam.pitch, footCam.cam, e.clientX - rect.left, e.clientY - rect.top);
+      if (!g || g.d > REACH) return void walker.lift();
+      const t = performance.now() / 1000;
+      if (e.type === 'pointerdown' && e.pointerType === 'touch') walker.tap(g, cameraMetres(footCam.cam), t);
+      else if (e.type === 'pointermove' && e.pointerType !== 'touch') {
+        if (!walker.move(g, t)) return;
+      } else return;
+      kick();
+    }
+    function onPointerOut() {
+      walker.lift();
+    }
+    window.addEventListener('pointermove', onPointer, { passive: true });
+    window.addEventListener('pointerdown', onPointer, { passive: true });
+    window.addEventListener('pointerleave', onPointerOut);
+    window.addEventListener('blur', onPointerOut);
+
     resize();
     kick();
 
@@ -921,6 +1040,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
+      if (grass) {
+        gl.deleteProgram(grass.prog);
+        gl.deleteVertexArray(grass.vao);
+      }
+      window.removeEventListener('pointermove', onPointer);
+      window.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('pointerleave', onPointerOut);
+      window.removeEventListener('blur', onPointerOut);
     };
   }, [onFail]);
 

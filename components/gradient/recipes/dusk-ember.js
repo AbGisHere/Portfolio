@@ -111,6 +111,13 @@ const duskEmber = {
     // colour: a dim violet-green that sits with the indigo front ridge.
     meadow: '#3E4466',
   },
+  // (0.3) The meadow up close, under the desk camera (deskCamera.js
+  // grassOf): anime grass in three cel bands, root to tip, lit by the
+  // evening (golden tips), over its own ground. Far away it hazes into the
+  // painted meadow above.
+  desk: {
+    grass: { root: '#2B4536', mid: '#56783F', tip: '#A6B862', ground: '#2E4838' },
+  },
 };
 
 export default duskEmber;

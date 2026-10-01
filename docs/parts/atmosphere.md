@@ -205,8 +205,8 @@ smoothstep (`MOON_GLOW`), since a linear fade left a visible edge.
 
 ## How the transition works
 
-Two clocks, each with one job. Don't add a second animation loop beside the
-switch clock.
+Two clocks here, each with one job; the third, from `0.3.1`, is the
+footprints' (see "The meadow (0.3.1)"). Don't add another animation loop.
 
 - **At rest, the spring** (GL only; the layered renderer paints the recipe).
   The studio's `Wl` is **exponential smoothing**, not a spring:
@@ -397,9 +397,55 @@ camera at `about` 1 exactly (unit-tested).
   tick) so the birds move smoothly. Integer hashing (`pcg`), so every GPU
   draws the same sky. Reduced motion holds the sky still, without birds;
   `?skyt=` starts the clock at a given second (stills, with `?freeze=1`).
-- **Not yet:** the layered fallback ignores `desk` (it holds the
+- **Not yet** (still, after `0.3.1`): the layered fallback ignores `desk` (it holds the
   pull-back's end), reduced motion runs the full path, and parity, perf
   and switch cover the `0.2` stretch only.
+
+## The meadow (0.3.1)
+
+Under the desk camera the meadow is real: a ground layer in the scene's
+fullscreen pass and instanced grass in a second pass in the same context
+(`gl/grassShader.js`), depth-tested against the depth the first pass writes
+(the canvas has a depth buffer from `0.3.1`; the fullscreen pass only writes
+it while there's grass, so `0.2` frames are untouched).
+
+- **Colours** are the recipe's (`desk.grass`: root, mid, tip, ground),
+  blended mid-switch (`grassOf`), and lit like the ridges (`grassLit`): the
+  body's light (`sun`: the crest light, else the air's glow), the sky's
+  tint overhead (`sky`) and where the body is across the ground (`dir`).
+  `far` is what a field of blades reads as from afar.
+- **The ground** (`uGrassGround` → `uGrassFar` by 24 m, tinted by the sky)
+  hazes into the painted `0.2` meadow over `GRASS_HAZE` (8–58 m): the
+  descent starts ~64 m up, so there it is that meadow exactly.
+- **The blades** (`GRASS`): five rings of world-snapped cells (0.1 m, then
+  doubling) around the camera's foot, 16 blades a cell, placed by an
+  integer hash (`pcg`): nothing moves when the camera does. A target
+  density `min(cap 600, 1600 / d²)` per m² is shared between rings by a
+  crossfade at each edge; each blade has its own threshold and grows in as
+  the density passes it (no pops). Past `reach` (32 m) none; a blade under
+  ~1 px tall on screen is culled (no shimmer, and the cost). Each blade is a
+  tapered ribbon bent as one arc of constant curvature (its length holds),
+  with its own kind (ordinary, broad leaf, tall wisp), height, width, taper,
+  curl, off-centre tip, twist and a slight lean in value and warmth.
+- **Shading:** root to tip in one soft run (the root is the ground's
+  colour), the sky's tint, the side toward the body a little brighter, the
+  tips glowing in the body's light when it's behind them, wind sheen, the
+  grain. Hazed into the painted meadow like the ground.
+- **Wind:** rolling waves and gusts across the meadow plus a flutter, on
+  the wind's clock (`windPhase`; still under reduced motion and `?freeze`).
+  While grass shows, GL redraws every frame, not on the idle tick.
+- **Footsteps** (`gl/footsteps.js`, the third clock: seconds since a print
+  landed): the pointer is cast onto the ground (`groundAt`); a moving mouse
+  lays alternating prints `STRIDE` (.36 m) apart, `GAIT` (.09 m) either side
+  of its path, turned along it; a touch taps one. Up to `MAX_PRINTS` (24)
+  live for `LIFE` (3.4 s): blades within ~2.3 foot-radii are pressed flat
+  outward and into shade (`footStrength`: pressed at once, held .7 s, then
+  springing back past upright and settling; under reduced motion, easing
+  back). Only in GL, only while grass shows.
+- **Flags:** `?grass=0` leaves the blades out (profiling).
+- **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
+  the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
+  a day/night switch on the low shots 107–108.
 
 ## Adding a scene
 

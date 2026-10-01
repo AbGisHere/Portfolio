@@ -214,7 +214,7 @@ outline offset by 4px.
 ### Don't:
 - **Don't** stack sections below a hero, or fall back to a plain CV page.
 - **Don't** bring back the fake desktop OS or its "AbG OS" name.
-- **Don't** add a second animation loop; the scene has two clocks.
+- **Don't** add another animation loop; the scene has three clocks (the spring, the switch, the footprints), and everything else that moves ticks on GL's frame loop.
 - **Don't** use Signal Ember as a fill, or gradient text anywhere.
 - **Don't** put panels, cards or glass over the scene before the desk.
 - **Don't** invent facts, metrics or testimonials; the content is real or
