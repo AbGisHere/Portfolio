@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`. Per-release history: `CHANGELOG.md`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -300,13 +300,13 @@ How it should feel:
 
 ### 0.2 — about me: the pull-back
 
-**Shipped, `0.2.0`–`0.2.12`:** the pull-back (`0.2.0`), the ridge conveyor
+**Shipped, `0.2.0`–`0.2.13`:** the pull-back (`0.2.0`), the ridge conveyor
 (`0.2.1`), the look (`0.2.2`), the sun and moon at any scroll (`0.2.3`),
 performance headroom (`0.2.4`), ridge light at rest (`0.2.5`), the fallback
 catching up (`0.2.6`), the switch cut (`0.2.7`), the audit's clean-up
 (`0.2.8`), the fallback's tile dropout (`0.2.9`), the domain (`0.2.10`)
-sharpness on large displays (`0.2.11`) and the design audit's fixes
-(`0.2.12`). What each changed and measured is in `CHANGELOG.md`; how it works
+sharpness on large displays (`0.2.11`), the design audit's fixes
+(`0.2.12`) and two of the audit's owner decisions (`0.2.13`). What each changed and measured is in `CHANGELOG.md`; how it works
 now is in `docs/parts/atmosphere.md`.
 
 **`0.2.8`: the audit's clean-up** (shipped 2026-09-30; details in
@@ -326,11 +326,12 @@ page shows text.
   decides):
   - Should the fallback keep full pixel parity under the camera, or only at
     rest and during a switch? Decide before `0.3`.
-  - `.impeccable/surfaces/home.md` is cited as the visual contract but is
-    gitignored and last revised at `0.1.7`: un-ignore it and update it, or
-    drop the references.
-  - `.claude/agents/impeccable-*` is committed but its skill is gitignored:
-    commit both or neither.
+  - ~~`.impeccable/surfaces/home.md` as the visual contract~~ Decided
+    2026-10-01: it stays local (gitignored), a working file for the
+    impeccable skill. `DESIGN.md` is the committed design record.
+  - ~~`.claude/agents/impeccable-*` committed without its skill~~ Decided
+    2026-10-01: neither is committed; the agents are gitignored with the
+    skill.
   - Is the "admin surface" open task still wanted?
 
 **`0.2.9`: the fallback's tile dropout in Chrome** (done, 2026-09-30).

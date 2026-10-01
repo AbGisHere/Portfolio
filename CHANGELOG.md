@@ -6,6 +6,18 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.2.13 — 2026-10-01
+
+Two of the `0.2.8` audit's owner decisions, settled. Docs and `.gitignore`
+only; the scene is unchanged.
+
+- `.impeccable/surfaces/home.md` stays local and is no longer cited as the
+  visual contract; `DESIGN.md` is the committed design record.
+- `.claude/agents/impeccable-*` is untracked and gitignored, so the
+  impeccable agents and their skill are both local.
+- Still open: fallback parity under the camera (decide before `0.3`) and
+  whether an admin surface is wanted.
+
 ## 0.2.12 — 2026-10-01
 
 The design audit's fixes, `DESIGN.md`, and the docs brought up to date. The
