@@ -106,7 +106,7 @@ What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same. A
 higher p99 with a low mean points at one local defect, and the `worst 32px
 block` coordinates say where to look. The current `layers`-against-`gl`
-result is under "Parity" in [`CLAUDE.md`](../CLAUDE.md#renderers); past
+result is under "Parity" in [`docs/parts/atmosphere.md`](../docs/parts/atmosphere.md#renderers); past
 runs are in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## `npm run perf`
@@ -191,6 +191,35 @@ pinned frame with `?bench=N` and read the scene wrapper's `data-bench` and
 Subtract `data-bench-base` (the sync's own overhead) from `data-bench`; the
 drop against a run without `off` is that feature's cost. Run builds
 interleaved and take the median of a few, since the GPU's clocks drift.
+
+## `npm run sharp`
+
+Not part of `qa`: the `0.2.11` measurement (`ROADMAP.md`). GL caps its
+drawing buffer at 4K's pixel count (`MAX_PIXELS`), so a 5K@2 frame is drawn
+at about .75 per axis and a 6K@2 one at about .64, then scaled up. `sharp`
+loads each case twice, capped and with `?cap=0` (native, still at most
+`MAX_DPR`), always `?freeze=1&adapt=0` with one seeded `Math.random`:
+
+- **Cases:** `2560x1440@2` and `3008x1692@2` × day and night × scrolls
+  `0,0.5,1` × with and without grain (`--viewports`, `--themes`,
+  `--scrolls`, `--grain on|off|both`).
+- **Crops** (`--crop 256` device px): the far and front crest lines, found
+  in the uncapped frame as the topmost and bottommost strong rows of
+  vertical contrast in a narrow column band away from the sun (rows
+  averaged across the band first, so grain cancels), and a sky
+  patch near the top for the grain. Each is saved capped | uncapped,
+  `--zoom 2`× nearest, as `scripts/out/sharp/<case>-<crop>.png`.
+- **Numbers** per crop: mean gradient magnitude and Laplacian variance as
+  capped / uncapped (1 is as sharp; below 1 is softer), and the pixel diff
+  mean and p99 (also for the whole frame). Grain-on loads also run
+  `?bench=200` (`--bench 0` skips it): GPU ms per frame, capped → uncapped,
+  net of the sync's overhead.
+
+A case reads `soft` when a crop's gradient ratio is under `--min-ratio`
+(0.9). It's information (exit 0) unless `--gate`. Detail goes to
+`scripts/out/sharp/results.json`; `--quiet` prints only soft or broken
+cases and the summary. Judge softness by eye on the crops too: the ratio
+says how much, not whether it shows.
 
 ## `npm run switch`
 
@@ -277,7 +306,7 @@ The URL parameters and `data-*` attributes the scripts rely on (the
 renderer, freeze, scroll, grain and crest switches; the painted sun's centre;
 `data-busy`, `data-seed`, `data-ready`, `data-quality`, `?bench` and
 `?adapt=0`; the theme key in localStorage) are one table: "Hooks" under
-"Renderers" in [`CLAUDE.md`](../CLAUDE.md#renderers). Change a hook there
+"Renderers" in [`docs/parts/atmosphere.md`](../docs/parts/atmosphere.md#renderers). Change a hook there
 and in the scripts together. What the harness assumes on top of it:
 
 - `?freeze=1` freezes both renderers the same way (veil drift 0 at full

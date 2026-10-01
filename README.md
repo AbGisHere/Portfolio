@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.2.10](https://img.shields.io/badge/version-0.2.10-informational)
+![Version 0.2.11](https://img.shields.io/badge/version-0.2.11-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -159,7 +159,7 @@ The scene honours query parameters for the harness and screenshots, such as
 and `?scroll=0.5` to pin scroll progress, and exposes `data-*` attributes
 for tests (which renderer painted, where the sun is, whether a switch is
 running). The full list is the hook table in
-[`CLAUDE.md`](./CLAUDE.md#renderers).
+[`docs/parts/atmosphere.md`](./docs/parts/atmosphere.md#renderers).
 
 ## Project structure
 
@@ -204,7 +204,7 @@ until they arrive. Each frame's scene comes from one shared pure function
 (`sceneAt`), built on the shared switch, camera, colour and sky maths and the
 sun and moon looks, so a renderer only maps it to shader uniforms or CSS.
 `npm run parity` keeps them visually identical at every scroll position
-(the current state is in [`CLAUDE.md`](./CLAUDE.md#renderers)).
+(the current state is in [`docs/parts/atmosphere.md`](./docs/parts/atmosphere.md#renderers)).
 
 **One clock per job.** At rest, an exponential smoothing step holds the scene.
 During a switch, one eased clock carries the sun and moon along their arc,
@@ -217,7 +217,7 @@ never crossfades two layers.
 to a small store outside React, so a scroll frame never re-renders a
 component. The renderers and the sun toggle subscribe to it.
 
-The details are in [`CLAUDE.md`](./CLAUDE.md#the-atmosphere), and the
+The details are in [`docs/parts/atmosphere.md`](./docs/parts/atmosphere.md), and the
 measured numbers behind these choices in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Performance and accessibility

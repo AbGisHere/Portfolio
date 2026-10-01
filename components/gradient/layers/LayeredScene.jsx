@@ -3,10 +3,8 @@
 import { useEffect, useRef } from 'react';
 import {
   FAR_VEIL,
-  GRAIN_SIZE,
   MAX_DPR,
   grainOpacity,
-  grainTexels,
   layout,
   mistOf,
   sunColour,
@@ -39,6 +37,7 @@ import { DESCENT_VEIL } from '../camera';
 import themes from '../themes';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
 import { publishSunSpot } from '../sunSpot';
+import { grainTile, layGrain } from '../grainLayer';
 import { ridgeMasks } from './ridgeMasks';
 import styles from './LayeredScene.module.css';
 
@@ -95,23 +94,6 @@ const LIMB = `radial-gradient(ellipse closest-side, ${LIMB_STOPS.map(
 ).join(', ')}, rgb(${limbAt(1)
   .map(c => Math.round(c * 255))
   .join(',')}) 100%)`;
-
-// The GL renderer's grain (mistGeometry.js grainTexels) as a tile, one
-// texel per CSS px.
-function grainTile() {
-  const c = document.createElement('canvas');
-  c.width = GRAIN_SIZE;
-  c.height = GRAIN_SIZE;
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(GRAIN_SIZE, GRAIN_SIZE);
-  const texels = grainTexels();
-  for (let i = 0; i < texels.length; i++) {
-    img.data[4 * i] = img.data[4 * i + 1] = img.data[4 * i + 2] = texels[i];
-    img.data[4 * i + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  return c;
-}
 
 // ---- colour canvases. Each redraws only when its key changes.
 const redraw = (c, key) => {
@@ -307,25 +289,11 @@ export default function LayeredScene({ recipe }) {
     const ridgesEl = make(styles.fill);
     const spill = paper(styles.wash, host, ROUND, ROUND);
     const air = paper(styles.air, host, 1, STRIP);
-    // The grain: its tile laid over the frame once per size, one texel per
-    // CSS px, at the device's own pixels (so the compositor never resamples
-    // it: a pixelated stretch under the overlay blend cost a frame).
+    // The grain: its tile laid over the frame once per size (../grainLayer.js).
     const grain = paper(styles.grain, host, 1, 1);
     const tile = noGrain ? null : grainTile();
     if (noGrain) grain.style.display = 'none';
-    const layGrain = () => {
-      const k = window.devicePixelRatio || 1;
-      const cols = Math.round(w * k);
-      const rows = Math.round(h * k);
-      if (!tile || (grain.width === cols && grain.height === rows)) return;
-      grain.width = cols;
-      grain.height = rows;
-      const x = grain.getContext('2d');
-      x.imageSmoothingEnabled = false;
-      x.setTransform(cols / w, 0, 0, rows / h, 0, 0);
-      x.fillStyle = x.createPattern(tile, 'repeat');
-      x.fillRect(0, 0, w, h);
-    };
+    const lay = () => layGrain(grain, tile, w, h);
 
     // Style writes only when a value changes, so a resting frame is free.
     // The moon's face image. Made ahead of time, when the browser is idle,
@@ -965,7 +933,7 @@ export default function LayeredScene({ recipe }) {
       w = nw;
       h = nh;
       dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-      layGrain();
+      lay();
       clearTimeout(maskTimer);
       if (first) buildMasks();
       else maskTimer = setTimeout(buildMasks, MASK_DEBOUNCE);

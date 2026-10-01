@@ -120,7 +120,7 @@
   will-change: transform;
 }
 
-/* A canvas at the device's pixels (LayeredScene.jsx layGrain). */
+/* A canvas at the device's pixels (../grainLayer.js layGrain). */
 .grain {
   position: absolute;
   inset: 0;

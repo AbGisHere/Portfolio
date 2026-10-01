@@ -2,9 +2,37 @@
 
 What each release changed, and what it measured, newest first. Versions
 follow the lines in `ROADMAP.md` ("Version lines"); how the code works now is
-in `CLAUDE.md`. Measurements are production builds on an Apple M4, headless
+in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple M4, headless
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
+
+## 0.2.11 — 2026-10-01
+
+Sharpness on large high-DPI displays, and the docs split per part.
+
+- **Measured** (`npm run sharp`, new; `?cap=0` lifts the 4K pixel cap):
+  5K@2 and 6K@2, day and night, scroll 0, .5 and 1, grain on and off, the
+  cap (75% and 64% per axis) against native. Without grain, crest and sky
+  crops are as sharp as native (gradient ratio 0.99–1.01, diff mean 0.1).
+  With grain, 12/24 cases read soft (0.65–0.79): the one-CSS-px grain,
+  resampled up, is the only thing the cap softens. Native costs 2–3× the
+  GPU time (9–17 ms against about 5), past a 120 Hz frame.
+- **The fix:** whenever GL draws below the device's pixels, the grain
+  leaves the shader for an overlay canvas at device pixels, the same blend
+  the layered fallback uses (now shared, `grainLayer.js`). After: 24/24 as
+  sharp as native (worst 0.99), the scene still capped.
+- **Not shipped:** a quality step above the cap (native where there's
+  headroom). It could rarely hold at 120 Hz and would buy only the grain.
+- `sharp.mjs` finds crest rows on band-averaged rows, so grain no longer
+  hides them.
+- **Docs:** `CLAUDE.md` keeps the rules and an index of parts; the
+  atmosphere's internals move to `docs/parts/atmosphere.md` (629 → about
+  300 lines loaded every session).
+- QA (full): tests, hygiene, parity 46/46 (worst mean 0.96, p99 4), switch
+  pass. Perf passed 5/6 on the full run: GL scroll at 1728×1117@2 ran at
+  115.7 fps (the gate is 118). That case also needed a retry in `0.2.10`,
+  and it never draws the overlay (it's under the cap). One cold rerun
+  failed at 66.9 fps; two warm reruns passed at 119.7.
 
 ## 0.2.10 — 2026-10-01
 

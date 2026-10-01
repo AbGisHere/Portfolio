@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs; done); next, `0.2.11` sharpness on large high-DPI displays. Per-release history: `CHANGELOG.md`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs. Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -131,10 +131,12 @@ release that last changed them.
   the map missed.
 - **The same map scopes reading.** Work on a part reads that part's files
   and the interfaces of what it reaches, never the code, docs or renders of
-  parts that already work. When `0.3` starts, split the per-part detail out
-  of `CLAUDE.md` into one short doc per part (`docs/parts/<part>.md`: its
-  files, interfaces, hooks, links and gate), leaving `CLAUDE.md` the rules
-  and an index, so a session loads only the part it's changing.
+  parts that already work. Each part's detail lives in one doc
+  (`docs/parts/<part>.md`: its files, interfaces, hooks, links and gate),
+  with `CLAUDE.md` the rules and an index ("Parts"), so a session loads only
+  the part it's changing. Started in `0.2.11` with the atmosphere
+  (`docs/parts/atmosphere.md`); each new part (the desk, the pool, the
+  header) gets its own.
 - **Keep checks lean:** one check lives in one place (`CLAUDE.md`,
   "Pre-push checks"). A new part adds its cases to the existing harnesses
   rather than a new script.
@@ -303,7 +305,7 @@ How it should feel:
 performance headroom (`0.2.4`), ridge light at rest (`0.2.5`), the fallback
 catching up (`0.2.6`), the switch cut (`0.2.7`) and the audit's clean-up
 (`0.2.8`). What each changed and measured is in `CHANGELOG.md`; how it works
-now is in `CLAUDE.md`, "The atmosphere".
+now is in `docs/parts/atmosphere.md`.
 
 **`0.2.8`: the audit's clean-up** (shipped 2026-09-30; details in
 `CHANGELOG.md`). The low-risk half of the 2026-09-30 repo audit: dead code
@@ -341,29 +343,17 @@ layers 73 → 20, live tile memory 222 → 60 MB at 1792×1120@2 (`CHANGELOG.md`
 release brought `npm run qa`.
 
 **`0.2.11`: sharpness on large high-DPI displays** (the owner asked,
-2026-09-30). GL draws at most 4K's pixel count (`MAX_PIXELS`,
-`MistCanvas.jsx`) and 2× the CSS pixels (`MAX_DPR`), then scales up. A 5K
-display (5120×2880) is drawn at about .75 of its resolution per axis, and a
-6K one (6016×3384) at about .64. The mist and sky can't show it; the crest
-rims and the grain may read slightly soft.
-
-- **Measure first.** Render 5K@2 and 6K@2 frames (headless, `?freeze=1
-  &grain=0` and with grain, at scroll 0, .5 and 1, both themes) capped and
-  uncapped. Compare crops of the crests and the grain side by side, and
-  record GPU time per frame for each (`?bench`). If no difference shows,
-  keep the cap and record why.
-- **If it shows:** raise the cap only when the GPU has headroom. Adaptive
-  quality already measures frame time against the refresh; give it a step
-  above today's cap (up to native resolution) that it takes only after the
-  p90 has held well inside budget, and drops first when frames run long.
-  Same hysteresis and lockout as today's steps.
-- **The layered fallback:** check that its ridge masks and grain stay crisp
-  at 5K and 6K too (masks are built per viewport; a CSS gradient is always
-  native).
-- **The gate:** at 5K and 6K no visible softening against uncapped in the
-  crest and grain crops, or a recorded reason it's not worth the GPU cost;
-  120 fps kept at 1728×1117@2 and 1440×900@2 (`npm run perf`); parity 42/42;
-  `npm run test:adaptive` covers the new step.
+2026-09-30; done 2026-10-01, `CHANGELOG.md`). GL draws at most 4K's pixel
+count (`MAX_PIXELS`) and 2× the CSS pixels (`MAX_DPR`), then scales up: a
+5K@2 frame at about .75 per axis, a 6K@2 one at about .64. `npm run sharp`
+measured it against uncapped: the mountains, crests and sky lose nothing
+(gradient ratio 0.99–1.01); only the one-CSS-px grain went soft (0.65–0.79).
+Native resolution costs 2–3× the GPU time (up to 17 ms, past a 120 Hz
+frame), so the cap stays and no step goes above it (one was built and
+dropped). The grain instead leaves the shader for the layered renderer's
+overlay at device pixels whenever GL draws below them: 24/24 crops as sharp
+as uncapped. The layered fallback already drew its grain that way, and its
+ridges are CSS, native at any size.
 
 **Standing rule from `0.2.11` on: quality holds on every display.** Every
 new layer, scene and version (the desk, the pool, the header, the device

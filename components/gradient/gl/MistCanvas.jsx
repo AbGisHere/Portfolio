@@ -37,6 +37,7 @@ import {
 } from '../camera';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
 import { publishSunSpot } from '../sunSpot';
+import { grainTile, layGrain } from '../grainLayer';
 import styles from './MistCanvas.module.css';
 
 const SKY_TEXELS = 1024;
@@ -121,6 +122,7 @@ function texture(gl, filter) {
  */
 export default function MistCanvas({ recipe, onFail }) {
   const canvasRef = useRef(null);
+  const grainRef = useRef(null);
   const recipeRef = useRef(recipe);
   const kickRef = useRef(() => {});
 
@@ -132,6 +134,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const grainEl = grainRef.current;
     let gl;
     let prog;
     try {
@@ -301,16 +304,31 @@ export default function MistCanvas({ recipe, onFail }) {
     // `data-quality` on the scene wrapper says which is set.
     const quality = params.get('adapt') === '0' ? null : adaptiveQuality(() => resize());
     const level = () => quality?.level ?? 0;
+    // `?cap=0` (harness, 0.2.11: `npm run sharp`) lifts the MAX_PIXELS cap,
+    // so large high-DPI frames draw at native (still at most MAX_DPR).
+    const pixelCap = params.get('cap') === '0' ? Infinity : MAX_PIXELS;
+    // (0.2.11) Grain is one-CSS-px noise: drawn under the pixel cap or a
+    // quality step, it gets resampled up to the screen and goes soft (`npm
+    // run sharp`: the only thing the cap visibly softens). So whenever the
+    // canvas is below the device's pixels, the grain leaves the shader for
+    // the layered renderer's overlay at device pixels (../grainLayer.js):
+    // the same blend, composited sharp.
+    let grainOut = false;
+    let grainA = -1;
+    let tile = null;
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
       const nw = Math.round(rect.width);
       const nh = Math.round(rect.height);
       if (!nw || !nh) return;
-      const cap = Math.sqrt(MAX_PIXELS / (nw * nh));
+      const cap = Math.sqrt(pixelCap / (nw * nh));
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR, cap) * QUALITY[level()];
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      grainOut = !noGrain && dpr < (window.devicePixelRatio || 1) - 1e-3;
+      grainEl.style.display = grainOut ? '' : 'none';
+      if (grainOut) layGrain(grainEl, (tile ??= grainTile()), nw, nh);
       w = nw;
       h = nh;
       dirty = true;
@@ -611,7 +629,11 @@ export default function MistCanvas({ recipe, onFail }) {
       // The veils and air: the haze, glowing with the body's light.
       gl.uniform3fv(uniform('uMist'), rgb01(light.mist));
       gl.uniform1f(uniform('uAirA'), frame.air);
-      gl.uniform1f(uniform('uGrainA'), noGrain ? 0 : grainOpacity(r));
+      gl.uniform1f(uniform('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(r));
+      if (grainOut && grainA !== grainOpacity(r)) {
+        grainA = grainOpacity(r);
+        grainEl.style.opacity = String(grainA);
+      }
       // The sky and the meadow.
       // (0.2.2) The sky under the camera: camera.js skyUnder.
       const { sky } = frame;
@@ -856,5 +878,10 @@ export default function MistCanvas({ recipe, onFail }) {
     };
   }, [onFail]);
 
-  return <canvas ref={canvasRef} className={styles.canvas} />;
+  return (
+    <>
+      <canvas ref={canvasRef} className={styles.canvas} />
+      <canvas ref={grainRef} className={styles.grain} style={{ display: 'none' }} />
+    </>
+  );
 }
