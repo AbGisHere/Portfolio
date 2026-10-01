@@ -27,6 +27,7 @@ import { hexToRgb, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
+import { deskBox, deskWidest, pitchSpan } from '../deskCamera';
 import {
   DESCENT_VEIL,
   DRIFT_GAIN_MAX,
@@ -204,6 +205,10 @@ export default function MistCanvas({ recipe, onFail }) {
     let view = null;
     let groundShown = false;
     let windPhase = 0;
+    // (0.3) The closing shot's sky (clouds, birds, stars): shown, and its
+    // clock, seconds on this loop's clock while it shows.
+    let lifeShown = false;
+    let skyT = 0;
     let raf = 0;
     let last = 0;
     let woke = true;
@@ -216,6 +221,9 @@ export default function MistCanvas({ recipe, onFail }) {
     const params = new URLSearchParams(window.location.search);
     const noGrain = params.get('grain') === '0';
     const frozen = params.get('freeze') === '1';
+    // `?skyt=12` starts the closing sky's clock there (stills of the birds
+    // and clouds at a given moment, with `?freeze=1`).
+    skyT = Number(params.get('skyt')) || 0;
 
     // Idle drift: at rest the seed breathes ±`idle.seedDrift` around its
     // target on a `idle.period`-second sine, so the ridges slowly shift. Only
@@ -451,7 +459,7 @@ export default function MistCanvas({ recipe, onFail }) {
         lift[k] = ridges[i].L;
         scale[k] = rc[i].s;
         foot[k] = rc[i].foot;
-        ext[k] = crestExtension(rc[i].s, w, h, ridge.dx);
+        ext[k] = crestExtension(rc[i].s / (view.m ?? 1), w, h, ridge.dx);
       }
       gl.useProgram(g.prog);
       gl.uniform1i(g.u('uOrigin'), g.table.origin);
@@ -466,6 +474,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(g.u('uBase'), base);
       gl.uniform1fv(g.u('uL'), lift);
       gl.uniform1fv(g.u('uS'), scale);
+      gl.uniform1f(g.u('uM'), view.m ?? 1);
 
       gl.uniform1fv(g.u('uFoot'), foot);
       gl.uniform1iv(g.u('uExt'), ext);
@@ -483,7 +492,10 @@ export default function MistCanvas({ recipe, onFail }) {
       if (crest.length !== cols * n) crest = new Float32Array(cols * n);
       const scale = cols / w;
       // Rows by noise index, as the GPU pass writes them.
-      for (let i = 0; i < n; i++) sampleCrest(ridges[i], cols, scale, crest, (ridges[i].noise ?? i) * cols, view.ridges[i]);
+      for (let i = 0; i < n; i++) {
+        const cam = view.m > 1 ? { ...view.ridges[i], m: view.m } : view.ridges[i];
+        sampleCrest(ridges[i], cols, scale, crest, (ridges[i].noise ?? i) * cols, cam);
+      }
       gl.activeTexture(gl.TEXTURE1);
       if (crestDims !== `${cols}x${n}`) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, cols, n, 0, gl.RED, gl.FLOAT, crest);
@@ -504,7 +516,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const count = Math.min(scene.ridges.length, MAX_RIDGES);
       if (gpuCrests(scene.ridges, count, value[6], builtOffset, value[4])) return;
       const mist = { ...mistOf(r.mist), haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] };
-      const scales = view.rest ? null : view.ridges.map(rc => rc.s);
+      const scales = view.rest ? null : view.ridges.map(rc => rc.s / (view.m ?? 1));
       const drift = { offset: builtOffset, gains: view.gains };
       const { ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, ranges: view.ranges, drift });
       uploadCrest(ridges, Math.min(ridges.length, MAX_RIDGES));
@@ -514,7 +526,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // and the descent's progress.
     function rebuild() {
       const r = recipeRef.current;
-      const { about } = getDescent();
+      const { about, desk } = getDescent();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
       // rest it's the spring's, as ever. The descent's time of day goes on
@@ -537,6 +549,7 @@ export default function MistCanvas({ recipe, onFail }) {
         base,
         haze: value[2],
         about,
+        desk,
         reduced: motion.matches,
         w,
         h,
@@ -544,29 +557,36 @@ export default function MistCanvas({ recipe, onFail }) {
         restCol: rgbToHex(value.slice(7, 10)),
         maxRidges: MAX_RIDGES,
       });
-      const { cam, stops, lit, painted } = frame;
+      const { cam, stops, lit } = frame;
       scene = frame.layout;
       view = frame.view;
       view.ranges = cam.ranges;
       view.haze = frame.haze;
       // Each ridge's idle-drift gain (camera.js DRIFT_GAIN_MAX): null at rest.
       view.gains = driftGains(view);
-      const widest = descentWidest(scene, h, orbit ? [r, orbit.prev] : [r]);
+      // Under the 0.3 camera's pitch the crest texture spans the virtual
+      // plane's wider reach (`m`, deskCamera.js pitchSpan), and the hash
+      // table the 0.3 camera's (rebuilt once on the way in).
+      const { pitch } = frame;
+      view.pitch = pitch;
+      view.m = pitch ? pitchSpan(pitch, w, h, frame.ground ? frame.ground.top : h) : 1;
+      const widest = pitch ? deskWidest(scene, h, r) : descentWidest(scene, h, orbit ? [r, orbit.prev] : [r]);
       view.ext = crestExtension(widest, w, h, scene.ridges[0]?.dx ?? 1);
       // The painted sun's centre, for the hit target (SunToggle, through
       // ../sunSpot.js) and the harness.
       const host = canvas.parentElement;
-      publishSunSpot(painted.x, painted.y);
+      const { spot } = frame;
+      publishSunSpot(spot.x, spot.y);
       if (host) {
-        host.dataset.sunCx = painted.x.toFixed(2);
-        host.dataset.sunCy = painted.y.toFixed(2);
+        host.dataset.sunCx = spot.x.toFixed(2);
+        host.dataset.sunCy = spot.y.toFixed(2);
         host.dataset.seed = (value[6] + builtOffset).toFixed(4);
       }
       let { ridges } = scene;
       const n = Math.min(ridges.length, MAX_RIDGES);
       if (!gpuCrests(ridges, n, value[6], builtOffset, mist.sharp)) {
         if (!ridges[0]?.ys || !view.rest) {
-          const scales = view.rest ? null : view.ridges.map(rc => rc.s);
+          const scales = view.rest ? null : view.ridges.map(rc => rc.s / (view.m ?? 1));
           const drift = { offset: builtOffset, gains: view.gains };
           ({ ridges } = layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, scales, ranges: cam.ranges, drift }));
         }
@@ -646,6 +666,28 @@ export default function MistCanvas({ recipe, onFail }) {
       if (ground) {
         gl.uniform4f(uniform('uGroundY'), ...ground.stops.map(([y]) => y));
         gl.uniform3fv(uniform('uGroundCol'), ground.stops.flatMap(([, c]) => rgb01(c)));
+      }
+      // (0.3) The camera's pitch, the ground under it and the desk.
+      gl.uniform1i(uniform('uPitched'), pitch ? 1 : 0);
+      if (pitch) {
+        gl.uniform4f(uniform('uPitch'), pitch.cos, pitch.sin, pitch.f, pitch.zoom);
+        gl.uniform4f(uniform('uPrin'), pitch.sx, pitch.sy, pitch.vx, pitch.vy);
+        gl.uniform1f(uniform('uCm'), view.m);
+        gl.uniform2f(uniform('uEye'), cam.eye, cam.back);
+        const box = deskBox(cam);
+        gl.uniform3fv(uniform('uBoxMin'), box.min);
+        gl.uniform3fv(uniform('uBoxMax'), box.max);
+      }
+      const { life } = frame;
+      lifeShown = !!life;
+      gl.uniform1f(uniform('uLifeA'), life ? life.amount : 0);
+      if (life) {
+        // Under reduced motion the sky holds still and the birds stay away.
+        gl.uniform2f(uniform('uLifeMix'), motion.matches ? 0 : life.birds, life.stars);
+        gl.uniform3fv(uniform('uCloudLit'), rgb01(life.cloud[0]));
+        gl.uniform3fv(uniform('uCloudShade'), rgb01(life.cloud[1]));
+        gl.uniform3fv(uniform('uBirdCol'), rgb01(life.bird));
+        gl.uniform1f(uniform('uSkyT'), skyT);
       }
       setWind();
       dirty = false;
@@ -776,6 +818,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // scales the ridges.
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
+      const living = lifeShown && !motion.matches && !frozen;
+      if (living) skyT += dt;
       // A scroll, a switch or the spring redraws every frame; at rest the
       // drift, the wind and the veils share one IDLE_HZ tick.
       const busy = dirty;
@@ -797,8 +841,10 @@ export default function MistCanvas({ recipe, onFail }) {
           windMoved = true;
         }
       }
+      // The birds fly at the display's rate, not the idle tick's.
+      if (living && !busy) gl.uniform1f(uniform('uSkyT'), skyT);
       const vs = veils(dt);
-      if (busy || crestMoved || windMoved || (tick && changed(vs))) draw(vs);
+      if (busy || crestMoved || windMoved || living || (tick && changed(vs))) draw(vs);
 
       const moving = !settled();
       const drifting = !motion.matches && !frozen;

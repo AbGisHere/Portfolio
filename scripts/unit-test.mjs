@@ -1,6 +1,7 @@
 // Tests for the scene's pure maths, run without a browser or a GPU:
 // the colour module (components/gradient/colour.js), the switch palette
-// (skyKeys.js paletteAt) and one frame of the scene (scene.js sceneAt).
+// (skyKeys.js paletteAt), one frame of the scene (scene.js sceneAt) and the
+// 0.3 camera (deskCamera.js).
 //   node --import ./scripts/lib/resolve-js.mjs --test scripts/unit-test.mjs
 // (`npm run test:unit`; the hook resolves the components' extensionless
 // imports as the bundler does.)
@@ -13,6 +14,7 @@ import { descentAt, groundPaint, scrollPalette } from '../components/gradient/ca
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
+import { deskCameraAt, deskHolds, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -123,7 +125,7 @@ const W = 1440;
 const H = 900;
 
 /** One frame the way the layered renderer asks for it (its own layout). */
-function frame(recipe, { about = 0, orbit = null, e = 1, w = W, h = H, reduced = false } = {}) {
+function frame(recipe, { about = 0, desk = 0, orbit = null, e = 1, w = W, h = H, reduced = false } = {}) {
   const geo = orbit ? orbitScene(orbit, e).geo : targetGeo(recipe);
   const base = orbit ? orbitScene(orbit, e).stops : recipe.stops;
   const [size, horizon, haze, height, sharp, sun, seed] = geo;
@@ -133,7 +135,7 @@ function frame(recipe, { about = 0, orbit = null, e = 1, w = W, h = H, reduced =
     base,
     haze,
     layoutAt,
-    f: sceneAt({ recipe, orbit, e, base, haze, about, reduced, w, h, layoutAt, restCol: sunColour(base) }),
+    f: sceneAt({ recipe, orbit, e, base, haze, about, desk, reduced, w, h, layoutAt, restCol: sunColour(base) }),
   };
 }
 
@@ -237,6 +239,58 @@ test('sceneAt with a switch not yet turning keeps the resting bodies', () => {
   });
   assert.equal(f.lit.length, 1);
   assert.deepEqual(f.stops, scrollPalette(moonlit.stops, moonlit, 0.5));
+});
+
+test('the 0.3 camera starts exactly where the pull-back ends', () => {
+  for (const r of RECIPES) {
+    const end = frame(r, { about: 1 }).f;
+    const join = frame(r, { about: 1, desk: 1e-9 }).f;
+    // (Up to float rounding: the 0.3 camera's back is rebuilt from metres.)
+    const near = (a, b, path) => {
+      if (typeof a === 'number') return assert.ok(Math.abs(a - b) < 1e-9, `${path}: ${a} vs ${b}`);
+      for (const k of Object.keys(b)) near(a[k], b[k], `${path}.${k}`);
+    };
+    near(join.view.ridges, end.view.ridges, 'the ridges where 0.2 left them');
+    assert.deepEqual(join.stops, end.stops);
+    near(join.spot, { x: end.painted.x, y: end.painted.y }, 'the hit target on the body');
+    near(join.sky, end.sky, 'the sky');
+    assert.equal(join.life, null, 'no closing sky yet');
+  }
+});
+
+test('the 0.3 camera: the stops sit in holds, and it reaches the desk', () => {
+  assert.deepEqual(deskHolds(), deskHolds().map(() => true));
+  const top = deskCameraAt(0.5, duskEmber);
+  assert.ok(Math.abs(top.pitch - Math.PI / 2) < 1e-9, 'straight down over the desk');
+  assert.ok(Math.abs(top.ahead) < 1e-9);
+  const last = deskCameraAt(1, duskEmber);
+  assert.ok(last.ahead > 0 && last.pitch < 0.2, 'facing the desk, nearly level');
+  for (let d = 0; d <= 1; d += 0.01) {
+    const c = deskCameraAt(d, duskEmber);
+    assert.ok(c.eye > 0 && Number.isFinite(c.back), `a camera above the ground at ${d}`);
+  }
+});
+
+test('the 0.3 pitch: screen and virtual plane map both ways', () => {
+  const f = frame(duskEmber, { about: 1, desk: 0.3 }).f;
+  const P = f.pitch;
+  assert.ok(P && P.sin > 0);
+  for (const [x, y] of [[10, 20], [W / 2, H / 3], [W - 5, H / 4]]) {
+    const v = toVirtual(P, x, y);
+    if (!v) continue;
+    const s = toScreen(P, v.x, v.y);
+    assert.ok(Math.abs(s.x - x) < 1e-6 && Math.abs(s.y - y) < 1e-6);
+  }
+  assert.equal(pitchOf(null, f.view, W, H), null);
+});
+
+test('the closing sky: birds by day, stars by night, none before arc 2', () => {
+  assert.equal(frame(duskEmber, { about: 1, desk: 0.3 }).f.life, null);
+  const day = frame(duskEmber, { about: 1, desk: 1 }).f.life;
+  const night = frame(moonlit, { about: 1, desk: 1 }).f.life;
+  assert.equal(day.amount, 1);
+  assert.deepEqual([day.birds, day.stars], [1, 0]);
+  assert.deepEqual([night.birds, night.stars], [0, 1]);
 });
 
 function geoArgs(r) {

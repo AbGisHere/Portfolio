@@ -16,6 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
+import { deskCameraAt, deskFrameAt, deskSkyAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -46,6 +47,7 @@ export function sceneAt({
   base,
   haze,
   about,
+  desk = 0,
   reduced = false,
   w,
   h,
@@ -58,12 +60,17 @@ export function sceneAt({
   const from = orbit ? orbit.prev : r;
   // The camera, blended between the scenes' amounts mid-switch, and the
   // descent's time of day over the palette.
-  const cam = descentAt(about, r, { reduced, from: orbit?.prev, e: p });
+  // Past the pull-back (`desk` > 0) the 0.3 camera takes over from where
+  // it left off (deskCamera.js).
+  const onDesk = desk > 0;
+  const cam = onDesk
+    ? deskCameraAt(desk, r, { reduced, from: orbit?.prev, e: p })
+    : descentAt(about, r, { reduced, from: orbit?.prev, e: p });
   const stops = turning ? scrollPaletteSwitch(base, orbit.prev, orbit.next, about, e) : scrollPalette(base, r, about);
   // Past the top the world ranges join the layout (under the frame, or sunk
   // behind the far ridge), and the camera brings them in by geometry alone.
   const layout = layoutAt(cam.ranges);
-  const view = frameAt(layout, h, cam);
+  const view = onDesk ? deskFrameAt(layout, h, cam) : frameAt(layout, h, cam);
   // The haze thins toward evening (the recipe's `scroll.haze`).
   const hz = view.rest ? haze : scrollHaze(haze, from, r, p, about);
 
@@ -89,12 +96,19 @@ export function sceneAt({
   // harness: at rest the body as painted; mid-switch where it will land,
   // moved by the descent too.
   const painted = turning ? bodyAt({ ...sun, x: sunX }, r, view, place) : lit[0];
+  // Everything above is on the 0.2 camera's image plane; the 0.3 camera's
+  // pitch takes it to the screen (null: no pitch). The hit target goes where
+  // the body lands there (off the frame once the camera looks down).
+  const pitch = onDesk ? pitchOf(cam, view, w, h) : null;
+  const shown = pitch ? toScreen(pitch, painted.x, painted.y) : painted;
+  const spot = shown ? { x: shown.x, y: shown.y } : { x: -1e4, y: -1e4 };
+  const life = onDesk ? skyLifeAt(desk, r, stops, { prev: turning ? orbit.prev : null, e }) : null;
 
   // Ridges: past the top each is lit for the slot it has reached (its `t`),
   // and takes the descent's painted colours (descentPaint) on the camera's
   // clock.
-  const shown = layout.ridges.slice(0, maxRidges);
-  const ridges = view.rest ? shown : shown.map((rd, i) => ({ ...rd, t: view.ridges[i].t, flat: view.ridges[i].flat }));
+  const drawn = layout.ridges.slice(0, maxRidges);
+  const ridges = view.rest ? drawn : drawn.map((rd, i) => ({ ...rd, t: view.ridges[i].t, flat: view.ridges[i].flat }));
   const studio = ridgePaint(stops, ridges, hz, h);
   const paints = view.rest ? studio : studio.map((pt, i) => blendPaint(pt, descentPaint(stops, ridges[i], h), view.k));
   const M = mistColour(stops);
@@ -113,12 +127,16 @@ export function sceneAt({
     M,
     lit,
     painted,
+    spot,
+    pitch,
     ridges,
     paints,
     light,
     ground,
     // The sky under the camera: frame row y shows the ramp at (y × scale + shift).
-    sky: skyUnder(view, h),
+    sky: onDesk ? deskSkyAt(view, h, pitch, life) : skyUnder(view, h),
+    // (0.3) The closing shot's sky: clouds, birds, stars (null: none).
+    life,
     // The air band's opacity, thinned under the camera.
     air: airOpacity(hz) * (view.rest ? 1 : 1 - DESCENT_AIR * view.k),
   };

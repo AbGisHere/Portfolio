@@ -6,6 +6,41 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.0 — 2026-10-01
+
+The first of the `0.3` line: the camera's whole path from the pull-back down
+onto the desk, the scroll's stops, and the closing shot's sky. The desk is a
+grey box over a 1 m ground grid until the meadow (`0.3.1`) and the table
+(`0.3.2`).
+
+- **The `0.3` camera** (`deskCamera.js`): a second scroll track, `desk`
+  (four screens), drives keyframes of distance, height, pitch, framing and
+  zoom on monotone cubics, from about 64 m up over the mountains, down to
+  look straight down on the desk, then round to a low shot facing it with
+  the mountains on the horizon behind. The pitch maps each pixel back onto
+  the `0.2` camera's image plane (a homography), so everything far away is
+  painted exactly as before; the ground grid and the box are traced. The
+  join with `0.2` is exact (unit-tested), and `0.2` frames are unchanged.
+- **Stops:** the scroll glides onto the pull-back's end (the sun half set)
+  and the top-down shot when it comes to rest near one; the camera holds
+  still around each. Reduced motion keeps the holds, not the snap.
+- **The closing sky:** behind the desk the sky shows more of its ramp, with
+  two hazy cloud banks drifting and changing shape, irregular flocks of
+  hazy birds by day and twinkling stars at night, on GL's frame loop.
+- `qa` counts `.gitignore` and a version-only `package.json`/lockfile bump
+  as docs (quick tier). `llms.txt` describes the descent.
+- **Not yet:** the layered fallback holds the pull-back's end through the
+  `desk` stretch, reduced motion runs the full path, and parity, perf and
+  switch measure the `0.2` stretch only.
+
+Measured at the closing shot (`?desk=1`, GL, `perf --query desk=1`, M4):
+at rest with the birds flying (a redraw every frame) 117.3 fps at
+1728×1117@2 and 119.2 at 3008×1692@2, no frame over 20 ms; a day/night
+switch there 118.2 fps (p95 10.3 ms) and 109.4 at 3008×1692@2 (p95 16.4,
+max 17.6 ms), the one place under the 120 fps budget, to look at with the
+`0.3` perf sweep. The `0.2` stretch is unchanged: parity 46/46 (worst mean
+0.96, p99 4), perf gate 6/6 (min scroll 119.7 fps).
+
 ## 0.2.13 — 2026-10-01
 
 Two of the `0.2.8` audit's owner decisions, settled. Docs and `.gitignore`

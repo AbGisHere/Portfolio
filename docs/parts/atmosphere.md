@@ -347,6 +347,60 @@ identity.
   8.33), 1440×900@2 and 393×852@2 (M4, `?adapt=0`). Perf's headless wheel
   sweep stops a little short of `about` 1.
 
+## The camera (0.3)
+
+Past the pull-back, the `desk` track (`TRACK_LVH.desk` 400, four screens)
+carries the camera down onto the desk and round to face it
+(`deskCamera.js`, composed by `sceneAt` when `desk` > 0). Like `0.2`'s, it's
+a **pure function of `desk`**, never sprung. At `desk` 0 it is `0.2`'s
+camera at `about` 1 exactly (unit-tested).
+
+- **Progress.** A later track starts where the one before ends (its start a
+  viewport above its top) and runs its whole height, so `about` 1 and
+  `desk` 0 are the same scroll position. `?desk=` pins it (with `about` 1).
+- **The path** is `DESK_PATH`: keyframes over `desk` of `d` (metres to the
+  desk along the view, + on the mountains' side), `y` (height, metres,
+  eased in log space), `pitch` (degrees down), `centre` (the screen's
+  optical centre moving from `0.2`'s horizon row to the frame's middle) and
+  `zoom`, each through a monotone cubic, flat at both ends and wherever two
+  keys repeat (a hold). One world unit is the rest eye height, `WORLD_M` 40
+  m; the desk (`DESK_BOX`, a grey box for now) sits `d0` 60 m behind where
+  `0.2` leaves the camera, about 64 m up.
+- **Pitch as a homography.** The `0.2` camera has a vertical image plane and
+  a lens shift, which can't look down. Rotating a camera about its centre
+  maps its image by a homography that doesn't depend on depth, so the
+  shader takes each screen pixel back to the `0.2` plane (`toVirtual`;
+  `uPitch`, `uPrin`) and paints it exactly as before. A ray that leaves the
+  plane behind sees only the ground. The ground grid and the box are traced
+  from the ray (`uEye`, `uBoxMin`/`uBoxMax`). `toScreen` takes the body
+  back, so the hit target follows (off the frame looking down).
+  `deskFrameAt` keeps each ridge's `t` and `flat` as `0.2` left them:
+  coming down, every foot slides to the horizon and would turn to haze.
+- **The crests under the pitch.** The plane's ridge band reaches wider than
+  the frame (`pitchSpan`, up to 4×), so the crest texture spans `uM`
+  (crest pass) / `m` (`sampleCrest`) × the frame, read between columns
+  (`crestAt`; whole columns read exactly, so `0.2` frames are unchanged),
+  and the hash table covers `deskWidest` (rebuilt once on the way in).
+- **Stops** (`scroll/stops.js`): desk .025 (the pull-back's end, the sun
+  half set) and .5 (the top-down shot), each inside a hold. When scrolling
+  rests within `STOP_REACH` (half a viewport) of one, `SmoothScroll` glides
+  onto it (Lenis `scrollTo`, or a smooth native scroll; never under reduced
+  motion, or while a finger is down).
+- **The closing sky** (`skyLifeAt`, fading in over `LIFE_IN` .62–.86): the
+  sky ramp spread from the frame's top to the horizon (`DESK_SKY`,
+  `deskSkyAt`), two cloud banks (far and near, drifting at their own pace,
+  slowly changing shape, patchy, hazed toward the sky's colour), birds by
+  day (four flocks on irregular cycles, one to seven birds, depth setting
+  size and haze, gliding between wingbeats) and twinkling stars at night;
+  mid-switch they blend on `e`. They run on `skyT`, seconds on GL's frame
+  loop while the sky shows, and redraw every frame there (not the idle
+  tick) so the birds move smoothly. Integer hashing (`pcg`), so every GPU
+  draws the same sky. Reduced motion holds the sky still, without birds;
+  `?skyt=` starts the clock at a given second (stills, with `?freeze=1`).
+- **Not yet:** the layered fallback ignores `desk` (it holds the
+  pull-back's end), reduced motion runs the full path, and parity, perf
+  and switch cover the `0.2` stretch only.
+
 ## Adding a scene
 
 1. Add a recipe under `components/gradient/recipes/`, with its `body`

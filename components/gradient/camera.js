@@ -142,7 +142,7 @@ export function slotT(foot, horizon, h, ranges) {
 }
 
 /** Ridge b's depth, z_b = (h − c) / (base_b − c). */
-const depthOf = (base, c, h) => (h - c) / Math.max(1e-3, base - c);
+export const depthOf = (base, c, h) => (h - c) / Math.max(1e-3, base - c);
 
 /** Each ridge's scale under `cam` (all 1 at rest). */
 export const ridgeScales = (ridges, c, h, cam) =>

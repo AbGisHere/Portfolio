@@ -11,8 +11,8 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
+| `0.3.x` | Current line: `0.3.0` the camera. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -325,7 +325,8 @@ page shows text.
 - **Owner decisions the audit raised** (not taken in `0.2.8`; the user
   decides):
   - Should the fallback keep full pixel parity under the camera, or only at
-    rest and during a switch? Decide before `0.3`.
+    rest and during a switch? Provisionally (2026-10-01): stills under
+    `0.3`, pixel parity through `0.2` (see "0.3 — the desk").
   - ~~`.impeccable/surfaces/home.md` as the visual contract~~ Decided
     2026-10-01: it stays local (gitignored), a working file for the
     impeccable skill. `DESIGN.md` is the committed design record.
@@ -390,6 +391,47 @@ differences: no idle drift or reshaping in the fallback, and no wind.
   map, words in the mist, constellations, a field journal.
 
 ### 0.3 — the desk
+
+**The order** (the owner, 2026-10-01): the camera first, then the ground and
+the grass, then the table, then the laptop, the lamp and the accessories.
+
+| Version | What ships |
+|---|---|
+| `0.3.0` | **Shipped.** The camera's whole S path after the pull-back, over a 1 m ground grid and a grey box for the desk; the scroll's two stops (the pull-back's end, the top-down shot); the closing shot's sky (a fuller gradient, clouds, birds by day, stars at night). |
+| `0.3.1` | The meadow: the ground layer and the anime grass, with footsteps. The grid goes. |
+| `0.3.2` | The table: the first model, with day and night lightmaps. |
+| `0.3.3` | The laptop (the tablet on portrait) and the lid opening. |
+| `0.3.4`+ | The lamp (the theme toggle), the stationery and accessories, then the device screen. |
+
+**Still owed by the `0.3` camera** (before the line closes): the fallback's
+stills (it holds the pull-back's end for now), a reduced-motion version of
+the path (it runs the full move today), and `perf`, `parity` and `switch`
+over the `0.3` stretch (they cover `0.2` only).
+
+**The grass is drawn, and real** (the owner, 2026-10-01). Anime grass, a
+mix of Ghibli and a Doraemon film: cel-shaded blades with clear shapes and
+two or three flat tone bands (dark root, light tip), in tufts of uneven
+height and tint, with wind moving through in visible waves. Anime greens,
+lit by the sky like the ridges: golden-green at dusk, blue-green under the
+moon. Thousands of instanced 3D blades near the desk, thinning with
+distance into a ground layer, with the wind on the GPU, in one draw call. It
+holds 120 fps and the quality rule on every display.
+
+**Footsteps** (the owner, 2026-10-01). The grass answers the pointer like an
+invisible person walking through it. The pointer is cast onto the ground,
+so a step lands where it points. Moving the mouse lays alternating left and
+right footprints one stride apart along its path; a tap on touch is one
+step (a drag scrolls, so it doesn't stamp). Blades flatten outward under a
+foot and spring back over a second or two. Steps are stamped into a small
+ground-space texture that fades, and the grass bends from it. Only while
+the meadow is in view, and only in GL (the fallback's stills don't react).
+Reduced motion keeps the footprints but drops the rebound and the wind.
+This is the scene's third clock (below).
+
+**The fallback under `0.3`** (provisional, 2026-10-01; option A): it plays
+the pull-back as today, then crossfades painted stills through the arcs,
+rendered from the GL scene at build time. Parity there checks each still
+against its GL frame at its scroll point, not every scroll.
 
 **The scene.** A meadow of flowing grass. On it, a square wooden table with a
 laptop, a desk lamp and stationery, plus whatever else makes it feel real and
@@ -464,9 +506,8 @@ front needs real geometry.
 
 - **Sky, mountains and ground: extend the current shader.** Per-ridge depth
   and the camera's pitch and height give the ridges' offsets and scale. The
-  ground is a per-pixel ray–plane intersection with a stylised meadow and
-  wind. Top-down, realistic grass mostly shows blade tips, so a soft meadow
-  that matches the ridges will look better. The ridges' mist band at their
+  ground is a per-pixel ray–plane intersection, the far meadow; near the
+  desk, instanced 3D grass blades stand on it (see "0.3 — the desk"). The ridges' mist band at their
   feet (`stops[1]`) hides the seam between mountains and ground.
 - **Desk objects: a mesh pass in the same WebGL2 context.** The scene is
   simple for 3D: only the camera and the lid hinge move, so the lighting can

@@ -10,7 +10,8 @@
  *              [--only parity,perf] [--skip switch]
  *
  * Tier: `quick` when everything changed against origin/main (committed,
- * uncommitted and untracked) is docs (*.md, *.txt, LICENSE), else `full`.
+ * uncommitted and untracked) is docs (*.md, *.txt, LICENSE, .gitignore, and
+ * a package.json or lockfile whose only change is the version), else `full`.
  * It keeps going after a failure, prints a failed check's failing cases
  * (the detail is in scripts/out/<check>/), and exits 1 if any check failed.
  */
@@ -31,7 +32,14 @@ function pickTier() {
     const files = `${git('git diff --name-only origin/main')}\n${git('git ls-files --others --exclude-standard')}`
       .split('\n')
       .filter(Boolean);
-    const code = files.filter(f => !/\.(md|txt)$|(^|\/)LICENSE$/.test(f));
+    // A release bump touches only the "version" lines of these two.
+    const versionOnly = f =>
+      /^package(-lock)?\.json$/.test(f) &&
+      git(`git diff -U0 origin/main -- ${f}`)
+        .split('\n')
+        .filter(l => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l))
+        .every(l => /^[+-]\s*"version": "[^"]*",?$/.test(l));
+    const code = files.filter(f => !/\.(md|txt)$|(^|\/)LICENSE$|^\.gitignore$/.test(f) && !versionOnly(f));
     return code.length ? ['full', `${code.length} non-doc files changed`] : ['quick', 'docs-only changes'];
   } catch {
     return ['full', 'no origin/main to diff against'];

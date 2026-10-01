@@ -25,7 +25,7 @@ not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
 The rebuild goes layer by layer, and the version line tracks which layer:
 `0.1.x` the atmosphere (done), `0.2.x` about me (the camera pull-back,
-current), `0.3.x` projects (the desk), `0.4.x` contact, `0.5.x` header
+done), `0.3.x` projects (the desk, current), `0.4.x` contact, `0.5.x` header
 navigation, `0.6.x` real content, `1.0.0` ship. The table, with where the
 current line stands, is "Version lines" in `ROADMAP.md`; it's the user's
 current thinking and will change.
@@ -224,8 +224,9 @@ components/
   AtmosphereField.jsx  — the scene behind every page: backdrop sky, renderer pick, sun toggle
   SunToggle.jsx        — hit target on the painted sun or moon (follows sunSpot.js)
   SmoothScroll.jsx     — the scroll layer: Lenis (desktop), publishes the descent's progress
-  scroll/descent.js    — the progress store (`about`), outside React; `?scroll=` pins it
+  scroll/descent.js    — the progress store (`about`, `desk`), outside React; `?scroll=`, `?desk=` pin it
   scroll/DescentTrack.jsx — an empty block giving a stretch its scroll length (TRACK_LVH)
+  scroll/stops.js      — where the scroll comes to rest (the snap targets, inside the camera's holds)
   ErrorScreen.jsx      — shared 404/error layout, palette-tinted scrim
   ThemeProvider.jsx    — day/night state, localStorage, `data-theme`
   gradient/
@@ -236,6 +237,7 @@ components/
     layers/LayeredScene.jsx, ridgeMasks.js — fallback renderer: CSS layers, ridge alpha masks
     scene.js    — `sceneAt`: one frame of the scene, pure, for both renderers
     camera.js   — the descent (0.2): ridges, sky, ranges, meadow, palette, bodies, `ridgeLightAt`
+    deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
     skyRamp.js  — the sky ramp every sky path uses; `rampAt`
@@ -261,7 +263,7 @@ being changed (`ROADMAP.md`, "Testing: only what a change touches"):
 
 | Part | Doc | Covers |
 |---|---|---|
-| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2` camera, the URL and `data-` hooks |
+| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2` and `0.3` cameras, the URL and `data-` hooks |
 
 The invariants any change must keep, whatever part it touches:
 
@@ -272,9 +274,12 @@ The invariants any change must keep, whatever part it touches:
 - **One scene for the whole site,** mounted once in the root layout,
   `position: fixed`, click-through except the sun button. Page content over
   it needs a z-index.
-- **Two clocks only:** the spring at rest and the switch clock. Don't add
-  another animation loop. The camera is a pure function of scroll, never
-  sprung.
+- **Three clocks only:** the spring at rest, the switch clock and, from
+  `0.3.1`, the footprint clock (the grass's footsteps fading, ticked inside
+  GL's frame loop, `ROADMAP.md` "0.3"). The wind and the closing sky's
+  birds, clouds and stars run on GL's frame loop too, not a loop of their
+  own. Don't add another animation loop. The camera is a pure function of
+  scroll, never sprung; the scroll itself only snaps onto the stops.
 - **Frame budget:** 120 fps on the sweeps in `npm run perf`, and sharp on
   every display (Pre-push checks).
 
@@ -285,7 +290,8 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| Decide before `0.3`: fallback parity under the camera (`ROADMAP.md`, "0.2.8") |
+| `0.3.1`: the meadow ground and the anime grass with footsteps (`ROADMAP.md`, "0.3") |
+| Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
 | Decide whether an admin surface is still wanted |

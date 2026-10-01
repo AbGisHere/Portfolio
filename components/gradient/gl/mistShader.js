@@ -13,10 +13,17 @@
  * its crest, top, base and veil come already moved), the meadow below the
  * front ridge (uGround*) and the air following the front foot (uFront). At
  * `about` = 0 they're all identities, and the picture is 0.1's exactly.
+ *
+ * (0.3) The desk camera's pitch (../deskCamera.js): each screen pixel is
+ * taken back to the 0.2 camera's image plane (`p`) and painted there as
+ * before, the crests read between columns; a pixel whose ray leaves that
+ * plane behind sees only the ground. The ground grid and the desk's grey box
+ * are traced from the ray. With uPitched 0 nothing changes.
  */
 
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
 import { hexToRgb } from '../colour';
+import { WORLD_M } from '../deskCamera';
 
 /** Shader features `?off=` can compile out, to profile what a frame costs
  * (harness only: without the flag, no define and no cost). */
@@ -90,6 +97,21 @@ uniform float uHorizon;      // the ground's vanishing line
 uniform vec4 uGroundY;       // the meadow gradient's stops, y in CSS px (camera.js GROUND_AT)
 uniform vec3 uGroundCol[4];
 uniform vec3 uWind;          // amplitude, bands per unit depth ratio, phase (cycles)
+// (0.3) The desk camera (../deskCamera.js pitchOf, deskBox).
+uniform int uPitched;        // 1 under its pitch
+uniform vec4 uPitch;         // cos, sin of the pitch, focal length (CSS px), zoom
+uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual plane (zw)
+uniform float uCm;           // the crest texture spans uCm × the frame, centred
+uniform vec2 uEye;           // the camera's height and back, world units
+uniform vec3 uBoxMin;        // the desk's box relative to the camera, world units,
+uniform vec3 uBoxMax;        // y up, z forward
+// (0.3) The closing shot's sky (../deskCamera.js skyLifeAt).
+uniform float uLifeA;        // how far it has come in (0: none)
+uniform vec2 uLifeMix;       // birds (day), stars (night)
+uniform vec3 uCloudLit;
+uniform vec3 uCloudShade;
+uniform vec3 uBirdCol;
+uniform float uSkyT;         // its clock, seconds
 
 out vec4 outColor;
 
@@ -137,18 +159,172 @@ float sunGlow(float x) {
 const vec3 LIMB_EDGE = vec3(${LIMB_EDGE.map(f).join(', ')});
 const vec3 DISC_WHITE = vec3(${hexToRgb(DISC_WHITE).map(c => f(c / 255)).join(', ')});
 
+// (0.3) Hashes and value noise for the closing sky: integer hashing, so
+// every GPU draws the same clouds, stars and flocks.
+uint pcg(uint v) {
+  uint s = v * 747796405u + 2891336453u;
+  uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+  return (w >> 22u) ^ w;
+}
+float h1(ivec2 c) { return float(pcg(uint(c.x) * 1973u ^ pcg(uint(c.y) + 40503u))) / 4294967295.0; }
+float vnoise(vec2 x) {
+  vec2 i = floor(x);
+  vec2 f = x - i;
+  f = f * f * (3.0 - 2.0 * f);
+  ivec2 c = ivec2(i);
+  return mix(mix(h1(c), h1(c + ivec2(1, 0)), f.x), mix(h1(c + ivec2(0, 1)), h1(c + ivec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 x) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * vnoise(x);
+    x = x * 2.03 + vec2(17.1, 3.7);
+    a *= 0.5;
+  }
+  return v / 0.9375;
+}
+float seg(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+
+// Clouds: two banks, a low far one and a higher near one, each drifting at
+// its own pace (parallax) and slowly changing shape (a warped noise that
+// moves with time), thinned in patches so the sky has gaps. Haze takes them
+// toward the sky's own colour, most near the horizon, so they sit in the air
+// rather than on it. Then stars: faint, twinkling, higher up and out from
+// behind the clouds.
+vec3 skyLife(vec3 col, vec2 p) {
+  float alt = (uHorizon - p.y) / uSize.y;
+  float x = p.x / uSize.y;
+  float cover = 0.0;
+  for (int k = 0; k < 2; k++) {
+    float near = float(k);
+    float lo = mix(0.02, 0.12, near);
+    float hi = mix(0.22, 0.62, near);
+    float band = smoothstep(lo, lo + 0.08, alt) * (1.0 - smoothstep(hi - 0.15, hi, alt));
+    if (band <= 0.0) continue;
+    float t = uSkyT * mix(0.004, 0.009, near);
+    vec2 q = vec2(x * mix(2.2, 1.1, near) + t + near * 7.3, alt * mix(9.0, 4.5, near));
+    q += 0.45 * vec2(vnoise(q * 0.6 + vec2(0.0, uSkyT * 0.02)), vnoise(q * 0.6 + vec2(4.1, -uSkyT * 0.017)));
+    float n = fbm(q);
+    float patchy = smoothstep(0.3, 0.65, vnoise(vec2(x * 0.7 + t * 0.5 + near * 3.0, near * 11.0)));
+    float c = smoothstep(0.47, 0.7, n) * band * patchy;
+    vec3 cc = mix(uCloudShade, uCloudLit, smoothstep(0.55, 0.8, n) * (0.6 + 0.4 * smoothstep(lo, hi, alt)));
+    float haze = mix(0.55, 0.3, near) + 0.3 * (1.0 - smoothstep(0.0, 0.25, alt));
+    col = mix(col, mix(cc, col, haze), c * 0.9 * uLifeA);
+    cover = max(cover, c);
+  }
+  if (uLifeMix.y > 0.0) {
+    float cell = uSize.y * 0.018;
+    vec2 g = p / cell;
+    ivec2 id = ivec2(floor(g));
+    float r = h1(id);
+    if (r > 0.86) {
+      vec2 at = vec2(h1(id + ivec2(7, 3)), h1(id + ivec2(1, 9)));
+      float d = length(fract(g) - at) * cell;
+      float size = 0.5 + 1.1 * h1(id + ivec2(5, 5));
+      float tw = 0.65 + 0.35 * sin(uSkyT * (1.5 + 2.0 * r) + r * 40.0);
+      float a = (1.0 - smoothstep(size * 0.4, size, d)) * smoothstep(0.03, 0.25, alt) * (1.0 - cover) * tw;
+      col = mix(col, vec3(1.0, 0.97, 0.9), a * 0.9 * uLifeMix.y * uLifeA);
+    }
+  }
+  return col;
+}
+
+// Birds by day. Four flocks, each on its own long cycle: it crosses for part
+// of it (at its own speed, height and heading, at a new depth each time)
+// and is away for the rest, so they come irregularly. A flock is one to
+// seven birds in a loose scatter, each beating its wings at its own rate and
+// gliding now and then. Depth sets the size and the haze: far birds are
+// small, soft and taken toward the sky behind them.
+vec3 birds(vec3 col, vec2 p, float aa) {
+  for (int f = 0; f < 4; f++) {
+    float period = 38.0 + 40.0 * h1(ivec2(f, 991));
+    float u = uSkyT / period + h1(ivec2(f, 17));
+    ivec2 id = ivec2(f, int(floor(u)));
+    float travel = 0.5 + 0.4 * h1(id + ivec2(6, 2));
+    float ph = fract(u) / travel;
+    if (ph > 1.0) continue;
+    float z = h1(id + ivec2(9, 4));
+    float dir = h1(id + ivec2(3, 1)) > 0.5 ? 1.0 : -1.0;
+    float s = uSize.y * mix(0.0095, 0.004, z);
+    float y0 = uHorizon - uSize.y * (0.06 + 0.24 * h1(id + ivec2(2, 8)))
+      + uSize.y * 0.025 * (vnoise(vec2(uSkyT * 0.08, float(f) * 5.0)) - 0.5);
+    float x0 = mix(-0.15, 1.15, dir > 0.0 ? ph : 1.0 - ph) * uSize.x;
+    if (abs(p.x - x0) > s * 22.0 || abs(p.y - y0) > s * 14.0) continue;
+    int n = 1 + int(h1(id + ivec2(4, 4)) * 7.0);
+    float haze = 0.25 + 0.55 * z;
+    vec3 bc = mix(uBirdCol, col, haze);
+    float soft = aa * 1.5 + s * 0.06 * (1.0 + z);
+    for (int b = 0; b < 7; b++) {
+      if (b >= n) break;
+      ivec2 bid = ivec2(f * 16 + b, id.y);
+      float bt = uSkyT + 10.0 * h1(bid + ivec2(8, 8));
+      vec2 c = vec2(x0, y0) + s * vec2(
+        -dir * (float(b) * 2.6 + 3.0 * h1(bid)) + 0.8 * sin(bt * 0.31),
+        (h1(bid + ivec2(1, 1)) - 0.5) * 9.0 + 0.7 * sin(bt * 0.47));
+      // Flapping, eased in and out of glides (wings held a little up).
+      float flap = smoothstep(0.35, 0.6, vnoise(vec2(bt * 0.3, float(b) * 3.1 + float(f))));
+      float fl = mix(-0.3, sin(bt * 6.2831853 * (2.6 + 1.4 * h1(bid + ivec2(2, 2)))), flap);
+      vec2 q = (p - c) / s;
+      q.x = abs(q.x);
+      vec2 elbow = vec2(0.5, -0.12 - 0.32 * fl);
+      vec2 tip = vec2(1.05, 0.05 - 0.6 * fl);
+      float d = min(seg(q, vec2(0.0, 0.08), elbow), seg(q, elbow, tip)) * s;
+      float a = 1.0 - smoothstep(0.0, soft * 2.0, d - max(0.4, s * 0.085));
+      col = mix(col, bc, a * 0.9 * uLifeMix.x * uLifeA);
+    }
+  }
+  return col;
+}
+
+// A crest between columns (column x, fractional under the pitch only: whole
+// columns read exactly as texelFetch).
+float crestAt(float x, int row) {
+  int i = int(floor(x));
+  int n = textureSize(uCrest, 0).x - 1;
+  float a = texelFetch(uCrest, ivec2(min(i, n), row), 0).r;
+  float u = x - float(i);
+  if (u == 0.0) return a;
+  return mix(a, texelFetch(uCrest, ivec2(min(i + 1, n), row), 0).r, u);
+}
+
 void main() {
   // Pixel centre in CSS px, y down like the SVG.
   float xPx = gl_FragCoord.x;
   vec2 p = vec2(xPx, uRes.y - gl_FragCoord.y) * uSize / uRes;
+  // (The screen's own pixel, for the grain.)
+  vec2 ps = p;
 
   // Antialiasing width, as a Gaussian of ~half a device pixel.
   float aa = 0.5 / uDpr;
   int cols = textureSize(uCrest, 0).x;
-  int cx = clamp(int(xPx), 0, cols - 1);
-  int cl = max(cx - 1, 0);
-  int cr = min(cx + 1, cols - 1);
-  float span = float(cr - cl) * uSize.x / uRes.x;
+  float cx = float(clamp(int(xPx), 0, cols - 1));
+  float cm = 1.0;
+
+  // (0.3) Under the desk camera's pitch: the ray (y down, z forward, before
+  // the pitch), and this pixel on the 0.2 camera's plane. A ray that leaves
+  // the plane behind only meets the ground: it goes far below everything.
+  vec3 ray = vec3(0.0);
+  if (uPitched == 1) {
+    vec2 uv = (p - uPrin.xy) / uPitch.w;
+    float yv = uv.y * uPitch.x + uPitch.z * uPitch.y;
+    float zv = uPitch.z * uPitch.x - uv.y * uPitch.y;
+    ray = vec3(uv.x, yv, zv);
+    if (zv <= 1e-3 * uPitch.z) p = vec2(uPrin.z, 1e7);
+    else {
+      p = uPrin.zw + uPitch.z * vec2(uv.x, yv) / zv;
+      aa *= uPitch.z / (uPitch.w * zv);
+    }
+    cm = uCm;
+    cx = clamp(((p.x - uSize.x * 0.5) / cm + uSize.x * 0.5) * uRes.x / uSize.x - 0.5, 0.0, float(cols - 1));
+  }
+  float cl = max(cx - 1.0, 0.0);
+  float cr = min(cx + 1.0, float(cols - 1));
+  float span = (cr - cl) * uSize.x / uRes.x * cm;
 
   // (0.2.4) The ridges are opaque and painted back to front, so a pixel
   // deep inside one ridge's body shows nothing from behind it: its fill's
@@ -167,10 +343,10 @@ void main() {
     int row = uCrestRow[i];
     float bl = uBlur[i] * uScale[i];
     float deep = 6.0 * sqrt(bl * bl + aa * aa);
-    float dy = p.y - texelFetch(uCrest, ivec2(cx, row), 0).r;
+    float dy = p.y - crestAt(cx, row);
     if (dy < deep) continue;
     float slope = span > 0.0
-      ? (texelFetch(uCrest, ivec2(cr, row), 0).r - texelFetch(uCrest, ivec2(cl, row), 0).r) / span
+      ? (crestAt(cr, row) - crestAt(cl, row)) / span
       : 0.0;
     if (dy / sqrt(1.0 + slope * slope) >= deep) first = i;
   }
@@ -178,6 +354,7 @@ void main() {
 
   // Sky: the gradient spans the full frame height.
   vec3 col = first < 0 ? texture(uSky, vec2((p.y * uSkyScale + uSkyShift) / uSize.y, 0.5)).rgb : vec3(0.0);
+  if (uLifeA > 0.0 && first < 0) col = skyLife(col, p);
 
   // A setting sun's wash (sunLook.js SET_WASH): a very wide, faint Gaussian
   // hugging the horizon that tints the sky here, then lights the ridge rims
@@ -244,12 +421,12 @@ void main() {
     // Signed distance to the crest (positive below it), corrected for slope
     // so the blurred and antialiased edges keep an even width on steep flanks.
     int row = uCrestRow[i];
-    float crest = texelFetch(uCrest, ivec2(cx, row), 0).r;
+    float crest = crestAt(cx, row);
 #ifdef OFF_SLOPE
     float slope = 0.0;
 #else
     float slope = span > 0.0
-      ? (texelFetch(uCrest, ivec2(cr, row), 0).r - texelFetch(uCrest, ivec2(cl, row), 0).r) / span
+      ? (crestAt(cr, row) - crestAt(cl, row)) / span
       : 0.0;
 #endif
     float d = (p.y - crest) / sqrt(1.0 + slope * slope);
@@ -327,10 +504,42 @@ void main() {
   col = over(col, uMist, air);
 #endif
 
+  // (0.3, prototype) The ground under the desk camera, as a grid a metre
+  // apart (every tenth stronger) so the move reads before the meadow has
+  // grass, and the desk as a grey box.
+  if (uLifeA > 0.0 && uLifeMix.x > 0.0 && p.y < uFront) col = birds(col, p, aa);
+  if (uPitched == 1) {
+    vec3 dir = vec3(ray.x, -ray.y, ray.z);
+    // (fwidth outside the branch: derivatives need every pixel of a quad.)
+    float t = uEye.x / max(-dir.y, 1e-6);
+    vec2 m = vec2(dir.x * t, dir.z * t - uEye.y) * ${f(WORLD_M)};
+    vec2 fw = max(fwidth(m), vec2(1e-4));
+    if (dir.y < 0.0 && p.y > uFront) {
+      vec2 d1 = abs(fract(m - 0.5) - 0.5) / fw;
+      vec2 d10 = abs(fract(m / 10.0 - 0.5) - 0.5) * 10.0 / fw;
+      float thin = 1.0 - min(min(d1.x, d1.y), 1.0);
+      float thick = 1.0 - min(min(d10.x, d10.y) * 0.5, 1.0);
+      // Lines finer than a few pixels apart fade out (no moiré).
+      float far = clamp(1.0 - (max(fw.x, fw.y) - 0.15) / 0.25, 0.0, 1.0);
+      col = mix(col, col * 0.55, max(thin * 0.35 * far, thick * 0.6));
+    }
+    vec3 inv = 1.0 / (dir + vec3(1e-9));
+    vec3 t0 = uBoxMin * inv;
+    vec3 t1 = uBoxMax * inv;
+    vec3 tn3 = min(t0, t1);
+    vec3 tf3 = max(t0, t1);
+    float tn = max(max(tn3.x, tn3.y), tn3.z);
+    float tf = min(min(tf3.x, tf3.y), tf3.z);
+    if (tn < tf && tn > 0.0) {
+      float shade = tn == tn3.y ? 0.66 : tn == tn3.z ? 0.5 : 0.4;
+      col = vec3(shade);
+    }
+  }
+
   // Grain: CSS mix-blend-mode overlay at uGrainA, texels one CSS px square.
 #ifndef OFF_GRAIN
   if (uGrainA > 0.0) {
-    ivec2 g = ivec2(mod(floor(p), 256.0));
+    ivec2 g = ivec2(mod(floor(ps), 256.0));
     float n = texelFetch(uGrain, g, 0).r;
     vec3 ov = mix(2.0 * col * n, 1.0 - 2.0 * (1.0 - col) * (1.0 - n), step(0.5, col));
     col = mix(col, ov, uGrainA);

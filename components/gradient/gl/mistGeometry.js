@@ -302,9 +302,12 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
 export function sampleCrest(ridge, columns, dpr, out, offset = 0, cam = null) {
   const { x0, dx, ys, E = 0, cx, base } = ridge;
   const last = ys.length - 1;
-  const moved = cam && (cam.s !== 1 || cam.foot !== base);
+  // (0.3) `cam.m`: the columns span m × the frame on the 0.3 camera's
+  // virtual plane (deskCamera.js pitchSpan), centred.
+  const m = cam?.m ?? 1;
+  const moved = cam && (cam.s !== 1 || cam.foot !== base || m !== 1);
   for (let col = 0; col < columns; col++) {
-    const x = moved ? cx + ((col + 0.5) / dpr - cx) / cam.s : (col + 0.5) / dpr;
+    const x = moved ? cx + (((col + 0.5) / dpr - cx) * m) / cam.s : (col + 0.5) / dpr;
     // Point indices run −E … Q + E; `ys[k]` holds point k − E.
     let n = Math.floor((x - x0) / dx) + E;
     n = n < 0 ? 0 : n > last - 1 ? last - 1 : n;

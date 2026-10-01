@@ -49,6 +49,7 @@ uniform float uBase[MAX_RIDGES];
 uniform float uL[MAX_RIDGES];   // crest lift above the base
 uniform float uS[MAX_RIDGES];   // camera scale (1 at rest)
 uniform float uFoot[MAX_RIDGES]; // camera foot (= uBase at rest)
+uniform float uM;              // (0.3) columns span uM × the frame, centred (1: the frame)
 uniform int uExt[MAX_RIDGES];   // control points past each end
 
 out vec4 outCrest;
@@ -93,9 +94,9 @@ float pointY(int i, int b) {
 void main() {
   int col = int(gl_FragCoord.x);
   int b = int(gl_FragCoord.y);
-  bool moved = uS[b] != 1.0 || uFoot[b] != uBase[b];
+  bool moved = uS[b] != 1.0 || uFoot[b] != uBase[b] || uM != 1.0;
   float x = (float(col) + 0.5) / uDpr;
-  if (moved) x = uW * 0.5 + (x - uW * 0.5) / uS[b];
+  if (moved) x = uW * 0.5 + (x - uW * 0.5) * uM / uS[b];
   int lo = -uExt[b];
   int hi = uLast + uExt[b];
   int n = int(floor((x - uX0) / uDx));

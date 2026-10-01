@@ -9,7 +9,7 @@ export function GET() {
 
 > ${SITE.description} This is his personal portfolio site.
 
-The site is being rebuilt layer by layer. What's live today is the opening scene: an animated mountain atmosphere with a day/night toggle (click the sun), and a first stretch of scroll that pulls the camera back from the mountains as the sky turns toward evening and the sun sets into the ridges. Projects, resume, dev log and contact arrive in later releases and will be listed here as they ship.
+The site is being rebuilt layer by layer. What's live today is the opening scene: an animated mountain atmosphere with a day/night toggle (click the sun), and a scroll that pulls the camera back from the mountains as the sky turns toward evening and the sun sets into the ridges, then brings it down onto a desk in the meadow in front of them, where the projects will be. Projects, resume, dev log and contact arrive in later releases and will be listed here as they ship.
 
 ## Links
 
