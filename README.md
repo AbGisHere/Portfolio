@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.2.11](https://img.shields.io/badge/version-0.2.11-informational)
+![Version 0.2.12](https://img.shields.io/badge/version-0.2.12-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -124,6 +124,7 @@ Chromium isn't installed yet, run `npx playwright install chromium` first.
 | `npm run parity` | Compares the layered renderer against WebGL, pixel by pixel, across viewports, both themes and three scroll positions (`--scrolls`, default top, middle and end). Fails above a mean difference of 2/255 or a p99 of 24. |
 | `npm run perf` | Measures frame timing and main-thread time per renderer, during sky switches, at rest and through a scroll sweep; with `--gate`, fails under 118 fps or on tiles dropping out under a capped GPU memory |
 | `npm run switch` | Steps each day/night switch frame by frame on a fake clock, per renderer and scroll position, and fails on a cut: a frame step over 3× the steps around it |
+| `npm run sharp` | Renders 5K and 6K frames at 2× with the 4K pixel cap and without, and compares the crests and grain for softness (not part of `qa`) |
 | `npm run test:adaptive` | Unit tests for the WebGL renderer's adaptive quality, fed synthetic frame timings (no GPU needed) |
 | `npm run test:unit` | Unit tests for the scene's pure maths: the colour conversions, the switch palette's keyframes, and one frame of the scene at rest, scrolled and mid-switch (no GPU needed) |
 | `npm run hygiene` | Checks a running production server for the basics: `lang`, titles, descriptions, one `<h1>`, alt text, canonical, OG image, JSON-LD, the 404, robots, sitemap, llms.txt and no shipped source maps |

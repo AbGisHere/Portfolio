@@ -347,8 +347,6 @@ identity.
   8.33), 1440×900@2 and 393×852@2 (M4, `?adapt=0`). Perf's headless wheel
   sweep stops a little short of `about` 1.
 
-Next: `0.2.11` (sharpness on large high-DPI displays), in `ROADMAP.md`.
-
 ## Adding a scene
 
 1. Add a recipe under `components/gradient/recipes/`, with its `body`

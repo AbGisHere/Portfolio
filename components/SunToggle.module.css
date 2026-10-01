@@ -31,9 +31,15 @@
   pointer-events: none;
 }
 
+/* Two tones, so the ring shows on the pale day glow (the dark rim) and on the
+   night sky (the light one). The transparent outline is what forced-colors
+   mode draws, since it drops box-shadow. */
 .toggle:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.7);
-  outline-offset: 6px;
+  outline: 2px solid transparent;
+  outline-offset: 5px;
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 5px var(--bg);
 }
 
 .toggle:active {

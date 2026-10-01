@@ -75,13 +75,13 @@ export default function AtmosphereField() {
     // The backdrop (SKY_VARS) is painted behind the renderer: what shows
     // before its chunk arrives, and in any frame it drops, instead of the
     // page's near-black.
-    <div className={styles.field} style={SKY_VARS}>
+    <aside className={styles.field} style={SKY_VARS} aria-label="Time of day">
       <div className={styles.scene} aria-hidden="true" data-renderer={renderer ?? undefined}>
         {renderer === 'gl' && <MistCanvas recipe={recipe} onFail={fallBack} />}
         {renderer === 'layers' && <LayeredScene recipe={recipe} />}
       </div>
 
       <SunToggle recipe={recipe} />
-    </div>
+    </aside>
   );
 }

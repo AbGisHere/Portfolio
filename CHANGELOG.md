@@ -6,6 +6,43 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.2.12 — 2026-10-01
+
+The design audit's fixes, `DESIGN.md`, and the docs brought up to date. The
+scene is unchanged.
+
+- **Audit** (`/impeccable audit`): 17/20, then 19/20 after the fixes
+  below (accessibility 4, performance 3, responsive 4, theming 4,
+  implementation 4). Performance stays at 3 for the 1728×1117@2 scroll
+  sitting at the 118 fps gate.
+- **Focus on the sun:** the 70% white outline vanished on the pale day glow
+  (about 1:1). It's now a two-tone ring (warm ink inside a charcoal rim)
+  that shows on both skies, with a transparent outline for forced-colors
+  mode.
+- **Semantics:** the sun's button sits in an `aside` labelled "Time of day"
+  instead of loose in `<body>`; its `title`, which repeated the label, is
+  gone.
+- **Browser surfaces:** `color-scheme: dark` and a scrollbar in the ink at
+  35%.
+- **Tokens:** the error screens' text and underline use `--ink` through
+  `color-mix` instead of copied rgba; the link hover keeps warm ink (no
+  `#fff`) and the focus outline is square, as `DESIGN.md` says.
+- **`DESIGN.md`** (new): north star "The Descent", both scene palettes,
+  the type scale, layout, depth and the two components that exist, with
+  four named rules. Its sidecar is `.impeccable/design.json` (local), and
+  the direction brief's world is refreshed to `0.2.11`.
+- **Docs:** `PRODUCT.md`'s history caught up to `0.2.11`, `CLAUDE.md`'s
+  open tasks, a stale "next" line in `docs/parts/atmosphere.md`, and
+  `npm run sharp` in the README. `ROADMAP.md` gains the sky lanterns (the
+  favourite for the about-me content, not final), cues to scroll and to
+  touch the sun (around `0.4`), and primitive as a reference.
+- **Not taken:** the scroll and sun cues (the owner builds the whole scroll
+  first).
+- **QA:** full tier, all passed in 17.7 min: both test suites, hygiene
+  21/21, parity 46/46 (worst mean 0.96, p99 4), perf gate 6/6 (min scroll
+  118.1 fps, dropout 6/6 clean), switch 12/12 (worst step ×2.9). WebKit
+  stays a manual check.
+
 ## 0.2.11 — 2026-10-01
 
 Sharpness on large high-DPI displays, and the docs split per part.

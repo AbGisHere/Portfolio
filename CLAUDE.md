@@ -9,7 +9,8 @@ Abhinav Gupta's ("AbG") personal portfolio — a single continuous, scroll-drive
 experience where every scroll delta stages a reveal, rather than a page of
 static stacked sections. Next.js (App Router).
 
-See `PRODUCT.md` for the product record and `.impeccable/surfaces/home.md`
+See `PRODUCT.md` for the product record, `DESIGN.md` for the design system
+(tokens, type, rules) and `.impeccable/surfaces/home.md` (local, gitignored)
 for the visual direction contract. An earlier fake-desktop-OS build (boot →
 login → windows/dock/terminal) was retired and its branding dropped; do not
 resurrect that metaphor or its name unasked. `ROADMAP.md` holds agreed future
@@ -283,7 +284,7 @@ The invariants any change must keep, whatever part it touches:
 | Task |
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
-| `0.2.11`: sharpness on large high-DPI displays, and the standing quality rule (`ROADMAP.md`) |
+| The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
 | Owner decisions from the `0.2.8` audit (`ROADMAP.md`): fallback parity under the camera, `.impeccable/surfaces/home.md`, `.claude/agents/impeccable-*` |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

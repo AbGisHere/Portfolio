@@ -11,7 +11,7 @@ as the site takes shape.
 | Line | Scope |
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
-| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs. Per-release history: `CHANGELOG.md`. |
+| `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Current line: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`. Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
@@ -300,11 +300,13 @@ How it should feel:
 
 ### 0.2 — about me: the pull-back
 
-**Shipped, `0.2.0`–`0.2.8`:** the pull-back (`0.2.0`), the ridge conveyor
+**Shipped, `0.2.0`–`0.2.12`:** the pull-back (`0.2.0`), the ridge conveyor
 (`0.2.1`), the look (`0.2.2`), the sun and moon at any scroll (`0.2.3`),
 performance headroom (`0.2.4`), ridge light at rest (`0.2.5`), the fallback
-catching up (`0.2.6`), the switch cut (`0.2.7`) and the audit's clean-up
-(`0.2.8`). What each changed and measured is in `CHANGELOG.md`; how it works
+catching up (`0.2.6`), the switch cut (`0.2.7`), the audit's clean-up
+(`0.2.8`), the fallback's tile dropout (`0.2.9`), the domain (`0.2.10`)
+sharpness on large displays (`0.2.11`) and the design audit's fixes
+(`0.2.12`). What each changed and measured is in `CHANGELOG.md`; how it works
 now is in `docs/parts/atmosphere.md`.
 
 **`0.2.8`: the audit's clean-up** (shipped 2026-09-30; details in
@@ -374,6 +376,17 @@ differences: no idle drift or reshaping in the fallback, and no wind.
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
   real content (`0.6.x`).
+- **The favourite so far: sky lanterns** (the user, 2026-09-24; not final).
+  Each lantern carries a line about Abhinav and rises into the darkening
+  sunset as you scroll, sinking again when you scroll back. It's the only
+  idea that carries on into `0.3`: one lantern could drift down to become
+  the desk's light, or they rise out of frame as the camera comes down to
+  the laptop. Whatever the metaphor, the lanterns' motion is a pure
+  function of scroll, the text is also real server-rendered HTML, and phone
+  portrait works as well as desktop. Where it lands (a later `0.2.x`, or a
+  line of its own) is the user's call. Set aside: cassettes (maybe a desk
+  prop in `0.3`), crumpled pages in a bin, trail markers, a topographic
+  map, words in the mist, constellations, a field journal.
 
 ### 0.3 — the desk
 
@@ -782,6 +795,24 @@ above: the mountains are at −Z and the camera never rolls.
   caustics. No simulation and no pointer ripples. Parity compares the
   renderers with the water and the swimmer frozen.
 
+## Later — cues to scroll and to touch the sun
+
+**Status:** agreed 2026-10-01 (user): built with the content, around `0.4`,
+after the whole scroll exists. Raised by the 2026-10-01 audit.
+
+Today nothing on screen says the page scrolls or that the sun and moon can
+be clicked: a pointer cursor on hover and the screen-reader label are the
+only cues, and touch gets none. The direction brief asks for "one quiet
+scroll affordance" in the first viewport.
+
+- **Ideas floated, not decided:** a hairline drawing down at the foot of the
+  frame (with a small mono "scroll" label) that appears once the scene has
+  settled and fades for good on the first scroll; a faint ring of light that
+  swells around the body on hover, breathing once on touch devices.
+- **Keep:** the first three seconds belong to the scene, nothing loops,
+  reduced motion gets a still version, and both renderers draw the same
+  frames so parity holds.
+
 ## Later — a notice for the fallback renderer
 
 **Status:** agreed in discussion 2026-09-24. Built after the content
@@ -830,4 +861,22 @@ few strokes and placed along the ridge lines.
 - **Take the idea, not the look.** Its ink-wash brush style isn't ours. Any
   objects would be drawn in the scene's palette and light (`sceneAt`), in
   both renderers, and stay within parity and the frame budget.
+- **Licence:** check the repo's LICENSE before borrowing any code.
+
+## Reference — images from shapes (primitive)
+
+**Status:** a reference, noted 2026-10-01 (user). No plans yet.
+
+[primitive](https://github.com/fogleman/primitive) (Michael Fogleman)
+rebuilds an image from geometric shapes: triangles, rectangles, ellipses
+or curves, one at a time, each placed by hill climbing to cut the error
+most. A few dozen shapes give a soft abstract likeness; a few hundred, a
+recognisable one. It runs as a Go command-line tool, so output can be
+pre-rendered to SVG rather than computed in the browser.
+
+- **Where it could help:** not decided. Possible fits: project thumbnails on
+  the desk screen (`0.3`), a portrait for the about-me layer, or placeholder
+  images that resolve shape by shape as they load.
+- **Same rules as anything else in the scene:** the palette and light come
+  from `sceneAt`, and it stays inside parity and the frame budget.
 - **Licence:** check the repo's LICENSE before borrowing any code.

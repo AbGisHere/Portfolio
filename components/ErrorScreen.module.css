@@ -59,7 +59,7 @@
 }
 
 .message {
-  color: rgba(244, 241, 234, 0.84);
+  color: color-mix(in oklab, var(--ink) 84%, transparent);
   font-size: clamp(0.9rem, 0.85rem + 0.25vw, 1.05rem);
 }
 
@@ -86,19 +86,18 @@
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.3em;
-  text-decoration-color: rgba(244, 241, 234, 0.5);
+  text-decoration-color: color-mix(in oklab, var(--ink) 50%, transparent);
   transition:
     text-decoration-color 200ms var(--ease-out),
     color 200ms var(--ease-out);
 }
 
 .action:hover {
-  color: #fff;
+  color: var(--ink);
   text-decoration-color: var(--accent);
 }
 
 .action:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-  border-radius: 2px;
 }

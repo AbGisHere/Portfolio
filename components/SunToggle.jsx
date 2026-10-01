@@ -73,7 +73,6 @@ export default function SunToggle({ recipe }) {
       data-busy={busy || undefined}
       data-sun-toggle=""
       aria-label={night ? 'Moon — switch to day' : 'Sun — switch to night'}
-      title={night ? 'Switch to day' : 'Switch to night'}
     />
   );
 }

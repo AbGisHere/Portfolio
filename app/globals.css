@@ -1,10 +1,12 @@
 /* ============================================================
    Global layer: tokens, reset, base type. Nothing component-
    specific lives here; components own a *.module.css beside
-   them. See .impeccable/surfaces/home.md for the direction.
+   them. The design system is in DESIGN.md.
    ============================================================ */
 
 :root {
+  /* Scrollbars and other browser-drawn parts in their dark form. */
+  color-scheme: dark;
   --bg: #0c0c0d;
   --accent: #ff5a1f;
   --ink: #f4f1ea;
@@ -28,6 +30,7 @@ body {
   color: var(--ink);
   font-family: var(--font-mono), monospace;
   overscroll-behavior: none;
+  scrollbar-color: color-mix(in oklab, var(--ink) 35%, transparent) transparent;
 }
 
 h1 {
