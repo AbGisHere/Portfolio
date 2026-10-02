@@ -116,7 +116,9 @@ const duskEmber = {
   // evening (golden tips), over its own ground. Far away it hazes into the
   // painted meadow above.
   desk: {
-    grass: { root: '#2B4536', mid: '#56783F', tip: '#A6B862', ground: '#2E4838' },
+    // The meadow (0.3.1); flower, bloom: its wildflowers; shade: the cloud
+    // shadows passing over it, multiplied (0.3.2).
+    grass: { root: '#2B4536', mid: '#56783F', tip: '#A6B862', ground: '#2E4838', flower: '#F2ECDA', bloom: '#E9C552', shade: '#A9B6CC' },
   },
 };
 

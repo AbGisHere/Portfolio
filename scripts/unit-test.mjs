@@ -16,6 +16,8 @@ import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
 import { deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
 import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
+import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
+import { MEADOW_SIZE, meadowTexels } from '../components/gradient/gl/meadowTexture.js';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -302,9 +304,52 @@ test('footsteps: a stride apart, alternating feet, gone after their life', () =>
   assert.equal(w.move({ x: STRIDE * 2.2, z: 0 }, 0.3), true);
   const [a, b] = w.live(0.3);
   assert.ok(Math.sign(a.z) === -Math.sign(b.z), 'left, then right');
+  // Walking +x, left of the path is +z.
+  for (const q of [a, b]) assert.equal(q.foot, q.z > 0 ? -1 : 1, 'each boot on its own side of the path');
   assert.ok(Math.abs(a.angle - Math.PI / 2) < 1e-9, 'turned along the walk');
   assert.equal(w.move({ x: 50, z: 0 }, 0.4), false, 'a jump restarts the walk');
   assert.equal(w.live(0.3 + LIFE + 0.01).length, 0);
+});
+
+test('the boot: one per load, seeded the same, each its own within the ranges', () => {
+  const a = bootOf(seeded(7));
+  assert.equal(a.length, BOOT_FLOATS);
+  assert.deepEqual([...a], [...bootOf(seeded(7))], 'a seed draws the same boot');
+  const boots = Array.from({ length: 200 }, (_, i) => bootOf(seeded(i)));
+  const rows = new Set(boots.map(b => b[4]));
+  assert.deepEqual([...rows].sort(), [3, 4, 5], 'three to five forefoot rows');
+  assert.ok(boots.some(b => b[5] === 0) && boots.some(b => b[5] > 0), 'straight bars and chevrons');
+  assert.ok(boots.some(b => b[7] === 0) && boots.some(b => b[7] > 0), 'one column a side, or two');
+  for (const b of boots) {
+    assert.ok(b[0] >= 0.27 && b[0] <= 0.31, 'a boot\'s length');
+    assert.ok(b[2] > b[1], 'the ball wider than the heel');
+    assert.ok(b[0] - b[1] - b[2] > 0.15, 'heel and ball apart');
+  }
+});
+
+test('the meadow\'s paint: the same every load, every channel spread, tiling seamlessly', () => {
+  const t = meadowTexels();
+  const N = MEADOW_SIZE;
+  assert.equal(t.length, N * N * 4);
+  assert.deepEqual(t.slice(0, 64), meadowTexels().slice(0, 64), 'a fixed seed');
+  for (let c = 0; c < 4; c++) {
+    let lo = 255;
+    let hi = 0;
+    let seam = 0;
+    let inner = 0;
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const v = t[(y * N + x) * 4 + c];
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+      }
+      // Across the wrap, neighbours differ no more than inside the tile.
+      seam += Math.abs(t[(y * N + N - 1) * 4 + c] - t[(y * N) * 4 + c]);
+      inner += Math.abs(t[(y * N + N / 2) * 4 + c] - t[(y * N + N / 2 - 1) * 4 + c]);
+    }
+    assert.ok(hi - lo > 100, `channel ${c} spans its range`);
+    assert.ok(seam < inner * 2 + N * 4, `channel ${c} tiles`);
+  }
 });
 
 test('the pointer meets the ground under the desk camera, and misses it in the sky', () => {

@@ -442,7 +442,40 @@ it while there's grass, so `0.2` frames are untouched).
   outward and into shade (`footStrength`: pressed at once, held .7 s, then
   springing back past upright and settling; under reduced motion, easing
   back). Only in GL, only while grass shows.
-- **Flags:** `?grass=0` leaves the blades out (profiling).
+- **Boot prints** (`0.3.2`, `gl/bootPrint.js`): each print is a hiking
+  boot's sole, `foot` 1 right / -1 left (mirrored). `bootOf` draws one boot
+  per load into `uBoot` (16 floats: outline, forefoot lugs, heel, toe cap,
+  arch gap, groove, stagger, speckle, depth); `BOOT_GLSL` is the sole as
+  signed distances, metres (`bootOutline`, `bootTread`), shared by the
+  grass and the meadow pass. The meadow pass (`boots`) dents the sole and presses the
+  tread deep, roughened and speckled by a 6 mm hash where a pixel is finer
+  than ~9 mm, faded over `LIFE`; the grass squashes blades rooted under the
+  sole and leans those round it away. Prints are bounded at 0.2 m (ground)
+  and 0.3 m (grass) before any distance is taken.
+- **The meadow pass** (`0.3.2`, `gl/meadowShader.js`): what the ground
+  gains under the desk camera, drawn after the grass in two small
+  fullscreen passes, never in `mistShader.js` (everything added there slows
+  every pixel of the scene, used or not). Each casts the same ray as the
+  scene, skips the sky, the ridges and the desk's box, and is scissored to
+  the rows that can be ground (`groundAt` down the optical centre's
+  column); its triangle sits just short of the far plane, so the depth test
+  skips every pixel a blade covers. `MEADOW_PAINT` multiplies the ground
+  (`DST_COLOR, SRC_COLOR`: ×2·src, lightening and darkening): the broad
+  layers near and far (fields, three clump sizes and strokes, cloud
+  shadows and wind on `uGrassT`, the wind's clock), the undergrowth within
+  ~30 m, the boot prints; it fades in from 64 m down to 42 m (`uMeadowA`)
+  so the descent's first frame is the `0.2` meadow, and hazes with the
+  ground (`GRASS_HAZE`). `MEADOW_FLOWERS` adds wildflowers within
+  `FLOWER_M` (45 m) where they're over a pixel. The texture
+  (`gl/meadowTexture.js`, 256², RGBA, built once from a fixed seed in
+  ~20–30 ms, in idle time after load or on the meadow pass's first draw;
+  repeat and mipmapped, anisotropic ×4) is read in world space with the ground
+  point's own derivatives: R soft patches, G tufts, B brush strokes, A
+  finer patches. Colours in `desk.grass` (`flower`, `bloom`, `shade`).
+- **Denser from above:** the grass's density is ×(1 + 2 sin² pitch), up to
+  ×3 straight down, where a blade shows only its curl.
+- **Flags:** `?grass=0` leaves the blades out (profiling); `?boot=<n>` draws
+  boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.

@@ -30,6 +30,9 @@ import { sceneAt } from '../scene';
 import { DEPTH, cameraMetres, deskBox, deskWidest, groundAt, pitchSpan } from '../deskCamera';
 import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
+import { bootOf, seeded } from './bootPrint';
+import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
+import { MEADOW_FLOWERS, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
   DRIFT_GAIN_MAX,
@@ -186,6 +189,27 @@ export default function MistCanvas({ recipe, onFail }) {
     let grassAt = null;
     // The footsteps: the walker, and the camera they're cast through.
     const walker = createWalker();
+    // (0.3.2) This load's boot; `?boot=<n>` draws boot n (stills).
+    const bootN = new URLSearchParams(window.location.search).get('boot');
+    const boot = bootOf(bootN ? seeded(Number(bootN)) : Math.random);
+    // The live prints as uniforms, for the ground and the grass alike.
+    const printsNow = () => {
+      const now = performance.now() / 1000;
+      const live = grassAt ? walker.live(now) : [];
+      const pos = new Float32Array(MAX_PRINTS * 4);
+      const foot = new Float32Array(MAX_PRINTS);
+      live.forEach((q, i) => {
+        pos.set([q.x, q.z, q.angle, now - q.t], i * 4);
+        foot[i] = q.foot;
+      });
+      return { pos, foot, n: live.length };
+    };
+    const setPrints = (u, p) => {
+      gl.uniform4fv(u('uPrints'), p.pos);
+      gl.uniform1fv(u('uFoot'), p.foot);
+      gl.uniform1i(u('uPrintN'), p.n);
+      gl.uniform4fv(u('uBoot'), boot);
+    };
     let footCam = null;
 
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -200,6 +224,27 @@ export default function MistCanvas({ recipe, onFail }) {
     gl.activeTexture(gl.TEXTURE4);
     const moonTex = texture(gl, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, MOON_SIZE, MOON_SIZE, 0, gl.RED, gl.UNSIGNED_BYTE, moonFace());
+    // (0.3.2) The meadow's paint: tiled in world space, so it repeats and
+    // mipmaps (anisotropic where the browser has it: the ground is seen
+    // at a grazing angle). Building it takes ~20–30 ms, so it waits for the
+    // browser to be idle after load, or for the meadow pass if that comes
+    // first; never on the load path.
+    let meadowTex = null;
+    const meadowTexture = () => {
+      if (meadowTex) return meadowTex;
+      gl.activeTexture(gl.TEXTURE5);
+      meadowTex = texture(gl, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, MEADOW_SIZE, MEADOW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, meadowTexels());
+      gl.generateMipmap(gl.TEXTURE_2D);
+      const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+      if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(4, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+      return meadowTex;
+    };
+    const idle = window.requestIdleCallback ?? (cb => setTimeout(cb, 1500));
+    const meadowIdle = idle(() => meadowTexture(), { timeout: 8000 });
     gl.uniform1i(uniform('uMoon'), 4);
     gl.uniform1i(uniform('uSky'), 0);
     gl.uniform1i(uniform('uCrest'), 1);
@@ -234,6 +279,25 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3) The closing shot's sky (clouds, birds, stars): shown, and its
     // clock, seconds on this loop's clock while it shows.
     let lifeShown = false;
+    // (0.3.2) The meadow's paint is in the frame (its wind and clouds move).
+    let meadowShown = false;
+    // What the meadow pass draws with, from the last rebuild (null: none).
+    let meadowAt = null;
+    // Past this the flowers are under a pixel and in the haze (metres).
+    const FLOWER_M = 45;
+    // (0.3.2) The meadow pass (meadowShader.js): its paint and its flowers,
+    // each its own small program, built on the way down like the grass's.
+    let meadow = null;
+    const meadowPrograms = () => {
+      if (meadow) return meadow;
+      const make = frag => {
+        const prog = createProgram(gl, MEADOW_VERTEX, frag);
+        const U = {};
+        return { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
+      };
+      meadow = { paint: make(MEADOW_PAINT), flowers: make(MEADOW_FLOWERS), vao: gl.createVertexArray() };
+      return meadow;
+    };
     let skyT = 0;
     let raf = 0;
     let last = 0;
@@ -697,6 +761,10 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       // (0.3) The camera's pitch, the ground under it and the desk.
       gl.uniform1i(uniform('uPitched'), pitch ? 1 : 0);
+      if (!pitch) {
+        meadowShown = false;
+        meadowAt = null;
+      }
       if (pitch) {
         gl.uniform4f(uniform('uPitch'), pitch.cos, pitch.sin, pitch.f, pitch.zoom);
         gl.uniform4f(uniform('uPrin'), pitch.sx, pitch.sy, pitch.vx, pitch.vy);
@@ -714,6 +782,32 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.uniform3fv(uniform('uGrassFar'), rgb01(frame.grass.far));
           gl.uniform3fv(uniform('uGrassSky'), frame.grass.sky);
         }
+        // (0.3.2) The meadow's paint comes in as the camera comes down from
+        // where the descent starts (~64 m), so that frame is the 0.2 meadow.
+        const sm = Math.min(1, Math.max(0, (64 - cm.y) / 22));
+        meadowShown = !!frame.grass && sm > 0;
+        // The rows the pass can touch (CSS px from the top): the ground's
+        // first, and the first within FLOWER_M (the flowers'). Down the
+        // optical centre's column, the nearest ground on each row.
+        const rowWhere = test => {
+          if (test(0)) return 0;
+          let lo = 0;
+          let hi = h;
+          if (!test(hi)) return h;
+          for (let i = 0; i < 20; i++) {
+            const mid = (lo + hi) / 2;
+            if (test(mid)) hi = mid;
+            else lo = mid;
+          }
+          return lo;
+        };
+        meadowAt = frame.grass
+          ? {
+              pitch, cam, box, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
+              top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
+              near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
+            }
+          : null;
       }
       // The grass, once the camera is low enough to see blades.
       const cmY = pitch ? cam.eye * 40 : Infinity;
@@ -780,7 +874,7 @@ export default function MistCanvas({ recipe, onFail }) {
       });
     }
 
-    function drawGrass() {
+    function drawGrass(prints) {
       const g = grassProgram();
       const { pitch: P, cam: c, colours, haze } = grassAt;
       gl.useProgram(g.prog);
@@ -793,12 +887,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uT'), windPhase / WIND.speed);
       gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
       gl.uniform1f(g.u('uRebound'), motion.matches ? 0 : 1);
-      const now = performance.now() / 1000;
-      const prints = walker.live(now);
-      const pr = new Float32Array(MAX_PRINTS * 4);
-      prints.forEach((q, i) => pr.set([q.x, q.z, q.angle, now - q.t], i * 4));
-      gl.uniform4fv(g.u('uPrints'), pr);
-      gl.uniform1i(g.u('uPrintN'), prints.length);
+      setPrints(g.u, prints);
       gl.uniform3fv(g.u('uRoot'), rgb01(colours.root));
       gl.uniform3fv(g.u('uMid'), rgb01(colours.mid));
       gl.uniform3fv(g.u('uTip'), rgb01(colours.tip));
@@ -817,6 +906,60 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
+    // (0.3.2) The meadow pass over the scene's ground: the paint multiplied
+    // in (×2·src, so it lightens and darkens), then the flowers added.
+    function drawMeadow(prints) {
+      if (!meadowAt || (!meadowShown && !prints.n)) return;
+      const M = meadowPrograms();
+      meadowTexture();
+      const { pitch: P, cam: c, box, cm, front, colours, a, top, near } = meadowAt;
+      if (top >= h) return;
+      gl.bindVertexArray(M.vao);
+      gl.enable(gl.BLEND);
+      // Each pass only over the rows it can touch (scissor rows count up
+      // from the canvas's foot, in device px).
+      gl.enable(gl.SCISSOR_TEST);
+      const rows = y => Math.min(canvas.height, Math.ceil(((h - y) / h) * canvas.height) + 2);
+      const passes = grassAt ? [M.paint, M.flowers] : [M.paint];
+      for (const g of passes) {
+        gl.useProgram(g.prog);
+        if (g === M.paint) {
+          gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
+          gl.scissor(0, 0, canvas.width, rows(top));
+        } else {
+          if (near >= h) continue;
+          gl.blendFunc(gl.ONE, gl.ONE);
+          gl.scissor(0, 0, canvas.width, rows(near));
+        }
+        gl.uniform2f(g.u('uRes'), canvas.width, canvas.height);
+        gl.uniform2f(g.u('uSize'), w, h);
+        gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+        gl.uniform4f(g.u('uPrin'), P.sx, P.sy, P.vx, P.vy);
+        gl.uniform1f(g.u('uFront'), front);
+        gl.uniform2f(g.u('uEye'), c.eye, c.back);
+        gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
+        gl.uniform3fv(g.u('uBoxMin'), box.min);
+        gl.uniform3fv(g.u('uBoxMax'), box.max);
+        gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
+        gl.uniform1i(g.u('uMeadow'), 5);
+        gl.uniform1f(g.u('uMeadowA'), meadowShown ? a : 0);
+        gl.uniform1f(g.u('uGrassT'), windPhase / WIND.speed);
+        gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
+        gl.uniform3fv(g.u('uGrassGround'), rgb01(colours.ground));
+        gl.uniform3fv(g.u('uGrassMid'), rgb01(colours.mid));
+        gl.uniform3fv(g.u('uGrassTip'), rgb01(colours.tip));
+        gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
+        gl.uniform3fv(g.u('uFlower'), rgb01(colours.flower));
+        gl.uniform3fv(g.u('uBloom'), rgb01(colours.bloom));
+        setPrints(g.u, prints);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      gl.disable(gl.SCISSOR_TEST);
+      gl.disable(gl.BLEND);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
     function draw(vs) {
       const pos = new Float32Array(MAX_RIDGES * 4);
       const alpha = new Float32Array(MAX_RIDGES);
@@ -826,10 +969,12 @@ export default function MistCanvas({ recipe, onFail }) {
       });
       gl.uniform4fv(uniform('uVeil'), pos);
       gl.uniform1fv(uniform('uVeilA'), alpha);
+      const prints = printsNow();
       gl.viewport(0, 0, canvas.width, canvas.height);
       if (!grassAt) {
         gl.disable(gl.DEPTH_TEST);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
+        drawMeadow(prints);
         lastDrawn = vs;
         return;
       }
@@ -840,7 +985,13 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.depthFunc(gl.ALWAYS);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      drawGrass();
+      drawGrass(prints);
+      // Then the meadow over the ground the blades leave uncovered (the
+      // depth test skips the rest), writing no depth.
+      gl.depthFunc(gl.LESS);
+      gl.depthMask(false);
+      drawMeadow(prints);
+      gl.depthMask(true);
       gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
     }
@@ -913,9 +1064,9 @@ export default function MistCanvas({ recipe, onFail }) {
       // scales the ridges.
       if (!orbit && !motion.matches && !frozen && recipeRef.current.idle?.seedDrift) idleT += dt;
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
-      // The closing sky and the grass in the wind move every frame, not on
+      // The closing sky, the meadow and the grass in the wind move every frame, not on
       // the idle tick; so do footprints springing back.
-      const living = ((lifeShown || !!grassAt) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
+      const living = ((lifeShown || !!grassAt || meadowShown) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
       if (living) skyT += dt;
       // A scroll, a switch or the spring redraws every frame; at rest the
       // drift, the wind and the veils share one IDLE_HZ tick.
@@ -1026,6 +1177,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
     return () => {
       cancelAnimationFrame(raf);
+      (window.cancelIdleCallback ?? clearTimeout)(meadowIdle);
       kickRef.current = () => {};
       ro.disconnect();
       io?.disconnect();

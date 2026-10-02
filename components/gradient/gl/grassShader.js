@@ -25,6 +25,7 @@
 
 import { hexToRgb } from '../colour';
 import { MAX_PRINTS } from './footsteps';
+import { BOOT_GLSL } from './bootPrint';
 
 const f = v => v.toFixed(6);
 
@@ -56,6 +57,7 @@ uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
 uniform float uT;       // the wind's clock, seconds
 uniform float uWindA;   // the wind's strength (0: still)
 uniform vec4 uPrints[${MAX_PRINTS}]; // x, z (metres), heading, age (s)
+uniform float uFoot[${MAX_PRINTS}];  // 1: a right boot, -1: a left (bootPrint.js)
 uniform int uPrintN;
 uniform float uRebound; // 1: prints spring back past upright; 0: they just ease back
 uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
@@ -87,6 +89,7 @@ float vnoise(vec2 x) {
   return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
+${BOOT_GLSL}
 // A print's push on its blades over its life: pressed at once, held, then
 // springing back (past upright and settling) or, under reduced motion,
 // easing back.
@@ -116,7 +119,11 @@ void main() {
   float own = (ring == 0 ? 1.0 : smoothstep(inner * 0.9, inner, m)) - smoothstep(edge * 0.9, edge, m);
   vec2 rel = pos - uCam.xz;
   float d = length(vec3(rel.x, uCam.y, rel.y));
-  float want = min(${f(GRASS.cap)}, ${f(GRASS.density)} / (d * d)) * (1.0 - smoothstep(${f(GRASS.reach * 0.6)}, ${f(GRASS.reach)}, d));
+  // Looking down, a blade shows only its curl, not its height: the meadow
+  // grows thicker under a steeper camera (×3 straight down), so the ground
+  // doesn't show through from above.
+  float down = 1.0 + 2.0 * uPitch.y * uPitch.y;
+  float want = min(${f(GRASS.cap)} * down, ${f(GRASS.density)} * down / (d * d)) * (1.0 - smoothstep(${f(GRASS.reach * 0.6)}, ${f(GRASS.reach)}, d));
   float p = own * want * c * c / ${f(GRASS.blades)};
   float grow = clamp((p - rnd(s)) / 0.08, 0.0, 1.0);
   if (grow <= 0.0) {
@@ -161,21 +168,28 @@ void main() {
   float sheen = wave * gust;
   bend += uWindA * (wd * (0.2 + 0.7 * sheen) + face * 0.05 * sin(uT * 7.0 + var * 40.0));
 
-  // The footprints: blades under a foot pressed flat outward from it, those
-  // around it leaning away, all springing back as the print ages.
+  // The footprints: a boot's sole (bootPrint.js) laid on the grass. Blades
+  // rooted under it are squashed flat into it, so the tread pressed into
+  // the ground shows (mistShader.js); those just round it lean away. All
+  // spring back as the print ages.
   float press = 0.0;
+  float squash = 0.0;
   for (int i = 0; i < ${MAX_PRINTS}; i++) {
     if (i >= uPrintN) break;
     vec4 pr = uPrints[i];
     vec2 o = pos - pr.xy;
+    if (dot(o, o) > 0.09) continue;
     vec2 fwd = vec2(sin(pr.z), cos(pr.z));
-    vec2 lr = vec2(dot(o, vec2(fwd.y, -fwd.x)), dot(o, fwd));
-    float e = length(lr / vec2(0.06, 0.13));
-    float k = (1.0 - smoothstep(0.8, 2.3, e)) * footStrength(pr.w);
+    vec2 lr = vec2(dot(o, vec2(fwd.y, -fwd.x)) * uFoot[i], dot(o, fwd) + uBoot[0].x * 0.5);
+    float sd = bootOutline(lr);
+    float str = footStrength(pr.w);
+    float k = (1.0 - smoothstep(-0.01, 0.06, sd)) * str;
     vec2 out_ = length(o) > 1e-4 ? normalize(o) : face;
     bend += out_ * k * 1.6;
     press = max(press, k);
+    squash = max(squash, (1.0 - smoothstep(-0.012, 0.004, sd)) * max(str, 0.0));
   }
+  h *= 1.0 - 0.88 * squash;
 
   // Along the blade: one arc of constant curvature, length h.
   int v = gl_VertexID;

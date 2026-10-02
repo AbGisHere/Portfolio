@@ -6,6 +6,62 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.2 — 2026-10-02
+
+Boot prints, and a meadow that's grass all the way to the mountains: every
+footstep is a hiking boot's sole now, drawn fresh on each page load; the
+ground is painted as grass at every height; and the grass is thicker seen
+from above.
+
+- **The boot** (`gl/bootPrint.js`): a lugged sole as shape distances
+  shared by both passes. The outline (a heel and a ball joined, the ball
+  leaning toward the big toe, pinched at the arch), a solid toe cap, the
+  forefoot's lugs, a gap at the arch, the heel's solid back curving up the
+  sides and its own lugs above it. Left and right boots are a mirrored pair.
+- **Drawn fresh each load** (`bootOf`): length and widths, three to five
+  forefoot rows, straight bars or a chevron of its own slope, one column a
+  side or two (the outer staggered or not), the heel's rows and back, the
+  toe cap, the arch's gap, the centre groove, and how deep and speckled it
+  presses. `?boot=<n>` draws boot n (stills).
+- **In the ground** (the meadow pass, below): the whole sole a shallow dent,
+  the tread pressed deep and dark, its edges roughened and speckled where the
+  ground didn't take the press (left out where that's finer than a pixel).
+  It presses in at once, holds, and fades over the print's life.
+- **In the grass:** blades rooted under the sole are squashed into it, so
+  the tread shows; those round its outline lean away, and all spring back
+  over it as before.
+- **The meadow, painted** (`gl/meadowShader.js`, `gl/meadowTexture.js`):
+  past the blades' reach the ground was one flat gradient from the
+  mountains down. Now one tileable texture, read in world space and
+  mipmapped, paints it as grass at every height: fields of light and
+  shade, warmer and cooler; clumps at three sizes and brush strokes; cloud
+  shadows drifting over by day (faint under the moon) and the wind rolling
+  across, long waves far off, on the wind's clock; under the blades, the
+  undergrowth leaning to the grass's own colours; and wildflowers (cream
+  and buttercup by day, pale by night) in drifts. It fades in from where
+  the descent starts, so that frame is still the `0.2` meadow, and hazes
+  with the ground. Colours in the recipes (`desk.grass`: `flower`, `bloom`,
+  `shade`). The texture is built once (~20–30 ms) when the browser is
+  idle after load, or when the meadow first needs it: never on the load
+  path.
+- **Its own pass.** The paint, the prints and the flowers draw in a small
+  pass after the grass, not in the scene's shader: anything added there
+  slowed every pixel of the frame, sky and all, even unused (the closing
+  shot fell from 109 to 95 fps at 1728×1117@2). The paint multiplies the
+  ground (×2·src, so it can lighten and darken), the flowers add; both are
+  scissored to the rows that can be ground, and the depth test skips every
+  pixel a blade covers. `mistShader.js` is unchanged from `0.3.1`.
+- **Thicker from above:** looking down, a blade shows only its curl, so the
+  grass grows denser the steeper the camera (×3 straight down) and the top
+  view no longer shows ground between blades.
+- Unit tests for the boot's seeding and ranges, each print's foot and the
+  meadow's texture (21).
+
+Measured (M4, GL, warm, `perf --query desk=…`, idle fps, against `0.3.1`
+measured the same session): the closing shot at 1728×1117@2 110 (`0.3.1`
+109); the top-down shot 120 at 1728×1117@2 and 113 at 3008×1692@2 with
+three times the blades. The `0.2` stretch is unchanged (parity).
+
 ## 0.3.1 — 2026-10-02
 
 The meadow: under the desk camera the grid is gone, and the ground and the

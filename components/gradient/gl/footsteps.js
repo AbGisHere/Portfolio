@@ -6,7 +6,10 @@
  *
  * - A moving mouse lays alternating left and right prints along its path,
  *   one STRIDE apart, each turned the way it's walking.
- * - A tap is one print, facing away from the camera.
+ * - A tap is one print, facing away from the camera, the other foot to
+ *   the last.
+ * - Each print is a boot (bootPrint.js): `foot` is 1 for the right, -1 for
+ *   the left, its sole mirrored.
  * - A print presses its blades flat at once, holds, then lets them spring
  *   back (grassShader.js footStrength); after LIFE seconds it's gone.
  *
@@ -29,8 +32,9 @@ export function createWalker() {
   let side = 1;
   const prints = [];
 
+  // `side` 1 lands the foot left of the path (shader's +x is right).
   const add = (x, z, angle, t) => {
-    prints.push({ x, z, angle, t });
+    prints.push({ x, z, angle, t, foot: -side });
     if (prints.length > MAX_PRINTS) prints.shift();
   };
 
@@ -61,6 +65,7 @@ export function createWalker() {
     },
     /** A tap at ground point `g`: one print, facing away from `from`. */
     tap(g, from, t) {
+      side = -side;
       add(g.x, g.z, Math.atan2(g.x - from.x, g.z - from.z), t);
       last = null;
     },
