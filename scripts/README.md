@@ -226,7 +226,7 @@ says how much, not whether it shows.
 Every shader program the atmosphere builds, compiled and linked on real
 phones and tablets (BrowserStack Automate): 31 devices, old and new in
 each GPU family (Adreno, Mali, Exynos Xclipse, PowerVR, Tensor, Apple from
-iOS 10 to 27, Android tablets and iPads, Samsung Internet). Those without
+iOS 13 to 27, Android tablets and iPads, Samsung Internet). Those without
 WebGL2 (iOS before 15) must get the layered fallback. Desktop GPUs and emulators
 don't show driver bugs; the grass that Adreno's linker rejected (0.3.1 to
 0.3.3) only showed on a real phone.
@@ -239,10 +239,14 @@ npm run devices -- --list             # Automate's real devices (exact names for
 ```
 
 Per device: the site at the desk's end (`?desk=0.6`), then, in the page,
-each program from the repo's shader sources (scene, crest, grass, meadow
-paint, flowers, foot mist) compiled and linked with its log, the GPU's
-name, WebGL2, and the renderer the site picked; and a screenshot. It
-passes with WebGL2, every program linked and the site on GL. A device
+each program from the repo's shader sources (`lib/programs.mjs`: scene,
+crest, grass, flowers, trees, meadow paint, painted flowers, foot mist)
+compiled and linked with its log, the GPU's name, WebGL2, the renderer the
+site picked and any errors the page caught (`window.__errors`, from the
+head script: thrown, failed loads, rejected promises, React's reports);
+and a screenshot. It passes with WebGL2, every program linked, the site
+on GL and no page errors. A new shader goes in `lib/programs.mjs` in the
+same push: `test:unit` fails on any exported shader missing from it. A device
 Automate doesn't offer reads `n/a` (fix its name with `--list`); it isn't a
 failure. Keys: `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` in
 the environment or `.env.local` (never committed). Without them it skips.

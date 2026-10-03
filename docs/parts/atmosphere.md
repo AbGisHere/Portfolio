@@ -391,7 +391,9 @@ camera at `about` 1 exactly (unit-tested).
   `deskSkyAt`), two cloud banks (far and near, drifting at their own pace,
   slowly changing shape, patchy, hazed toward the sky's colour), birds by
   day (four flocks on irregular cycles, one to seven birds, depth setting
-  size and haze, gliding between wingbeats) and twinkling stars at night;
+  size, haze and, from `0.3.5`, where they fly: a near flock in front of
+  every ridge, a far one low among them, behind one to four, from how much
+  each ridge covers the pixel; gliding between wingbeats) and twinkling stars at night;
   mid-switch they blend on `e`. They run on `skyT`, seconds on GL's frame
   loop while the sky shows, and redraw every frame there (not the idle
   tick) so the birds move smoothly. Integer hashing (`pcg`), so every GPU
@@ -488,14 +490,54 @@ it while there's grass, so `0.2` frames are untouched).
   fails, with an empty log, on any vertex-shader loop whose result moves
   the vertex, so the grass's footprints are written out print by print
   (`printPush`, × `MAX_PRINTS`, each behind `uPrintN`), not looped. Each
-  extra pass (grass, meadow paint, flowers, foot mist) is built through
+  extra pass (grass, flowers, trees, meadow paint, painted flowers, foot
+  mist) is built through
   `passProgram`: a GPU that can't build one leaves that pass out with a
   console warning, never the frame. Desktop and emulated phones don't show
   driver bugs like this one; GPU changes are checked on real phones.
 - **Denser from above:** the grass's density is ×(1 + 2 sin² pitch), up to
   ×3 straight down, where a blade shows only its curl.
-- **Flags:** `?grass=0` leaves the blades out (profiling); `?boot=<n>` draws
-  boot n instead of a random one (stills).
+- **Flowers** (`0.3.5`, `gl/flowerShader.js`): instanced like the blades
+  (three rings of world-snapped cells, `FLOWERS`) and drawn just after them
+  against their depth, within `FLOWERS.fade` (9–13 m) of the camera, where
+  the painted flowers (`MEADOW_FLOWERS`, `uFlowerNear`) fade in. They grow
+  in the same drifts (the meadow texture's A at 30 m, read in the vertex
+  shader), with strays between: daisies and buttercups in patches of their
+  own, pom-poms (`petal`) through both. A stem bent as one arc (the wind,
+  the prints through the shared `PRINTS_GLSL`/`PUSH_SUM`) and a head: a
+  disc facing up along the stem, turned partly toward the eye, or for the
+  pom-pom a camera-facing ball. Stems and heads never go under a pixel.
+- **Trees** (`0.3.5`, `gl/treeShader.js`): a fixed layout (`treeLayout`,
+  seeded): the lone tree at (-6.4, 9.5) m, its crown overhanging the
+  closing shot, and five copses 40–70 m out, all inside that shot and short
+  of where its mountains' foot lies (~85 m; a unit test keeps the line
+  over the desk open). Each tree is grown from the seed (`grow`): a trunk
+  (flared, wandering) splits into 3–5 limbs, each into a leader and one or
+  two side branches, down to `depth` (4 for the lone tree, 3 for the
+  copses), every segment bending a little toward the light; leaf clusters
+  grow only round the twigs. Instance data (12 floats each), one draw:
+  - **wood**: six-sided tubes (36 vertices each), the trunk one smooth
+    curve whose radius matches at every joint, flared at the roots; never
+    under ~a pixel across; the bark ridged and fissured by noise wrapped
+    round the tube, lit by its own surface, mossy at the foot;
+  - **leaf clusters** (~7,000 in all; where one is under ~8 px on screen
+    only half are drawn, a little larger, and under ~4 px under a third):
+    cards of five pointed leaves round a stem, fixed in the world (never turned to the camera, so nothing
+    reshuffles as it moves), swaying in place on the wind's clock, lit by their
+    own facing in three cel tones (`leafShade`, `leaf`, `leafLit`),
+    darker underneath, translucent with the body's light behind them;
+  - then one **shadow** per tree (a soft oval on the ground away from the
+    light, multiplied in the meadow's `shade`, in its own blended draw;
+    the lone tree's also on the grass and flowers, `TREE_SHADE_GLSL`).
+  Everything is fixed in the world and projected like the grass (nothing
+  turns to the camera, nothing writes `gl_FragDepth`), stored nearest
+  first from the closing shot so the depth test skips what's behind. Hazed toward
+  the foot's mist with distance; dithered in with the meadow's paint (none
+  on the pull-back's frames) and out past `farM`, where the meadow meets
+  the mountains' foot down the centre (unbounded while the foot is above
+  the frame). The depth's far plane is 400 m (`DEPTH`).
+- **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
+  trees; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.

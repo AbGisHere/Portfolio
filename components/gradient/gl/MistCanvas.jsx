@@ -32,6 +32,8 @@ import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
 import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
+import { FLOWERS, FLOWER_FRAGMENT, FLOWER_INSTANCES, FLOWER_VERTEX, FLOWER_VERTS } from './flowerShader';
+import { LONE_SHADOW, TREE_FRAGMENT, TREE_STRIDE, TREE_VERTEX, treeLayout } from './treeShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
@@ -193,6 +195,49 @@ export default function MistCanvas({ recipe, onFail }) {
       grass = gp && { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
       return grass;
     };
+    // (0.3.5) The flowers in the grass (flowerShader.js), built like it.
+    let flowers = null;
+    const flowerProgram = () => {
+      if (flowers !== null) return flowers;
+      const fp = passProgram(gl, 'flowers', FLOWER_VERTEX, FLOWER_FRAGMENT);
+      const FU = {};
+      flowers = fp && { prog: fp, vao: gl.createVertexArray(), u: name => (FU[name] ??= gl.getUniformLocation(fp, name)) };
+      return flowers;
+    };
+    // (0.3.5) The trees (treeShader.js): their layout is fixed, so it goes
+    // up once, as per-instance data: the wood, the leaves, then the shadows
+    // (each its own vertex array over the one buffer: their own vertex counts and blend).
+    let trees = null;
+    const treeProgram = () => {
+      if (trees !== null) return trees;
+      const tp = passProgram(gl, 'trees', TREE_VERTEX, TREE_FRAGMENT);
+      if (!tp) return (trees = false);
+      const { data, wood, parts } = treeLayout();
+      const tb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, tb);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const arrayFrom = first => {
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        for (let i = 0; i < 3; i++) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribPointer(i, 4, gl.FLOAT, false, TREE_STRIDE * 4, first * TREE_STRIDE * 4 + i * 16);
+          gl.vertexAttribDivisor(i, 1);
+        }
+        gl.bindVertexArray(null);
+        return vao;
+      };
+      const vao = arrayFrom(0);
+      const leafVao = arrayFrom(wood);
+      const shadowVao = arrayFrom(parts);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const TU = {};
+      trees = {
+        prog: tp, vao, leafVao, shadowVao, buf: tb, wood, leaves: parts - wood, shadows: data.length / TREE_STRIDE - parts,
+        u: name => (TU[name] ??= gl.getUniformLocation(tp, name)),
+      };
+      return trees;
+    };
     const DEPTH_AB = (() => {
       const n = DEPTH.near * 40;
       const f = DEPTH.far * 40;
@@ -309,7 +354,7 @@ export default function MistCanvas({ recipe, onFail }) {
         const U = {};
         return prog && { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
       };
-      meadow = { paint: make('meadow paint', MEADOW_PAINT), flowers: make('flowers', MEADOW_FLOWERS), foot: make('foot mist', MEADOW_FOOT), vao: gl.createVertexArray() };
+      meadow = { paint: make('meadow paint', MEADOW_PAINT), flowers: make('painted flowers', MEADOW_FLOWERS), foot: make('foot mist', MEADOW_FOOT), vao: gl.createVertexArray() };
       return meadow;
     };
     let skyT = 0;
@@ -326,6 +371,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noGrain = params.get('grain') === '0';
     // `?grass=0` leaves the grass out (profiling: what the blades cost).
     const noGrass = params.get('grass') === '0';
+    // `?trees=0` leaves the trees out (profiling).
+    const noTrees = params.get('trees') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -820,6 +867,14 @@ export default function MistCanvas({ recipe, onFail }) {
               pitch, cam, box, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
+              // (0.3.5) How far the meadow runs to the mountains' foot down
+              // the centre (metres): a tree past it would stand on the
+              // ridges. Unbounded while the foot is above the frame.
+              farM: (() => {
+                if (!ground) return 0;
+                const row = rowWhere(y => (toVirtual(pitch, pitch.sx, y)?.y ?? Infinity) > ground.top);
+                return row <= 0 ? 1e5 : groundAt(pitch, cam, pitch.sx, row + 1)?.d ?? 1e5;
+              })(),
               // The foot's mist (MEADOW_FOOT): its colour, the plain's at the
               // foot leaned to the haze, and its rows, from its highest top
               // over the foot down to where it's thinned out on the plain.
@@ -919,6 +974,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uSky'), colours.sky);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
       gl.uniform1f(g.u('uPxCss'), w / canvas.width);
+      gl.uniform4fv(g.u('uTreeShadow'), noTrees ? [0, 0, 0, 1e-3] : LONE_SHADOW);
+      gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
       gl.uniform3fv(g.u('uHaze'), rgb01(haze));
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1i(g.u('uGrain'), 2);
@@ -926,6 +983,91 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, GRASS_INSTANCES);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.3.5) The flowers, among the blades and against their depth. They
+    // grow in the meadow texture's drifts, so it's built first.
+    function drawFlowers(prints) {
+      const g = flowerProgram();
+      if (!g) return;
+      const { pitch: P, cam: c, colours, haze } = grassAt;
+      meadowTexture();
+      gl.useProgram(g.prog);
+      gl.bindVertexArray(g.vao);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform1f(g.u('uT'), windPhase / WIND.speed);
+      gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
+      gl.uniform1f(g.u('uRebound'), motion.matches ? 0 : 1);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform1f(g.u('uPxCss'), w / canvas.width);
+      gl.uniform4fv(g.u('uTreeShadow'), noTrees ? [0, 0, 0, 1e-3] : LONE_SHADOW);
+      gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
+      gl.uniform1i(g.u('uMeadow'), 5);
+      setPrints(g.u, prints);
+      gl.uniform3fv(g.u('uMid'), rgb01(colours.mid));
+      gl.uniform3fv(g.u('uTip'), rgb01(colours.tip));
+      gl.uniform3fv(g.u('uFlower'), rgb01(colours.flower));
+      gl.uniform3fv(g.u('uBloom'), rgb01(colours.bloom));
+      gl.uniform3fv(g.u('uPetal'), rgb01(colours.petal));
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uHaze'), rgb01(haze));
+      gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, FLOWER_VERTS, FLOWER_INSTANCES);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.3.5) The trees, against the same depth.
+    function drawTrees() {
+      const g = treeProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours, a, mist, farM } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform1f(g.u('uT'), windPhase / WIND.speed);
+      gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform1f(g.u('uFarM'), farM);
+      gl.uniform1f(g.u('uA'), a);
+      gl.uniform3fv(g.u('uShadeC'), rgb01(colours.leafShade));
+      gl.uniform3fv(g.u('uLeaf'), rgb01(colours.leaf));
+      gl.uniform3fv(g.u('uLit'), rgb01(colours.leafLit));
+      gl.uniform3fv(g.u('uBark'), rgb01(colours.bark));
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uHaze'), rgb01(mist));
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform3fv(g.u('uShadow'), rgb01(colours.shade));
+      // The shadows first, multiplied into the ground (the blades in front
+      // of it keep theirs: grassShader.js), writing no depth.
+      gl.bindVertexArray(g.shadowVao);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+      gl.depthMask(false);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.shadows);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      // The wood (six-sided tubes, 36 vertices each), then the leaves.
+      gl.bindVertexArray(g.vao);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
+      gl.bindVertexArray(g.leafVao);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.leaves);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -983,6 +1125,9 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
         gl.uniform3fv(g.u('uFlower'), rgb01(colours.flower));
         gl.uniform3fv(g.u('uBloom'), rgb01(colours.bloom));
+        // (0.3.5) The painted flowers fade in where the grass's own fade out
+        // (none fade where those can't be drawn).
+        if (g === M.flowers) gl.uniform2fv(g.u('uFlowerNear'), flowers ? FLOWERS.fade : [-2, -1]);
         setPrints(g.u, prints);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
@@ -1003,7 +1148,10 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uVeilA'), alpha);
       const prints = printsNow();
       gl.viewport(0, 0, canvas.width, canvas.height);
-      if (!grassAt || !grassProgram()) {
+      const grassOn = !!grassAt && !!grassProgram();
+      // (0.3.5) The trees show as soon as the meadow's paint does.
+      const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees;
+      if (!grassOn && !treesOn) {
         gl.disable(gl.DEPTH_TEST);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         drawMeadow(prints);
@@ -1011,13 +1159,20 @@ export default function MistCanvas({ recipe, onFail }) {
         return;
       }
       // (0.3.1) The scene writes its depth (far, or the desk's box), then
-      // the grass draws against it.
+      // the grass, its flowers and the trees (0.3.5) draw against it.
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
       gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.depthFunc(gl.ALWAYS);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      drawGrass(prints);
+      if (grassOn) {
+        drawGrass(prints);
+        drawFlowers(prints);
+      }
+      if (treesOn) {
+        gl.depthFunc(gl.LESS);
+        drawTrees();
+      }
       // Then the meadow over the ground the blades leave uncovered (the
       // depth test skips the rest), writing no depth.
       gl.depthFunc(gl.LESS);
@@ -1224,9 +1379,11 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
-      if (grass) {
-        gl.deleteProgram(grass.prog);
-        gl.deleteVertexArray(grass.vao);
+      for (const p of [grass, flowers, trees]) {
+        if (!p) continue;
+        gl.deleteProgram(p.prog);
+        for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);
+        if (p.buf) gl.deleteBuffer(p.buf);
       }
       window.removeEventListener('pointermove', onPointer);
       window.removeEventListener('pointerdown', onPointer);

@@ -215,6 +215,7 @@ void main() {
 `;
 
 export const MEADOW_FLOWERS = `${common}
+uniform vec2 uFlowerNear; // metres: the grass's own flowers fade out over these (0.3.5)
 void main() {
   vec2 gm;
   float dist;
@@ -222,7 +223,7 @@ void main() {
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
   float px = length(abs(gx) + abs(gy));
-  float fl = (1.0 - smoothstep(0.012, 0.03, px)) * (1.0 - smoothstep(uHazeAt.x, uHazeAt.y, dist));
+  float fl = (1.0 - smoothstep(0.012, 0.03, px)) * (1.0 - smoothstep(uHazeAt.x, uHazeAt.y, dist)) * smoothstep(uFlowerNear.x, uFlowerNear.y, dist);
   if (!hit || fl <= 0.0) discard;
   vec2 c = floor(gm / 0.35);
   uint hs = pcg(uint(int(c.x) + 70000) * 4099u ^ pcg(uint(int(c.y) + 70000)));

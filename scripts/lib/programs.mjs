@@ -1,0 +1,20 @@
+// Every shader program the atmosphere builds, as [name, vertex, fragment]:
+// what `npm run devices` compiles and links on real phones. A new pass goes
+// here in the same push (the unit test fails on any shader left out).
+import { FRAGMENT, VERTEX } from '../../components/gradient/gl/mistShader.js';
+import { CREST_FRAGMENT, CREST_VERTEX } from '../../components/gradient/gl/crestShader.js';
+import { GRASS_FRAGMENT, GRASS_VERTEX } from '../../components/gradient/gl/grassShader.js';
+import { FLOWER_FRAGMENT, FLOWER_VERTEX } from '../../components/gradient/gl/flowerShader.js';
+import { TREE_FRAGMENT, TREE_VERTEX } from '../../components/gradient/gl/treeShader.js';
+import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
+
+export const PROGRAMS = [
+  ['scene', VERTEX, FRAGMENT],
+  ['crest', CREST_VERTEX, CREST_FRAGMENT],
+  ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
+  ['flowers', FLOWER_VERTEX, FLOWER_FRAGMENT],
+  ['trees', TREE_VERTEX, TREE_FRAGMENT],
+  ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
+  ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],
+  ['foot mist', MEADOW_VERTEX, MEADOW_FOOT],
+];

@@ -26,6 +26,7 @@
 import { hexToRgb } from '../colour';
 import { MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
+import { TREE_SHADE_GLSL } from './treeShader';
 
 const f = v => v.toFixed(6);
 
@@ -46,48 +47,15 @@ export const GRASS = {
 export const GRASS_INSTANCES = GRASS.rings * GRASS.side * GRASS.side * GRASS.blades;
 export const GRASS_VERTS = GRASS.segments * 2 + 1;
 
-export const GRASS_VERTEX = `#version 300 es
-precision highp float;
-precision highp int;
-
-uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
-uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
-uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
-uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
-uniform float uT;       // the wind's clock, seconds
-uniform float uWindA;   // the wind's strength (0: still)
-uniform vec4 uPrints[${MAX_PRINTS}]; // x, z (metres), heading, age (s)
+/**
+ * The footprints' push on whatever grows from the meadow (the grass, and
+ * from 0.3.5 the flowers): the prints' uniforms, the boot (bootPrint.js),
+ * and `printPush`, one print's push on a stem rooted at `pos`.
+ */
+export const PRINTS_GLSL = `uniform vec4 uPrints[${MAX_PRINTS}]; // x, z (metres), heading, age (s)
 uniform float uFoot[${MAX_PRINTS}];  // 1: a right boot, -1: a left (bootPrint.js)
 uniform int uPrintN;
 uniform float uRebound; // 1: prints spring back past upright; 0: they just ease back
-uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
-uniform float uPxCss;   // one device pixel, CSS px
-
-out float vT;
-out float vVar;
-out float vPress;
-out float vSheen;
-out float vDist;
-out float vFace;   // how far the blade faces the light (-1 … 1)
-out float vHue;    // the blade's own lean in colour: -1 bluer … 1 yellower
-out float vBack;   // how far the camera looks toward the light past it (0 … 1)
-
-uint pcg(uint v) {
-  uint s = v * 747796405u + 2891336453u;
-  uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
-  return (w >> 22u) ^ w;
-}
-float rnd(inout uint s) {
-  s = pcg(s);
-  return float(s) / 4294967295.0;
-}
-float h2(vec2 c) { return float(pcg(uint(int(c.x)) * 1973u ^ pcg(uint(int(c.y)) + 40503u))) / 4294967295.0; }
-float vnoise(vec2 x) {
-  vec2 i = floor(x);
-  vec2 f = x - i;
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y);
-}
 
 ${BOOT_GLSL}
 // A print's push on its blades over its life: pressed at once, held, then
@@ -114,7 +82,61 @@ vec4 printPush(vec4 pr, float foot, vec2 pos, vec2 face) {
   vec2 away = length(o) > 1e-4 ? normalize(o) : face;
   return vec4(away * k * 1.6, k, (1.0 - smoothstep(-0.012, 0.004, sd)) * max(str, 0.0));
 }
+`;
 
+/**
+ * Every live print's push summed into \`vec4 push\` (bend xy, press, squash),
+ * for a stem at \`pos\` facing \`face\`. Written out print by print, not
+ * looped: Adreno's linker (seen on a 730) fails, with no log, on any loop
+ * whose result moves the vertex.
+ */
+export const PUSH_SUM = `  vec4 push = vec4(0.0); // bend (xy), press, squash
+  vec4 e;
+${Array.from({ length: MAX_PRINTS }, (_, i) => `  if (uPrintN > ${i}) { e = printPush(uPrints[${i}], uFoot[${i}], pos, face); push = vec4(push.xy + e.xy, max(push.zw, e.zw)); }`).join('\n')}`;
+
+export const GRASS_VERTEX = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
+uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
+uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
+uniform float uT;       // the wind's clock, seconds
+uniform float uWindA;   // the wind's strength (0: still)
+uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
+uniform float uPxCss;   // one device pixel, CSS px
+uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
+
+out float vT;
+out float vVar;
+out float vPress;
+out float vSheen;
+out float vDist;
+out float vFace;   // how far the blade faces the light (-1 … 1)
+out float vHue;    // the blade's own lean in colour: -1 bluer … 1 yellower
+out float vBack;   // how far the camera looks toward the light past it (0 … 1)
+out float vTree;   // in the lone tree's shadow (0 … 1)
+
+uint pcg(uint v) {
+  uint s = v * 747796405u + 2891336453u;
+  uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+  return (w >> 22u) ^ w;
+}
+float rnd(inout uint s) {
+  s = pcg(s);
+  return float(s) / 4294967295.0;
+}
+float h2(vec2 c) { return float(pcg(uint(int(c.x)) * 1973u ^ pcg(uint(int(c.y)) + 40503u))) / 4294967295.0; }
+float vnoise(vec2 x) {
+  vec2 i = floor(x);
+  vec2 f = x - i;
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+${PRINTS_GLSL}
+${TREE_SHADE_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
   int ring = gl_InstanceID / per;
@@ -185,12 +207,8 @@ void main() {
   // The footprints: a boot's sole (bootPrint.js) laid on the grass. Blades
   // rooted under it are squashed flat into it, so the tread pressed into
   // the ground shows (mistShader.js); those just round it lean away. All
-  // spring back as the print ages.
-  // Written out print by print, not looped: Adreno's linker (seen on a
-  // 730) fails, with no log, on any loop whose result moves the vertex.
-  vec4 push = vec4(0.0); // bend (xy), press, squash
-  vec4 e;
-${Array.from({ length: MAX_PRINTS }, (_, i) => `  if (uPrintN > ${i}) { e = printPush(uPrints[${i}], uFoot[${i}], pos, face); push = vec4(push.xy + e.xy, max(push.zw, e.zw)); }`).join('\n')}
+  // spring back as the print ages (PUSH_SUM: print by print, never a loop).
+${PUSH_SUM}
   bend += push.xy;
   float press = push.z;
   float squash = push.w;
@@ -238,6 +256,7 @@ ${Array.from({ length: MAX_PRINTS }, (_, i) => `  if (uPrintN > ${i}) { e = prin
   vPress = press;
   vSheen = sheen * uWindA;
   vDist = d;
+  vTree = treeShade(pos, uTreeShadow);
 }
 `;
 
@@ -249,6 +268,7 @@ uniform vec3 uMid;
 uniform vec3 uTip;
 uniform vec3 uSun;       // the body's light on the grass
 uniform vec3 uSky;       // the sky's tint overhead (max channel 1)
+uniform vec3 uShade;     // the meadow's shade (the tree's shadow, multiplied)
 uniform vec3 uHaze;      // the painted meadow far off
 uniform vec2 uHazeAt;    // metres: haze starts, haze is whole
 uniform sampler2D uGrain;
@@ -259,6 +279,7 @@ uniform float uResY;      // canvas height, device px (the grain runs y down)
 in float vT;
 in float vVar;
 in float vPress;
+in float vTree;
 in float vSheen;
 in float vDist;
 in float vFace;
@@ -285,6 +306,7 @@ void main() {
   // Wind sheen on the tips; pressed blades in shade.
   col = mix(col, min(col * 1.25, vec3(1.0)), vSheen * vT * vT * 0.4);
   col *= 1.0 - 0.45 * press;
+  col *= mix(vec3(1.0), uShade, vTree * 0.8);
   col = mix(col, uHaze, smoothstep(uHazeAt.x, uHazeAt.y, vDist));
   // The scene's grain (mistShader.js), when it's drawn in GL.
   if (uGrainA > 0.0) {

@@ -454,7 +454,8 @@ export default function LayeredScene({ recipe }) {
       veilKey = key;
       const scale = veilSpeedScale(r.speed);
       slots.forEach((s, i) => {
-        if (still || i >= count) {
+        // No Web Animations (before Safari 13.1): the veils hold still.
+        if (still || i >= count || !s.drift.animate) {
           s.anims?.drift.cancel();
           s.anims?.breathe.cancel();
           s.anims = null;

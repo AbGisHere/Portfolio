@@ -18,7 +18,8 @@
 /** Floats in the boot's uniform (`uBoot`, vec4 × 4). */
 export const BOOT_FLOATS = 16;
 
-/** Mulberry32: a small seeded generator, for `?boot=<n>` stills. */
+/** Mulberry32: a small seeded generator, for `?boot=<n>` stills and the
+ * trees' fixed layout (treeShader.js). */
 export function seeded(n) {
   let a = Math.imul(n >>> 0, 0x9e3779b1) >>> 0;
   return () => {

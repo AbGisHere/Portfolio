@@ -32,10 +32,7 @@ import { join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Builder } from 'selenium-webdriver';
 import { Local } from 'browserstack-local';
-import { FRAGMENT, VERTEX } from '../components/gradient/gl/mistShader.js';
-import { CREST_FRAGMENT, CREST_VERTEX } from '../components/gradient/gl/crestShader.js';
-import { GRASS_FRAGMENT, GRASS_VERTEX } from '../components/gradient/gl/grassShader.js';
-import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../components/gradient/gl/meadowShader.js';
+import { PROGRAMS } from './lib/programs.mjs';
 
 /**
  * One device per GPU family. `chip` is what it's here to cover; the run
@@ -82,17 +79,8 @@ const DEVICES = [
   { chip: 'Apple A14 (iPad, iPadOS 16)', deviceName: 'iPad 10th', osVersion: '16', browserName: 'safari' },
   { chip: 'Apple A13 (iPad, iPadOS 15)', deviceName: 'iPad 9th', osVersion: '15', browserName: 'safari' },
   { chip: 'Apple A13 (iOS 13, no WebGL2)', deviceName: 'iPhone 11', osVersion: '13', browserName: 'safari', expect: 'layers' },
-  { chip: 'Apple A10 (iOS 10, no WebGL2)', deviceName: 'iPhone 7', osVersion: '10', browserName: 'safari', expect: 'layers' },
-  { chip: 'Apple A10 (iPad, iOS 11, no WebGL2)', deviceName: 'iPad 6th', osVersion: '11', browserName: 'safari', expect: 'layers' },
-];
-
-const PROGRAMS = [
-  ['scene', VERTEX, FRAGMENT],
-  ['crest', CREST_VERTEX, CREST_FRAGMENT],
-  ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
-  ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
-  ['flowers', MEADOW_VERTEX, MEADOW_FLOWERS],
-  ['foot mist', MEADOW_VERTEX, MEADOW_FOOT],
+  { chip: 'Apple A14 (iOS 14, no WebGL2)', deviceName: 'iPhone 12', osVersion: '14', browserName: 'safari', expect: 'layers' },
+  { chip: 'Apple A12Z (iPad, iPadOS 14, no WebGL2)', deviceName: 'iPad Pro 12.9 2020', osVersion: '14', browserName: 'safari', expect: 'layers' },
 ];
 
 const args = {};
@@ -141,8 +129,11 @@ if (args.list) {
 // In the page: a WebGL2 context of its own, each program compiled and
 // linked (logs kept), the GPU's name, and which renderer the site runs.
 function probe(programs) {
-  const out = { webgl2: false, gpu: null, renderer: null, programs: [] };
-  out.renderer = document.querySelector('[data-renderer]')?.getAttribute('data-renderer') ?? null;
+  const out = { webgl2: false, gpu: null, renderer: null, programs: [], errors: [] };
+  const host = document.querySelector('[data-renderer]');
+  out.renderer = host ? host.getAttribute('data-renderer') : null;
+  // Errors the page caught before and while the app ran (app/layout.jsx).
+  out.errors = (window.__errors || []).slice(0, 5);
   const gl = document.createElement('canvas').getContext('webgl2');
   if (!gl) return out;
   out.webgl2 = true;
@@ -183,7 +174,6 @@ if (local) {
     tunnel.start({ key: KEY, localIdentifier, forceLocal: 'true', logFile: join(OUT, 'local.log') }, err => (err ? reject(err) : resolve())),
   );
 }
-mkdirSync(OUT, { recursive: true });
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
 const build = `devices v${version} ${new Date().toISOString().slice(0, 16)}`;
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -225,6 +215,8 @@ try {
       row.gpu = r.gpu;
       row.renderer = r.renderer;
       row.programs = r.programs;
+      row.errors = r.errors;
+      for (const e of r.errors) row.failed.push(`page error: ${e}`);
       if (d.expect === 'layers') {
         // No WebGL2 here: the site must fall back to the layered scene.
         if (r.renderer !== 'layers') row.failed.push(`site renderer ${r.renderer ?? 'none'} (expected layers)`);

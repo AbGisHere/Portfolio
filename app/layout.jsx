@@ -41,7 +41,14 @@ export const viewport = {
 
 // Runs before first paint so a returning night visitor's backdrop is already
 // night, rather than flashing the day sky until React reads localStorage.
-const THEME_SCRIPT = `try{var t=localStorage.getItem('abg-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t}catch(e){}`;
+const THEME_SCRIPT = `try{var t=localStorage.getItem('abg-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t}catch(e){}` +
+  // Errors on old browsers, kept (at most 20) for `npm run devices` to read:
+  // thrown, failed loads, rejected promises, and React's own reports, which go
+  // to console.error where `reportError` is missing (before Safari 15.4).
+  `;(function(){window.__errors=[];var E=function(m){if(window.__errors.length<20)window.__errors.push(String(m).slice(0,240))};` +
+  `addEventListener('error',function(e){E(e.message||(e.target&&(e.target.src||e.target.href))||e.type)},true);` +
+  `addEventListener('unhandledrejection',function(e){E(e.reason&&e.reason.message||e.reason)});` +
+  `var ce=console.error;console.error=function(){E([].map.call(arguments,function(a){return String(a)}).join(' '));return ce.apply(console,arguments)}})();`;
 
 const personJsonLd = {
   '@context': 'https://schema.org',

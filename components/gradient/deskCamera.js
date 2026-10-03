@@ -324,9 +324,9 @@ export function grassOf(recipe, { prev = null, e = 1 } = {}) {
  * up, z forward (toward the mountains). */
 export const cameraMetres = cam => ({ x: 0, y: cam.eye * WORLD_M, z: -cam.ahead * WORLD_M });
 
-/** The near and far planes for depth (world units): the grass and the
- * desk's things lie between. */
-export const DEPTH = { near: 0.04 / WORLD_M, far: 160 / WORLD_M };
+/** The near and far planes for depth (world units): the grass, the desk's
+ * things and the trees (the far copses, 0.3.5) lie between. */
+export const DEPTH = { near: 0.04 / WORLD_M, far: 400 / WORLD_M };
 
 /**
  * Where a screen point (CSS px) meets the ground, in metres from the desk's

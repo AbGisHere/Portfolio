@@ -1,6 +1,6 @@
 {
   "name": "portfolio",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Abhinav Gupta's personal site: one continuous, scroll-driven scene.",
   "private": true,
   "scripts": {
@@ -20,6 +20,13 @@
   "keywords": [],
   "author": "Abhinav Gupta",
   "license": "UNLICENSED",
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 111",
+    "safari 13",
+    "ios_saf 13"
+  ],
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "browserstack-local": "^1.5.15",

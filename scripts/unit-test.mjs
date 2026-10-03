@@ -6,6 +6,7 @@
 // (`npm run test:unit`; the hook resolves the components' extensionless
 // imports as the bundler does.)
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { fromOklab, hexToLms, hexToRgb, lmsToHex, mix, oklab, rgbToHex } from '../components/gradient/colour.js';
 import { paletteAt } from '../components/gradient/skyKeys.js';
@@ -18,6 +19,8 @@ import { deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtua
 import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
 import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
 import { MEADOW_SIZE, meadowTexels } from '../components/gradient/gl/meadowTexture.js';
+import { TREE_STRIDE, treeLayout } from '../components/gradient/gl/treeShader.js';
+import { PROGRAMS } from './lib/programs.mjs';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -367,6 +370,35 @@ test('the grass: each scene its own colours, lit by its light; blended mid-switc
   assert.ok(Math.max(...day.sky) === 1 && day.dir.length === 2);
   assert.equal(grassOf(moonlit, { prev: duskEmber, e: 0 }).root.toLowerCase(), duskEmber.desk.grass.root.toLowerCase());
   assert.equal(frame(duskEmber, { about: 1 }).f.grass, null, 'none before the desk stretch');
+});
+
+test('every shader the atmosphere builds is checked on real devices (scripts/lib/programs.mjs)', async () => {
+  const listed = new Set(PROGRAMS.flatMap(([, vs, fs]) => [vs, fs]));
+  const dir = new URL('../components/gradient/gl/', import.meta.url);
+  for (const file of readdirSync(dir).filter(f => f.endsWith('.js'))) {
+    const mod = await import(new URL(file, dir).href);
+    for (const [name, v] of Object.entries(mod)) {
+      if (typeof v === 'string' && v.startsWith('#version 300 es')) assert.ok(listed.has(v), `${file} ${name} is in PROGRAMS`);
+    }
+  }
+});
+
+test('the trees: fixed, whole, one shadow each, clear of the desk and of the view over it', () => {
+  const a = treeLayout();
+  const b = treeLayout();
+  assert.deepEqual(a.data, b.data, 'the same trees every visit');
+  assert.equal(a.data.length % TREE_STRIDE, 0);
+  assert.ok(a.data.every(Number.isFinite));
+  const rows = i => a.data.subarray(i * TREE_STRIDE, (i + 1) * TREE_STRIDE);
+  const n = a.data.length / TREE_STRIDE;
+  const trunks = [];
+  for (let i = 0; i < a.parts; i++) if (rows(i)[8] === 0 && rows(i)[1] < 0) trunks.push(rows(i));
+  assert.equal(n - a.parts, trunks.length, 'a shadow per tree');
+  for (const t of trunks) {
+    const [x, , z] = t;
+    assert.ok(Math.hypot(x, z) > 4, 'none on the desk');
+    if (z > 20) assert.ok(Math.abs(x) > 12, 'the line over the desk stays open');
+  }
 });
 
 function geoArgs(r) {

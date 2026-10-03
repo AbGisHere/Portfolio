@@ -116,9 +116,11 @@ const duskEmber = {
   // evening (golden tips), over its own ground. Far away it hazes into the
   // painted meadow above.
   desk: {
-    // The meadow (0.3.1); flower, bloom: its wildflowers; shade: the cloud
-    // shadows passing over it, multiplied (0.3.2).
-    grass: { root: '#2B4536', mid: '#56783F', tip: '#A6B862', ground: '#2E4838', flower: '#F2ECDA', bloom: '#E9C552', shade: '#A9B6CC' },
+    // The meadow (0.3.1); flower, bloom, petal (0.3.5): its wildflowers (the
+    // daisy, the buttercup, the pom-pom); shade: the cloud shadows passing
+    // over it, multiplied (0.3.2). leafShade, leaf, leafLit, bark: the trees'
+    // three cel tones and their trunks (0.3.5).
+    grass: { root: '#2B4536', mid: '#56783F', tip: '#A6B862', ground: '#2E4838', flower: '#F2ECDA', bloom: '#E9C552', petal: '#D98BA6', shade: '#A9B6CC', leafShade: '#2C463F', leaf: '#4E6D3B', leafLit: '#A3B45E', bark: '#4B3A35' },
   },
 };
 

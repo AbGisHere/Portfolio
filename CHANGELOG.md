@@ -6,6 +6,63 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.5 — 2026-10-04
+
+Flowers and trees in the meadow, birds among the mountains, and the site
+back on older iPhones and iPads.
+
+- **Wildflowers** (`gl/flowerShader.js`): real flowers among the blades
+  within ~13 m of the camera, instanced like the grass and drawn against
+  its depth. Daisies (cream round a yellow eye), glossy five-petalled
+  buttercups, each kind in patches of its own, and taller pom-poms in the
+  recipe's new `petal` colour. They grow in the drifts the painted flowers
+  keep to (the meadow texture's A), sway in the grass's wind and are
+  pressed flat by the boot prints; the heads face up and turn partly toward
+  the eye, so they're open faces from above and from the side. The painted
+  flowers fade out where these fade in.
+- **Trees** (`gl/treeShader.js`): one lone tree by the desk, off to the
+  left, its crown overhanging the closing shot, and five copses out on
+  the meadow, all within the closing shot's view. Each tree is grown from
+  its seed, not shaped: a trunk flared at the roots splits into limbs,
+  branches and twigs, every split its own angle and length, bending toward
+  the light, and leaves grow only at the twigs, so every crown is its own
+  airy outline with sky showing through. Leaves are clusters of five
+  pointed leaves, swaying in place in the wind, lit in three cel tones and
+  translucent against the low light; trunks and branches are six-sided
+  tubes, the trunk one smooth curve flared at its roots, the bark ridged
+  and fissured, lit by its own surface, mossy at the foot. Everything is
+  fixed in the world: seen from above, a tree shows its top, from the
+  front its front, and nothing turns or slides as the camera moves. Each lays a long soft
+  shadow away from the low light (the lone tree's also on the grass and
+  flowers). They dither in with the meadow's paint, never over the
+  pull-back's mountains, and out past where the meadow meets the
+  mountains' foot. Colours in `desk.grass` (`leafShade`, `leaf`,
+  `leafLit`, `bark`). `?trees=0` leaves them out. The depth's far plane
+  moves from 160 m to 400 m.
+- **Birds among the mountains.** A near flock passes in front of every
+  ridge; a far one flies low among them, behind one to four (the ridge
+  loop records how much each ridge covers the pixel).
+- **Older iPhones and iPads.** iOS 13 to 16.3 showed only the CSS sky:
+  Next 16 compiles for Safari 16.4. `browserslist` now targets Safari and
+  iOS 13; `instrumentation-client.js` adds what Safari lacks before 15.4
+  (`.at`, `Object.hasOwn`), 14 (`MediaQueryList` change listeners) and
+  13.1 (`ResizeObserver`); the layered fallback's mist holds still without
+  Web Animations (before 13.1). The head script keeps the page's errors
+  (at most 20; React's own reports included) for `npm run devices` to
+  name.
+- **Every shader on real devices.** `scripts/lib/programs.mjs` lists every
+  program for `npm run devices`; a unit test fails if an exported shader
+  is missing from it. iPhone 7 and iPad 6th (iOS 10, 11; below the floor
+  and no longer starting on BrowserStack) gave way to iPhone 12 and iPad
+  Pro 12.9 2020 (iOS 14).
+- **Measured.** The trees cost 0.7 ms a frame in the closing shot
+  (`?bench`, 1728×1117@2: 7.6 against 6.9 without; leaves thinned where
+  they're small on screen, cheaper leaf and bark shading): `perf --query
+  desk=…` holds 119.2–120 fps at 1728×1117@2 and 393×852@2 at 0.25, 0.36
+  and 0.92. `npm run devices`: 31/31 (iOS 13 to 27 among them). `qa` full
+  tier: parity 46/46 (worst mean 0.96, p99 3), perf gate 6/6 at min scroll
+  119.0 fps, dropout 6/6 clean, switch 12/12 (×2.9).
+
 ## 0.3.4 — 2026-10-04
 
 The grass on Android phones. On a Xiaomi 12 Pro (Adreno 730, Chrome) the

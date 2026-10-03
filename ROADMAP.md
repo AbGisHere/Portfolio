@@ -402,7 +402,7 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.2` | **Shipped.** Boot prints (the owner, 2026-10-02): each footstep a boot's shape with tread pressed into the grass and the ground, and the boot drawn fresh on every page load (the number of tread ridges, the heel, the sole's width and toe), so each visit leaves its own. With it: the meadow painted as grass out to the mountains (cloud shadows, wind, wildflowers) in a pass of its own, and the grass thicker seen from above. |
 | `0.3.3` | **Shipped.** The mountains' foot (the owner, 2026-10-03): the pull-back ends with the front ridge running to the frame's foot (no strip of meadow under it, its size and shade kept), and under the desk camera the ridges stand in a bank of mist the far meadow runs into, a smooth blue plain, instead of meeting the ground in a ruled line. |
 | `0.3.4` | **Shipped.** The grass on Adreno phones (the owner, 2026-10-04, on a Xiaomi 12 Pro): the grass's footprint loop written out print by print, since Adreno's linker rejects it as a loop; each extra GL pass now fails alone, never the frame. |
-| `0.3.5` | Flowers and trees in the grass (the owner, 2026-10-03). |
+| `0.3.5` | **Shipped.** Flowers and trees in the grass (the owner, 2026-10-03): daisies, buttercups and pom-poms in the painted flowers' drifts; a lone tree framing the closing shot and copses on the meadow, upright, with long shadows; far birds among the ridges (the owner, 2026-10-04); older iPhones and iPads (iOS 13 to 16) working again. |
 | `0.3.6` | The desk: the first model, with day and night lightmaps. |
 | `0.3.7` | The laptop (the tablet on portrait) and the lid opening. |
 | `0.3.8`+ | The lamp (the theme toggle), the stationery and accessories, then the device screen. |

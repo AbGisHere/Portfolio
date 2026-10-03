@@ -246,8 +246,10 @@ vec3 skyLife(vec3 col, vec2 p) {
 // and is away for the rest, so they come irregularly. A flock is one to
 // seven birds in a loose scatter, each beating its wings at its own rate and
 // gliding now and then. Depth sets the size and the haze: far birds are
-// small, soft and taken toward the sky behind them.
-vec3 birds(vec3 col, vec2 p, float aa) {
+// small, soft and taken toward the sky behind them, and (0.3.5) where they
+// fly: a near flock passes in front of every ridge, a far one low among
+// them, behind one to four (\`cover\`: how much each ridge covers the pixel).
+vec3 birds(vec3 col, vec2 p, float aa, float cover[MAX_RIDGES]) {
   for (int f = 0; f < 4; f++) {
     float period = 38.0 + 40.0 * h1(ivec2(f, 991));
     float u = uSkyT / period + h1(ivec2(f, 17));
@@ -258,10 +260,18 @@ vec3 birds(vec3 col, vec2 p, float aa) {
     float z = h1(id + ivec2(9, 4));
     float dir = h1(id + ivec2(3, 1)) > 0.5 ? 1.0 : -1.0;
     float s = uSize.y * mix(0.0095, 0.004, z);
-    float y0 = uHorizon - uSize.y * (0.06 + 0.24 * h1(id + ivec2(2, 8)))
+    int behind = z < 0.3 ? 0 : 1 + int((z - 0.3) / 0.7 * 3.99);
+    float y0 = uHorizon - uSize.y * (behind > 0 ? 0.01 + 0.1 * h1(id + ivec2(2, 8)) : 0.06 + 0.24 * h1(id + ivec2(2, 8)))
       + uSize.y * 0.025 * (vnoise(vec2(uSkyT * 0.08, float(f) * 5.0)) - 0.5);
     float x0 = mix(-0.15, 1.15, dir > 0.0 ? ph : 1.0 - ph) * uSize.x;
     if (abs(p.x - x0) > s * 22.0 || abs(p.y - y0) > s * 14.0) continue;
+    // How much of the flock shows past the ridges in front of it.
+    float shown = 1.0;
+    for (int i = 0; i < MAX_RIDGES; i++) {
+      if (i >= uCount) break;
+      if (i >= uCount - behind) shown *= 1.0 - cover[i];
+    }
+    if (shown <= 0.0) continue;
     int n = 1 + int(h1(id + ivec2(4, 4)) * 7.0);
     float haze = 0.25 + 0.55 * z;
     vec3 bc = mix(uBirdCol, col, haze);
@@ -282,7 +292,7 @@ vec3 birds(vec3 col, vec2 p, float aa) {
       vec2 tip = vec2(1.05, 0.05 - 0.6 * fl);
       float d = min(seg(q, vec2(0.0, 0.08), elbow), seg(q, elbow, tip)) * s;
       float a = 1.0 - smoothstep(0.0, soft * 2.0, d - max(0.4, s * 0.085));
-      col = mix(col, bc, a * 0.9 * uLifeMix.x * uLifeA);
+      col = mix(col, bc, a * 0.9 * uLifeMix.x * uLifeA * shown);
     }
   }
   return col;
@@ -419,6 +429,8 @@ void main() {
   }
 #endif
 
+  // (0.3.5) How much each ridge covers this pixel, for the birds behind them.
+  float cover[MAX_RIDGES] = float[MAX_RIDGES](${Array(MAX_RIDGES).fill('0.0').join(', ')});
 #ifndef OFF_RIDGES
   for (int i = 0; i < MAX_RIDGES; i++) {
     if (i >= uCount) break;
@@ -463,7 +475,8 @@ void main() {
         fill = 1.0 - (1.0 - fill) * (1.0 - uLitCol * (uLitA[i] * edge * toward));
       }
 #endif
-      col = over(col, fill, Phi(d / sigma) * fade);
+      cover[i] = Phi(d / sigma) * fade;
+      col = over(col, fill, cover[i]);
     }
 
 #ifndef OFF_RIM
@@ -511,8 +524,8 @@ void main() {
   col = over(col, uMist, air);
 #endif
 
-  // (0.3) Birds, in front of the ridges.
-  if (uLifeA > 0.0 && uLifeMix.x > 0.0 && p.y < uFront) col = birds(col, p, aa);
+  // (0.3) Birds: near ones in front of the ridges, far ones among them.
+  if (uLifeA > 0.0 && uLifeMix.x > 0.0 && p.y < uFront) col = birds(col, p, aa, cover);
   // (0.3.1) The ground under the desk camera: the meadow's own ground near
   // (in clumps), hazing out into the painted 0.2 meadow by GRASS_HAZE's far
   // end, so from where the descent starts it's that meadow exactly. The

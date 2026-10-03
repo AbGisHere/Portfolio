@@ -184,6 +184,9 @@ npm run devices        # every shader on 31 real phones and tablets (BrowserStac
 ## Tech Stack
 
 - **Next.js 16** (App Router), React 19, plain JS/JSX (no TypeScript).
+  Compiled for Safari and iOS 13 on (`browserslist`, `0.3.5`; Next's own
+  floor is 16.4), with `instrumentation-client.js` filling in the built-ins
+  older Safari lacks. A newer API goes there too, or behind a check.
 - The atmosphere: a WebGL2 renderer (`components/gradient/gl/`) drawing the
   animated mountain scene from recipe files, with a layered DOM renderer
   (`components/gradient/layers/`) as the fallback.
@@ -241,6 +244,7 @@ components/
     deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light
     gl/grassShader.js, gl/footsteps.js — the meadow's instanced grass; the footprints (0.3.1)
     gl/bootPrint.js — the boot each print is, drawn fresh per load (0.3.2)
+    gl/flowerShader.js, gl/treeShader.js — the wildflowers in the grass; the lone tree and copses, their shadows (0.3.5)
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
@@ -256,7 +260,8 @@ components/
 docs/parts/       — one doc per part's internals (atmosphere.md); see "Parts"
 .github/workflows/ci.yml — test:adaptive, test:unit, build, hygiene (no GPU checks)
 scripts/          — qa (runs the rest), parity, perf, switch, sharp, devices, adaptive-test, unit-test, hygiene;
-                    lib/: console (shared console check), dropout (tile dropout), resolve-js
+                    lib/: console (shared console check), dropout (tile dropout), programs (every shader, for devices), resolve-js
+instrumentation-client.js — polyfills for older Safari (iOS 13 on; `browserslist` in package.json)
 .env.example      — optional config (SITE_URL); LICENSE — all rights reserved
 ```
 
@@ -294,7 +299,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.5`: flowers and trees in the grass; then `0.3.6` the desk, the first model, with day and night lightmaps (`ROADMAP.md`, "0.3") |
+| `0.3.6`: the desk, the first model, with day and night lightmaps; then `0.3.7` the laptop (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

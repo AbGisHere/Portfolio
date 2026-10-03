@@ -90,7 +90,7 @@ const moonlit = {
   // under the moon, blue-green, the tips catching its light.
   desk: {
     // The meadow; its wildflowers pale under the moon, the cloud shadows faint.
-    grass: { root: '#101C22', mid: '#20393B', tip: '#55807C', ground: '#15262A', flower: '#93A8BC', bloom: '#7C90A6', shade: '#CDD3DE' },
+    grass: { root: '#101C22', mid: '#20393B', tip: '#55807C', ground: '#15262A', flower: '#93A8BC', bloom: '#7C90A6', petal: '#8C86AE', shade: '#CDD3DE', leafShade: '#0C171C', leaf: '#1A2F31', leafLit: '#41645F', bark: '#17171D' },
   },
 };
 
