@@ -92,9 +92,13 @@ export const DESCENT = {
   tilt: 0.28,
   rise: 0.59,
   // z: depth (the frame's foot = 1); height: world height, share of the
-  // frame's height at depth 1; drop/until: see above.
+  // frame's height at depth 1; drop/until: see above; haze: how much
+  // lighter its look is than its slot's (`t`).
   ranges: [
-    { z: 0.78, height: 0.4, stretch: 1.6, drop: 0.5, until: 0.85 },
+    // The new front ridge: near enough that at the stretch's end its foot is
+    // just under the frame's (no meadow strip under it: the meadow opens as
+    // the 0.3 camera comes down), drawn the size and shade it had at z 0.78.
+    { z: 0.66, height: 0.36, stretch: 1.6, drop: 0.5, until: 0.85, haze: 0.079 },
     { z: 13, height: 1.4, drop: 0.3, until: 0.6 },
     { z: 20, height: 1.7, drop: 0.3, until: 0.6 },
     { z: 32, height: 2, drop: 0.3, until: 0.6 },
@@ -185,7 +189,7 @@ export function frameAt(scene, h, cam) {
     // FAR_FOOT, FAR_VEIL): the distant ranges fully, the recipe's by how far
     // back they sit, so a crest that dips into a valley (a narrow portrait
     // frame shows few peaks) still reads as its own layer, not as haze.
-    const t = slotT(foot, horizon, h, scene.ranges ?? 5) - far;
+    const t = slotT(foot, horizon, h, scene.ranges ?? 5) - far - (rd.haze ?? 0);
     const flat = z > zFar + 1e-6 ? 1 : (cam.k ?? 1) * clamp01(1 - t);
     return { s: drawn, foot: foot + dropped, t, g, flat };
   });

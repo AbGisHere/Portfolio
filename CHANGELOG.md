@@ -6,6 +6,32 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.3 — 2026-10-03
+
+The mountains' foot: no more ruled line where the ridges met the ground.
+
+- **The pull-back ends on the mountain.** Its new front ridge sits nearer
+  (z 0.78 → 0.66), so at the end of the stretch its foot is just under the
+  frame's: the thin strip of meadow under it is gone, on every aspect. Its
+  height (0.4 → 0.36) and a new per-range `haze` (0.079) keep the size and
+  the exact colours it had (fill `#2f2b6c #3e3873 #52487c`, `t` 0.921, both
+  before and after).
+- **Mist at the foot.** Under the desk camera a third small meadow pass
+  (`MEADOW_FOOT`) lays a bank of mist over the ridges' foot, in the far
+  plain's blue leaned to the haze: its top rises and dips along the range
+  and drifts with the wind, and it thins up the ridges and across the plain.
+  Scissored to its band of rows, fading in with the meadow's paint.
+- **The blue plain.** The meadow's paint thins out toward the foot, so the
+  far ground lies smooth into the mist instead of stopping on a textured
+  edge.
+- Parity 46/46 (the pull-back's end changed in both renderers). GPU ms
+  at 1728x1117@2, 9 interleaved rounds against 0.3.2, scroll 0.7–1: within
+  0.1 ms (4.9–5.2 both). Perf gate 6/6, min scroll 119.4 fps.
+- **Builds out of the dev server's way.** `next.config.mjs` takes an
+  optional `NEXT_DIST_DIR`, so a local production build (`.next-*`,
+  ignored) never touches a running `next dev`'s cache in `.next` (a build
+  beside it had broken its Google font lookup).
+
 ## 0.3.2 — 2026-10-02
 
 Boot prints, and a meadow that's grass all the way to the mountains: every

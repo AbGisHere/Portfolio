@@ -28,6 +28,11 @@ import { BOOT_GLSL } from './bootPrint';
 
 const f = v => v.toFixed(6);
 
+/** The mist at the mountains' foot (MEADOW_FOOT): its top over the foot, a
+ * share of the frame's height (least, plus as much again where it rises),
+ * the ground-depth ratio it's thinned out by across the plain, its density. */
+export const FOOT_MIST = { up: [0.012, 0.07], plain: 0.4, a: 0.78 };
+
 export const MEADOW_VERTEX = `#version 300 es
 void main() {
   vec2 v = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -73,20 +78,20 @@ uint pcg(uint v) {
   return (w >> 22u) ^ w;
 }
 
-// This pixel's ground point (metres) and its distance, or false for the
-// sky, the ridges and the desk (as mistShader.js casts its ray).
-bool groundHit(out vec2 gm, out float dist) {
+// This pixel's ray (world units, y up) and its point on the virtual plane
+// (CSS px; y 1e7 where the ray leaves the plane behind), as mistShader.js
+// casts them.
+vec3 rayOf(out vec2 v) {
   vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) * uSize / uRes;
   vec2 uv = (p - uPrin.xy) / uPitch.w;
   float yv = uv.y * uPitch.x + uPitch.z * uPitch.y;
   float zv = uPitch.z * uPitch.x - uv.y * uPitch.y;
-  float py = zv <= 1e-3 * uPitch.z ? 1e7 : uPrin.w + uPitch.z * yv / zv;
-  vec3 dir = vec3(uv.x, -yv, zv);
-  // Clamped, so the derivatives hold everywhere (they're taken by the caller).
-  float t = uEye.x / max(-dir.y, 1e-4);
-  gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
-  dist = t * length(dir) * ${f(WORLD_M)};
-  if (!(dir.y < 0.0 && py > uFront)) return false;
+  v = zv <= 1e-3 * uPitch.z ? vec2(uPrin.z, 1e7) : uPrin.zw + uPitch.z * vec2(uv.x, yv) / zv;
+  return vec3(uv.x, -yv, zv);
+}
+
+// The ray meets the desk's box.
+bool deskHit(vec3 dir) {
   vec3 inv = 1.0 / (dir + vec3(1e-9));
   vec3 t0 = uBoxMin * inv;
   vec3 t1 = uBoxMax * inv;
@@ -94,7 +99,26 @@ bool groundHit(out vec2 gm, out float dist) {
   vec3 tf3 = max(t0, t1);
   float tn = max(max(tn3.x, tn3.y), tn3.z);
   float tf = min(min(tf3.x, tf3.y), tf3.z);
-  return !(tn < tf && tn > 0.0);
+  return tn < tf && tn > 0.0;
+}
+
+// How far toward the mountains' foot a virtual-plane row is: the ground's
+// depth over the foot's (1 at the foot, smaller toward the camera).
+float footQ(float vy) {
+  return (uFront - uPrin.w) / max(vy - uPrin.w, 1e-3);
+}
+
+// This pixel's ground point (metres) and its distance, or false for the
+// sky, the ridges and the desk.
+bool groundHit(out vec2 gm, out float dist) {
+  vec2 v;
+  vec3 dir = rayOf(v);
+  // Clamped, so the derivatives hold everywhere (they're taken by the caller).
+  float t = uEye.x / max(-dir.y, 1e-4);
+  gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
+  dist = t * length(dir) * ${f(WORLD_M)};
+  if (!(dir.y < 0.0 && v.y > uFront)) return false;
+  return !deskHit(dir);
 }
 
 vec4 meadowTex(float scale, vec2 off, vec2 gm, vec2 gx, vec2 gy) {
@@ -179,7 +203,12 @@ void main() {
   float u = 1.0 - smoothstep(10.0, 30.0, dist);
   if (u > 0.0) near *= mix(vec3(1.0), under(gm, gx, gy), u);
   if (uPrintN > 0 && px < 0.05) near *= boots(gm, px);
-  vec3 far = mix(vec3(1.0), k, uMeadowA * (1.0 - smoothstep(400.0, 3000.0, dist)));
+  // Far off the pattern thins out, and toward the mountains' foot it's gone:
+  // the plain lies smooth into the foot's mist (MEADOW_FOOT).
+  vec2 v;
+  rayOf(v);
+  float plain = 1.0 - smoothstep(0.3, 0.8, footQ(v.y));
+  vec3 far = mix(vec3(1.0), k, uMeadowA * plain * (1.0 - smoothstep(400.0, 3000.0, dist)));
   vec3 m = mix(near, far, smoothstep(uHazeAt.x, uHazeAt.y, dist));
   outColor = vec4(clamp(m * 0.5, 0.0, 1.0), 1.0);
 }
@@ -211,5 +240,36 @@ void main() {
   // flower's (the ground there about the grass's root to mid).
   vec3 base = mix(uGrassGround, uGrassMid, 0.4);
   outColor = vec4(max(fc - base, 0.0) * a, 1.0);
+}
+`;
+
+// The mist at the mountains' foot, blended over (premultiplied): where the
+// front ridge's fill met the ground in a ruled line, the ridges now stand in
+// a low bank of haze that the plain runs into. Its top rises and dips along
+// the range and drifts on the wind's clock; it thins up the ridges and
+// across the plain toward the camera.
+export const MEADOW_FOOT = `${common}
+uniform vec3 uFootMist;
+void main() {
+  vec2 v;
+  vec3 dir = rayOf(v);
+  if (deskHit(dir)) discard;
+  float x = v.x / uSize.y;
+  float t = uGrassT * 0.006;
+  float n = textureLod(uMeadow, vec2(x * 0.45 + t, 0.31), 0.0).r * 0.6 + textureLod(uMeadow, vec2(x * 1.6 - t * 1.7, 0.73), 0.0).a * 0.4;
+  float s = (v.y - uFront) / uSize.y;
+  float a;
+  if (s < 0.0) {
+    // Up the ridges: the bank's top, rising and dipping along the range.
+    float top = ${f(FOOT_MIST.up[0])} + ${f(FOOT_MIST.up[1])} * smoothstep(0.35, 0.7, n);
+    a = pow(max(0.0, 1.0 + s / top), 2.2);
+  } else {
+    // Across the plain: thinning toward the camera, in loose drifts.
+    float q = footQ(v.y);
+    a = pow(smoothstep(${f(FOOT_MIST.plain)}, 1.0, q), 2.0) * (0.6 + 0.4 * textureLod(uMeadow, vec2(x * 0.7 - t, q * 3.0), 0.0).r);
+  }
+  a *= ${f(FOOT_MIST.a)} * uMeadowA;
+  if (a <= 0.002) discard;
+  outColor = vec4(uFootMist * a, a);
 }
 `;

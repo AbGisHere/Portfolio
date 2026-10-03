@@ -472,6 +472,18 @@ it while there's grass, so `0.2` frames are untouched).
   repeat and mipmapped, anisotropic ×4) is read in world space with the ground
   point's own derivatives: R soft patches, G tufts, B brush strokes, A
   finer patches. Colours in `desk.grass` (`flower`, `bloom`, `shade`).
+- **The mountains' foot** (`0.3.3`): the pull-back's new front ridge
+  (`DESCENT.ranges[0]`) sits at z 0.66, so at the stretch's end its foot is
+  just under the frame's: no strip of meadow under it. Its `height` (0.36)
+  and `haze` (0.079: how much lighter its look is than its slot's `t`) keep
+  the size and shade it had at z 0.78. The meadow opens as the `0.3` camera
+  comes down, and there `MEADOW_FOOT` (`FOOT_MIST`, blended over) lays a
+  bank of mist across the ridges' foot in the far plain's colour leaned to
+  the haze: its top rises and dips along the range and drifts on the wind's
+  clock, it thins up the ridges and across the plain toward the camera, and
+  it fades in with the paint (`uMeadowA`). The paint's pattern thins out
+  toward the foot too (`footQ`, the ground's depth over the foot's), so the
+  far meadow lies smooth into the mist.
 - **Denser from above:** the grass's density is ×(1 + 2 sin² pitch), up to
   ×3 straight down, where a blade shows only its curl.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?boot=<n>` draws

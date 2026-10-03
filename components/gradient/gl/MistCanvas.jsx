@@ -23,16 +23,16 @@ import {
   veilSpeedScale,
   veilTiming,
 } from './mistGeometry';
-import { hexToRgb, rgb01, rgbToHex } from '../colour';
+import { hexToRgb, mix, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
-import { DEPTH, cameraMetres, deskBox, deskWidest, groundAt, pitchSpan } from '../deskCamera';
+import { DEPTH, cameraMetres, deskBox, deskWidest, groundAt, pitchSpan, toVirtual } from '../deskCamera';
 import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
 import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
-import { MEADOW_FLOWERS, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
+import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
   DRIFT_GAIN_MAX,
@@ -295,7 +295,7 @@ export default function MistCanvas({ recipe, onFail }) {
         const U = {};
         return { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
       };
-      meadow = { paint: make(MEADOW_PAINT), flowers: make(MEADOW_FLOWERS), vao: gl.createVertexArray() };
+      meadow = { paint: make(MEADOW_PAINT), flowers: make(MEADOW_FLOWERS), foot: make(MEADOW_FOOT), vao: gl.createVertexArray() };
       return meadow;
     };
     let skyT = 0;
@@ -806,6 +806,16 @@ export default function MistCanvas({ recipe, onFail }) {
               pitch, cam, box, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
+              // The foot's mist (MEADOW_FOOT): its colour, the plain's at the
+              // foot leaned to the haze, and its rows, from its highest top
+              // over the foot down to where it's thinned out on the plain.
+              mist: ground ? mix(ground.stops[0][1], light.mist, 0.15) : null,
+              mistRows: ground
+                ? [
+                    rowWhere(y => (toVirtual(pitch, pitch.sx, y)?.y ?? Infinity) > ground.top - (FOOT_MIST.up[0] + FOOT_MIST.up[1]) * h),
+                    rowWhere(y => (toVirtual(pitch, pitch.sx, y)?.y ?? Infinity) > view.horizon + (ground.top - view.horizon) / FOOT_MIST.plain),
+                  ]
+                : null,
             }
           : null;
       }
@@ -912,7 +922,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!meadowAt || (!meadowShown && !prints.n)) return;
       const M = meadowPrograms();
       meadowTexture();
-      const { pitch: P, cam: c, box, cm, front, colours, a, top, near } = meadowAt;
+      const { pitch: P, cam: c, box, cm, front, colours, a, top, near, mist, mistRows } = meadowAt;
       if (top >= h) return;
       gl.bindVertexArray(M.vao);
       gl.enable(gl.BLEND);
@@ -921,11 +931,18 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.enable(gl.SCISSOR_TEST);
       const rows = y => Math.min(canvas.height, Math.ceil(((h - y) / h) * canvas.height) + 2);
       const passes = grassAt ? [M.paint, M.flowers] : [M.paint];
+      if (mist && meadowShown) passes.push(M.foot);
       for (const g of passes) {
         gl.useProgram(g.prog);
         if (g === M.paint) {
           gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
           gl.scissor(0, 0, canvas.width, rows(top));
+        } else if (g === M.foot) {
+          const [y0, y1] = mistRows;
+          if (y0 >= h || y1 <= y0) continue;
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          gl.scissor(0, Math.max(0, rows(y1) - 4), canvas.width, rows(y0) - Math.max(0, rows(y1) - 4));
+          gl.uniform3fv(g.u('uFootMist'), rgb01(mist));
         } else {
           if (near >= h) continue;
           gl.blendFunc(gl.ONE, gl.ONE);

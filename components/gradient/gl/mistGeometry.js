@@ -244,7 +244,7 @@ export function layout(w, h, { size, horizon = 0.42, mist, aspect, crests = true
       // camera (camera.js frameAt), so its height is set that much lower.
       const L = (g.height * h) / g.z / (g.stretch ?? 1);
       const noise = count + j;
-      ridges.push({ x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t: 0, fade: 1, noise, extra: true, z: g.z, stretch: g.stretch ?? 1, drop: g.drop ?? 0, until: g.until ?? 1 });
+      ridges.push({ x0, dx, Q, U, L, ys: null, E: 0, cx: w / 2, top: base - L, base, t: 0, fade: 1, noise, extra: true, z: g.z, stretch: g.stretch ?? 1, drop: g.drop ?? 0, until: g.until ?? 1, haze: g.haze ?? 0 });
       veils.push({
         cx: (noise % 2 === 0 ? 0.32 : 0.68) * w + Math.sin(noise * 2.1) * 0.06 * w,
         cy: base,

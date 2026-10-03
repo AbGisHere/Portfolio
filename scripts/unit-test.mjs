@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import { fromOklab, hexToLms, hexToRgb, lmsToHex, mix, oklab, rgbToHex } from '../components/gradient/colour.js';
 import { paletteAt } from '../components/gradient/skyKeys.js';
 import { sceneAt } from '../components/gradient/scene.js';
-import { descentAt, groundPaint, scrollPalette } from '../components/gradient/camera.js';
+import { descentAt, scrollPalette } from '../components/gradient/camera.js';
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
@@ -184,12 +184,10 @@ test('sceneAt at about 1: the evening, the extra ranges, the set body, the meado
     assert.ok(Math.abs(f.lit[0].x - (rest.lit[0].x + r.scroll.body.dx * H)) < 1e-9, 'it leans left by dx');
     assert.ok(f.sky.scale !== 1 && f.sky.shift > 0, 'the sky is redrawn under the camera');
     assert.ok(f.air < airOpacity(f.haze), 'the air thins');
-    assert.ok(f.ground && f.ground.top < H, 'the meadow shows');
-    assert.deepEqual(
-      f.ground,
-      groundPaint(f.stops, r.scroll.meadow, f.paints.at(-1).fill[2], f.view, H, f.haze),
-      "the recipe's own meadow",
-    );
+    // The front ridge runs to the frame's foot: no strip of meadow under it
+    // (the meadow opens as the 0.3 camera comes down).
+    assert.ok(f.view.front >= H, 'the front ridge reaches the frame');
+    assert.equal(f.ground, null, 'no meadow strip');
     assert.ok(f.light.st > 0, 'the setting light is on');
   }
 });

@@ -240,7 +240,7 @@ components/
     deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light
     gl/grassShader.js, gl/footsteps.js — the meadow's instanced grass; the footprints (0.3.1)
     gl/bootPrint.js — the boot each print is, drawn fresh per load (0.3.2)
-    gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2)
+    gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
     skyRamp.js  — the sky ramp every sky path uses; `rampAt`
@@ -293,7 +293,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.3`: the table, the first model, with day and night lightmaps (`ROADMAP.md`, "0.3") |
+| `0.3.4`: flowers and trees in the grass; then `0.3.5` the desk, the first model, with day and night lightmaps (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
