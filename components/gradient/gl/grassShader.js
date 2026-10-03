@@ -101,6 +101,20 @@ float footStrength(float a) {
   return exp(-1.8 * b) * cos(4.2 * b);
 }
 
+// One print's push on a blade rooted at pos: its bend away (xy), how hard
+// it's pressed (z) and squashed flat (w).
+vec4 printPush(vec4 pr, float foot, vec2 pos, vec2 face) {
+  vec2 o = pos - pr.xy;
+  if (dot(o, o) > 0.09) return vec4(0.0);
+  vec2 fwd = vec2(sin(pr.z), cos(pr.z));
+  vec2 lr = vec2(dot(o, vec2(fwd.y, -fwd.x)) * foot, dot(o, fwd) + uBoot[0].x * 0.5);
+  float sd = bootOutline(lr);
+  float str = footStrength(pr.w);
+  float k = (1.0 - smoothstep(-0.01, 0.06, sd)) * str;
+  vec2 away = length(o) > 1e-4 ? normalize(o) : face;
+  return vec4(away * k * 1.6, k, (1.0 - smoothstep(-0.012, 0.004, sd)) * max(str, 0.0));
+}
+
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
   int ring = gl_InstanceID / per;
@@ -172,23 +186,14 @@ void main() {
   // rooted under it are squashed flat into it, so the tread pressed into
   // the ground shows (mistShader.js); those just round it lean away. All
   // spring back as the print ages.
-  float press = 0.0;
-  float squash = 0.0;
-  for (int i = 0; i < ${MAX_PRINTS}; i++) {
-    if (i >= uPrintN) break;
-    vec4 pr = uPrints[i];
-    vec2 o = pos - pr.xy;
-    if (dot(o, o) > 0.09) continue;
-    vec2 fwd = vec2(sin(pr.z), cos(pr.z));
-    vec2 lr = vec2(dot(o, vec2(fwd.y, -fwd.x)) * uFoot[i], dot(o, fwd) + uBoot[0].x * 0.5);
-    float sd = bootOutline(lr);
-    float str = footStrength(pr.w);
-    float k = (1.0 - smoothstep(-0.01, 0.06, sd)) * str;
-    vec2 out_ = length(o) > 1e-4 ? normalize(o) : face;
-    bend += out_ * k * 1.6;
-    press = max(press, k);
-    squash = max(squash, (1.0 - smoothstep(-0.012, 0.004, sd)) * max(str, 0.0));
-  }
+  // Written out print by print, not looped: Adreno's linker (seen on a
+  // 730) fails, with no log, on any loop whose result moves the vertex.
+  vec4 push = vec4(0.0); // bend (xy), press, squash
+  vec4 e;
+${Array.from({ length: MAX_PRINTS }, (_, i) => `  if (uPrintN > ${i}) { e = printPush(uPrints[${i}], uFoot[${i}], pos, face); push = vec4(push.xy + e.xy, max(push.zw, e.zw)); }`).join('\n')}
+  bend += push.xy;
+  float press = push.z;
+  float squash = push.w;
   h *= 1.0 - 0.88 * squash;
 
   // Along the blade: one arc of constant curvature, length h.

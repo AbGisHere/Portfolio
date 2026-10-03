@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -401,10 +401,11 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.1` | **Shipped.** The meadow: the ground layer and the anime grass (short, even, every blade its own shape and colour lean, lit by the scene), with footsteps. The grid is gone. |
 | `0.3.2` | **Shipped.** Boot prints (the owner, 2026-10-02): each footstep a boot's shape with tread pressed into the grass and the ground, and the boot drawn fresh on every page load (the number of tread ridges, the heel, the sole's width and toe), so each visit leaves its own. With it: the meadow painted as grass out to the mountains (cloud shadows, wind, wildflowers) in a pass of its own, and the grass thicker seen from above. |
 | `0.3.3` | **Shipped.** The mountains' foot (the owner, 2026-10-03): the pull-back ends with the front ridge running to the frame's foot (no strip of meadow under it, its size and shade kept), and under the desk camera the ridges stand in a bank of mist the far meadow runs into, a smooth blue plain, instead of meeting the ground in a ruled line. |
-| `0.3.4` | Flowers and trees in the grass (the owner, 2026-10-03). |
-| `0.3.5` | The desk: the first model, with day and night lightmaps. |
-| `0.3.6` | The laptop (the tablet on portrait) and the lid opening. |
-| `0.3.7`+ | The lamp (the theme toggle), the stationery and accessories, then the device screen. |
+| `0.3.4` | **Shipped.** The grass on Adreno phones (the owner, 2026-10-04, on a Xiaomi 12 Pro): the grass's footprint loop written out print by print, since Adreno's linker rejects it as a loop; each extra GL pass now fails alone, never the frame. |
+| `0.3.5` | Flowers and trees in the grass (the owner, 2026-10-03). |
+| `0.3.6` | The desk: the first model, with day and night lightmaps. |
+| `0.3.7` | The laptop (the tablet on portrait) and the lid opening. |
+| `0.3.8`+ | The lamp (the theme toggle), the stationery and accessories, then the device screen. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of

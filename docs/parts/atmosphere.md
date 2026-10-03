@@ -484,6 +484,14 @@ it while there's grass, so `0.2` frames are untouched).
   it fades in with the paint (`uMeadowA`). The paint's pattern thins out
   toward the foot too (`footQ`, the ground's depth over the foot's), so the
   far meadow lies smooth into the mist.
+- **Phones' GPUs** (`0.3.4`): Adreno's linker (a 730, Chrome on Android)
+  fails, with an empty log, on any vertex-shader loop whose result moves
+  the vertex, so the grass's footprints are written out print by print
+  (`printPush`, × `MAX_PRINTS`, each behind `uPrintN`), not looped. Each
+  extra pass (grass, meadow paint, flowers, foot mist) is built through
+  `passProgram`: a GPU that can't build one leaves that pass out with a
+  console warning, never the frame. Desktop and emulated phones don't show
+  driver bugs like this one; GPU changes are checked on real phones.
 - **Denser from above:** the grass's density is ×(1 + 2 sin² pitch), up to
   ×3 straight down, where a blade shows only its curl.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?boot=<n>` draws

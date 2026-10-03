@@ -221,6 +221,34 @@ A case reads `soft` when a crop's gradient ratio is under `--min-ratio`
 cases and the summary. Judge softness by eye on the crops too: the ratio
 says how much, not whether it shows.
 
+## `npm run devices`
+
+Every shader program the atmosphere builds, compiled and linked on real
+phones and tablets (BrowserStack Automate): 31 devices, old and new in
+each GPU family (Adreno, Mali, Exynos Xclipse, PowerVR, Tensor, Apple from
+iOS 10 to 27, Android tablets and iPads, Samsung Internet). Those without
+WebGL2 (iOS before 15) must get the layered fallback. Desktop GPUs and emulators
+don't show driver bugs; the grass that Adreno's linker rejected (0.3.1 to
+0.3.3) only showed on a real phone.
+
+```bash
+npm run devices                       # against http://localhost:3001, via a BrowserStack Local tunnel
+npm run devices -- --base https://abgupta.me
+npm run devices -- --only pixel,iphone
+npm run devices -- --list             # Automate's real devices (exact names for DEVICES)
+```
+
+Per device: the site at the desk's end (`?desk=0.6`), then, in the page,
+each program from the repo's shader sources (scene, crest, grass, meadow
+paint, flowers, foot mist) compiled and linked with its log, the GPU's
+name, WebGL2, and the renderer the site picked; and a screenshot. It
+passes with WebGL2, every program linked and the site on GL. A device
+Automate doesn't offer reads `n/a` (fix its name with `--list`); it isn't a
+failure. Keys: `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` in
+the environment or `.env.local` (never committed). Without them it skips.
+One device at a time (one parallel): about 1–2 min each, ~45 min for all. Not in `qa`:
+the owner runs it as needed (a reminder every couple of code pushes). Detail: `scripts/out/devices/` (results.json, screenshots).
+
 ## `npm run switch`
 
 A switch is one sky turn, so no frame of it may jump against its neighbours

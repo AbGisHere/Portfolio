@@ -1,6 +1,6 @@
 {
   "name": "portfolio",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Abhinav Gupta's personal site: one continuous, scroll-driven scene.",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
     "perf": "node scripts/perf.mjs",
     "switch": "node scripts/switch.mjs",
     "sharp": "node scripts/sharp.mjs",
+    "devices": "node --import ./scripts/lib/resolve-js.mjs scripts/devices.mjs",
     "test:adaptive": "node --test scripts/adaptive-test.mjs",
     "test:unit": "node --import ./scripts/lib/resolve-js.mjs --test scripts/unit-test.mjs",
     "hygiene": "node scripts/hygiene.mjs",
@@ -20,7 +21,9 @@
   "author": "Abhinav Gupta",
   "license": "UNLICENSED",
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.60.0",
+    "browserstack-local": "^1.5.15",
+    "selenium-webdriver": "^4.50.0"
   },
   "dependencies": {
     "lenis": "^1.3.26",

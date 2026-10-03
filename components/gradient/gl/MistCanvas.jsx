@@ -109,6 +109,18 @@ function createProgram(gl, vs = VERTEX, fs = FRAGMENT) {
   return p;
 }
 
+// A pass's own program, or null if this GPU can't build it: the pass is
+// then left out, never the frame (a driver can reject valid GLSL, e.g.
+// Adreno's linker on the grass's footprint loop before 0.3.4).
+function passProgram(gl, name, vs, fs) {
+  try {
+    return createProgram(gl, vs, fs);
+  } catch (err) {
+    console.warn(`[atmosphere] the ${name} pass is off on this GPU:`, err.message || 'no log');
+    return null;
+  }
+}
+
 function texture(gl, filter) {
   const t = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, t);
@@ -172,12 +184,13 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.1) The grass pass (grassShader.js): its own program, and an empty
     // vertex array (every blade comes from its instance number). Built on
     // the way down to the meadow, not before.
+    // Null until built; false if this GPU can't build it.
     let grass = null;
     const grassProgram = () => {
-      if (grass) return grass;
-      const gp = createProgram(gl, GRASS_VERTEX, GRASS_FRAGMENT);
+      if (grass !== null) return grass;
+      const gp = passProgram(gl, 'grass', GRASS_VERTEX, GRASS_FRAGMENT);
       const GU = {};
-      grass = { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
+      grass = gp && { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
       return grass;
     };
     const DEPTH_AB = (() => {
@@ -290,12 +303,13 @@ export default function MistCanvas({ recipe, onFail }) {
     let meadow = null;
     const meadowPrograms = () => {
       if (meadow) return meadow;
-      const make = frag => {
-        const prog = createProgram(gl, MEADOW_VERTEX, frag);
+      // A pass this GPU can't build is null, and left out.
+      const make = (name, frag) => {
+        const prog = passProgram(gl, name, MEADOW_VERTEX, frag);
         const U = {};
-        return { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
+        return prog && { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
       };
-      meadow = { paint: make(MEADOW_PAINT), flowers: make(MEADOW_FLOWERS), foot: make(MEADOW_FOOT), vao: gl.createVertexArray() };
+      meadow = { paint: make('meadow paint', MEADOW_PAINT), flowers: make('flowers', MEADOW_FLOWERS), foot: make('foot mist', MEADOW_FOOT), vao: gl.createVertexArray() };
       return meadow;
     };
     let skyT = 0;
@@ -933,6 +947,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const passes = grassAt ? [M.paint, M.flowers] : [M.paint];
       if (mist && meadowShown) passes.push(M.foot);
       for (const g of passes) {
+        if (!g) continue;
         gl.useProgram(g.prog);
         if (g === M.paint) {
           gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
@@ -988,7 +1003,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uVeilA'), alpha);
       const prints = printsNow();
       gl.viewport(0, 0, canvas.width, canvas.height);
-      if (!grassAt) {
+      if (!grassAt || !grassProgram()) {
         gl.disable(gl.DEPTH_TEST);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         drawMeadow(prints);

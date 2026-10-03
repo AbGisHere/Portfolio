@@ -6,6 +6,39 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.4 — 2026-10-04
+
+The grass on Android phones. On a Xiaomi 12 Pro (Adreno 730, Chrome) the
+meadow under the desk camera was bare: no blades, no painted ground, no
+mist at the mountains' foot, since 0.3.1.
+
+- **The cause.** The grass's program failed to link, with an empty log.
+  Bisected on the phone over a LAN build: Adreno's linker rejects any
+  vertex-shader loop whose result moves the vertex (the footprints' bend
+  and squash), even 4 iterations, a single accumulator, or a `vec4`-packed
+  one; a loop that only feeds a varying links. The shader is valid GLSL
+  (desktop ANGLE, SwiftShader and Apple GPUs all link it).
+- **The fix.** The footprints are written out print by print (`printPush`,
+  24 calls, each behind `uPrintN`): the same maths, no loop. It links on the
+  Adreno 730.
+- **Fail alone.** The grass's throw had taken the meadow paint and the
+  foot mist down with it (the frame stopped after the main pass). Each
+  extra pass is now built through `passProgram`: a GPU that can't build one
+  leaves that pass out with a console warning, and the rest still draws
+  (without the blades, the painted ground still reads as grass).
+- **Real phones.** `npm run devices` (run as needed, not in `qa`)
+  compiles and links every program the atmosphere builds on 31 real
+  devices, old and new in each GPU family (Adreno 610 to 840, Mali G52 to
+  G925, Xclipse, PowerVR, Tensor, Apple A10 to A20 on iOS 10 to 27, phones
+  and tablets, Samsung Internet), on BrowserStack Automate, through a Local
+  tunnel to the production build, and screenshots the desk's end. Devices
+  before iOS 15 (no WebGL2) must get the layered fallback. Dev-only
+  dependencies: `selenium-webdriver`, `browserstack-local`.
+- **Measured.** OnePlus 11R (Adreno 730, BrowserStack): every program
+  links and the grass draws. `qa` full tier: parity 46/46 (worst mean
+  0.96, p99 3), perf gate 6/6 at min scroll 119.4 fps, dropout 6/6 clean,
+  switch 12/12 (×2.9).
+
 ## 0.3.3 — 2026-10-03
 
 The mountains' foot: no more ruled line where the ridges met the ground.
