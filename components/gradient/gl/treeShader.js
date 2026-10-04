@@ -32,7 +32,7 @@
 
 import { seeded } from './bootPrint';
 
-const LONE = { x: -6.4, z: 9.5, h: 8, spread: 4.4, depth: 4, leaves: 22, leafSize: 0.47 };
+const LONE = { x: -6.4, z: 9.5, h: 8, spread: 4.4, depth: 4, leaves: 30, leafSize: 0.58 };
 
 // The copses: where each stands (metres from the desk), and how many trees.
 // All within the closing shot's view and short of where the mountains'
@@ -93,18 +93,22 @@ export function treeLayout() {
         pts.push(next);
         at = next;
       }
-      if (d >= depth) {
-        // Leaves round the twig's end and along it, facing out and up.
-        const n = leaves;
+      // Leaves round the twig's end and along it, facing out and up; the
+      // branch below the twigs carries some too, so the crown fills in.
+      const fill = (n, from, reach) => {
         for (let i = 0; i < n; i++) {
-          const t = 0.35 + 0.65 * Math.sqrt(rnd());
+          const t = from + (1 - from) * Math.sqrt(rnd());
           const base = pts[0].map((v, k) => v + (at[k] - v) * t);
-          const off = norm([rnd() - 0.5, rnd() - 0.5, rnd() - 0.5]).map(v => v * len * 0.45 * rnd());
+          const off = norm([rnd() - 0.5, rnd() - 0.5, rnd() - 0.5]).map(v => v * len * reach * (0.3 + 0.7 * rnd()));
           const pos = base.map((v, k) => v + off[k]);
-          leaf(pos, norm(dr.map((v, k) => v * 0.5 + off[k] / (len * 0.45 + 1e-6) * 0.6 + (k === 1 ? 0.5 : 0))));
+          leaf(pos, norm(dr.map((v, k) => v * 0.5 + off[k] / (len * reach + 1e-6) * 0.6 + (k === 1 ? 0.5 : 0))));
         }
+      };
+      if (d >= depth) {
+        fill(leaves, 0.1, 0.75);
         return;
       }
+      if (d === depth - 1) fill(Math.round(leaves * 0.8), 0.2, 0.75);
       // A leader carrying on, and one or two branching off, each its own
       // angle round it.
       const kids = 2 + (rnd() < 0.55 ? 1 : 0);
@@ -145,7 +149,7 @@ export function treeLayout() {
       const a = rnd() * Math.PI * 2;
       const d = 6 * Math.sqrt(rnd());
       const h = 6 + 5 * rnd();
-      tree({ x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d, h, spread: h * 0.42, depth: 3, leaves: 11, leafSize: 0.8 });
+      tree({ x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 1.0 });
     }
   }
   // Nearest first from the closing shot's camera, where the lone tree is

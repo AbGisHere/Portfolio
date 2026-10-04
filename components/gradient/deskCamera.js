@@ -27,7 +27,8 @@ import { DESK_STOPS } from '../scroll/stops';
 /** Metres per world unit (the rest camera's eye height). */
 export const WORLD_M = 40;
 
-/** The desk, for now a grey box (metres): width (x), height, depth (z). */
+/** The desk's top (metres): width (x), height, depth (z); the table itself
+ * is gl/deskShader.js (0.3.6). */
 export const DESK_BOX = { w: 1.2, h: 0.75, d: 0.7 };
 
 /**
@@ -217,19 +218,6 @@ export function pitchSpan(P, w, h, front) {
     }
   }
   return Math.min(4, m);
-}
-
-/**
- * The box (the desk) relative to the camera, world units, y up, z forward
- * (toward the mountains): { min, max }.
- */
-export function deskBox(cam) {
-  const { w, h, d } = DESK_BOX;
-  const z = cam.ahead;
-  return {
-    min: [-w / 2 / WORLD_M, -cam.eye, z - d / 2 / WORLD_M],
-    max: [w / 2 / WORLD_M, h / WORLD_M - cam.eye, z + d / 2 / WORLD_M],
-  };
 }
 
 /**

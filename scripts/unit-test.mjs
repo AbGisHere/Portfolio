@@ -20,6 +20,8 @@ import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.
 import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
 import { MEADOW_SIZE, meadowTexels } from '../components/gradient/gl/meadowTexture.js';
 import { TREE_STRIDE, treeLayout } from '../components/gradient/gl/treeShader.js';
+import { DESK_STRIDE, deskLayout } from '../components/gradient/gl/deskShader.js';
+import { DESK_BOX } from '../components/gradient/deskCamera.js';
 import { PROGRAMS } from './lib/programs.mjs';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
@@ -399,6 +401,27 @@ test('the trees: fixed, whole, one shadow each, clear of the desk and of the vie
     assert.ok(Math.hypot(x, z) > 4, 'none on the desk');
     if (z > 20) assert.ok(Math.abs(x) > 12, 'the line over the desk stays open');
   }
+});
+
+test('the desk: fixed, whole, standing on the ground, its top at DESK_BOX', () => {
+  const a = deskLayout();
+  assert.deepEqual(a.data, deskLayout().data, 'the same table every visit');
+  assert.equal(a.data.length % DESK_STRIDE, 0);
+  assert.ok(a.data.every(Number.isFinite));
+  const n = a.data.length / DESK_STRIDE;
+  assert.equal(n - a.wood, 1, 'one shadow, last');
+  let top = 0;
+  let foot = Infinity;
+  for (let i = 0; i < a.wood; i++) {
+    const [, y, , tilt, hx, hy, hz] = a.data.subarray(i * DESK_STRIDE, (i + 1) * DESK_STRIDE);
+    // A box's lowest and highest points, tilted about x.
+    const reach = Math.abs(Math.cos(tilt)) * hy + Math.abs(Math.sin(tilt)) * hz;
+    top = Math.max(top, y + reach);
+    foot = Math.min(foot, y - reach);
+    assert.ok(hx > 0 && hy > 0 && hz > 0);
+  }
+  assert.ok(Math.abs(top - DESK_BOX.h) < 0.005, `the top at ${DESK_BOX.h} m (${top.toFixed(3)})`);
+  assert.ok(foot > -0.005 && foot < 0.01, `standing on the ground (${foot.toFixed(3)})`);
 });
 
 function geoArgs(r) {

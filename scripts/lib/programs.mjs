@@ -6,6 +6,7 @@ import { CREST_FRAGMENT, CREST_VERTEX } from '../../components/gradient/gl/crest
 import { GRASS_FRAGMENT, GRASS_VERTEX } from '../../components/gradient/gl/grassShader.js';
 import { FLOWER_FRAGMENT, FLOWER_VERTEX } from '../../components/gradient/gl/flowerShader.js';
 import { TREE_FRAGMENT, TREE_VERTEX } from '../../components/gradient/gl/treeShader.js';
+import { DESK_FRAGMENT, DESK_VERTEX } from '../../components/gradient/gl/deskShader.js';
 import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
 export const PROGRAMS = [
@@ -14,6 +15,7 @@ export const PROGRAMS = [
   ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
   ['flowers', FLOWER_VERTEX, FLOWER_FRAGMENT],
   ['trees', TREE_VERTEX, TREE_FRAGMENT],
+  ['desk', DESK_VERTEX, DESK_FRAGMENT],
   ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
   ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],
   ['foot mist', MEADOW_VERTEX, MEADOW_FOOT],

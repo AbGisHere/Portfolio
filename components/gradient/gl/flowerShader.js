@@ -25,6 +25,7 @@
 
 import { PRINTS_GLSL, PUSH_SUM } from './grassShader';
 import { TREE_SHADE_GLSL } from './treeShader';
+import { DESK_SHADE_GLSL } from './deskShader';
 
 const f = v => v.toFixed(6);
 
@@ -73,7 +74,7 @@ out float vLit;        // the head's face toward the light (-1 … 1)
 out float vBack;       // how far the camera looks toward the light past it
 out float vPress;
 out float vSpin;
-out float vTree;   // in the lone tree's shadow (0 … 1)
+out float vTree;   // in the lone tree's or the desk's shadow (0 … 1)
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -93,7 +94,7 @@ float vnoise(vec2 x) {
 }
 
 ${PRINTS_GLSL}
-${TREE_SHADE_GLSL}
+${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
 
 // Projected as the scene's pitched camera sees it (grassShader.js): clip
 // space linear in the camera's coordinates, no divide.
@@ -230,7 +231,7 @@ ${PUSH_SUM}
   gl_Position = project(w);
   vVar = var;
   vDist = d;
-  vTree = treeShade(pos, uTreeShadow);
+  vTree = max(treeShade(pos, uTreeShadow), deskShade(pos));
   vBack = clamp(dot(normalize(rel + vec2(1e-5)), uSunDir), 0.0, 1.0);
   vPress = push.z;
   vSpin = spin;

@@ -53,8 +53,6 @@ uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual
 uniform float uFront;        // the meadow's top on the virtual plane
 uniform vec2 uEye;           // the camera's height and back, world units
 uniform vec3 uCamM;          // the camera, metres from the desk's centre
-uniform vec3 uBoxMin;        // the desk's box relative to the camera, world units
-uniform vec3 uBoxMax;
 uniform vec2 uHazeAt;        // metres: the ground's haze starts, it's all painted meadow
 uniform sampler2D uMeadow;
 uniform float uMeadowA;      // how much of the paint shows (0 where the descent starts)
@@ -90,18 +88,6 @@ vec3 rayOf(out vec2 v) {
   return vec3(uv.x, -yv, zv);
 }
 
-// The ray meets the desk's box.
-bool deskHit(vec3 dir) {
-  vec3 inv = 1.0 / (dir + vec3(1e-9));
-  vec3 t0 = uBoxMin * inv;
-  vec3 t1 = uBoxMax * inv;
-  vec3 tn3 = min(t0, t1);
-  vec3 tf3 = max(t0, t1);
-  float tn = max(max(tn3.x, tn3.y), tn3.z);
-  float tf = min(min(tf3.x, tf3.y), tf3.z);
-  return tn < tf && tn > 0.0;
-}
-
 // How far toward the mountains' foot a virtual-plane row is: the ground's
 // depth over the foot's (1 at the foot, smaller toward the camera).
 float footQ(float vy) {
@@ -118,7 +104,7 @@ bool groundHit(out vec2 gm, out float dist) {
   gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
   dist = t * length(dir) * ${f(WORLD_M)};
   if (!(dir.y < 0.0 && v.y > uFront)) return false;
-  return !deskHit(dir);
+  return true;
 }
 
 vec4 meadowTex(float scale, vec2 off, vec2 gm, vec2 gx, vec2 gy) {
@@ -254,7 +240,6 @@ uniform vec3 uFootMist;
 void main() {
   vec2 v;
   vec3 dir = rayOf(v);
-  if (deskHit(dir)) discard;
   float x = v.x / uSize.y;
   float t = uGrassT * 0.006;
   float n = textureLod(uMeadow, vec2(x * 0.45 + t, 0.31), 0.0).r * 0.6 + textureLod(uMeadow, vec2(x * 1.6 - t * 1.7, 0.73), 0.0).a * 0.4;

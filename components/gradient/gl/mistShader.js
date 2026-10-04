@@ -36,7 +36,9 @@ const GLOW_N = SUN_GLOW.length;
 
 export const VERTEX = `#version 300 es
 in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+// On the far plane: the scene's depth, which the desk, the grass and the
+// trees draw against (0.3.1).
+void main() { gl_Position = vec4(aPos, 1.0, 1.0); }
 `;
 
 export const FRAGMENT = `#version 300 es
@@ -97,14 +99,12 @@ uniform float uHorizon;      // the ground's vanishing line
 uniform vec4 uGroundY;       // the meadow gradient's stops, y in CSS px (camera.js GROUND_AT)
 uniform vec3 uGroundCol[4];
 uniform vec3 uWind;          // amplitude, bands per unit depth ratio, phase (cycles)
-// (0.3) The desk camera (../deskCamera.js pitchOf, deskBox).
+// (0.3) The desk camera (../deskCamera.js pitchOf).
 uniform int uPitched;        // 1 under its pitch
 uniform vec4 uPitch;         // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual plane (zw)
 uniform float uCm;           // the crest texture spans uCm × the frame, centred
 uniform vec2 uEye;           // the camera's height and back, world units
-uniform vec3 uBoxMin;        // the desk's box relative to the camera, world units,
-uniform vec3 uBoxMax;        // y up, z forward
 // (0.3) The closing shot's sky (../deskCamera.js skyLifeAt).
 uniform float uLifeA;        // how far it has come in (0: none)
 uniform vec2 uLifeMix;       // birds (day), stars (night)
@@ -118,7 +118,6 @@ uniform vec3 uGrassGround;   // the ground's colour up close
 uniform vec3 uGrassFar;      // and where the blades are too small to see
 uniform vec3 uGrassSky;      // the sky's tint on it (deskCamera.js grassLit)
 uniform vec2 uHazeAt;        // metres: its haze starts, it's all painted meadow
-uniform vec2 uDepthAB;       // perspective depth A, B (metres; grassShader.js)
 
 out vec4 outColor;
 
@@ -529,9 +528,8 @@ void main() {
   // (0.3.1) The ground under the desk camera: the meadow's own ground near
   // (in clumps), hazing out into the painted 0.2 meadow by GRASS_HAZE's far
   // end, so from where the descent starts it's that meadow exactly. The
-  // grass stands on it (grassShader.js). Then the desk's grey box, which
-  // writes its depth so the grass behind it stays hidden.
-  float depth = 1.0;
+  // grass stands on it (grassShader.js); the desk is its own pass
+  // (deskShader.js, 0.3.6).
   if (uPitched == 1) {
     vec3 dir = vec3(ray.x, -ray.y, ray.z);
     if (dir.y < 0.0 && p.y > uFront) {
@@ -541,20 +539,6 @@ void main() {
       // too small to see, the colour the grass reads as from afar.
       vec3 near = mix(uGrassGround, uGrassFar, smoothstep(4.0, 24.0, dist)) * mix(vec3(1.0), uGrassSky, 0.25);
       col = mix(near, col, smoothstep(uHazeAt.x, uHazeAt.y, dist));
-    }
-    vec3 inv = 1.0 / (dir + vec3(1e-9));
-    vec3 t0 = uBoxMin * inv;
-    vec3 t1 = uBoxMax * inv;
-    vec3 tn3 = min(t0, t1);
-    vec3 tf3 = max(t0, t1);
-    float tn = max(max(tn3.x, tn3.y), tn3.z);
-    float tf = min(min(tf3.x, tf3.y), tf3.z);
-    if (tn < tf && tn > 0.0) {
-      float shade = tn == tn3.y ? 0.66 : tn == tn3.z ? 0.5 : 0.4;
-      col = vec3(shade);
-      vec3 hit = tn * dir;
-      float zp = (-hit.y * uPitch.y + hit.z * uPitch.x) * ${f(WORLD_M)};
-      depth = 0.5 * (uDepthAB.x + uDepthAB.y / zp) + 0.5;
     }
   }
 
@@ -569,6 +553,5 @@ void main() {
 #endif
 
   outColor = vec4(col, 1.0);
-  gl_FragDepth = depth;
 }
 `;

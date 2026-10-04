@@ -6,6 +6,36 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.6 — 2026-10-04
+
+The desk stands on the meadow, and the trees fill in.
+
+- **The desk** (`gl/deskShader.js`): a wooden trestle table, built in code
+  rather than modelled (the owner's pick, 2026-10-04; `ROADMAP.md`). Five
+  top planks with gaps between, each a little off its neighbours, on two
+  A-frame trestles (splayed legs, a cleat under the top, a foot on the
+  ground) joined by a stretcher. Drawn right after the scene, writing
+  depth, so the grass, flowers and trees stand behind it and the blades
+  grow round its feet. The wood is lit live like the bark (warm and low by
+  evening, the moon's cool light at night; the recipes' new `wood`), its
+  grain in the shader: growth rings drifting along each board into
+  arches, streaks, each board its own tone, worn lighter edges. No
+  lightmaps and no asset: the sky's light is the day and the night (the
+  lamp's pool comes with the lamp). Its shadow falls long, away from the
+  light, with a soft dark under it, on the ground and on the blades and
+  flowers (`DESK_SHADE_GLSL`). `?table=0` leaves it out.
+- **The grey box is gone**, and with it the ray–box test in the scene and
+  meadow shaders; the scene's triangle now sits on the far plane instead
+  of writing `gl_FragDepth` on every pixel.
+- **Fuller trees:** more and larger leaf clusters, round the twigs and
+  along the branches below them (~13,600 clusters, from ~7,200), so the
+  crowns close instead of showing a clump per limb.
+- **Measured:** `qa` full tier all passed: parity 46/46 (worst mean 0.96,
+  p99 3), perf gate 6/6 (min scroll 118.3 fps), dropout 6/6 clean, switch
+  12/12 (worst ×2.9). Closing shot at 1728×1117@2: 8.2 GPU ms with the
+  desk and without it alike (its wood cut from four noise lookups to two),
+  the fuller trees ~1.2 ms of it.
+
 ## 0.3.5 — 2026-10-04
 
 Flowers and trees in the meadow, birds among the mountains, and the site

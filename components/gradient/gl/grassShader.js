@@ -27,6 +27,7 @@ import { hexToRgb } from '../colour';
 import { MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 import { TREE_SHADE_GLSL } from './treeShader';
+import { DESK_SHADE_GLSL } from './deskShader';
 
 const f = v => v.toFixed(6);
 
@@ -116,7 +117,7 @@ out float vDist;
 out float vFace;   // how far the blade faces the light (-1 … 1)
 out float vHue;    // the blade's own lean in colour: -1 bluer … 1 yellower
 out float vBack;   // how far the camera looks toward the light past it (0 … 1)
-out float vTree;   // in the lone tree's shadow (0 … 1)
+out float vTree;   // in the lone tree's or the desk's shadow (0 … 1)
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -136,7 +137,7 @@ float vnoise(vec2 x) {
 }
 
 ${PRINTS_GLSL}
-${TREE_SHADE_GLSL}
+${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
   int ring = gl_InstanceID / per;
@@ -256,7 +257,7 @@ ${PUSH_SUM}
   vPress = press;
   vSheen = sheen * uWindA;
   vDist = d;
-  vTree = treeShade(pos, uTreeShadow);
+  vTree = max(treeShade(pos, uTreeShadow), deskShade(pos));
 }
 `;
 

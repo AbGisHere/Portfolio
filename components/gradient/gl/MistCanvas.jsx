@@ -27,13 +27,14 @@ import { hexToRgb, mix, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
-import { DEPTH, cameraMetres, deskBox, deskWidest, groundAt, pitchSpan, toVirtual } from '../deskCamera';
+import { DEPTH, cameraMetres, deskWidest, groundAt, pitchSpan, toVirtual } from '../deskCamera';
 import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
 import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
 import { FLOWERS, FLOWER_FRAGMENT, FLOWER_INSTANCES, FLOWER_VERTEX, FLOWER_VERTS } from './flowerShader';
 import { LONE_SHADOW, TREE_FRAGMENT, TREE_STRIDE, TREE_VERTEX, treeLayout } from './treeShader';
+import { DESK_FRAGMENT, DESK_STRIDE, DESK_VERTEX, deskLayout } from './deskShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
@@ -238,6 +239,35 @@ export default function MistCanvas({ recipe, onFail }) {
       };
       return trees;
     };
+    // (0.3.6) The desk (deskShader.js): fixed too, up once, the planks then
+    // its shadow, as the trees are.
+    let desk = null;
+    const deskProgram = () => {
+      if (desk !== null) return desk;
+      const dp = passProgram(gl, 'desk', DESK_VERTEX, DESK_FRAGMENT);
+      if (!dp) return (desk = false);
+      const { data, wood } = deskLayout();
+      const db = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, db);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const arrayFrom = first => {
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        for (let i = 0; i < 3; i++) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribPointer(i, 4, gl.FLOAT, false, DESK_STRIDE * 4, first * DESK_STRIDE * 4 + i * 16);
+          gl.vertexAttribDivisor(i, 1);
+        }
+        gl.bindVertexArray(null);
+        return vao;
+      };
+      const vao = arrayFrom(0);
+      const shadowVao = arrayFrom(wood);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const DU = {};
+      desk = { prog: dp, vao, shadowVao, buf: db, wood, u: name => (DU[name] ??= gl.getUniformLocation(dp, name)) };
+      return desk;
+    };
     const DEPTH_AB = (() => {
       const n = DEPTH.near * 40;
       const f = DEPTH.far * 40;
@@ -373,6 +403,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noGrass = params.get('grass') === '0';
     // `?trees=0` leaves the trees out (profiling).
     const noTrees = params.get('trees') === '0';
+    // `?table=0` leaves the desk out (profiling).
+    const noDesk = params.get('table') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -831,12 +863,8 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform4f(uniform('uPrin'), pitch.sx, pitch.sy, pitch.vx, pitch.vy);
         gl.uniform1f(uniform('uCm'), view.m);
         gl.uniform2f(uniform('uEye'), cam.eye, cam.back);
-        const box = deskBox(cam);
-        gl.uniform3fv(uniform('uBoxMin'), box.min);
-        gl.uniform3fv(uniform('uBoxMax'), box.max);
         const cm = cameraMetres(cam);
         gl.uniform3f(uniform('uCamM'), cm.x, cm.y, cm.z);
-        gl.uniform2f(uniform('uDepthAB'), ...DEPTH_AB);
         gl.uniform2f(uniform('uHazeAt'), ...GRASS_HAZE);
         if (frame.grass) {
           gl.uniform3fv(uniform('uGrassGround'), rgb01(frame.grass.ground));
@@ -864,7 +892,7 @@ export default function MistCanvas({ recipe, onFail }) {
         };
         meadowAt = frame.grass
           ? {
-              pitch, cam, box, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
+              pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
               // (0.3.5) How far the meadow runs to the mountains' foot down
@@ -1072,13 +1100,46 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
+    // (0.3.6) The desk: its shadow multiplied into the ground (writing no
+    // depth), then its planks, writing theirs, so the grass, the flowers and
+    // the trees after it stand behind it where they should.
+    function drawDesk() {
+      const g = deskProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.wood));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uShadow'), rgb01(colours.shade));
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.bindVertexArray(g.shadowVao);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+      gl.depthMask(false);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      gl.bindVertexArray(g.vao);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
     // (0.3.2) The meadow pass over the scene's ground: the paint multiplied
     // in (×2·src, so it lightens and darkens), then the flowers added.
     function drawMeadow(prints) {
       if (!meadowAt || (!meadowShown && !prints.n)) return;
       const M = meadowPrograms();
       meadowTexture();
-      const { pitch: P, cam: c, box, cm, front, colours, a, top, near, mist, mistRows } = meadowAt;
+      const { pitch: P, cam: c, cm, front, colours, a, top, near, mist, mistRows } = meadowAt;
       if (top >= h) return;
       gl.bindVertexArray(M.vao);
       gl.enable(gl.BLEND);
@@ -1112,8 +1173,6 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1f(g.u('uFront'), front);
         gl.uniform2f(g.u('uEye'), c.eye, c.back);
         gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
-        gl.uniform3fv(g.u('uBoxMin'), box.min);
-        gl.uniform3fv(g.u('uBoxMax'), box.max);
         gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
         gl.uniform1i(g.u('uMeadow'), 5);
         gl.uniform1f(g.u('uMeadowA'), meadowShown ? a : 0);
@@ -1151,20 +1210,27 @@ export default function MistCanvas({ recipe, onFail }) {
       const grassOn = !!grassAt && !!grassProgram();
       // (0.3.5) The trees show as soon as the meadow's paint does.
       const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees;
-      if (!grassOn && !treesOn) {
+      // (0.3.6) The desk shows whenever the camera's pitched over the meadow.
+      const deskOn = !!meadowAt && !noDesk;
+      if (!grassOn && !treesOn && !deskOn) {
         gl.disable(gl.DEPTH_TEST);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         drawMeadow(prints);
         lastDrawn = vs;
         return;
       }
-      // (0.3.1) The scene writes its depth (far, or the desk's box), then
+      // (0.3.1) The scene writes its depth (far), then the desk (0.3.6),
       // the grass, its flowers and the trees (0.3.5) draw against it.
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
       gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.depthFunc(gl.ALWAYS);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (deskOn) {
+        gl.depthFunc(gl.LESS);
+        drawDesk();
+        gl.depthFunc(gl.ALWAYS);
+      }
       if (grassOn) {
         drawGrass(prints);
         drawFlowers(prints);
@@ -1379,7 +1445,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
-      for (const p of [grass, flowers, trees]) {
+      for (const p of [grass, flowers, trees, desk]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

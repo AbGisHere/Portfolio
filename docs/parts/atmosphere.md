@@ -364,15 +364,15 @@ camera at `about` 1 exactly (unit-tested).
   optical centre moving from `0.2`'s horizon row to the frame's middle) and
   `zoom`, each through a monotone cubic, flat at both ends and wherever two
   keys repeat (a hold). One world unit is the rest eye height, `WORLD_M` 40
-  m; the desk (`DESK_BOX`, a grey box for now) sits `d0` 60 m behind where
+  m; the desk (`DESK_BOX`, its top's size; the table is `gl/deskShader.js`) sits `d0` 60 m behind where
   `0.2` leaves the camera, about 64 m up.
 - **Pitch as a homography.** The `0.2` camera has a vertical image plane and
   a lens shift, which can't look down. Rotating a camera about its centre
   maps its image by a homography that doesn't depend on depth, so the
   shader takes each screen pixel back to the `0.2` plane (`toVirtual`;
   `uPitch`, `uPrin`) and paints it exactly as before. A ray that leaves the
-  plane behind sees only the ground. The ground grid and the box are traced
-  from the ray (`uEye`, `uBoxMin`/`uBoxMax`). `toScreen` takes the body
+  plane behind sees only the ground, traced from the ray (`uEye`); the
+  scene's triangle lies on the far plane, its depth (`0.3.6`). `toScreen` takes the body
   back, so the hit target follows (off the frame looking down).
   `deskFrameAt` keeps each ridge's `t` and `flat` as `0.2` left them:
   coming down, every foot slides to the horizon and would turn to haze.
@@ -458,7 +458,7 @@ it while there's grass, so `0.2` frames are untouched).
   gains under the desk camera, drawn after the grass in two small
   fullscreen passes, never in `mistShader.js` (everything added there slows
   every pixel of the scene, used or not). Each casts the same ray as the
-  scene, skips the sky, the ridges and the desk's box, and is scissored to
+  scene, skips the sky and the ridges (the desk's depth hides it there), and is scissored to
   the rows that can be ground (`groundAt` down the optical centre's
   column); its triangle sits just short of the far plane, so the depth test
   skips every pixel a blade covers. `MEADOW_PAINT` multiplies the ground
@@ -515,12 +515,13 @@ it while there's grass, so `0.2` frames are untouched).
   (flared, wandering) splits into 3–5 limbs, each into a leader and one or
   two side branches, down to `depth` (4 for the lone tree, 3 for the
   copses), every segment bending a little toward the light; leaf clusters
-  grow only round the twigs. Instance data (12 floats each), one draw:
+  grow round the twigs and, fewer, along the branches below them, so the
+  crown closes (`0.3.6`). Instance data (12 floats each), one draw:
   - **wood**: six-sided tubes (36 vertices each), the trunk one smooth
     curve whose radius matches at every joint, flared at the roots; never
     under ~a pixel across; the bark ridged and fissured by noise wrapped
     round the tube, lit by its own surface, mossy at the foot;
-  - **leaf clusters** (~7,000 in all; where one is under ~8 px on screen
+  - **leaf clusters** (~13,600 in all; where one is under ~8 px on screen
     only half are drawn, a little larger, and under ~4 px under a third):
     cards of five pointed leaves round a stem, fixed in the world (never turned to the camera, so nothing
     reshuffles as it moves), swaying in place on the wind's clock, lit by their
@@ -536,8 +537,21 @@ it while there's grass, so `0.2` frames are untouched).
   on the pull-back's frames) and out past `farM`, where the meadow meets
   the mountains' foot down the centre (unbounded while the foot is above
   the frame). The depth's far plane is 400 m (`DEPTH`).
+- **The desk** (`0.3.6`, `gl/deskShader.js`): a trestle table built in
+  code, not modelled: five top planks with gaps, two A-frame trestles
+  (splayed legs, a cleat under the top, a foot) and a stretcher, each a
+  box (`deskLayout`, seeded, 12 floats each, 36 vertices) drawn right
+  after the scene, writing depth, so the blades, flowers and trees stand
+  behind it. Lit live like the bark (the body's low light, the sky from
+  above, darker under the top), the colour the recipe's `wood`; the grain
+  is in the shader: growth rings round a pith off the board, drifting
+  along it (arches on the faces), streaks, each board its own tone, worn
+  edges. Its shadow (the top's, thrown away from the light, and a soft
+  dark under it) is one ground quad multiplied in before it, and shades
+  the blades and flowers too (`DESK_SHADE_GLSL`). No lightmaps: the
+  sky's light is the day and the night.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
-  trees; `?boot=<n>` draws boot n instead of a random one (stills).
+  trees; `?table=0` the desk; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.
