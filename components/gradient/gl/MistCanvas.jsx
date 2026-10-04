@@ -1056,7 +1056,24 @@ export default function MistCanvas({ recipe, onFail }) {
     }
 
     // (0.3.5) The trees, against the same depth.
-    function drawTrees() {
+    // A shadow multiplied into the scene's ground and nothing else: pinned
+    // to the far plane, it passes only where no solid thing stands (the
+    // blades and the desk shade themselves: grassShader.js, deskShader.js),
+    // writing no depth.
+    function shadeInto(drawShadow) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+      gl.depthMask(false);
+      gl.depthRange(1, 1);
+      gl.depthFunc(gl.LEQUAL);
+      drawShadow();
+      gl.depthFunc(gl.LESS);
+      gl.depthRange(0, 1);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    function drawTrees(shade) {
       const g = treeProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours, a, mist, farM } = meadowAt;
@@ -1082,28 +1099,25 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
       gl.uniform3fv(g.u('uShadow'), rgb01(colours.shade));
-      // The shadows first, multiplied into the ground (the blades in front
-      // of it keep theirs: grassShader.js), writing no depth.
-      gl.bindVertexArray(g.shadowVao);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
-      gl.depthMask(false);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.shadows);
-      gl.depthMask(true);
-      gl.disable(gl.BLEND);
-      // The wood (six-sided tubes, 36 vertices each), then the leaves.
-      gl.bindVertexArray(g.vao);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
-      gl.bindVertexArray(g.leafVao);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.leaves);
+      if (shade) {
+        // The shadows, multiplied into the ground (the blades in front of
+        // it keep theirs: grassShader.js), writing no depth.
+        gl.bindVertexArray(g.shadowVao);
+        shadeInto(() => gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.shadows));
+      } else {
+        // The wood (six-sided tubes, 36 vertices each), then the leaves.
+        gl.bindVertexArray(g.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
+        gl.bindVertexArray(g.leafVao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, g.leaves);
+      }
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
 
-    // (0.3.6) The desk: its shadow multiplied into the ground (writing no
-    // depth), then its planks, writing theirs, so the grass, the flowers and
-    // the trees after it stand behind it where they should.
-    function drawDesk() {
+    // (0.3.6) The desk: its planks, writing their depth, or (`shade`) its
+    // shadow multiplied into the ground, writing none.
+    function drawDesk(shade) {
       const g = deskProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
@@ -1120,15 +1134,13 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      gl.bindVertexArray(g.shadowVao);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
-      gl.depthMask(false);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1);
-      gl.depthMask(true);
-      gl.disable(gl.BLEND);
-      gl.bindVertexArray(g.vao);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
+      if (shade) {
+        gl.bindVertexArray(g.shadowVao);
+        shadeInto(() => gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1));
+      } else {
+        gl.bindVertexArray(g.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
+      }
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -1219,29 +1231,31 @@ export default function MistCanvas({ recipe, onFail }) {
         lastDrawn = vs;
         return;
       }
-      // (0.3.1) The scene writes its depth (far), then the desk (0.3.6),
-      // the grass, its flowers and the trees (0.3.5) draw against it.
+      // (0.3.7) The solid things first, writing their depth: the desk
+      // (0.3.6), the grass, its flowers and the trees (0.3.5). Then the
+      // scene, on the far plane, only where none of them stands, so its
+      // shader never runs under them; then the shadows multiplied into it.
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
       gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.depthFunc(gl.ALWAYS);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (deskOn) {
-        gl.depthFunc(gl.LESS);
-        drawDesk();
-        gl.depthFunc(gl.ALWAYS);
-      }
+      gl.depthFunc(gl.LESS);
+      if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);
         drawFlowers(prints);
       }
-      if (treesOn) {
-        gl.depthFunc(gl.LESS);
-        drawTrees();
-      }
+      if (treesOn) drawTrees(false);
+      gl.useProgram(prog);
+      gl.bindVertexArray(null);
+      gl.depthFunc(gl.LEQUAL);
+      gl.depthMask(false);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.depthMask(true);
+      gl.depthFunc(gl.LESS);
+      if (deskOn) drawDesk(true);
+      if (treesOn) drawTrees(true);
       // Then the meadow over the ground the blades leave uncovered (the
       // depth test skips the rest), writing no depth.
-      gl.depthFunc(gl.LESS);
       gl.depthMask(false);
       drawMeadow(prints);
       gl.depthMask(true);

@@ -372,7 +372,9 @@ camera at `about` 1 exactly (unit-tested).
   shader takes each screen pixel back to the `0.2` plane (`toVirtual`;
   `uPitch`, `uPrin`) and paints it exactly as before. A ray that leaves the
   plane behind sees only the ground, traced from the ray (`uEye`); the
-  scene's triangle lies on the far plane, its depth (`0.3.6`). `toScreen` takes the body
+  scene's triangle lies on the far plane, its depth (`0.3.6`), and is drawn after the
+  desk, the grass, the flowers and the trees, only where none of them stands, so its
+  shader never runs under them (`0.3.7`). `toScreen` takes the body
   back, so the hit target follows (off the frame looking down).
   `deskFrameAt` keeps each ridge's `t` and `flat` as `0.2` left them:
   coming down, every foot slides to the horizon and would turn to haze.
@@ -528,7 +530,9 @@ it while there's grass, so `0.2` frames are untouched).
     own facing in three cel tones (`leafShade`, `leaf`, `leafLit`),
     darker underneath, translucent with the body's light behind them;
   - then one **shadow** per tree (a soft oval on the ground away from the
-    light, multiplied in the meadow's `shade`, in its own blended draw;
+    light, multiplied in the meadow's `shade`, in its own blended draw
+    after the scene, pinned to the far plane so it lands only on the scene's
+    ground, never on a blade or the wood (`0.3.7`);
     the lone tree's also on the grass and flowers, `TREE_SHADE_GLSL`).
   Everything is fixed in the world and projected like the grass (nothing
   turns to the camera, nothing writes `gl_FragDepth`), stored nearest
@@ -540,9 +544,9 @@ it while there's grass, so `0.2` frames are untouched).
 - **The desk** (`0.3.6`, `gl/deskShader.js`): a trestle table built in
   code, not modelled: five top planks with gaps, two A-frame trestles
   (splayed legs, a cleat under the top, a foot) and a stretcher, each a
-  box (`deskLayout`, seeded, 12 floats each, 36 vertices) drawn right
-  after the scene, writing depth, so the blades, flowers and trees stand
-  behind it. Lit live like the bark (the body's low light, the sky from
+  box (`deskLayout`, seeded, 12 floats each, 36 vertices) drawn first,
+  writing depth, so the blades, flowers and trees stand behind it and the
+  scene isn't shaded under it (`0.3.7`). Lit live like the bark (the body's low light, the sky from
   above, darker under the top), the colour the recipe's `wood`; the grain
   is in the shader: growth rings round a pith off the board, drifting
   along it (arches on the faces), streaks, each board its own tone, worn

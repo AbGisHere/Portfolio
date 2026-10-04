@@ -6,6 +6,27 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.7 — 2026-10-04
+
+Headroom before the laptop: the same picture, drawn in less time.
+
+- **The scene goes last under the desk camera.** It used to be drawn first,
+  on every pixel, then the desk, the grass, the flowers and the trees
+  painted over most of the lower frame, throwing that work away. Now they
+  draw first, writing depth, and the scene's triangle (on the far plane)
+  follows with `LEQUAL`, so the depth test skips its shader wherever one of
+  them stands. The trees' and the desk's shadows, multiplied into the
+  scene's colour, come after it, pinned to the far plane
+  (`depthRange(1, 1)`) so they land only on the scene's ground, as before,
+  never on the buried foot of a trunk.
+- **Measured** (`?bench`, 1728×1117@2, 11 interleaved rounds against the
+  `0.3.6` build): the closing shot 8.3 → 5.8 GPU ms, the top-down shot
+  4.2 → 3.4, the way down (desk .2) 5.0 → 4.5. Pixels against `0.3.6` with the
+  grain off: 3 of 1.9 M differ at the closing shot (edge samples, at most
+  12 levels); with the grain on, every shot (day and night, laptop and
+  phone) sits at the grain's own load-to-load noise.
+- The laptop moves to `0.3.8`, the lamp to `0.3.9`+ (`ROADMAP.md`).
+
 ## 0.3.6 — 2026-10-04
 
 The desk stands on the meadow, and the trees fill in.
