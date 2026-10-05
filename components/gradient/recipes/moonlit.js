@@ -90,8 +90,8 @@ const moonlit = {
   // under the moon, blue-green, the tips catching its light.
   desk: {
     // The meadow; its wildflowers pale under the moon, the cloud shadows faint;
-    // the laptop space black, its screen the night's blues (0.3.8).
-    grass: { root: '#101C22', mid: '#20393B', tip: '#55807C', ground: '#15262A', flower: '#93A8BC', bloom: '#7C90A6', petal: '#8C86AE', shade: '#CDD3DE', leafShade: '#0C171C', leaf: '#1A2F31', leafLit: '#41645F', bark: '#17171D', wood: '#30323C', metal: '#2A2B30', screenTop: '#8C9AD0', screenFoot: '#39406E' },
+    // the laptop's screen the night's blues (0.3.8).
+    grass: { root: '#101C22', mid: '#20393B', tip: '#55807C', ground: '#15262A', flower: '#93A8BC', bloom: '#7C90A6', petal: '#8C86AE', shade: '#CDD3DE', leafShade: '#0C171C', leaf: '#1A2F31', leafLit: '#41645F', bark: '#17171D', wood: '#30323C', screenTop: '#8C9AD0', screenFoot: '#39406E' },
   },
 };
 

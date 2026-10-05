@@ -563,16 +563,33 @@ it while there's grass, so `0.2` frames are untouched).
   right after the desk, writing depth. The lid turns on its hinge in the
   vertex stage by `lidAt(desk)` (`deskCamera.js`, carried as the frame's
   `lid`): shut to the end of the top-down hold, then open to 108° over
-  15–90% of arc 2, easing out. The finish is the recipe's `metal` (silver,
-  space black), lit like the wood plus a soft sheen and the sky mirrored
-  at grazing angles (`env`, from `grassLit`). One texture (`laptopTexels`,
-  1024×724, drawn once on a 2D canvas, on unit 6): r the keycaps, g the
-  dark of the keys' well, the grilles and the trackpad's edge, b the
-  trackpad, a the logo (mirror-polished, upright from behind the open lid).
-  The screen is a glow from `screenTop` to `screenFoot` under black glass,
-  waking over 20–80° of lid. Shadows: the lid's on the deck
-  (`laptopLid`, a ray to the lid's plane), and the lid's and the base's on
-  the desk's top (`laptopBase`), in the desk's shader.
+  15–90% of arc 2, easing out. The finish is one space black
+  (`LAPTOP.metal`, `0.3.9`; no recipe colour, so no swap on a switch),
+  lit like the wood, dimmer and bluer by night (`uNight`, from how dark the
+  sky overhead is), shaded as a metal under a dye: little of its own
+  colour, mostly what it mirrors (`shine`: GGX, Schlick Fresnel, F0 0.22,
+  0.55 on the polished edges), tinted by the dye, plus a broad satin sheen
+  round the body's light. The mirrored sky (`envAt`, from `grassLit`'s
+  `env`) has a metal's cues: the bright band above the horizon, the glow
+  round the body, a sky uneven round the compass; half greyed, rougher over
+  the bead blast's mottle. The base also mirrors the lit screen
+  (`screenIn`, a ray to the lid's face). The rounded edges catch a line of
+  the horizon's light. The shut lid's outline rolls over (its normal bent
+  over ~3.5 mm) and a dark seam runs between lid and base. One texture
+  (`laptopTexels`, 1024×724, drawn once on a 2D canvas, on unit 6): r the
+  keycaps, ramped over 0.7 mm so the shader reads their bevels from its
+  slope; g the dark of the keys' well, the grilles and the trackpad's
+  edge; b the trackpad, and the keys' legends on the caps; a the logo (a
+  dark grey mirror, upright from behind the open lid). The screen is a
+  glow from `screenTop` to `screenFoot` under black glass with a rubber
+  rim, a notch and a camera lens, waking over 20–80° of lid. As a light
+  (`laptopGlow`, a soft panel, cosine at both ends over distance squared;
+  `uGlow`, faint by day, strong by night), it lights the deck and the desk
+  in front. By night the keyboard's backlight (`uBacklight`) shines
+  through the legends and round the keys. Shadows: the lid's on the deck
+  (`laptopLid`, a ray to the lid's plane), and on the desk's top
+  (`laptopBase`, in the desk's shader) the lid's, the base's (from the
+  shut lid's top, softening away from it) and a contact halo all round.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
   trees; `?table=0` the desk; `?laptop=0` the laptop; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from

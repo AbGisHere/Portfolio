@@ -6,6 +6,37 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.9 — 2026-10-06
+
+The laptop made real, in one finish (the owner, 2026-10-05).
+
+- **One finish, space black, by day and by night** (`LAPTOP.metal`): no
+  recipe colour, so nothing swaps on a switch; the night lights it less
+  and bluer (`uNight`). The roadmap's per-theme finish rule is dropped for
+  the tablet too.
+- **Anodised aluminium:** shaded as a metal under a dye, mostly what it
+  mirrors (GGX, Schlick Fresnel, F0 0.22; 0.55 on the polished edges), a
+  broad satin sheen, a bead-blast mottle. The mirrored sky has a horizon
+  band, a glow round the body and an uneven compass; the base mirrors
+  the lit screen.
+- **Sitting on the desk, not stuck to it:** a soft contact shadow all
+  round (the top and left edges had none, so it read as a sticker), the
+  shut laptop's shadow cast from the lid's top (it was a third short),
+  softening away from it; the lid's edge rolled over and a dark seam
+  between lid and base, the base's sides a shade lighter than its top.
+- **The logo** is a dark grey mirror; it had mirrored the sky at full
+  colour and read blue.
+- **The screen:** a notch with a camera lens, a rubber rim, the glass
+  mirroring the sky and the body. As a light (`laptopGlow`) it falls on
+  the deck and on the desk in front, faint by day, a pool by night.
+- **The keyboard:** each cap's bevel read from the texture's slope, legends
+  on the caps, and by night the backlight through them and round the keys.
+- **The front scoop** under the lid's edge.
+
+GPU ms (`?bench`, 11 rounds, `laptop=0` against the same build): the
+closing shot 4.7 (4.4 without the laptop), in close 5.1 (4.9), top-down
+3.8 (4.2): within the bench's noise.
+
 ## 0.3.8 — 2026-10-05
 
 The laptop: shut under the top-down shot, opening as the camera comes

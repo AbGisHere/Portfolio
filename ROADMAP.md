@@ -406,8 +406,9 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.6` | **Shipped.** The desk (the owner, 2026-10-04): a wooden trestle table built in code, lit live by the sky (no lightmaps), with its shadow on the meadow; the trees' crowns filled in. |
 | `0.3.7` | **Shipped.** Headroom before the laptop (the audit, 2026-10-04): under the desk camera the scene is drawn after the desk, grass and trees, only where none of them stands, the shadows only on its ground; the same picture, the closing shot 8.3 → 5.8 GPU ms. |
 | `0.3.8` | **Shipped.** The laptop (the owner, 2026-10-05): built in code, silver by day and space black by night, the lid opening over arc 2, a placeholder glow on its screen; the reading position moved in so the screen spans ~42% of the frame. |
-| `0.3.9` | The tablet on portrait viewports, and where the path ends for them. |
-| `0.3.10`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
+| `0.3.9` | **Shipped.** The laptop made real (the owner, 2026-10-05): one space black finish by day and night, GGX shine with Fresnel, polished edges, the lid's rolled edge and the shut seam, a soft contact shadow all round and the shut lid's full shadow; the screen's glass, notch and camera, its light on the deck and desk by night; key legends and bevels, the backlight by night; the front scoop. |
+| `0.3.10` | The tablet on portrait viewports, and where the path ends for them. |
+| `0.3.11`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -443,7 +444,9 @@ against its GL frame at its scroll point, not every scroll.
 laptop, a desk lamp and stationery, plus whatever else makes it feel real and
 lived-in. Seen top-down at the join between the arcs, the laptop is closed.
 
-**The laptop** is MacBook Pro–like: silver by day, space black by night.
+**The laptop** is MacBook Pro–like, space black by day and by night.
+[2026-10-05: the owner's call, in `0.3.9`, replacing the silver/black swap.]
+The night darkens it through its light, never a different colour.
 - **The Apple logo is on the lid.** [2026-10-05: the owner's call, over the
   earlier no-logo rule, with the trademark risk noted.] It's drawn to read
   upright from behind the open lid, so from the top-down shot it's upside
@@ -455,9 +458,9 @@ lived-in. Seen top-down at the join between the arcs, the laptop is closed.
   gets low. Otherwise mid-arc you'd be looking at a half-open edge.
 
 **Theming: swapped versus relit.**
-- **Swapped per theme:** the laptop's and tablet's finish (silver or space
-  black), and at most one or two
-  accessories. Switching theme with the laptop on screen dissolves its
+- **Swapped per theme:** at most one or two accessories. (The laptop's
+  and tablet's finish no longer swaps: one space black, relit, from
+  `0.3.9`.) Switching theme with the laptop on screen dissolves its
   material over the switch's `ms`, so it reads as part of the scene turning,
   not a swap.
 - **Relit per theme:** the grass, the wood and everything else. They take
@@ -491,11 +494,9 @@ tablet instead of the laptop: the same scene and path, a different end point.
   against about 245 px for the laptop's. It also gives the tiles more width
   than a phone screen would, and one layout covers phones and portrait
   tablets.
-- **Its finish follows the theme, like the laptop's.** [2026-09-24: user
-  decision.] Landscape viewports see a silver laptop by day and a space
-  black one by night. Portrait viewports (phones and tablets) see a silver
-  tablet by day and a space black one by night. Both dissolve their material
-  over a switch.
+- **Its finish matches the laptop's: space black, day and night.**
+  [2026-10-05: the owner's call, replacing the 2026-09-24 per-theme swap.]
+  The night only relights it.
 - **It needs a stand.** Lying flat, it would face the ceiling, not the final
   camera. A folio stand or a desk stand props it toward the camera.
 - **The same trademark rule as the laptop:** don't call it "iPad" on the

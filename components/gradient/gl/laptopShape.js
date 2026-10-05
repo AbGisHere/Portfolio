@@ -17,9 +17,21 @@ export const LAPTOP = {
   // Where the base's foot centre stands: on the planks (its feet lift it a
   // touch), a little toward the camera's side of the desk's middle.
   at: [0, DESK_BOX.h + 0.0012, -0.02],
+  // The screen on the lid's face: its size, and how far down from the lid's
+  // free edge it starts.
+  screen: { w: 0.2965, h: 0.1925, top: 0.0075 },
+  // (0.3.9) One finish by day and by night, space black: the night only
+  // darkens it through its light (the owner, 2026-10-05).
+  metal: '#303033',
 };
 
 const f = x => x.toFixed(5);
+
+const SCR = LAPTOP.screen;
+const HINGE_Y = LAPTOP.base + LAPTOP.gap;
+const HINGE_Z = LAPTOP.d / 2 - LAPTOP.hingeIn;
+// The screen's middle, from the hinge, in the lid's own frame (along it).
+const SCR_FROM_HINGE = LAPTOP.d / 2 - SCR.top - SCR.h / 2 + HINGE_Z;
 
 /**
  * GLSL: how far a point (metres, from `uAt`, the base's foot centre) lies in
@@ -27,7 +39,10 @@ const f = x => x.toFixed(5);
  * every 1 across, as the desk's and trees' do). `laptopLid`: the lid's, a
  * plane through the hinge (`uLid`: its cos, sin open); `laptopBase`: the
  * base's, its outline along the ray from its foot to its deck, and the
- * dark right under it. Needs `uSunDir`, `uLid`.
+ * dark right under it. `laptopGlow`: (0.3.9) how much of the screen's light
+ * reaches a point facing N, the lit screen as one soft panel (cosine at
+ * both ends, over the distance squared), nothing under the base. Needs
+ * `uSunDir`, `uLid`.
  */
 export const LAPTOP_SHADE_GLSL = `float laptopBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
@@ -52,12 +67,32 @@ float laptopLid(vec3 q) {
 float laptopBase(vec3 q) {
   vec3 L = laptopLight();
   vec2 half_ = vec2(${f(LAPTOP.w / 2)}, ${f(LAPTOP.d / 2)});
-  float d = 1e3;
-  for (int i = 0; i < 3; i++) {
-    float up = ${f(LAPTOP.base)} * float(i) * 0.5 - q.y;
-    if (up >= 0.0) d = min(d, laptopBox(q.xz + L.xz / L.y * up, half_, ${f(LAPTOP.corner)}));
+  // Shut, the lid stacks on the base, so the shadow runs from its top;
+  // open, the lid casts its own (laptopLid). The edge softens as it runs
+  // away from the laptop (the sky's light, from all round, fills it in).
+  float top = ${f(LAPTOP.base)} + ${f(LAPTOP.gap + LAPTOP.lid)} * (1.0 - smoothstep(0.05, 0.3, uLid.y));
+  float sh = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float up = top * float(i) / 3.0 - q.y;
+    if (up < 0.0) continue;
+    float s = 0.002 + up * 0.35;
+    sh = max(sh, 1.0 - smoothstep(-s, s, laptopBox(q.xz + L.xz / L.y * up, half_, ${f(LAPTOP.corner)})));
   }
   float under = 1.0 - smoothstep(-0.004, 0.02, laptopBox(q.xz, half_, ${f(LAPTOP.corner)}));
-  return max(1.0 - smoothstep(-0.003, 0.005, d), under * 0.7);
+  // (0.3.9) And a soft dark halo where it meets the desk, the light from
+  // low down blocked by its sides.
+  float out_ = max(laptopBox(q.xz, half_, ${f(LAPTOP.corner)}), 0.0);
+  float halo = exp(-out_ / 0.012) * 0.8 + exp(-out_ / 0.04) * 0.25;
+  return max(max(sh, under * 0.7), halo);
+}
+float laptopGlow(vec3 q, vec3 N) {
+  vec3 c = vec3(0.0, ${f(HINGE_Y)} + ${f(SCR_FROM_HINGE)} * uLid.y, ${f(HINGE_Z)} - ${f(SCR_FROM_HINGE)} * uLid.x);
+  vec3 ns = vec3(0.0, -uLid.x, -uLid.y);
+  vec3 d = c - q;
+  float r2 = dot(d, d);
+  vec3 dn = d * inversesqrt(r2);
+  float a = ${f(SCR.w * SCR.h)};
+  float off = smoothstep(0.0, 0.006, laptopBox(q.xz, vec2(${f(LAPTOP.w / 2)}, ${f(LAPTOP.d / 2)}), ${f(LAPTOP.corner)})) + step(${f(LAPTOP.base - 0.001)}, q.y);
+  return max(dot(ns, -dn), 0.0) * max(dot(N, dn), 0.0) * a / (3.14159 * r2 + a) * min(off, 1.0);
 }
 `;

@@ -205,6 +205,7 @@ flat in float vKind;
 out vec4 outColor;
 
 uniform vec2 uLid;      // the laptop's lid: cos, sin of how far it's open
+uniform vec3 uGlow;     // its screen's light (0.3.9)
 ${DESK_SHADE_GLSL}
 ${LAPTOP_SHADE_GLSL}
 uint pcg(uint v) {
@@ -268,6 +269,8 @@ void main() {
   if (N.y > 0.5 && vWorld.y > ${(DESK_BOX.h - 0.01).toFixed(4)}) {
     vec3 q = vWorld - vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')});
     col *= 1.0 - 0.6 * max(laptopBase(q), laptopLid(q));
+    // (0.3.9) And its screen's light, on the wood in front of it.
+    col += uWood * uGlow * laptopGlow(q, N) * 12.0;
   }
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

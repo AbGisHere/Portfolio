@@ -1171,6 +1171,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uResY'), canvas.height);
       const lid = ((meadowAt.lid ?? 0) * Math.PI) / 180;
       gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
+      gl.uniform3fv(g.u('uGlow'), laptopLight().glow);
       if (shade) {
         gl.bindVertexArray(g.shadowVao);
         shadeInto(() => gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1));
@@ -1180,6 +1181,23 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.useProgram(prog);
+    }
+
+    // (0.3.9) The laptop's screen as a light: its mean colour as it wakes,
+    // stronger by night (how dark the sky overhead is), for the laptop's
+    // deck and the desk's top; and the keyboard's backlight, by night only.
+    function laptopLight() {
+      const { colours, lid: deg = 0 } = meadowAt;
+      const t = Math.min(1, Math.max(0, (deg - 20) / 60));
+      const wake = t * t * (3 - 2 * t);
+      const [r, g, b] = rgb01(colours.env[0]);
+      const sky = 0.299 * r + 0.587 * g + 0.114 * b;
+      const night = 1 - Math.min(1, Math.max(0, (sky - 0.12) / 0.43));
+      const top = rgb01(colours.screenTop);
+      const foot = rgb01(colours.screenFoot);
+      const k = wake * (0.06 + 7 * night * night);
+      const lit = night * night * wake;
+      return { wake, night, glow: top.map((v, i) => ((v + foot[i]) / 2) * k), backlight: [0.85 * lit, 0.88 * lit, 0.95 * lit] };
     }
 
     // (0.3.8) The laptop on the desk, writing its depth.
@@ -1196,7 +1214,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
       gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
       gl.uniform3f(g.u('uAt'), ...LAPTOP.at);
-      gl.uniform3fv(g.u('uMetal'), rgb01(colours.metal));
+      gl.uniform3fv(g.u('uMetal'), rgb01(LAPTOP.metal));
       gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
       gl.uniform3fv(g.u('uSky'), colours.sky);
       gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
@@ -1205,8 +1223,11 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uScreenTop'), rgb01(colours.screenTop));
       gl.uniform3fv(g.u('uScreenFoot'), rgb01(colours.screenFoot));
       // The screen wakes as the lid lifts past ~20°, fully lit by ~80°.
-      const t = Math.min(1, Math.max(0, (deg - 20) / 60));
-      gl.uniform1f(g.u('uWake'), t * t * (3 - 2 * t));
+      const shine = laptopLight();
+      gl.uniform1f(g.u('uWake'), shine.wake);
+      gl.uniform3fv(g.u('uGlow'), shine.glow);
+      gl.uniform3fv(g.u('uBacklight'), shine.backlight);
+      gl.uniform1f(g.u('uNight'), shine.night);
       gl.uniform1i(g.u('uDeck'), 6);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
