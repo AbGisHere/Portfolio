@@ -270,7 +270,7 @@ test('the 0.3 camera: the stops sit in holds, and it reaches the desk', () => {
   assert.ok(Math.abs(top.pitch - Math.PI / 2) < 1e-9, 'straight down over the desk');
   assert.ok(Math.abs(top.ahead) < 1e-9);
   const last = deskCameraAt(1, duskEmber);
-  assert.ok(last.ahead > 0 && last.pitch < 0.2, 'facing the desk, nearly level');
+  assert.ok(last.ahead > 0 && last.pitch < 0.25, 'facing the desk, nearly level (13°, 0.3.8)');
   for (let d = 0; d <= 1; d += 0.01) {
     const c = deskCameraAt(d, duskEmber);
     assert.ok(c.eye > 0 && Number.isFinite(c.back), `a camera above the ground at ${d}`);

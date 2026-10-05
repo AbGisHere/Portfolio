@@ -6,6 +6,41 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.8 — 2026-10-05
+
+The laptop: shut under the top-down shot, opening as the camera comes
+round, and the end of the descent.
+
+- **Built in code, like the desk** (`gl/laptopShader.js`, the owner's pick
+  over a Spline model): the base and the lid are two rounded aluminium
+  slabs, meshed once (~1.8 k triangles), drawn in the same context and
+  depth as the desk. One 1024×724 texture, drawn once on a canvas, carries
+  the keys in their well, the speaker grilles, the trackpad and the logo.
+- **The lid** (`deskCamera.js` `lidAt`): shut through the top-down hold, it
+  opens over 15–90% of arc 2 to 108°, easing out so the screen faces the
+  camera before the camera gets low.
+- **The finish follows the theme:** the recipes' `metal` (silver by day,
+  space black by night) blends on the switch like their other colours. It's
+  lit live by the scene and mirrors the sky at grazing angles. The logo on
+  the lid is polished to a mirror.
+- **The screen** is a placeholder glow in the recipe's `screenTop` →
+  `screenFoot` under black glass, waking as the lid lifts (20–80°). At
+  night it lights the keys a little. The project cards come later.
+- **Shadows:** the open lid shades the deck, and the whole laptop shades
+  the desk's top (`gl/laptopShape.js`, shared by both shaders).
+- **The reading position moves in** (the owner's call): the screen now
+  spans about 42% of a 16:10 frame, against 16% before, with the mountains
+  over the lid. A narrow frame zooms out until the screen fits 80% of its
+  width (`pitchOf`, the `fit` key), until the tablet takes portrait in
+  `0.3.9`.
+- **The Apple logo is on the lid,** at the owner's request, overriding
+  the earlier rule in `ROADMAP.md`. The page still never names the product.
+- **Measured** (`?bench`, 1728×1117@2, interleaved rounds, `?laptop=0`
+  against the same build, 11 rounds): the closing shot 4.1 GPU ms (4.2
+  without it; 5.8 in `0.3.7`, since the screen now covers sky the scene
+  would shade), the top-down shot 3.7 (3.5), mid-arc (desk .72) 5.1 (5.1):
+  the laptop itself is within the bench's noise.
+
 ## 0.3.7 — 2026-10-04
 
 Headroom before the laptop: the same picture, drawn in less time.

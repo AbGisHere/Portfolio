@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -405,8 +405,9 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.5` | **Shipped.** Flowers and trees in the grass (the owner, 2026-10-03): daisies, buttercups and pom-poms in the painted flowers' drifts; a lone tree framing the closing shot and copses on the meadow, upright, with long shadows; far birds among the ridges (the owner, 2026-10-04); older iPhones and iPads (iOS 13 to 16) working again. |
 | `0.3.6` | **Shipped.** The desk (the owner, 2026-10-04): a wooden trestle table built in code, lit live by the sky (no lightmaps), with its shadow on the meadow; the trees' crowns filled in. |
 | `0.3.7` | **Shipped.** Headroom before the laptop (the audit, 2026-10-04): under the desk camera the scene is drawn after the desk, grass and trees, only where none of them stands, the shadows only on its ground; the same picture, the closing shot 8.3 → 5.8 GPU ms. |
-| `0.3.8` | The laptop (the tablet on portrait) and the lid opening. |
-| `0.3.9`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
+| `0.3.8` | **Shipped.** The laptop (the owner, 2026-10-05): built in code, silver by day and space black by night, the lid opening over arc 2, a placeholder glow on its screen; the reading position moved in so the screen spans ~42% of the frame. |
+| `0.3.9` | The tablet on portrait viewports, and where the path ends for them. |
+| `0.3.10`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -443,10 +444,12 @@ laptop, a desk lamp and stationery, plus whatever else makes it feel real and
 lived-in. Seen top-down at the join between the arcs, the laptop is closed.
 
 **The laptop** is MacBook Pro–like: silver by day, space black by night.
-- No Apple logo, and don't call it "MacBook" anywhere on the page. Both are
-  trademarks. Check any sourced model for logos.
-- The closed lid is what the top-down shot looks at. The AbG mark could go
-  there (proposed, not confirmed).
+- **The Apple logo is on the lid.** [2026-10-05: the owner's call, over the
+  earlier no-logo rule, with the trademark risk noted.] It's drawn to read
+  upright from behind the open lid, so from the top-down shot it's upside
+  down, as on a real laptop seen from the user's seat. Still don't call it
+  "MacBook" anywhere on the page. The AbG mark doesn't go on the lid.
+- Built in code (`0.3.8`, `gl/laptopShader.js`), not modelled in Spline.
 - **The lid opens from 15% to 90% of arc 2,** finishing at about 105–110°. It
   leads the camera slightly, so the screen faces the camera before the camera
   gets low. Otherwise mid-arc you'd be looking at a half-open edge.
@@ -495,8 +498,8 @@ tablet instead of the laptop: the same scene and path, a different end point.
   over a switch.
 - **It needs a stand.** Lying flat, it would face the ceiling, not the final
   camera. A folio stand or a desk stand props it toward the camera.
-- **The same trademark rule as the laptop:** no Apple logo, and don't call it
-  "iPad" on the page.
+- **The same trademark rule as the laptop:** don't call it "iPad" on the
+  page. Whether it carries the logo too is open.
 - A phone can still lie on the desk as a prop, but no path ends at it.
 - Pick the device by viewport shape, not device detection: portrait gets the
   tablet, and landscape (tablets in landscape included) gets the laptop.
@@ -544,8 +547,9 @@ front needs real geometry.
 
 [2026-10-04: the table is built in code instead (`0.3.6`, the owner's
 pick on the recommendation): procedural planks lit live by the sky match
-the grass and trees, need no baked lightmaps and ship no asset. Spline
-stays the plan for what needs a real model, the laptop first.]
+the grass and trees, need no baked lightmaps and ship no asset. So is the
+laptop (`0.3.8`, the owner's pick, 2026-10-05). Spline stays an option for
+an accessory that needs a real model.]
 
 [2026-09-30: user decision.] **The desk objects are modelled in
 [Spline](https://spline.design).** It's the design tool, not the runtime:
@@ -724,7 +728,7 @@ Known catches:
   a portrait device. Not revisited since the descent was agreed.
 - The tablet's details: its stand, and where it sits on the desk (see
   "Portrait viewports get a tablet").
-- The AbG mark on the lid, and where the about text sits in `0.2`.
+- Where the about text sits in `0.2`.
 - The form of the project tiles (play-cards, widgets, icons) and the
   background they sit on.
 - Where the resume and dev log live relative to the device. Contact comes

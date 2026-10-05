@@ -35,6 +35,8 @@ import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
 import { FLOWERS, FLOWER_FRAGMENT, FLOWER_INSTANCES, FLOWER_VERTEX, FLOWER_VERTS } from './flowerShader';
 import { LONE_SHADOW, TREE_FRAGMENT, TREE_STRIDE, TREE_VERTEX, treeLayout } from './treeShader';
 import { DESK_FRAGMENT, DESK_STRIDE, DESK_VERTEX, deskLayout } from './deskShader';
+import { LAPTOP_FRAGMENT, LAPTOP_STRIDE, LAPTOP_TEX, LAPTOP_VERTEX, laptopMesh, laptopTexels } from './laptopShader';
+import { LAPTOP } from './laptopShape';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
@@ -268,6 +270,37 @@ export default function MistCanvas({ recipe, onFail }) {
       desk = { prog: dp, vao, shadowVao, buf: db, wood, u: name => (DU[name] ??= gl.getUniformLocation(dp, name)) };
       return desk;
     };
+    // (0.3.8) The laptop (laptopShader.js): its mesh up once, and its
+    // texture (the keys, the trackpad, the logo) drawn once, on unit 6.
+    let laptop = null;
+    const laptopProgram = () => {
+      if (laptop !== null) return laptop;
+      const lp = passProgram(gl, 'laptop', LAPTOP_VERTEX, LAPTOP_FRAGMENT);
+      if (!lp) return (laptop = false);
+      const { data, count } = laptopMesh();
+      const lb = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, lb);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, LAPTOP_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.activeTexture(gl.TEXTURE6);
+      const tex = texture(gl, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, LAPTOP_TEX.w, LAPTOP_TEX.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, laptopTexels());
+      gl.generateMipmap(gl.TEXTURE_2D);
+      const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+      if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+      gl.activeTexture(gl.TEXTURE0);
+      const LU = {};
+      laptop = { prog: lp, vao, buf: lb, tex, count, u: name => (LU[name] ??= gl.getUniformLocation(lp, name)) };
+      return laptop;
+    };
     const DEPTH_AB = (() => {
       const n = DEPTH.near * 40;
       const f = DEPTH.far * 40;
@@ -405,6 +438,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noTrees = params.get('trees') === '0';
     // `?table=0` leaves the desk out (profiling).
     const noDesk = params.get('table') === '0';
+    // `?laptop=0` leaves the laptop out (profiling).
+    const noLaptop = params.get('laptop') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -892,7 +927,7 @@ export default function MistCanvas({ recipe, onFail }) {
         };
         meadowAt = frame.grass
           ? {
-              pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm),
+              pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid,
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
               // (0.3.5) How far the meadow runs to the mountains' foot down
@@ -1134,6 +1169,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
+      const lid = ((meadowAt.lid ?? 0) * Math.PI) / 180;
+      gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
       if (shade) {
         gl.bindVertexArray(g.shadowVao);
         shadeInto(() => gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1));
@@ -1141,6 +1178,42 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.bindVertexArray(g.vao);
         gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, g.wood);
       }
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.3.8) The laptop on the desk, writing its depth.
+    function drawLaptop() {
+      const g = laptopProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours, lid: deg = 0 } = meadowAt;
+      const lid = (deg * Math.PI) / 180;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
+      gl.uniform3f(g.u('uAt'), ...LAPTOP.at);
+      gl.uniform3fv(g.u('uMetal'), rgb01(colours.metal));
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.wood));
+      gl.uniform3fv(g.u('uScreenTop'), rgb01(colours.screenTop));
+      gl.uniform3fv(g.u('uScreenFoot'), rgb01(colours.screenFoot));
+      // The screen wakes as the lid lifts past ~20°, fully lit by ~80°.
+      const t = Math.min(1, Math.max(0, (deg - 20) / 60));
+      gl.uniform1f(g.u('uWake'), t * t * (3 - 2 * t));
+      gl.uniform1i(g.u('uDeck'), 6);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -1240,6 +1313,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.depthFunc(gl.LESS);
       if (deskOn) drawDesk(false);
+      if (deskOn && !noLaptop) drawLaptop();
       if (grassOn) {
         drawGrass(prints);
         drawFlowers(prints);
@@ -1459,7 +1533,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
-      for (const p of [grass, flowers, trees, desk]) {
+      if (laptop) gl.deleteTexture(laptop.tex);
+      for (const p of [grass, flowers, trees, desk, laptop]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

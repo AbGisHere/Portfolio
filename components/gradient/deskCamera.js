@@ -42,6 +42,8 @@ export const DESK_BOX = { w: 1.2, h: 0.75, d: 0.7 };
  * - `centre`: how far the screen's optical centre has moved from the 0.2
  *   horizon row to the frame's middle (0 → 1): the lens shift going away.
  * - `zoom`: focal length over the 0.2 one (narrows at the very end).
+ * - `fit` (0 unless given): how far the zoom gives way to fit the laptop's
+ *   screen into a narrow frame (`pitchOf`, 0.3.8).
  * Keys without `d` and `y` are where 0.2 ends (filled in from the descent:
  * `d0` is how far the desk is behind that camera). The two holds are the
  * scroll's stops (../scroll/stops.js): the end of the pull-back, the sun half
@@ -64,8 +66,10 @@ export const DESK_PATH = {
     { at: 0.68, d: -1.3, y: 1.9, pitch: 52, centre: 1, zoom: 1 },
     { at: 0.82, d: -1.0, y: 1.2, pitch: 18, centre: 0.9, zoom: 1.05 },
     // The reading position, held.
-    { at: 0.92, d: -0.7, y: 1.02, pitch: 8, centre: 0.85, zoom: 1.15 },
-    { at: 1, d: -0.7, y: 1.02, pitch: 8, centre: 0.85, zoom: 1.15 },
+    // (0.3.8) In close: the open laptop's screen about 42% of a 16:10
+    // frame's width, the mountains over its lid.
+    { at: 0.92, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1 },
+    { at: 1, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1 },
   ],
 };
 
@@ -108,7 +112,7 @@ function monotone(xs, ys, x) {
 /** The keys with the first one filled in from where 0.2 leaves the camera. */
 function keysFrom(end) {
   const y = (1 + end.rise) * WORLD_M;
-  return DESK_PATH.keys.map(k => (k.d == null ? { ...k, d: DESK_PATH.d0, y } : k));
+  return DESK_PATH.keys.map(k => ({ fit: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k) }));
 }
 
 /**
@@ -132,6 +136,7 @@ export function deskCameraAt(desk, recipe, opts = {}) {
     pitch: (at('pitch') * Math.PI) / 180,
     centre: at('centre'),
     zoom: at('zoom'),
+    fit: at('fit'),
     eye: y / WORLD_M,
     // How far ahead of the camera the desk is (toward the mountains).
     ahead: -d / WORLD_M,
@@ -165,6 +170,11 @@ export function deskFrameAt(layout, h, cam) {
  */
 export function pitchOf(cam, view, w, h) {
   if (!cam?.end) return null;
+  // (0.3.8) At the reading position the screen spans ~0.39 of the frame's
+  // height per unit of zoom; a narrow (portrait) frame zooms out until it
+  // spans 80% of the width at most (the tablet takes portrait in 0.3.9).
+  const fit = cam.fit ?? 0;
+  const zoom = cam.zoom * (1 - fit) + Math.min(cam.zoom, ((0.8 / 0.39) * w) / h) * fit;
   const f = h - (view.horizon + cam.tilt * h);
   const vy = view.horizon;
   return {
@@ -173,7 +183,7 @@ export function pitchOf(cam, view, w, h) {
     vx: w / 2,
     vy,
     f,
-    zoom: cam.zoom,
+    zoom,
     cos: Math.cos(cam.pitch),
     sin: Math.sin(cam.pitch),
   };
@@ -255,6 +265,21 @@ const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+
+/**
+ * (0.3.8) The laptop's lid, degrees open, over `desk`: shut through the
+ * top-down hold, then opening from 15% to 90% of arc 2 (the hold's end to
+ * the reading position, DESK_PATH), to `open`. It eases out, leading the
+ * camera, so the screen faces it before it gets low.
+ */
+export const LID = { arc: [0.54, 0.92], over: [0.15, 0.9], open: 108 };
+
+export function lidAt(desk) {
+  const [a, b] = LID.arc;
+  const t = Math.min(1, Math.max(0, ((desk - a) / (b - a) - LID.over[0]) / (LID.over[1] - LID.over[0])));
+  // Smoothstep's start, then an ease-out: quick to lift, slow to settle.
+  return LID.open * (1 - (1 - t) ** 2.4) * Math.min(1, t * 6);
+}
 
 /** How dark the scene is: 1 for a moon recipe. */
 const nightOf = r => (r?.body === 'moon' ? 1 : 0);
@@ -349,5 +374,7 @@ export function grassLit(g, { stops, light, body, pitch, w }) {
   const [r, gr, b] = [0, 2, 4].map(i => parseInt(mix(stops[0], stops[1], 0.5).slice(1 + i, 3 + i), 16));
   const top = Math.max(r, gr, b, 1);
   const az = pitch ? Math.atan((body.x - w / 2) / pitch.f) : 0;
-  return { ...g, sun, sky: [r / top, gr / top, b / top], dir: [Math.sin(az), Math.cos(az)] };
+  // `env`: the sky as a polished surface mirrors it, overhead and toward
+  // the horizon (the laptop, 0.3.8).
+  return { ...g, sun, sky: [r / top, gr / top, b / top], dir: [Math.sin(az), Math.cos(az)], env: [stops[0], mix(stops[1], stops[2], 0.5)] };
 }

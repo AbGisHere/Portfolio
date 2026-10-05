@@ -361,8 +361,10 @@ camera at `about` 1 exactly (unit-tested).
 - **The path** is `DESK_PATH`: keyframes over `desk` of `d` (metres to the
   desk along the view, + on the mountains' side), `y` (height, metres,
   eased in log space), `pitch` (degrees down), `centre` (the screen's
-  optical centre moving from `0.2`'s horizon row to the frame's middle) and
-  `zoom`, each through a monotone cubic, flat at both ends and wherever two
+  optical centre moving from `0.2`'s horizon row to the frame's middle),
+  `zoom` and `fit` (`0.3.8`: how far the zoom gives way so a narrow frame
+  still holds the laptop's screen, at most 80% of its width; `pitchOf`),
+  each through a monotone cubic, flat at both ends and wherever two
   keys repeat (a hold). One world unit is the rest eye height, `WORLD_M` 40
   m; the desk (`DESK_BOX`, its top's size; the table is `gl/deskShader.js`) sits `d0` 60 m behind where
   `0.2` leaves the camera, about 64 m up.
@@ -554,8 +556,25 @@ it while there's grass, so `0.2` frames are untouched).
   dark under it) is one ground quad multiplied in before it, and shades
   the blades and flowers too (`DESK_SHADE_GLSL`). No lightmaps: the
   sky's light is the day and the night.
+- **The laptop** (`0.3.8`, `gl/laptopShader.js`; its size, place and
+  shadow in `gl/laptopShape.js`): built in code like the desk. The base and
+  the lid are rounded slabs (`slab`: a rounded-rectangle outline, its top
+  and bottom edges rounded over), meshed once, ~1.8 k triangles, drawn
+  right after the desk, writing depth. The lid turns on its hinge in the
+  vertex stage by `lidAt(desk)` (`deskCamera.js`, carried as the frame's
+  `lid`): shut to the end of the top-down hold, then open to 108° over
+  15–90% of arc 2, easing out. The finish is the recipe's `metal` (silver,
+  space black), lit like the wood plus a soft sheen and the sky mirrored
+  at grazing angles (`env`, from `grassLit`). One texture (`laptopTexels`,
+  1024×724, drawn once on a 2D canvas, on unit 6): r the keycaps, g the
+  dark of the keys' well, the grilles and the trackpad's edge, b the
+  trackpad, a the logo (mirror-polished, upright from behind the open lid).
+  The screen is a glow from `screenTop` to `screenFoot` under black glass,
+  waking over 20–80° of lid. Shadows: the lid's on the deck
+  (`laptopLid`, a ray to the lid's plane), and the lid's and the base's on
+  the desk's top (`laptopBase`), in the desk's shader.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
-  trees; `?table=0` the desk; `?boot=<n>` draws boot n instead of a random one (stills).
+  trees; `?table=0` the desk; `?laptop=0` the laptop; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.

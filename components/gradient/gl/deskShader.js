@@ -19,6 +19,7 @@
  */
 import { DESK_BOX } from '../deskCamera';
 import { TREE_STRIDE } from './treeShader';
+import { LAPTOP, LAPTOP_SHADE_GLSL } from './laptopShape';
 
 const TOP_T = 0.035; // the top's thickness (metres)
 const TOP_X = DESK_BOX.w / 2 + 0.03; // the top's half-length, with its overhang
@@ -100,11 +101,25 @@ export const DESK_SHADE_GLSL = `float deskShade(vec2 p) {
 }
 `;
 
-const CAMERA_GLSL = `uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
+export const CAMERA_GLSL = `uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
 uniform vec2 uDepthAB;
 uniform vec2 uSunDir;
+`;
+
+/** Projected as the scene's camera sees it (treeShader.js). */
+export const PROJECT_GLSL = `vec4 project(vec3 w) {
+  vec3 q = w - uCam;
+  float zp = -q.y * uPitch.y + q.z * uPitch.x;
+  float vp = -q.y * uPitch.x - q.z * uPitch.y;
+  float fz = uPitch.w * uPitch.z;
+  return vec4(
+    (uScreen.x / uScreen.z * 2.0 - 1.0) * zp + 2.0 * fz * q.x / uScreen.z,
+    (1.0 - uScreen.y / uScreen.w * 2.0) * zp - 2.0 * fz * vp / uScreen.w,
+    uDepthAB.x * zp + uDepthAB.y,
+    zp);
+}
 `;
 
 export const DESK_VERTEX = `#version 300 es
@@ -123,19 +138,7 @@ flat out float vGrain;
 flat out float vSeed;
 flat out float vKind;
 
-// Projected as the scene's camera sees it (treeShader.js).
-vec4 project(vec3 w) {
-  vec3 q = w - uCam;
-  float zp = -q.y * uPitch.y + q.z * uPitch.x;
-  float vp = -q.y * uPitch.x - q.z * uPitch.y;
-  float fz = uPitch.w * uPitch.z;
-  return vec4(
-    (uScreen.x / uScreen.z * 2.0 - 1.0) * zp + 2.0 * fz * q.x / uScreen.z,
-    (1.0 - uScreen.y / uScreen.w * 2.0) * zp - 2.0 * fz * vp / uScreen.w,
-    uDepthAB.x * zp + uDepthAB.y,
-    zp);
-}
-
+${PROJECT_GLSL}
 void main() {
   int k = gl_VertexID % 6;
   int f = gl_VertexID / 6;
@@ -201,7 +204,9 @@ flat in float vSeed;
 flat in float vKind;
 out vec4 outColor;
 
+uniform vec2 uLid;      // the laptop's lid: cos, sin of how far it's open
 ${DESK_SHADE_GLSL}
+${LAPTOP_SHADE_GLSL}
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
   uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -259,6 +264,11 @@ void main() {
   col *= mix(1.0, mix(0.55, 0.85, smoothstep(0.0, ${DESK_BOX.h.toFixed(2)}, ${DESK_BOX.h.toFixed(2)} - vWorld.y)), underTop);
   // The top in the light catches a sheen of the sky.
   col += uSky * 0.05 * smoothstep(0.5, 1.0, N.y);
+  // (0.3.8) The laptop's shadow on the top.
+  if (N.y > 0.5 && vWorld.y > ${(DESK_BOX.h - 0.01).toFixed(4)}) {
+    vec3 q = vWorld - vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')});
+    col *= 1.0 - 0.6 * max(laptopBase(q), laptopLid(q));
+  }
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));
     float gn = texelFetch(uGrain, g, 0).r;
