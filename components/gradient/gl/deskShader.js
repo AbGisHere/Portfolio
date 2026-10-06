@@ -20,6 +20,7 @@
 import { DESK_BOX } from '../deskCamera';
 import { TREE_STRIDE } from './treeShader';
 import { LAPTOP, LAPTOP_SHADE_GLSL } from './laptopShape';
+import { TABLET, TABLET_SHADE_GLSL } from './tabletShape';
 
 const TOP_T = 0.035; // the top's thickness (metres)
 const TOP_X = DESK_BOX.w / 2 + 0.03; // the top's half-length, with its overhang
@@ -206,8 +207,10 @@ out vec4 outColor;
 
 uniform vec2 uLid;      // the laptop's lid: cos, sin of how far it's open
 uniform vec3 uGlow;     // its screen's light (0.3.9)
+uniform float uTablet;  // (0.3.10) 1: the tablet stands there instead
 ${DESK_SHADE_GLSL}
 ${LAPTOP_SHADE_GLSL}
+${TABLET_SHADE_GLSL}
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
   uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -267,10 +270,17 @@ void main() {
   col += uSky * 0.05 * smoothstep(0.5, 1.0, N.y);
   // (0.3.8) The laptop's shadow on the top.
   if (N.y > 0.5 && vWorld.y > ${(DESK_BOX.h - 0.01).toFixed(4)}) {
-    vec3 q = vWorld - vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')});
-    col *= 1.0 - 0.6 * max(laptopBase(q), laptopLid(q));
-    // (0.3.9) And its screen's light, on the wood in front of it.
-    col += uWood * uGlow * laptopGlow(q, N) * 12.0;
+    if (uTablet > 0.5) {
+      // (0.3.10) Or the tablet's and its books', and its screen's light.
+      vec3 q = vWorld - vec3(${TABLET.at.map(v => v.toFixed(4)).join(', ')});
+      col *= 1.0 - 0.6 * tabletShade(q);
+      col += uWood * uGlow * tabletGlow(q, N) * 5.0;
+    } else {
+      vec3 q = vWorld - vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')});
+      col *= 1.0 - 0.6 * max(laptopBase(q), laptopLid(q));
+      // (0.3.9) And its screen's light, on the wood in front of it.
+      col += uWood * uGlow * laptopGlow(q, N) * 12.0;
+    }
   }
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

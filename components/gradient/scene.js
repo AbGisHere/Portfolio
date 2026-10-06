@@ -16,7 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
-import { deskCameraAt, deskFrameAt, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
+import { deskCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -64,7 +64,7 @@ export function sceneAt({
   // it left off (deskCamera.js).
   const onDesk = desk > 0;
   const cam = onDesk
-    ? deskCameraAt(desk, r, { reduced, from: orbit?.prev, e: p })
+    ? deskCameraAt(desk, r, { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h) })
     : descentAt(about, r, { reduced, from: orbit?.prev, e: p });
   const stops = turning ? scrollPaletteSwitch(base, orbit.prev, orbit.next, about, e) : scrollPalette(base, r, about);
   // Past the top the world ranges join the layout (under the frame, or sunk
@@ -141,6 +141,8 @@ export function sceneAt({
     grass: onDesk ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: painted, pitch, w }) : null,
     // (0.3.8) The laptop's lid, degrees open (0: shut, or no desk).
     lid: onDesk ? lidAt(desk) : 0,
+    // (0.3.10) The device on the desk: the tablet on a portrait frame.
+    device: deviceFor(w, h),
     // The air band's opacity, thinned under the camera.
     air: airOpacity(hz) * (view.rest ? 1 : 1 - DESCENT_AIR * view.k),
   };

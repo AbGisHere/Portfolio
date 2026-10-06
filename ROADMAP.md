@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -407,7 +407,7 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.7` | **Shipped.** Headroom before the laptop (the audit, 2026-10-04): under the desk camera the scene is drawn after the desk, grass and trees, only where none of them stands, the shadows only on its ground; the same picture, the closing shot 8.3 → 5.8 GPU ms. |
 | `0.3.8` | **Shipped.** The laptop (the owner, 2026-10-05): built in code, silver by day and space black by night, the lid opening over arc 2, a placeholder glow on its screen; the reading position moved in so the screen spans ~42% of the frame. |
 | `0.3.9` | **Shipped.** The laptop made real (the owner, 2026-10-05): one space black finish by day and night, GGX shine with Fresnel, polished edges, the lid's rolled edge and the shut seam, a soft contact shadow all round and the shut lid's full shadow; the screen's glass, notch and camera, its light on the deck and desk by night; key legends and bevels, the backlight by night; the front scoop. |
-| `0.3.10` | The tablet on portrait viewports, and where the path ends for them. |
+| `0.3.10` | **Shipped.** The tablet (the owner, 2026-10-06): on a portrait frame it stands in the laptop's place, leaning on a stack of cloth hardbacks, space black with the logo on its back, its screen waking as the camera comes round; the path ends looking down onto its screen, which spans up to 74% of a phone's width. Landscape frames keep the laptop; only one is ever on the desk. |
 | `0.3.11`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
@@ -484,9 +484,11 @@ It's the sun toggle's counterpart at the other end of the page.
 
 **Portrait viewports get a tablet.** A 16:10 laptop screen in a portrait
 viewport leaves the project tiles tiny. [2026-09-24: user's idea, proposed.]
-An iPad-like tablet sits on the desk for everyone, as one of the
-accessories, and on portrait viewports the spline's last stretch aims at the
-tablet instead of the laptop: the same scene and path, a different end point.
+On portrait viewports an iPad-like tablet stands on the desk in the
+laptop's place, and the path's last stretch looks down onto its screen: the
+same scene and path, a different end point. [2026-10-06, `0.3.10`: the
+owner's call, replacing "a tablet on the desk for everyone": a phone sees
+no laptop, a landscape frame no tablet.]
 - **Why a tablet, not a phone:** a portrait tablet screen is about 3:4. It
   matches portrait tablets exactly, and on a phone (about 9:19.5) it still
   fills the width and leaves room above and below for the desk around it.
@@ -497,15 +499,17 @@ tablet instead of the laptop: the same scene and path, a different end point.
 - **Its finish matches the laptop's: space black, day and night.**
   [2026-10-05: the owner's call, replacing the 2026-09-24 per-theme swap.]
   The night only relights it.
-- **It needs a stand.** Lying flat, it would face the ceiling, not the final
-  camera. A folio stand or a desk stand props it toward the camera.
+- **It leans on a stack of books** (the owner, 2026-10-06, over a desk
+  stand or a folio): five cloth hardbacks, its back resting on the top
+  one's edge above its middle, at the laptop screen's tilt (72°).
 - **The same trademark rule as the laptop:** don't call it "iPad" on the
-  page. Whether it carries the logo too is open.
+  page. It carries the logo on its back, like the laptop's lid (the owner,
+  2026-10-06).
 - A phone can still lie on the desk as a prop, but no path ends at it.
 - Pick the device by viewport shape, not device detection: portrait gets the
-  tablet, and landscape (tablets in landscape included) gets the laptop.
-  Rebuild the path when the shape changes (`ScrollTrigger.matchMedia` /
-  `refresh`) so rotating mid-scroll works.
+  tablet, and landscape (tablets in landscape included) gets the laptop
+  (`deviceFor`, `0.3.10`). It's chosen every frame, so rotating mid-scroll
+  swaps the device and its end point at once.
 
 ### Rendering
 
@@ -727,8 +731,6 @@ Known catches:
 - **Waking the screen.** The 2026-09-23 idea: a login screen and a quick
   Touch ID–style unlock on the laptop, or a lock screen and Face ID glyph on
   a portrait device. Not revisited since the descent was agreed.
-- The tablet's details: its stand, and where it sits on the desk (see
-  "Portrait viewports get a tablet").
 - Where the about text sits in `0.2`.
 - The form of the project tiles (play-cards, widgets, icons) and the
   background they sit on.

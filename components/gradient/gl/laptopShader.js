@@ -35,10 +35,11 @@ export const LAPTOP_STRIDE = 7;
 
 /**
  * A rounded slab, centred on x and z, from y 0 to `h`: its outline a
- * rounded rectangle (corner radius `rc`), its top and bottom edges rounded
- * over (`rt`, `rb`). Triangles, `LAPTOP_STRIDE` floats a vertex.
+ * `w` × `d` rounded rectangle (corner radius `rc`), its top and bottom edges
+ * rounded over (`rt`, `rb`). Triangles, `LAPTOP_STRIDE` floats a vertex
+ * (the tablet and its books, 0.3.10, take them too).
  */
-function slab({ h, rt, rb, part }) {
+export function slab({ h, rt, rb, part, w: W = LAPTOP.w, d: D = LAPTOP.d, rc: RC = LAPTOP.corner }) {
   const NC = 10; // segments per corner
   const NE = 4; // per rounded edge
   // The profile, bottom to top: inset from the outline, height, normal.
@@ -93,6 +94,37 @@ export function laptopMesh() {
     ...slab({ h: LID_H, rt: 0.0016, rb: 0.0016, part: 1 }),
   ]);
   return { data, count: data.length / LAPTOP_STRIDE };
+}
+
+/**
+ * The logo's path, filled, centred on the origin in a box ~100 units across
+ * and 104 tall, its leaf toward −y (the laptop's lid; the tablet's back).
+ */
+export function appleLogo(ctx) {
+  ctx.translate(-50, -56);
+  ctx.beginPath();
+  ctx.moveTo(50, 30);
+  ctx.bezierCurveTo(40, 23, 24, 21, 14, 31);
+  ctx.bezierCurveTo(2, 43, 2, 65, 10, 81);
+  ctx.bezierCurveTo(17, 95, 27, 105, 36, 104);
+  ctx.bezierCurveTo(43, 103, 46, 100, 50, 100);
+  ctx.bezierCurveTo(54, 100, 57, 103, 64, 104);
+  ctx.bezierCurveTo(73, 105, 83, 93, 89, 80);
+  ctx.bezierCurveTo(94, 70, 96, 50, 88, 37);
+  ctx.bezierCurveTo(80, 25, 64, 22, 50, 30);
+  ctx.fill();
+  // The bite.
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(104, 55, 16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // The leaf.
+  ctx.beginPath();
+  ctx.moveTo(49, 25);
+  ctx.quadraticCurveTo(48, 6, 68, 1);
+  ctx.quadraticCurveTo(69, 20, 49, 25);
+  ctx.fill();
 }
 
 /** The deck and lid texture's size (texels): the laptop's plan, ~3.3 a mm. */
@@ -245,30 +277,7 @@ export function laptopTexels() {
     const s = 0.042 / 104;
     ctx.translate(0, D / 2);
     ctx.scale(s, -s);
-    ctx.translate(-50, -56);
-    ctx.beginPath();
-    ctx.moveTo(50, 30);
-    ctx.bezierCurveTo(40, 23, 24, 21, 14, 31);
-    ctx.bezierCurveTo(2, 43, 2, 65, 10, 81);
-    ctx.bezierCurveTo(17, 95, 27, 105, 36, 104);
-    ctx.bezierCurveTo(43, 103, 46, 100, 50, 100);
-    ctx.bezierCurveTo(54, 100, 57, 103, 64, 104);
-    ctx.bezierCurveTo(73, 105, 83, 93, 89, 80);
-    ctx.bezierCurveTo(94, 70, 96, 50, 88, 37);
-    ctx.bezierCurveTo(80, 25, 64, 22, 50, 30);
-    ctx.fill();
-    // The bite.
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    ctx.arc(104, 55, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    // The leaf.
-    ctx.beginPath();
-    ctx.moveTo(49, 25);
-    ctx.quadraticCurveTo(48, 6, 68, 1);
-    ctx.quadraticCurveTo(69, 20, 49, 25);
-    ctx.fill();
+    appleLogo(ctx);
   });
   const out = new Uint8Array(TW * TH * 4);
   for (let i = 0; i < out.length; i += 4) {
@@ -279,6 +288,71 @@ export function laptopTexels() {
   }
   return out;
 }
+
+/**
+ * GLSL: the finish's light, shared by the laptop and the tablet (0.3.9):
+ * `envAt` (the sky and desk a polished surface mirrors), `shine` (GGX,
+ * Fresnel), `noise2` (the bead blast's mottle). Needs `uSun`, `uEnvTop`,
+ * `uEnvLow`, `uWood`, `uSunDir`.
+ */
+export const METAL_GLSL = `// What a polished surface mirrors along R: the sky above the horizon, the
+// desk's wood below it.
+// (0.3.9) With the structure a metal shows: the bright band just above the
+// horizon, the glow round the body, a sky uneven round the compass, the
+// meadow's dark green below the horizon and the desk under it all.
+float envNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  f = f * f * (3.0 - 2.0 * f);
+  float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+  float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+  float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+  float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+vec3 envAt(vec3 R) {
+  if (R.y > 0.0) {
+    vec3 sky = mix(uEnvLow * 1.35, uEnvLow, smoothstep(0.0, 0.18, R.y));
+    sky = mix(sky, uEnvTop, smoothstep(0.12, 0.8, R.y));
+    sky *= 0.8 + 0.4 * envNoise(vec2(atan(R.z, R.x) * 2.5, R.y * 5.0));
+    vec3 Ls = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
+    return sky + uSun * (pow(max(dot(R, Ls), 0.0), 8.0) * 0.6 + pow(max(dot(R, Ls), 0.0), 60.0) * 1.5);
+  }
+  return mix(uEnvLow * 0.5, uWood * 0.45, smoothstep(0.0, -0.25, R.y));
+}
+// (0.3.9) The light off a surface of roughness \`a\` (GGX, Schlick's
+// Fresnel from F0, Kelemen's visibility): the body's highlight, and the sky
+// mirrored, blurred toward the horizon's colour as it roughens.
+float ggx(float nh, float a) {
+  float a2 = a * a;
+  float d = nh * nh * (a2 - 1.0) + 1.0;
+  return a2 / (3.14159 * d * d);
+}
+float gSat = 1.0; // how much of the sky's colour a reflection keeps
+float gSpec = 0.12; // how strongly it shows the body's highlight
+vec3 shine(vec3 N, vec3 V, vec3 L, float a, float f0) {
+  vec3 H = normalize(L + V);
+  float nl = max(dot(N, L), 0.0);
+  float nv = max(dot(N, V), 0.0);
+  float lh = max(dot(L, H), 0.0);
+  float fl = f0 + (1.0 - f0) * pow(1.0 - lh, 5.0);
+  float spec = ggx(max(dot(N, H), 0.0), a) * fl * 0.25 / max(lh * lh, 0.1) * nl;
+  float fv = f0 + (1.0 - f0) * pow(1.0 - nv, 5.0) * (1.0 - 0.7 * a);
+  vec3 R = reflect(-V, N);
+  vec3 env = mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, a * 0.8);
+  env = mix(vec3(dot(env, vec3(0.299, 0.587, 0.114))), env, gSat);
+  return uSun * min(spec, 24.0) * gSpec + env * fv;
+}
+
+// A soft value noise over the finish's plan: the bead blast's faint mottle.
+float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+`;
 
 export const LAPTOP_VERTEX = `#version 300 es
 precision highp float;
@@ -348,63 +422,7 @@ flat in float vPart;
 out vec4 outColor;
 
 ${LAPTOP_SHADE_GLSL}
-// What a polished surface mirrors along R: the sky above the horizon, the
-// desk's wood below it.
-// (0.3.9) With the structure a metal shows: the bright band just above the
-// horizon, the glow round the body, a sky uneven round the compass, the
-// meadow's dark green below the horizon and the desk under it all.
-float envNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = p - i;
-  f = f * f * (3.0 - 2.0 * f);
-  float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
-  float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
-  float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
-  float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-vec3 envAt(vec3 R) {
-  if (R.y > 0.0) {
-    vec3 sky = mix(uEnvLow * 1.35, uEnvLow, smoothstep(0.0, 0.18, R.y));
-    sky = mix(sky, uEnvTop, smoothstep(0.12, 0.8, R.y));
-    sky *= 0.8 + 0.4 * envNoise(vec2(atan(R.z, R.x) * 2.5, R.y * 5.0));
-    vec3 Ls = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
-    return sky + uSun * (pow(max(dot(R, Ls), 0.0), 8.0) * 0.6 + pow(max(dot(R, Ls), 0.0), 60.0) * 1.5);
-  }
-  return mix(uEnvLow * 0.5, uWood * 0.45, smoothstep(0.0, -0.25, R.y));
-}
-// (0.3.9) The light off a surface of roughness \`a\` (GGX, Schlick's
-// Fresnel from F0, Kelemen's visibility): the body's highlight, and the sky
-// mirrored, blurred toward the horizon's colour as it roughens.
-float ggx(float nh, float a) {
-  float a2 = a * a;
-  float d = nh * nh * (a2 - 1.0) + 1.0;
-  return a2 / (3.14159 * d * d);
-}
-float gSat = 1.0; // how much of the sky's colour a reflection keeps
-float gSpec = 0.12; // how strongly it shows the body's highlight
-vec3 shine(vec3 N, vec3 V, vec3 L, float a, float f0) {
-  vec3 H = normalize(L + V);
-  float nl = max(dot(N, L), 0.0);
-  float nv = max(dot(N, V), 0.0);
-  float lh = max(dot(L, H), 0.0);
-  float fl = f0 + (1.0 - f0) * pow(1.0 - lh, 5.0);
-  float spec = ggx(max(dot(N, H), 0.0), a) * fl * 0.25 / max(lh * lh, 0.1) * nl;
-  float fv = f0 + (1.0 - f0) * pow(1.0 - nv, 5.0) * (1.0 - 0.7 * a);
-  vec3 R = reflect(-V, N);
-  vec3 env = mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, a * 0.8);
-  env = mix(vec3(dot(env, vec3(0.299, 0.587, 0.114))), env, gSat);
-  return uSun * min(spec, 24.0) * gSpec + env * fv;
-}
-
-// A soft value noise over the finish's plan: the bead blast's faint mottle.
-float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise2(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = p - i;
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
-}
+${METAL_GLSL}
 // The lid's frame turned to the world's, as the vertex stage turns it.
 vec3 lidToWorld(vec3 n) { return vec3(n.x, n.y * uLid.x - n.z * uLid.y, n.y * uLid.y + n.z * uLid.x); }
 

@@ -44,11 +44,15 @@ export const DESK_BOX = { w: 1.2, h: 0.75, d: 0.7 };
  * - `zoom`: focal length over the 0.2 one (narrows at the very end).
  * - `fit` (0 unless given): how far the zoom gives way to fit the laptop's
  *   screen into a narrow frame (`pitchOf`, 0.3.8).
+ * - `tablet`: (0.3.10) the key's channels where the path ends on the
+ *   tablet (a portrait frame, `deviceFor`), in its place.
  * Keys without `d` and `y` are where 0.2 ends (filled in from the descent:
  * `d0` is how far the desk is behind that camera). The two holds are the
  * scroll's stops (../scroll/stops.js): the end of the pull-back, the sun half
  * set, and the top-down shot.
  */
+const TABLET_END = { pitch: 19, centre: 0.95, zoom: 1.5 };
+
 export const DESK_PATH = {
   d0: 60,
   keys: [
@@ -68,8 +72,10 @@ export const DESK_PATH = {
     // The reading position, held.
     // (0.3.8) In close: the open laptop's screen about 42% of a 16:10
     // frame's width, the mountains over its lid.
-    { at: 0.92, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1 },
-    { at: 1, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1 },
+    // (0.3.10) A portrait frame looks down onto the tablet's screen, its
+    // middle at the frame's, the mountains over its top.
+    { at: 0.92, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1, tablet: TABLET_END },
+    { at: 1, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1, tablet: TABLET_END },
   ],
 };
 
@@ -110,20 +116,21 @@ function monotone(xs, ys, x) {
 }
 
 /** The keys with the first one filled in from where 0.2 leaves the camera. */
-function keysFrom(end) {
+function keysFrom(end, device) {
   const y = (1 + end.rise) * WORLD_M;
-  return DESK_PATH.keys.map(k => ({ fit: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k) }));
+  return DESK_PATH.keys.map(k => ({ fit: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
 }
 
 /**
  * The camera at `desk` (> 0): the 0.2 camera's fields (`back`, `rise`,
  * `tilt`, `k`, `ranges`, for frameAt and the rest of sceneAt) plus `pitch`
  * (radians), `centre`, `zoom`, `eye` (height) and `ahead` (the desk's
- * distance in front of the camera), both in world units.
+ * distance in front of the camera), both in world units. `opts.device`:
+ * the tablet's end in place of the laptop's (0.3.10).
  */
 export function deskCameraAt(desk, recipe, opts = {}) {
   const end = descentAt(1, recipe, opts);
-  const keys = keysFrom(end);
+  const keys = keysFrom(end, opts.device);
   const xs = keys.map(k => k.at);
   const at = key => monotone(xs, keys.map(k => k[key]), desk);
   const d = at('d');
@@ -163,6 +170,18 @@ export function deskFrameAt(layout, h, cam) {
 }
 
 /**
+ * (0.3.10) Which device the path ends on, by the frame's shape, not the
+ * device: a portrait frame gets the tablet (a 3:4 screen that fits a
+ * phone's width), anything else the laptop. Only one stands on the desk.
+ */
+export const deviceFor = (w, h) => (h > w ? 'tablet' : 'laptop');
+
+/** How wide each device's screen is at the reading position (`span`, of the
+ * frame's height per unit of zoom) and how much of a narrow frame's width
+ * it may take (`most`). */
+const SCREEN_FIT = { laptop: { span: 0.39, most: 0.8 }, tablet: { span: 0.279, most: 0.74 } };
+
+/**
  * The pitch as the shader takes it: the optical centre on screen (`sx`,
  * `sy`) and on the virtual plane (`vx`, `vy`, the 0.2 frame's horizon), the
  * focal length `f` (CSS px, the frame's: ground at depth 1 lands on its
@@ -170,11 +189,12 @@ export function deskFrameAt(layout, h, cam) {
  */
 export function pitchOf(cam, view, w, h) {
   if (!cam?.end) return null;
-  // (0.3.8) At the reading position the screen spans ~0.39 of the frame's
-  // height per unit of zoom; a narrow (portrait) frame zooms out until it
-  // spans 80% of the width at most (the tablet takes portrait in 0.3.9).
+  // (0.3.8) At the reading position the device's screen spans `span` of
+  // the frame's height across per unit of zoom; a narrow frame zooms out
+  // until it spans `most` of the width at most.
   const fit = cam.fit ?? 0;
-  const zoom = cam.zoom * (1 - fit) + Math.min(cam.zoom, ((0.8 / 0.39) * w) / h) * fit;
+  const { span, most } = SCREEN_FIT[deviceFor(w, h)];
+  const zoom = cam.zoom * (1 - fit) + Math.min(cam.zoom, ((most / span) * w) / h) * fit;
   const f = h - (view.horizon + cam.tilt * h);
   const vy = view.horizon;
   return {

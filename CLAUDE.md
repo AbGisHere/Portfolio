@@ -247,6 +247,7 @@ components/
     gl/flowerShader.js, gl/treeShader.js — the wildflowers in the grass; the lone tree and copses, their shadows (0.3.5)
     gl/deskShader.js — the desk: a trestle table built in code, its grain and shadow (0.3.6)
     gl/laptopShader.js, gl/laptopShape.js — the laptop: meshed in code, its lid, keys, logo and screen, its shine (0.3.9); its size, finish, shadow and screen light (0.3.8)
+    gl/tabletShader.js, gl/tabletShape.js — the tablet on portrait frames, leaning on its books; their size, shadow and screen light (0.3.10)
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
@@ -301,7 +302,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.10`: the tablet on portrait viewports; then `0.3.11`+ the lamp (the desk's day/night toggle), accessories and the device screen (`ROADMAP.md`, "0.3") |
+| `0.3.11`+: the lamp (the desk's day/night toggle), accessories and the device screen (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

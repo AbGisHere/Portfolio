@@ -6,6 +6,33 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.10 — 2026-10-06
+
+The tablet (the owner, 2026-10-06).
+
+- **One device per frame shape** (`deviceFor`): a portrait frame gets a
+  tablet in the laptop's place, anything else the laptop; never both on
+  the desk. It's chosen every frame, so rotating mid-scroll swaps it.
+- **The tablet** (`gl/tabletShader.js`, `gl/tabletShape.js`): a 13-inch
+  3:4 slab in the laptop's space black aluminium, the logo and camera
+  island on its back, black glass to the edge over the screen's glow,
+  waking as the laptop's lid would open. It leans at 72° on a stack of
+  five cloth hardbacks (the owner's pick over a stand), cream page edges
+  and foil spines, the stack off to one side so it shows.
+- **On the desk:** the stack's and the tablet's shadows, a contact halo
+  and the screen's light by night (`tabletShade`, `tabletGlow`).
+- **The path's end on portrait:** it looks down 19° onto the tablet's
+  screen, which spans up to 74% of a phone's width (`SCREEN_FIT`,
+  `TABLET_END`).
+- **Shared, unchanged on screen:** the laptop's `slab`, metal light
+  (`METAL_GLSL`) and logo path (`appleLogo`) are exported for the tablet.
+  The device now draws before the desk, so the desk isn't shaded behind it.
+- **Measured** (`?bench`, 390×844@3, 11 rounds, against `laptop=0`): the
+  GPU's clocks swung the medians ±2 ms both ways on this run, so the
+  floors are the comparison: closing shot 2.8 vs 2.7 ms, top-down 2.7 vs
+  3.0 ms. The book shadow on the desk was first an `if` chain of ~75 box
+  tests a pixel; it's unrolled to 15 and bounded to the stack's shadow.
+
 ## 0.3.9 — 2026-10-06
 
 The laptop made real, in one finish (the owner, 2026-10-05).

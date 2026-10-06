@@ -363,7 +363,10 @@ camera at `about` 1 exactly (unit-tested).
   eased in log space), `pitch` (degrees down), `centre` (the screen's
   optical centre moving from `0.2`'s horizon row to the frame's middle),
   `zoom` and `fit` (`0.3.8`: how far the zoom gives way so a narrow frame
-  still holds the laptop's screen, at most 80% of its width; `pitchOf`),
+  still holds the device's screen, at most 80% of its width for the
+  laptop, 74% for the tablet; `pitchOf`, `SCREEN_FIT`), and per key a
+  `tablet` override (`0.3.10`: the reading position looks down 19° onto
+  the tablet, zoom 1.5),
   each through a monotone cubic, flat at both ends and wherever two
   keys repeat (a hold). One world unit is the rest eye height, `WORLD_M` 40
   m; the desk (`DESK_BOX`, its top's size; the table is `gl/deskShader.js`) sits `d0` 60 m behind where
@@ -560,7 +563,8 @@ it while there's grass, so `0.2` frames are untouched).
   shadow in `gl/laptopShape.js`): built in code like the desk. The base and
   the lid are rounded slabs (`slab`: a rounded-rectangle outline, its top
   and bottom edges rounded over), meshed once, ~1.8 k triangles, drawn
-  right after the desk, writing depth. The lid turns on its hinge in the
+  before the desk (`0.3.10`: so the desk isn't shaded behind it), writing
+  depth. The lid turns on its hinge in the
   vertex stage by `lidAt(desk)` (`deskCamera.js`, carried as the frame's
   `lid`): shut to the end of the top-down hold, then open to 108° over
   15–90% of arc 2, easing out. The finish is one space black
@@ -590,8 +594,34 @@ it while there's grass, so `0.2` frames are untouched).
   (`laptopLid`, a ray to the lid's plane), and on the desk's top
   (`laptopBase`, in the desk's shader) the lid's, the base's (from the
   shut lid's top, softening away from it) and a contact halo all round.
+- **The device** (`0.3.10`, `deviceFor` in `deskCamera.js`, the frame's
+  `device`): a portrait frame (taller than wide) gets the tablet in the
+  laptop's place, anything else the laptop; never both. Chosen per frame,
+  so a rotation swaps it at once; `deskCameraAt` takes it for the
+  path's end.
+- **The tablet** (`0.3.10`, `gl/tabletShader.js`; its size, books,
+  shadow and light in `gl/tabletShape.js`): a 13-inch 3:4 slab
+  (215.5 × 281.6 × 5.1 mm) leaning back at 72° (the laptop screen's tilt)
+  on five cloth hardbacks (`BOOKS`), its back resting on the top book's
+  front edge above its middle (`REST_AT`), the stack off to the right so
+  it shows past the tablet. All of it is placed once in JS (positions and
+  normals baked into the mesh, with each part's own frame for shading),
+  one draw. The finish and its light are the laptop's (`METAL_GLSL`,
+  shared from `laptopShader.js`; `slab` and `appleLogo` too), skipped on
+  the glass face. Its back texture (`tabletTexels`, unit 7): r the
+  camera island, g its lenses, b the flash, a the logo, mirrored to read
+  from behind. The face is black glass to the edge over a screen glow
+  (`screenTop` → `screenFoot`, waking with `lidAt` as the lid would), a
+  front camera in the left border. Books: cloth with a weave and the
+  hinge groove, cream page edges between the boards, foil bands and a
+  title on the spines (gold on dark cloth, ink on light). On the desk
+  (`tabletShade`, with `uTablet`): each book's footprint cast at its top,
+  middle and foot (unrolled, only inside a capsule round the stack and
+  its shadow), the tablet's plane, a halo round the stack and a line at
+  its foot; its screen's light (`tabletGlow`) at under half the laptop's
+  weight, being nearer the desk.
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
-  trees; `?table=0` the desk; `?laptop=0` the laptop; `?boot=<n>` draws boot n instead of a random one (stills).
+  trees; `?table=0` the desk; `?laptop=0` the laptop or tablet; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.
