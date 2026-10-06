@@ -96,6 +96,12 @@ export function sceneAt({
   // harness: at rest the body as painted; mid-switch where it will land,
   // moved by the descent too.
   const painted = turning ? bodyAt({ ...sun, x: sunX }, r, view, place) : lit[0];
+  // (0.3.11) Where the desk's light comes from: mid-switch it swings from
+  // the outgoing body's resting spot to the incoming one's on the switch's
+  // clock, so the shadows on the desk and the grass turn with the sky
+  // rather than jump.
+  const fromX = turning ? restX(mistOf(orbit.prev.mist).sun, w, h) : sunX;
+  const litFrom = turning ? bodyAt({ ...sun, x: fromX + (sunX - fromX) * e }, r, view, place) : painted;
   // Everything above is on the 0.2 camera's image plane; the 0.3 camera's
   // pitch takes it to the screen (null: no pitch). The hit target goes where
   // the body lands there (off the frame once the camera looks down).
@@ -138,7 +144,7 @@ export function sceneAt({
     // (0.3) The closing shot's sky: clouds, birds, stars (null: none).
     life,
     // (0.3.1) The grass's colours under the desk camera (null: none).
-    grass: onDesk ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: painted, pitch, w }) : null,
+    grass: onDesk ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: litFrom, pitch, w }) : null,
     // (0.3.8) The laptop's lid, degrees open (0: shut, or no desk).
     lid: onDesk ? lidAt(desk) : 0,
     // (0.3.10) The device on the desk: the tablet on a portrait frame.

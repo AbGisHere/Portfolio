@@ -18,6 +18,7 @@
  *   shades the blades and flowers standing in it).
  */
 import { DESK_BOX } from '../deskCamera';
+import { LAMP_BLOCK_GLSL, LAMP_LIGHT_GLSL, LAMP_SHADE_GLSL } from './lampShape';
 import { TREE_STRIDE } from './treeShader';
 import { LAPTOP, LAPTOP_SHADE_GLSL } from './laptopShape';
 import { TABLET, TABLET_SHADE_GLSL } from './tabletShape';
@@ -211,6 +212,9 @@ uniform float uTablet;  // (0.3.10) 1: the tablet stands there instead
 ${DESK_SHADE_GLSL}
 ${LAPTOP_SHADE_GLSL}
 ${TABLET_SHADE_GLSL}
+${LAMP_LIGHT_GLSL}
+${LAMP_BLOCK_GLSL}
+${LAMP_SHADE_GLSL}
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
   uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -251,12 +255,14 @@ void main() {
   float tone = 0.95 + 0.09 * sin(along * 2.3 + across.x * 11.0 + vSeed * 30.0) * sin(along * 0.9 + across.y * 7.0 + vSeed * 12.0);
   // Each board its own: some paler, some darker, a little warmer or not.
   vec3 board = vec3(0.86 + 0.26 * fract(vSeed * 17.0)) * vec3(1.0, 0.97 + 0.06 * fract(vSeed * 29.0), 0.94 + 0.1 * fract(vSeed * 37.0));
-  col = uWood * board * tone * (1.0 - 0.28 * lines) * (0.92 + 0.12 * streak);
+  vec3 grain = board * tone * (1.0 - 0.28 * lines) * (0.92 + 0.12 * streak);
+  col = uWood * grain;
   // Worn edges: a little lighter where hands and weather rub.
   vec3 e = vHalf - abs(p);
   vec3 an = abs(normalize(vNorm));
   float edge = min(an.x > 0.5 ? 1.0 : e.x, min(an.y > 0.5 ? 1.0 : e.y, an.z > 0.5 ? 1.0 : e.z));
   col *= 1.0 + 0.16 * (1.0 - smoothstep(0.0, 0.006, edge));
+  grain *= 1.0 + 0.16 * (1.0 - smoothstep(0.0, 0.006, edge));
   // Lit by the scene: the low body's light, the sky's from above; under
   // the top, in its shade.
   vec3 N = normalize(vNorm);
@@ -280,6 +286,20 @@ void main() {
       col *= 1.0 - 0.6 * max(laptopBase(q), laptopLid(q));
       // (0.3.9) And its screen's light, on the wood in front of it.
       col += uWood * uGlow * laptopGlow(q, N) * 12.0;
+    }
+    // (0.3.11) The lamp's shadow on the top.
+    col *= 1.0 - 0.6 * lampShade(vWorld);
+  }
+  // (0.3.11) The lamp's light, on the wood's own colour; the device in its
+  // way casts its shadow (the lid or the tablet, the base or the books).
+  if (uLamp.r > 0.0) {
+    vec3 ll = lampLight(vWorld, N);
+    if (ll.r > 0.0) {
+      vec3 Lb = lampFrom(vWorld);
+      float far = lampFar(vWorld);
+      vec3 q = vWorld - (uTablet > 0.5 ? vec3(${TABLET.at.map(v => v.toFixed(4)).join(', ')}) : vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')}));
+      float occ = uTablet > 0.5 ? max(tabletAlong(q, Lb, far), lampBlockBooks(vWorld)) : max(laptopLidAlong(q, Lb, far), lampBlockBase(vWorld));
+      col += LAMP_WOOD * grain * ll * (1.0 - 0.9 * occ);
     }
   }
   if (uGrainA > 0.0) {

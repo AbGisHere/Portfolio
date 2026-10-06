@@ -54,6 +54,9 @@ components:
     backgroundColor: "transparent"
     rounded: "{rounded.round}"
     size: "max(10.4cqh, 44px)"
+  lamp-toggle:
+    backgroundColor: "transparent"
+    size: "the lamp's outline, at least 44px round the shade"
 ---
 
 # Design System: AbG — Abhinav Gupta's portfolio
@@ -179,11 +182,12 @@ cards.
 
 Square by default (`0`): links are underlined text with no chrome. The only
 round shape is the sun's hit target (`50%`), because it is the painted body.
+The lamp's hit target takes the lamp's own outline, for the same reason.
 
 ## Components
 
 The content layers are not built yet; the visitor will scroll through the
-whole descent before the content is designed. Two components exist today.
+whole descent before the content is designed. Three components exist today.
 
 ### The sun (signature component)
 The painted sun or moon is the day/night switch. Its button is invisible
@@ -192,6 +196,16 @@ and sits exactly on the painted body, following it as the camera moves
 switch runs. Keyboard focus draws a two-tone ring (a Warm Ink ring inside a
 Night Charcoal rim), so it shows on the pale day glow and the night sky
 alike; forced-colors mode gets a plain outline.
+
+### The lamp (the switch at the desk, 0.3.11)
+The desk lamp is the sun's counterpart at the other end of the page: on is
+night, off is day. Its button is invisible and clipped to the lamp's own
+outline on screen, following it at any scroll where it's in the frame, and
+never under 44px round the shade. A press that moves becomes a drag of its
+top half (the arrow keys do the same); a click switches. The only hint is a
+pointer cursor and a faint warm glow over it on hover. Focus shows the whole
+box with the sun's two-tone ring. Its light turns with the sky through a
+switch, never cutting on or off.
 
 ### Action links (error screens)
 Underlined text in Warm Ink with no background, border or padding, at least

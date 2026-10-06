@@ -51,6 +51,9 @@ const moonlit = {
   // value on a `period`-second sine, so the ridges slowly shift. GL only; the
   // layered fallback stays still. 0 turns it off.
   idle: { seedDrift: 0.5, period: 60 },
+  // (0.3.11) The desk lamp is on: night is the lamp switched on, day the
+  // lamp off (ROADMAP.md, "The lamp is a theme toggle").
+  lamp: true,
 
   // How this scene animates when it becomes the active theme.
   transition: {

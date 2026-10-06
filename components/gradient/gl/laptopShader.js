@@ -20,6 +20,7 @@
  */
 import { LAPTOP, LAPTOP_SHADE_GLSL } from './laptopShape';
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
+import { LAMP_LIGHT_GLSL } from './lampShape';
 
 const { w: W, d: D, base: BASE_H, lid: LID_H, corner: RC, hingeIn: HINGE_IN, gap: GAP } = LAPTOP;
 const HINGE_Z = D / 2 - HINGE_IN;
@@ -423,6 +424,7 @@ out vec4 outColor;
 
 ${LAPTOP_SHADE_GLSL}
 ${METAL_GLSL}
+${LAMP_LIGHT_GLSL}
 // The lid's frame turned to the world's, as the vertex stage turns it.
 vec3 lidToWorld(vec3 n) { return vec3(n.x, n.y * uLid.x - n.z * uLid.y, n.y * uLid.y + n.z * uLid.x); }
 
@@ -573,6 +575,14 @@ void main() {
     vec3 glass = vec3(0.008) + glow * uWake * in_;
     glass = mix(glass, vec3(0.02), lens) + vec3(0.12, 0.2, 0.35) * glint;
     col = mix(glass + shine(N, V, L, 0.05, 0.04), vec3(0.012) + shine(N, V, L, 0.6, 0.04) * 0.3, rim);
+  }
+  // (0.3.11) The lamp's light: on the black finish, and the bulb caught
+  // as a highlight; the open lid shades what's behind it.
+  vec3 ll = lampLight(vWorld, N);
+  if (ll.r > 0.0) {
+    vec3 Lb = lampFrom(vWorld);
+    float occ = laptopLidAlong(vWorld - uAt, Lb, lampFar(vWorld));
+    col += ll * (1.0 - occ) * (uMetal * 0.9 + ggx(max(dot(N, normalize(Lb + V)), 0.0), 0.3) * 0.05);
   }
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

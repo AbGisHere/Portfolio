@@ -227,6 +227,7 @@ components/
   Stage.jsx            — full-viewport shell for every scene
   AtmosphereField.jsx  — the scene behind every page: backdrop sky, renderer pick, sun toggle
   SunToggle.jsx        — hit target on the painted sun or moon (follows sunSpot.js)
+  LampToggle.jsx       — the desk lamp as a control: click to switch day/night, drag its top half (0.3.11)
   SmoothScroll.jsx     — the scroll layer: Lenis (desktop), publishes the descent's progress
   scroll/descent.js    — the progress store (`about`, `desk`), outside React; `?scroll=`, `?desk=` pin it
   scroll/DescentTrack.jsx — an empty block giving a stretch its scroll length (TRACK_LVH)
@@ -248,6 +249,9 @@ components/
     gl/deskShader.js — the desk: a trestle table built in code, its grain and shadow (0.3.6)
     gl/laptopShader.js, gl/laptopShape.js — the laptop: meshed in code, its lid, keys, logo and screen, its shine (0.3.9); its size, finish, shadow and screen light (0.3.8)
     gl/tabletShader.js, gl/tabletShape.js — the tablet on portrait frames, leaning on its books; their size, shadow and screen light (0.3.10)
+    gl/lampShader.js, gl/lampShape.js — the desk lamp: its mesh from a pose; its light, shadow, flicker, on-screen outline and drag (0.3.11)
+    lampSpot.js, lampPose.js — the lamp's outline on screen and its dragged pose, outside React (0.3.11)
+    treeSeed.js — the copses' seed: kept per browser, new on a hard refresh (0.3.11)
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
@@ -289,7 +293,7 @@ The invariants any change must keep, whatever part it touches:
 - **Three clocks only:** the spring at rest, the switch clock and, from
   `0.3.1`, the footprint clock (the grass's footsteps fading, ticked inside
   GL's frame loop, `ROADMAP.md` "0.3"). The wind (and the meadow's cloud
-  shadows) and the closing sky's birds, clouds and stars run on GL's frame loop too, not a loop of their
+  shadows), the closing sky's birds, clouds and stars and the lamp's flicker run on GL's frame loop too, not a loop of their
   own. Don't add another animation loop. The camera is a pure function of
   scroll, never sprung; the scroll itself only snaps onto the stops.
 - **Frame budget:** 120 fps on the sweeps in `npm run perf`, and sharp on
@@ -302,7 +306,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.11`+: the lamp (the desk's day/night toggle), accessories and the device screen (`ROADMAP.md`, "0.3") |
+| `0.3.12`+: the stationery and accessories, then the device screen (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

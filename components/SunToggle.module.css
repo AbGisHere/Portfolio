@@ -45,3 +45,7 @@
 .toggle:active {
   transform: translate(-50%, -50%) scale(0.94);
 }
+
+.toggle[hidden] {
+  display: none;
+}

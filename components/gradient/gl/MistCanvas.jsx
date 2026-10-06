@@ -39,6 +39,8 @@ import { LAPTOP_FRAGMENT, LAPTOP_STRIDE, LAPTOP_TEX, LAPTOP_VERTEX, laptopMesh, 
 import { LAPTOP } from './laptopShape';
 import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, tabletTexels } from './tabletShader';
 import { TABLET } from './tabletShape';
+import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
+import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
@@ -50,6 +52,9 @@ import {
 } from '../camera';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
 import { publishSunSpot } from '../sunSpot';
+import { publishLampSpot } from '../lampSpot';
+import { getLampPose, subscribeLampPose } from '../lampPose';
+import { treeSeed } from '../treeSeed';
 import { grainTile, layGrain } from '../grainLayer';
 import styles from './MistCanvas.module.css';
 
@@ -217,7 +222,8 @@ export default function MistCanvas({ recipe, onFail }) {
       if (trees !== null) return trees;
       const tp = passProgram(gl, 'trees', TREE_VERTEX, TREE_FRAGMENT);
       if (!tp) return (trees = false);
-      const { data, wood, parts } = treeLayout();
+      // (0.3.11) The copses jittered by the visitor's seed (new on a hard refresh).
+      const { data, wood, parts } = treeLayout(treeSeed());
       const tb = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, tb);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
@@ -331,6 +337,30 @@ export default function MistCanvas({ recipe, onFail }) {
       const TU = {};
       tablet = { prog: tp, vao, buf: tb, tex, count, u: name => (TU[name] ??= gl.getUniformLocation(tp, name)) };
       return tablet;
+    };
+    // (0.3.11) The desk lamp (lampShader.js): no texture; its mesh rebuilt
+    // whenever its top half is dragged to a new pose (../lampPose.js).
+    let lamp = null;
+    const lampProgram = () => {
+      if (lamp !== null) return lamp;
+      const mp = passProgram(gl, 'lamp', LAMP_VERTEX, LAMP_FRAGMENT);
+      if (!mp) return (lamp = false);
+      const pose = getLampPose();
+      const { data, count } = lampMesh(pose);
+      const mb = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mb);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 1, 7]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, LAMP_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const MU = {};
+      lamp = { prog: mp, vao, buf: mb, count, pose, u: name => (MU[name] ??= gl.getUniformLocation(mp, name)) };
+      return lamp;
     };
     const DEPTH_AB = (() => {
       const n = DEPTH.near * 40;
@@ -471,6 +501,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noDesk = params.get('table') === '0';
     // `?laptop=0` leaves the laptop out (profiling).
     const noLaptop = params.get('laptop') === '0';
+    // `?lamp=0` leaves the lamp out (profiling).
+    const noLamp = params.get('lamp') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -982,6 +1014,15 @@ export default function MistCanvas({ recipe, onFail }) {
             }
           : null;
       }
+      // (0.3.11) Where the lamp's shade is on screen, for its hit target
+      // (LampToggle, through ../lampSpot.js): live wherever the lamp is in
+      // the frame and big enough to see (the owner, 2026-10-06: clickable
+      // from anywhere, not only at the holds); null elsewhere.
+      // Its outline (every part) goes with the camera, for a drag.
+      const lampPose = meadowAt ? lampPoseNow() : null;
+      const hit = meadowAt && !noLamp && lampProgram() ? lampHitOn(meadowAt.pitch, meadowAt.cm, lampPose) : null;
+      const shown = hit && hit.r >= 4 && hit.x + hit.w > 0 && hit.x < w && hit.y + hit.h > 0 && hit.y < h;
+      publishLampSpot(shown ? { ...hit, cam: { P: meadowAt.pitch, cm: meadowAt.cm }, pose: lampPose, device: meadowAt.device } : null);
       // The grass, once the camera is low enough to see blades.
       const cmY = pitch ? cam.eye * 40 : Infinity;
       grassAt = pitch && frame.grass && cmY < GRASS.reach && !noGrass
@@ -1204,6 +1245,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
       gl.uniform3fv(g.u('uGlow'), laptopLight().glow);
       gl.uniform1f(g.u('uTablet'), meadowAt.device === 'tablet' && !noLaptop ? 1 : 0);
+      lampUniforms(g, true);
       if (shade) {
         gl.bindVertexArray(g.shadowVao);
         shadeInto(() => gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1));
@@ -1230,6 +1272,81 @@ export default function MistCanvas({ recipe, onFail }) {
       const k = wake * (0.06 + 7 * night * night);
       const lit = night * night * wake;
       return { wake, night, glow: top.map((v, i) => ((v + foot[i]) / 2) * k), backlight: [0.85 * lit, 0.88 * lit, 0.95 * lit] };
+    }
+
+    // (0.3.11) The lamp's light: on by night (the recipe's `lamp`), its
+    // bulb's colour; by night, at rest, an occasional stutter (lampShape.js
+    // makeFlicker) on the frame loop's clock. Never under reduced motion,
+    // `?freeze=1` or mid-switch.
+    // Mid-switch it follows the sky's turn: switching to night it comes up
+    // as the sky darkens, to day it fades as the light comes back.
+    const flicker = makeFlicker();
+    // The pose as drawn: the dragged one, unless it would stand in this
+    // frame's device (a rotation can swap the laptop for the tablet).
+    function lampPoseNow() {
+      const p = getLampPose();
+      return lampClear(p, meadowAt?.device ?? 'laptop') ? p : LAMP_POSE;
+    }
+    function lampLight() {
+      if (noLamp) return [0, 0, 0];
+      let k = recipeRef.current.lamp ? 1 : 0;
+      if (orbit) {
+        const smooth = (a, b, x) => {
+          const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+          return t * t * (3 - 2 * t);
+        };
+        k = orbit.next.lamp ? (orbit.prev.lamp ? 1 : smooth(0.05, 1, orbit.e)) : orbit.prev.lamp ? 1 - smooth(0, 0.8, orbit.e) : 0;
+      } else if (k && !motion.matches && !frozen) k *= flicker(skyT);
+      return rgb01(LAMP.bulb).map(v => v * k);
+    }
+    // Where the lamp's bulb is and where its shade points, for every pass
+    // its light falls on; with `segs`, the arms and shade its shadow is
+    // cast from (the desk).
+    function lampUniforms(g, segs) {
+      const pose = lampPoseNow();
+      const at = lampAt(pose);
+      gl.uniform3fv(g.u('uLamp'), lampLight());
+      gl.uniform3fv(g.u('uLampBulb'), at.bulb);
+      gl.uniform3fv(g.u('uLampAxis'), at.axis);
+      if (segs) gl.uniform3fv(g.u('uLampSeg'), lampSegments(at));
+    }
+
+    // (0.3.11) The lamp on the desk, writing its depth.
+    function drawLamp() {
+      const g = lampProgram();
+      if (!g) return;
+      const pose = lampPoseNow();
+      if (g.pose !== pose) {
+        const { data, count } = lampMesh(pose);
+        gl.bindBuffer(gl.ARRAY_BUFFER, g.buf);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        g.count = count;
+        g.pose = pose;
+      }
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uPaint'), rgb01(LAMP.paint));
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.wood));
+      lampUniforms(g);
+      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
     }
 
     // (0.3.8) The laptop on the desk, writing its depth.
@@ -1260,6 +1377,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uGlow'), shine.glow);
       gl.uniform3fv(g.u('uBacklight'), shine.backlight);
       gl.uniform1f(g.u('uNight'), shine.night);
+      lampUniforms(g);
       gl.uniform1i(g.u('uDeck'), 6);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
@@ -1296,6 +1414,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const shine = laptopLight();
       gl.uniform1f(g.u('uWake'), shine.wake);
       gl.uniform1f(g.u('uNight'), shine.night);
+      lampUniforms(g);
       gl.uniform1i(g.u('uBack'), 7);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
@@ -1404,6 +1523,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.3.10) The device before the desk, so the desk's top isn't shaded
       // behind it.
       if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
+      if (deskOn && !noLamp) drawLamp();
       if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);
@@ -1574,6 +1694,11 @@ export default function MistCanvas({ recipe, onFail }) {
       dirty = true;
       kick();
     });
+    // (0.3.11) A drag of the lamp: its mesh, light and outline follow.
+    const unsubscribeLamp = subscribeLampPose(() => {
+      dirty = true;
+      kick();
+    });
     const onLost = e => {
       e.preventDefault();
       cancelAnimationFrame(raf);
@@ -1586,6 +1711,8 @@ export default function MistCanvas({ recipe, onFail }) {
     // shows. A moving mouse walks; a touch taps one step.
     function onPointer(e) {
       if (!footCam) return;
+      // Not while on (or dragging) the lamp.
+      if (e.target?.closest?.('[data-lamp-toggle]')) return void walker.lift();
       const rect = canvas.getBoundingClientRect();
       const g = groundAt(footCam.pitch, footCam.cam, e.clientX - rect.left, e.clientY - rect.top);
       if (!g || g.d > REACH) return void walker.lift();
@@ -1616,6 +1743,7 @@ export default function MistCanvas({ recipe, onFail }) {
       document.removeEventListener('visibilitychange', onVisibility);
       motion.removeEventListener('change', onMotion);
       unsubscribe();
+      unsubscribeLamp();
       canvas.removeEventListener('webglcontextlost', onLost);
       gl.deleteTexture(skyTex);
       gl.deleteTexture(crestTex);
@@ -1626,7 +1754,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteProgram(prog);
       if (laptop) gl.deleteTexture(laptop.tex);
       if (tablet) gl.deleteTexture(tablet.tex);
-      for (const p of [grass, flowers, trees, desk, laptop, tablet]) {
+      publishLampSpot(null);
+      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

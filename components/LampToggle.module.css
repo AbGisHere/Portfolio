@@ -1,0 +1,43 @@
+/* The desk lamp painted into the scene is the control: the box round it,
+   clipped to its outline (LampToggle.jsx writes both from
+   gradient/lampSpot.js). */
+.toggle {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  /* A drag on the lamp moves it, not the page. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.toggle[hidden] {
+  display: none;
+}
+
+.toggle[data-dragging] {
+  cursor: grabbing;
+}
+
+/* The only hint: a faint warm glow over the lamp on hover. */
+@media (hover: hover) {
+  .toggle:hover {
+    background: radial-gradient(closest-side, rgb(255 196 120 / 0.14), rgb(255 196 120 / 0.04));
+  }
+}
+
+/* Two tones, as the sun toggle's: one shows on the lit desk, one on the
+   dark. Focused, the box shows whole, so the ring isn't clipped away. The
+   transparent outline is what forced-colors mode draws. */
+.toggle:focus-visible {
+  clip-path: none !important;
+  border-radius: 6px;
+  outline: 2px solid transparent;
+  outline-offset: 5px;
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 5px var(--bg);
+}

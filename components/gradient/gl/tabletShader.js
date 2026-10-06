@@ -14,8 +14,9 @@
  * - **The books:** cloth over board, cream page edges, foil on the spines.
  */
 import { appleLogo, METAL_GLSL, LAPTOP_STRIDE, slab } from './laptopShader';
-import { BOOKS, REST_AT, TABLET, TABLET_N, TABLET_U } from './tabletShape';
+import { BOOKS, REST_AT, TABLET, TABLET_N, TABLET_SHADE_GLSL, TABLET_U } from './tabletShape';
 import { LAPTOP_SHADE_GLSL } from './laptopShape';
+import { LAMP_BLOCK_GLSL, LAMP_LIGHT_GLSL } from './lampShape';
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 
 const { w: W, d: D, t: T, corner: RC, screen: SCREEN } = TABLET;
@@ -182,7 +183,10 @@ const vec3 BOOK[${BOOKS.length}] = vec3[](${BOOKS.map(b => vec3([b.w, b.d, b.h])
 const float SPINE[${BOOKS.length}] = float[](${BOOKS.map(b => f(b.spine)).join(', ')});
 
 ${LAPTOP_SHADE_GLSL}
+${TABLET_SHADE_GLSL}
 ${METAL_GLSL}
+${LAMP_LIGHT_GLSL}
+${LAMP_BLOCK_GLSL}
 
 void main() {
   vec3 N = normalize(vNorm);
@@ -194,6 +198,7 @@ void main() {
   float lightLvl = mix(1.0, 0.42, uNight);
   float low = vWorld.y - uAt.y;
   vec3 col;
+  vec3 kd = uMetal; // what the lamp's light shows (0.3.11)
   if (vPart == 0) {
     // The tablet: space black aluminium, as the laptop's (0.3.9), off
     // its face (the face is glass, and most of what's seen of it).
@@ -253,6 +258,7 @@ void main() {
     vec3 cloth = CLOTH[i];
     float weave = 0.92 + 0.08 * noise2(vLocal.xz * 900.0 + vLocal.y * 700.0);
     vec3 clothCol = cloth * lit * weave + shine(N, V, L, 0.75, 0.04) * 0.35;
+    kd = cloth * weave;
     float spine = step(0.5, vLocalN.z * SPINE[i]) * step(abs(vLocalN.y), 0.5);
     float side = step(abs(vLocalN.y), 0.5) * (1.0 - spine);
     col = clothCol;
@@ -270,6 +276,7 @@ void main() {
       float tuck = smoothstep(cb, cb + 0.0025, y) * (1.0 - smoothstep(b.z - cb - 0.0025, b.z - cb, y));
       vec3 pages = vec3(0.95, 0.88, 0.74) * (lit + uSky * 0.12 * (1.0 - uNight)) * lines * mix(0.7, 1.0, tuck);
       col = mix(clothCol * 0.85, pages, pg);
+      kd = mix(cloth, vec3(0.95, 0.88, 0.74), pg);
     } else if (spine > 0.5) {
       // The spine: foil bands near each end and the title in the middle;
       // gold on dark cloth, dark ink on light.
@@ -283,6 +290,14 @@ void main() {
     // In against the desk, and where the books meet.
     float meet = min(vLocal.y, b.z - vLocal.y);
     if (abs(vLocalN.y) < 0.9) col *= mix(i == 0 ? 0.55 : 0.75, 1.0, smoothstep(0.0, 0.004, i == 0 ? vLocal.y : meet));
+  }
+  // (0.3.11) The lamp's light, and the bulb caught as a highlight; the
+  // tablet shades the books behind it, the books the tablet.
+  vec3 ll = lampLight(vWorld, N);
+  if (ll.r > 0.0) {
+    vec3 Lb = lampFrom(vWorld);
+    float occ = vPart == 0 ? lampBlockBooks(vWorld) : tabletAlong(vWorld - uAt, Lb, lampFar(vWorld));
+    col += ll * (1.0 - occ) * (kd * 0.9 + ggx(max(dot(N, normalize(Lb + V)), 0.0), vPart == 0 ? 0.25 : 0.6) * 0.05);
   }
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

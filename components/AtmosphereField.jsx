@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from './ThemeProvider';
 import SunToggle from './SunToggle';
+import LampToggle from './LampToggle';
 import themes from './gradient/themes';
 import { SKY_VARS } from './gradient/sky';
 import styles from './AtmosphereField.module.css';
@@ -82,6 +83,7 @@ export default function AtmosphereField() {
       </div>
 
       <SunToggle recipe={recipe} />
+      <LampToggle recipe={recipe} />
     </aside>
   );
 }

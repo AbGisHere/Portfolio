@@ -23,6 +23,8 @@ import { TREE_STRIDE, treeLayout } from '../components/gradient/gl/treeShader.js
 import { DESK_STRIDE, deskLayout } from '../components/gradient/gl/deskShader.js';
 import { DESK_BOX } from '../components/gradient/deskCamera.js';
 import { PROGRAMS } from './lib/programs.mjs';
+import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, makeFlicker, poseFree, poseToward, screenToWorld } from '../components/gradient/gl/lampShape.js';
+import { LAMP_STRIDE, lampMesh } from '../components/gradient/gl/lampShader.js';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -385,21 +387,26 @@ test('every shader the atmosphere builds is checked on real devices (scripts/lib
   }
 });
 
-test('the trees: fixed, whole, one shadow each, clear of the desk and of the view over it', () => {
-  const a = treeLayout();
-  const b = treeLayout();
-  assert.deepEqual(a.data, b.data, 'the same trees every visit');
-  assert.equal(a.data.length % TREE_STRIDE, 0);
-  assert.ok(a.data.every(Number.isFinite));
-  const rows = i => a.data.subarray(i * TREE_STRIDE, (i + 1) * TREE_STRIDE);
-  const n = a.data.length / TREE_STRIDE;
-  const trunks = [];
-  for (let i = 0; i < a.parts; i++) if (rows(i)[8] === 0 && rows(i)[1] < 0) trunks.push(rows(i));
-  assert.equal(n - a.parts, trunks.length, 'a shadow per tree');
-  for (const t of trunks) {
-    const [x, , z] = t;
-    assert.ok(Math.hypot(x, z) > 4, 'none on the desk');
-    if (z > 20) assert.ok(Math.abs(x) > 12, 'the line over the desk stays open');
+test('the trees: whole, one shadow each, clear of the desk and of the view over it, however the copses fall', () => {
+  assert.deepEqual(treeLayout().data, treeLayout().data, 'no seed: the same trees every time');
+  assert.deepEqual(treeLayout(7).data, treeLayout(7).data, 'a seed: the same trees for it');
+  assert.notDeepEqual(treeLayout(7).data, treeLayout(8).data, 'another seed: other copses');
+  for (const seed of [null, 1, 7, 8, 99, 12345, 2 ** 30]) {
+    const a = treeLayout(seed);
+    assert.equal(a.data.length % TREE_STRIDE, 0);
+    assert.ok(a.data.every(Number.isFinite));
+    const rows = i => a.data.subarray(i * TREE_STRIDE, (i + 1) * TREE_STRIDE);
+    const n = a.data.length / TREE_STRIDE;
+    const trunks = [];
+    for (let i = 0; i < a.parts; i++) if (rows(i)[8] === 0 && rows(i)[1] < 0) trunks.push(rows(i));
+    assert.equal(n - a.parts, trunks.length, 'a shadow per tree');
+    assert.ok(trunks.some(([x, , z]) => Math.abs(x + 6.4) < 0.5 && Math.abs(z - 9.5) < 0.5), 'the lone tree where it stands');
+    for (const t of trunks) {
+      const [x, , z] = t;
+      assert.ok(Math.hypot(x, z) > 4, 'none on the desk');
+      if (z > 20) assert.ok(Math.abs(x) > 12, `the line over the desk stays open (seed ${seed})`);
+      assert.ok(z < 80, 'short of the mountains\' foot');
+    }
   }
 });
 
@@ -422,6 +429,69 @@ test('the desk: fixed, whole, standing on the ground, its top at DESK_BOX', () =
   }
   assert.ok(Math.abs(top - DESK_BOX.h) < 0.005, `the top at ${DESK_BOX.h} m (${top.toFixed(3)})`);
   assert.ok(foot > -0.005 && foot < 0.01, `standing on the ground (${foot.toFixed(3)})`);
+});
+
+test('the lamp: on the desk, its arms whole, its light aimed down, its top half moved by a drag', () => {
+  const { at: base, arm } = LAMP;
+  const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+  assert.equal(base[1], DESK_BOX.h, 'standing on the top');
+  assert.ok(Math.abs(base[0]) + LAMP.base.r < DESK_BOX.w / 2 && Math.abs(base[2]) + LAMP.base.r < DESK_BOX.d / 2, 'its base on the top');
+  // Every pose a drag can give: wherever the pointer goes, the arms keep
+  // their length, the head stays over the top, the shade looks down.
+  for (const w of [[0.12, 0.95, 0.03], [-2, 3, -2], [0.45, 0.8, 0.255], [0.9, 0.6, 0.6], [0, 0.76, 0]]) {
+    const pose = poseToward(w);
+    const at = lampAt(pose);
+    assert.ok(Math.abs(dist(at.pivot, at.elbow) - arm) < 1e-9 && Math.abs(dist(at.elbow, at.head) - arm) < 1e-9, 'both arms their length');
+    assert.ok(Math.abs(at.head[0]) < DESK_BOX.w / 2 && Math.abs(at.head[2]) < DESK_BOX.d / 2 && at.head[1] > DESK_BOX.h, 'the head over the top');
+    assert.ok(at.axis[1] < -0.5, 'the shade looks down');
+    const { data, count } = lampMesh(pose);
+    assert.equal(data.length, count * LAMP_STRIDE);
+    assert.ok(data.every(Number.isFinite));
+  }
+  const { data, count } = lampMesh();
+  for (let i = 0; i < count; i++) {
+    const [x, y, z] = data.subarray(i * LAMP_STRIDE, i * LAMP_STRIDE + 3);
+    assert.ok(y > DESK_BOX.h - 1e-6 && Math.abs(x) < DESK_BOX.w / 2 && Math.abs(z) < DESK_BOX.d / 2, 'all of it over the top');
+  }
+  // Never through the device: the first pose is clear of both, and a drag
+  // into one stops short of it.
+  for (const device of ['laptop', 'tablet']) {
+    assert.ok(lampClear(LAMP_POSE, device), `the first pose clear of the ${device}`);
+    for (const w of [[0, 0.8, 0.05], [0.05, 0.98, 0.2], [0.15, 0.85, 0.15], [-0.1, 0.78, 0.1]]) {
+      assert.ok(lampClear(poseFree(LAMP_POSE, w, device), device), `a drag stops at the ${device}`);
+    }
+  }
+  // On screen: behind the camera, no outline; in front, a box round it and
+  // the head taken back to the world where it was.
+  const P = { cos: 1, sin: 0, f: 800, zoom: 1, sx: 400, sy: 300 };
+  assert.equal(lampHitOn(P, { x: 0, y: 1, z: 2 }), null);
+  const cm = { x: 0.2, y: 1, z: -1 };
+  const hit = lampHitOn(P, cm);
+  assert.ok(hit && hit.w > 0 && hit.h > 0 && hit.path.startsWith('M'));
+  const head = lampAt(LAMP_POSE).head;
+  const q = [head[0] - cm.x, head[1] - cm.y, head[2] - cm.z];
+  const back = screenToWorld(P, cm, head, P.sx + (800 * q[0]) / q[2], P.sy - (800 * q[1]) / q[2]);
+  assert.ok(dist(back, head) < 1e-9, 'the screen and the world agree');
+});
+
+test('the lamp\'s flicker: steady, now and then a stutter, never on a schedule', () => {
+  const a = makeFlicker(0.3);
+  const b = makeFlicker(0.3);
+  const starts = [];
+  let prev = 1;
+  for (let t = 0; t < 1200; t += 1 / 60) {
+    const k = a(t);
+    assert.equal(k, b(t), 'the same seed, the same flicker');
+    assert.ok(k > 0 && k <= 1);
+    if (k < 1 && prev === 1) starts.push(t);
+    prev = k;
+  }
+  // Stutters: dips within half a second of each other are one.
+  const bursts = starts.filter((t, i) => i === 0 || t - starts[i - 1] > 0.5);
+  assert.ok(bursts.length > 15 && bursts.length < 120, `rare (${bursts.length} in 20 min)`);
+  const gaps = bursts.slice(1).map((t, i) => t - bursts[i]);
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) > 10, 'spaced at random, not on a period');
+  assert.ok(a(1300) <= 1 && makeFlicker(0.7)(5) === 1, 'steady at first');
 });
 
 function geoArgs(r) {

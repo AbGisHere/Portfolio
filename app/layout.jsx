@@ -42,6 +42,9 @@ export const viewport = {
 // Runs before first paint so a returning night visitor's backdrop is already
 // night, rather than flashing the day sky until React reads localStorage.
 const THEME_SCRIPT = `try{var t=localStorage.getItem('abg-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t}catch(e){}` +
+  // (0.3.11) A reload starts at the top of the page, not where the browser
+  // left the scroll (the owner, 2026-10-06); the theme above is kept.
+  `;try{history.scrollRestoration='manual'}catch(e){}` +
   // Errors on old browsers, kept (at most 20) for `npm run devices` to read:
   // thrown, failed loads, rejected promises, and React's own reports, which go
   // to console.error where `reportError` is missing (before Safari 15.4).

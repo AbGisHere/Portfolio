@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -408,7 +408,8 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.8` | **Shipped.** The laptop (the owner, 2026-10-05): built in code, silver by day and space black by night, the lid opening over arc 2, a placeholder glow on its screen; the reading position moved in so the screen spans ~42% of the frame. |
 | `0.3.9` | **Shipped.** The laptop made real (the owner, 2026-10-05): one space black finish by day and night, GGX shine with Fresnel, polished edges, the lid's rolled edge and the shut seam, a soft contact shadow all round and the shut lid's full shadow; the screen's glass, notch and camera, its light on the deck and desk by night; key legends and bevels, the backlight by night; the front scoop. |
 | `0.3.10` | **Shipped.** The tablet (the owner, 2026-10-06): on a portrait frame it stands in the laptop's place, leaning on a stack of cloth hardbacks, space black with the logo on its back, its screen waking as the camera comes round; the path ends looking down onto its screen, which spans up to 74% of a phone's width. Landscape frames keep the laptop; only one is ever on the desk. |
-| `0.3.11`+ | The lamp (the theme toggle at the desk: switched on and off, it turns night and day, the owner, 2026-10-04), the stationery and accessories, then the device screen. Where the sun and moon are off the frame, their hit target leaves the tab order (it's parked off screen today; the audit, 2026-10-04). |
+| `0.3.11` | **Shipped.** The lamp (the owner, 2026-10-04 and 2026-10-06): an ivory anglepoise in the desk's back right corner, built in code; on by night with its pool by the device, off by day. Click anywhere on it, wherever it's in the frame, to switch night and day; drag its top half to move the head and its light. The bulb, the light and the shadows turn with the sky's switch rather than snapping, and by night the bulb now and then flickers. Where the sun and moon are off the frame, their hit target leaves the tab order (the audit, 2026-10-04). The lamp's light never passes through the laptop or tablet, and a drag stops at them. A reload starts at the top of the page (the theme kept), and a hard refresh moves the copses (the lone tree stays). |
+| `0.3.12`+ | The stationery and accessories, then the device screen. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -473,11 +474,22 @@ What that layer is hasn't been decided.
 **The lamp is a theme toggle.** Lamp on means night, lamp off means day.
 It's the sun toggle's counterpart at the other end of the page.
 - It's a real `<button>` over the lamp, like `SunToggle`: keyboard-focusable,
-  labelled ("Switch to night"), and `data-busy` for the length of a switch.
-- Its hit target is projected from the 3D lamp to the screen every frame,
-  using the same camera maths as the drawing, so it can't drift off the lamp.
-- It's active only at the holds (the top-down and final shots). Mid-descent
-  it moves too fast to click.
+  labelled ("Lamp — switch on, to night"), and `data-busy` for the length
+  of a switch.
+- Its hit area is the lamp's own outline, projected from the 3D lamp to
+  the screen every frame with the same camera maths as the drawing, so it
+  can't drift off the lamp. [`0.3.11`: any part of it, the owner,
+  2026-10-06.]
+- It's live wherever the lamp is in the frame and big enough to see.
+  [`0.3.11`: the owner, 2026-10-06, replacing "only at the holds".]
+- **Its top half can be dragged:** the arms and head follow the pointer
+  as far as they reach, never into the device, and the light and shadows
+  go with them (the light never passes through the device); the arrow
+  keys do the same. The pose is kept per browser. [`0.3.11`: the owner,
+  2026-10-06.]
+- **A switch is a turn, not a cut:** the bulb comes up as night falls and
+  fades as day returns, and every light and shadow on the desk turns with
+  the sky on the switch's clock. [`0.3.11`: the owner, 2026-10-06.]
 - The hint is a cursor change and a faint glow on hover, nothing more.
 - At the final shot the sky is visible behind the laptop, so a click plays
   the whole sky turn in the background.
@@ -587,7 +599,7 @@ every so often feels real, and a tight loop reads as a GIF.
 | Effect | How |
 |---|---|
 | **Pencil** | Every so often it rolls a little, or settles after a nudge. It's a rotation of its own mesh about its long axis, with a slight slide, easing to rest, and its shadow follows. |
-| **Lamp flicker** | Night only (the lamp is on). The light is mostly steady, with an occasional stutter: a few fast dips in the lamp's lightmap weight. The pool on the desk flickers with the bulb, since it's the same light. |
+| **Lamp flicker** | Built in `0.3.11` (`makeFlicker`). Night only (the lamp is on). The light is mostly steady, with an occasional stutter: a few fast dips in the lamp's light. The pool on the desk flickers with the bulb, since it's the same light. |
 | **Sparks** from the extension box | A rare, short burst: a few bright streaks with gravity, fading within about 300 ms, as particles in the shader. Each burst flashes the nearby surfaces for a frame or two. |
 | **Grass** | Sways in gusts: noise-driven, strongest at the tips and still at the roots, varying in strength and direction. It extends `0.2`'s meadow wind (`WIND`). |
 | **Desk clock** | Seen from above. It shows the visitor's real local time, read from the device clock (no data leaves the browser). The face is readable from the top-down hold. The hands are their own meshes, rotated in code; the seconds hand ticks. |

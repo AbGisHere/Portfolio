@@ -72,7 +72,8 @@ const f = x => x.toFixed(5);
  * GLSL: how far a point (metres, from the tablet's foot) lies in the
  * tablet's and the books' shadow (0 … 1), from the light the laptop's
  * comes from (`laptopLight`), with the dark where they meet the desk; and
- * `tabletGlow`, its lit screen as a soft panel light, as `laptopGlow`.
+ * `tabletGlow`, its lit screen as a soft panel light, as `laptopGlow`;
+ * `tabletAlong`, (0.3.11) the tablet's alone along any light L, up to `far`.
  * Needs LAPTOP_SHADE_GLSL (`laptopBox`, `laptopLight`).
  */
 const STACK_C = [BOOKS.reduce((a, b) => a + b.x, 0) / BOOKS.length, BOOKS.reduce((a, b) => a + b.z, 0) / BOOKS.length];
@@ -86,6 +87,18 @@ export const TABLET_SHADE_GLSL = `${BOOKS.map(
   return laptopBox(vec2(p.x * ${f(Math.cos(b.yaw))} + p.y * ${f(Math.sin(b.yaw))}, p.y * ${f(Math.cos(b.yaw))} - p.x * ${f(Math.sin(b.yaw))}), vec2(${f(b.w / 2)}, ${f(b.d / 2)}), 0.002);
 }`,
 ).join('\n')}
+float tabletAlong(vec3 q, vec3 L, float far) {
+  vec3 u = vec3(${TABLET_U.map(f).join(', ')});
+  vec3 n = vec3(${TABLET_N.map(f).join(', ')});
+  vec3 h = n * ${f(TT / 2)} + u * ${f(TD / 2)};
+  float den = dot(L, n);
+  if (abs(den) < 1e-4) return 0.0;
+  float t = dot(h - q, n) / den;
+  if (t <= 0.0 || t >= far) return 0.0;
+  vec3 c = q + L * t - h;
+  float s = 0.0015 + t * 0.025;
+  return 1.0 - smoothstep(-s, s, laptopBox(vec2(c.x, dot(c, u)), vec2(${f(TW / 2)}, ${f(TD / 2)}), ${f(TABLET.corner)}));
+}
 float tabletShade(vec3 q) {
   vec3 L = laptopLight();
   vec2 run = L.xz / L.y;
@@ -107,18 +120,7 @@ float tabletShade(vec3 q) {
   float out_ = max(book0(q.xz), 0.0);
   halo = exp(-out_ / 0.012) * 0.8 + exp(-out_ / 0.04) * 0.25;
   // The tablet: a plane through its middle, along the light to it.
-  vec3 u = vec3(${TABLET_U.map(f).join(', ')});
-  vec3 n = vec3(${TABLET_N.map(f).join(', ')});
-  vec3 h = n * ${f(TT / 2)} + u * ${f(TD / 2)};
-  float den = dot(L, n);
-  if (abs(den) > 1e-4) {
-    float t = dot(h - q, n) / den;
-    if (t > 0.0) {
-      vec3 c = q + L * t - h;
-      float s = 0.0015 + t * 0.025;
-      sh = max(sh, 1.0 - smoothstep(-s, s, laptopBox(vec2(c.x, dot(c, u)), vec2(${f(TW / 2)}, ${f(TD / 2)}), ${f(TABLET.corner)})));
-    }
-  }
+  sh = max(sh, tabletAlong(q, L, 1e9));
   // Where its foot stands, a thin dark line.
   float foot = laptopBox(vec2(q.x, q.z + ${f(TT * SIN / 2)}), vec2(${f(TW / 2 - 0.004)}, ${f(TT * SIN / 2)}), 0.002);
   halo = max(halo, exp(-max(foot, 0.0) / 0.004) * 0.75);

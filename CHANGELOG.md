@@ -6,6 +6,71 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.11 — 2026-10-06
+
+The lamp (the owner, 2026-10-04 and 2026-10-06).
+
+- **The lamp** (`gl/lampShader.js`, `gl/lampShape.js`): an anglepoise in
+  the desk's back right corner (the owner's pick of style and place),
+  built in code from turned and tubed parts: a weighted round base, a
+  turret, twin-rod arms with knuckles, springs, and a bell shade with a
+  rolled lip round an opal bulb. Warm ivory enamel, steel fittings. Its
+  shade's pool falls by the device's right side, where both closing shots
+  (laptop and tablet) see it.
+- **Its light** (`LAMP_LIGHT_GLSL`): a spot from the bulb through the
+  shade's mouth, falling off with distance, on the desk (the wood's own
+  colour, `LAMP_WOOD`, not the night's blue), the laptop, the tablet and
+  its books, never through the device: the lid's or the tablet's plane
+  and the laptop's base or the stack of books (`LAMP_BLOCK_GLSL`, a ray
+  to the bulb against their boxes) shade it. Inside
+  the shade glows and its lip catches the light. On by night, off by day.
+- **Its shadow** on the desk (`lampShade`): the turret, the arms and the
+  shade as capsules cast along the scene's light, softening and fading as
+  they run, and a contact halo round the base.
+- **A theme toggle** (`LampToggle.jsx`, `lampSpot.js`): click anywhere on
+  the lamp and night turns to day, day to night. The hit area is the
+  lamp's own outline on screen (each part's convex shape, clipped with
+  `clip-path: path()`), at least 44 px round the shade when it's small,
+  live wherever the lamp is in the frame, not only at the holds (the
+  owner, 2026-10-06). Off the frame it's hidden and out of the tab order.
+- **Drag the top half** (the owner, 2026-10-06): the arms and head follow
+  the pointer as far as they reach, over the desk (`poseToward`,
+  `screenToWorld`), stopping where it would meet the device or the desk
+  (`lampClear`, `poseFree`, against `LAMP_KEEP_OUT`); the mesh, the light,
+  the pool and the shadows follow. A kept pose that would stand in this
+  frame's device (after a rotation) is drawn as the first pose.
+  The pose is kept per browser (`lampPose.js`, `abg-lamp`). Focused, the
+  arrow keys turn it and raise or lower the head. A press moves 5 px
+  before it's a drag, so a click still switches.
+- **With the switch, not a snap** (the owner, 2026-10-06): the bulb comes
+  up as night falls and fades as day comes back, on the switch's clock.
+  The desk's light direction (every shadow on the desk, grass and trees,
+  every highlight on the devices and the lamp) now swings from the
+  outgoing body's resting spot to the incoming one's on the same clock;
+  it used to jump to the incoming one's at the switch's first frame.
+- **Flicker** (`makeFlicker`): by night, at rest, an occasional stutter of
+  a few fast dips, each spell random (exponential, ~25 s apart on
+  average), on GL's frame loop. Never under reduced motion, `?freeze=1`
+  or mid-switch.
+- **The copses move on a hard refresh** (the owner, 2026-10-06,
+  `treeSeed.js`): each moves up to 5 m and gains or loses a tree, and
+  grows its own trees, from a seed kept per browser (`abg-trees`); the
+  lone tree stays where it frames the closing shot, and the line over the
+  desk stays open. A plain refresh or a revisit keeps them; a hard refresh
+  (told by the page and its first scripts coming over the network whole)
+  draws a new seed. `?freeze=1` keeps the copses as first placed.
+- **A reload starts at the top** (the owner, 2026-10-06): the head script
+  turns off the browser's scroll restoration; the theme is still kept.
+- **The sun's hit target** leaves the page and the tab order when the
+  descent has taken the body off the frame (the audit, 2026-10-04).
+- **Fixed:** both toggles could ignore clicks for a while after load
+  (the busy flag was set by the stored theme's read and Strict Mode's
+  second run); they now mark busy only on a real switch.
+- `?lamp=0` leaves the lamp out (profiling). Unit tests: every drag pose
+  keeps the arms whole and the head over the desk, the outline and the
+  drag agree with the shaders' projection, the flicker is seeded and
+  rare.
+
 ## 0.3.10 — 2026-10-06
 
 The tablet (the owner, 2026-10-06).

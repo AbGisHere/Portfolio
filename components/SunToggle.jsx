@@ -24,13 +24,13 @@ import styles from './SunToggle.module.css';
  * painted body, which the descent moves as it sets (gradient/sunSpot.js):
  * written straight to the element as CSS variables, not through React state,
  * so scrolling never re-renders it. The recipe's numbers above only place it
- * before then.
+ * before then. Off the frame, it's hidden (0.3.11).
  */
 export default function SunToggle({ recipe }) {
   const { theme, toggle } = useTheme();
   const night = theme === 'night';
   const [busy, setBusy] = useState(false);
-  const first = useRef(true);
+  const first = useRef(null);
   const button = useRef(null);
 
   useEffect(() => {
@@ -39,16 +39,22 @@ export default function SunToggle({ recipe }) {
       if (!spot) return;
       el.style.setProperty('--spot-x', `${spot.x}px`);
       el.style.setProperty('--spot-y', `${spot.y}px`);
+      // (0.3.11) Where the descent has taken the body off the frame, the
+      // target leaves the page (and the tab order) with it.
+      const box = el.parentElement;
+      el.hidden = !!box && (spot.x < 0 || spot.y < 0 || spot.x > box.clientWidth || spot.y > box.clientHeight);
     };
     apply(getSunSpot());
     return subscribeSunSpot(apply);
   }, []);
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return undefined;
-    }
+    // Only a real switch, not the stored theme read on load (nor Strict
+    // Mode's second run).
+    if (first.current === theme) return undefined;
+    const was = first.current;
+    first.current = theme;
+    if (was === null) return undefined;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
     setBusy(true);
     const id = setTimeout(() => setBusy(false), recipe.transition?.ms ?? 1250);

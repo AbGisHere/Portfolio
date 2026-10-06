@@ -3,9 +3,13 @@
  * desk, off to the left, framing the closing shot, and a few copses out on
  * the meadow. Drawn after the grass and flowers, against the same depth.
  *
- * - **Layout.** Fixed (`treeLayout`, from a fixed seed): every visit has the
- *   same trees. The copses keep clear of the line over the desk, so the
- *   mountains behind it stay open.
+ * - **Layout.** The lone tree is fixed (from a fixed seed): it frames the
+ *   closing shot. (0.3.11) The copses are jittered from a per-visitor seed
+ *   (`treeLayout(seed)`, ../treeSeed.js: drawn anew on a hard refresh): each
+ *   moves a few metres and gains or loses a tree, and grows its own trees,
+ *   still keeping clear of the line over the desk, so the mountains behind
+ *   it stay open, and short of the mountains' foot. No seed: the copses
+ *   where they were first placed (the harness, the unit tests).
  * - **Grown, not shaped.** Each tree grows from its seed (`grow`): a
  *   trunk wandering up and flared at the roots, splitting into a few limbs,
  *   each splitting again into branches and twigs, every split its own angle
@@ -70,8 +74,8 @@ const turn = (dir, ang, az) => {
  *   z, spin
  * - c, for all: kind, seed, the tree's foot x, z
  */
-export function treeLayout() {
-  const rnd = seeded(0x7ee5);
+export function treeLayout(seed = null) {
+  let rnd = seeded(0x7ee5);
   const woods = [];
   const leafs = [];
   const shadows = [];
@@ -144,7 +148,17 @@ export function treeLayout() {
     shadows.push([x, 0, z, spread, h, 0, 0, 0, 2, rnd(), x, z]);
   };
   tree(LONE);
-  for (const [cx, cz, n] of COPSES) {
+  // The copses: as placed, or jittered by the visitor's seed: up to 5 m
+  // each way (kept 18 m off the line over the desk, its trees 12, and 34 to
+  // 72 m out), a tree more or less.
+  const jit = seed == null ? null : seeded(seed);
+  if (jit) rnd = jit;
+  const copses = COPSES.map(([cx, cz, n]) => {
+    if (!jit) return [cx, cz, n];
+    const x = cx + (jit() - 0.5) * 10;
+    return [Math.sign(cx) * Math.max(18, Math.abs(x)), Math.min(72, Math.max(34, cz + (jit() - 0.5) * 10)), Math.min(6, Math.max(2, n + Math.floor(jit() * 3) - 1))];
+  });
+  for (const [cx, cz, n] of copses) {
     for (let i = 0; i < n; i++) {
       const a = rnd() * Math.PI * 2;
       const d = 6 * Math.sqrt(rnd());

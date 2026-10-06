@@ -175,7 +175,10 @@ blanked every ridge fill.
 | `data-sun-cx` / `data-sun-cy` | Painted sun centre, CSS px |
 | `data-sun-toggle` on the sun button | Stable selector for the harness (not `aria-pressed`: the button has none; its accessible name matches `/switch to/i`) |
 | `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
-| `localStorage['abg-theme']` | `day` or `night`, read before first paint |
+| `data-lamp-toggle` on the lamp button | The desk lamp's control (0.3.11): hidden unless the lamp is in the frame; `data-busy` as the sun's, `data-dragging` while its top half is dragged |
+| `localStorage['abg-trees']` | The copses' seed (0.3.11, `treeSeed.js`): kept across refreshes, drawn anew on a hard refresh; none under `?freeze=1` (the copses as placed) |
+| `localStorage['abg-lamp']` | The lamp's dragged pose (`{ yaw, s, y }`); ignored under `?freeze=1` |
+| `localStorage['abg-theme']` | `day` or `night`, read before first paint (a reload keeps it, but starts at the top: `history.scrollRestoration = 'manual'`, 0.3.11) |
 | `data-seed` on the scene wrapper | The seed last painted (GL: drift included; only increases across switches) |
 | `data-ready` on the layered scene | Set once its ridge masks are painted |
 | `?crest=cpu` (GL) | Force the CPU crest path |
@@ -514,11 +517,15 @@ it while there's grass, so `0.2` frames are untouched).
   the prints through the shared `PRINTS_GLSL`/`PUSH_SUM`) and a head: a
   disc facing up along the stem, turned partly toward the eye, or for the
   pom-pom a camera-facing ball. Stems and heads never go under a pixel.
-- **Trees** (`0.3.5`, `gl/treeShader.js`): a fixed layout (`treeLayout`,
-  seeded): the lone tree at (-6.4, 9.5) m, its crown overhanging the
-  closing shot, and five copses 40–70 m out, all inside that shot and short
-  of where its mountains' foot lies (~85 m; a unit test keeps the line
-  over the desk open). Each tree is grown from the seed (`grow`): a trunk
+- **Trees** (`0.3.5`, `gl/treeShader.js`): a layout (`treeLayout(seed)`):
+  the lone tree at (-6.4, 9.5) m, fixed, its crown overhanging the
+  closing shot, and five copses 34–72 m out, all inside that shot and
+  short of where its mountains' foot lies (~85 m; a unit test keeps the
+  line over the desk open for any seed). (`0.3.11`) The copses are
+  jittered from the visitor's seed (`treeSeed.js`: up to 5 m each way, at
+  least 18 m off the line, a tree more or less, grown from it), kept per
+  browser and drawn anew on a hard refresh; with no seed (`?freeze=1`)
+  they stand as first placed. Each tree is grown from the seed (`grow`): a trunk
   (flared, wandering) splits into 3–5 limbs, each into a leader and one or
   two side branches, down to `depth` (4 for the lone tree, 3 for the
   copses), every segment bending a little toward the light; leaf clusters
@@ -620,8 +627,54 @@ it while there's grass, so `0.2` frames are untouched).
   its shadow), the tablet's plane, a halo round the stack and a line at
   its foot; its screen's light (`tabletGlow`) at under half the laptop's
   weight, being nearer the desk.
+- **The lamp** (`0.3.11`, `gl/lampShader.js`; its size, pose, light,
+  shadow, flicker and on-screen outline in `gl/lampShape.js`): an
+  anglepoise at the desk's back right corner (`LAMP.at`), on every frame
+  shape. Its top half has a pose (`{ yaw, s, y }`: the arms' plane turned
+  about the base, the head's joint out and up; `LAMP_POSE` at first,
+  aimed at `LAMP.aim`), and `lampAt(pose)` gives the joints (the elbow by
+  two equal arms, above the line and back toward the base), the shade's
+  axis (a fixed tilt down the arms' plane), its neck and the bulb. The
+  mesh (`lampMesh(pose)`: lathed profiles and capped rods in world
+  positions; parts 0 enamel, 1 the shade's inside, 2 steel, 3 the bulb,
+  4 a spring, 5 the shade's outside) is rebuilt only when the pose
+  changes. Its light (`LAMP_LIGHT_GLSL`, `uLamp` the bulb's colour × power,
+  `uLampBulb`, `uLampAxis`) is a cone (full inside 18°, none past 52°)
+  over the distance squared, in the desk's, the laptop's, the tablet's
+  and its own shaders; on the desk it lights `LAMP_WOOD` (the wood's own
+  colour) and the lid or the tablet shades it (`laptopLidAlong`,
+  `tabletAlong`, the planes' shadows along any light), and the laptop's
+  base or the stack of books (`LAMP_BLOCK_GLSL`: the ray to the bulb
+  against their boxes in `LAMP_KEEP_OUT`), so no light passes through the
+  device. Its shadow on the
+  desk (`lampShade`, `uLampSeg`): the turret, both arms and the shade as
+  capsules cast along the scene's light, softening and fading with
+  height, and a contact halo. Power: the recipe's `lamp` (on in
+  `moonlit.js`); mid-switch it follows the switch's `e` (rising as night
+  falls, fading as day comes back); at rest by night, `makeFlicker` on
+  the frame loop's clock (none under reduced motion, `?freeze=1` or a
+  switch).
+- **The lamp as a control** (`0.3.11`, `components/LampToggle.jsx`): every
+  rebuild the renderer projects the lamp's parts (`lampHitOn`: each a
+  convex hull on screen, a 22 px disc round a small shade) and publishes
+  the box and its outline, with the camera, to `lampSpot.js`; the button
+  takes the box and clips itself to the outline (`clip-path: path()`),
+  hidden off the frame or under 4 px. A click switches the theme; a press
+  that moves 5 px is a drag instead: the pointer is cast onto the plane
+  through the head square to the view (`screenToWorld`), and
+  `poseToward` turns that into a pose within the arms' reach and over the
+  desk, `poseFree` stops it where the arms or the shade would meet the
+  device's boxes or the desk (`lampClear`; a kept pose that isn't clear of
+  this frame's device draws as `LAMP_POSE`), published to `lampPose.js` (kept in `localStorage['abg-lamp']`,
+  ignored under `?freeze=1`), which marks the scene for a rebuild. The
+  arrow keys turn it and raise or lower the head. Footsteps pause over it.
+- **The light's direction through a switch** (`0.3.11`, `scene.js`
+  `litFrom`): the grass colours' `dir`, which every desk pass shades and
+  casts shadows by, swings from the outgoing body's resting spot to the
+  incoming one's on the switch's `e` (it used to take the incoming one's
+  at once).
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
-  trees; `?table=0` the desk; `?laptop=0` the laptop or tablet; `?boot=<n>` draws boot n instead of a random one (stills).
+  trees; `?table=0` the desk; `?laptop=0` the laptop or tablet; `?lamp=0` the lamp; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.

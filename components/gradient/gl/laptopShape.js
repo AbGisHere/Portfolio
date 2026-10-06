@@ -41,29 +41,30 @@ const SCR_FROM_HINGE = LAPTOP.d / 2 - SCR.top - SCR.h / 2 + HINGE_Z;
  * base's, its outline along the ray from its foot to its deck, and the
  * dark right under it. `laptopGlow`: (0.3.9) how much of the screen's light
  * reaches a point facing N, the lit screen as one soft panel (cosine at
- * both ends, over the distance squared), nothing under the base. Needs
- * `uSunDir`, `uLid`.
+ * both ends, over the distance squared), nothing under the base.
+ * `laptopLidAlong`: (0.3.11) the lid's, along any light L, up to `far`
+ * (the lamp's). Needs `uSunDir`, `uLid`.
  */
 export const LAPTOP_SHADE_GLSL = `float laptopBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 vec3 laptopLight() { return normalize(vec3(uSunDir.x, 0.55, uSunDir.y)); }
-float laptopLid(vec3 q) {
-  vec3 L = laptopLight();
+float laptopLidAlong(vec3 q, vec3 L, float far) {
   vec3 h = vec3(0.0, ${f(LAPTOP.base + LAPTOP.gap + LAPTOP.lid / 2)}, ${f(LAPTOP.d / 2 - LAPTOP.hingeIn)});
   vec3 u = vec3(0.0, uLid.y, -uLid.x);
   vec3 n = vec3(0.0, uLid.x, uLid.y);
   float den = dot(L, n);
   if (abs(den) < 1e-4) return 0.0;
   float t = dot(h - q, n) / den;
-  if (t <= 0.0) return 0.0;
+  if (t <= 0.0 || t >= far) return 0.0;
   vec3 c = q + L * t - h;
   float s = 0.0015 + t * 0.025;
   float a = abs(c.x) - ${f(LAPTOP.w / 2)};
   float b = max(-dot(c, u) - ${f(LAPTOP.hingeIn)}, dot(c, u) - ${f(LAPTOP.d - LAPTOP.hingeIn)});
   return (1.0 - smoothstep(-s, s, a)) * (1.0 - smoothstep(-s, s, b));
 }
+float laptopLid(vec3 q) { return laptopLidAlong(q, laptopLight(), 1e9); }
 float laptopBase(vec3 q) {
   vec3 L = laptopLight();
   vec2 half_ = vec2(${f(LAPTOP.w / 2)}, ${f(LAPTOP.d / 2)});
