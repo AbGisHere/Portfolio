@@ -12,6 +12,7 @@
 import { DESK_BOX, LID } from '../deskCamera';
 import { LAPTOP } from './laptopShape';
 import { BOOKS, STACK_H, TABLET } from './tabletShape';
+import { PROPS_KEEP_OUT } from './propsShape';
 
 const H = DESK_BOX.h;
 
@@ -133,7 +134,8 @@ export const LAMP_KEEP_OUT = (() => {
   const xs = BOOKS.flatMap(b => [-1, 1].map(k => b.x + (k * (Math.cos(b.yaw) * b.w + Math.abs(Math.sin(b.yaw)) * b.d)) / 2));
   const zs = BOOKS.flatMap(b => [b.z - (Math.abs(Math.sin(b.yaw)) * b.w + Math.cos(b.yaw) * b.d) / 2, b.z + (Math.abs(Math.sin(b.yaw)) * b.w + Math.cos(b.yaw) * b.d) / 2]);
   const books = box(T.at, [Math.min(...xs), 0, Math.min(...zs)], [Math.max(...xs), STACK_H, Math.max(...zs)]);
-  return { laptop: [base, lid], tablet: [slab, books] };
+  // (0.3.12) And the things on the desk, on either frame.
+  return { laptop: [base, lid, ...PROPS_KEEP_OUT], tablet: [slab, books, ...PROPS_KEEP_OUT] };
 })();
 
 /** How far a point is outside a box (0 inside). */

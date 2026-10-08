@@ -25,6 +25,9 @@ import { DESK_BOX } from '../components/gradient/deskCamera.js';
 import { PROGRAMS } from './lib/programs.mjs';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, makeFlicker, poseFree, poseToward, screenToWorld } from '../components/gradient/gl/lampShape.js';
 import { LAMP_STRIDE, lampMesh } from '../components/gradient/gl/lampShader.js';
+import { LAMP_KEEP_OUT } from '../components/gradient/gl/lampShape.js';
+import { PROPS_KEEP_OUT, PROPS_LIFT } from '../components/gradient/gl/propsShape.js';
+import { PROPS_STRIDE, propsMesh } from '../components/gradient/gl/propsShader.js';
 import duskEmber from '../components/gradient/recipes/dusk-ember.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -492,6 +495,36 @@ test('the lamp\'s flicker: steady, now and then a stutter, never on a schedule',
   const gaps = bursts.slice(1).map((t, i) => t - bursts[i]);
   assert.ok(Math.max(...gaps) - Math.min(...gaps) > 10, 'spaced at random, not on a period');
   assert.ok(a(1300) <= 1 && makeFlicker(0.7)(5) === 1, 'steady at first');
+});
+
+test('the things on the desk: on its top, clear of the device, the lamp and each other', () => {
+  const { data, count } = propsMesh();
+  assert.equal(data.length, count * PROPS_STRIDE);
+  assert.ok(data.every(Number.isFinite), 'every vertex finite');
+  for (let i = 0; i < count; i++) {
+    const [x, y, z] = data.subarray(i * PROPS_STRIDE, i * PROPS_STRIDE + 3);
+    assert.ok(y > DESK_BOX.h - 1e-6 && Math.abs(x) < DESK_BOX.w / 2 && Math.abs(z) < DESK_BOX.d / 2, 'all of it over the top');
+  }
+  // Standing over the highest plank, so none hides a flat sheet.
+  const { data: planks, wood } = deskLayout();
+  for (let i = 0; i < wood; i++) {
+    const [, y, , , , hy] = planks.subarray(i * DESK_STRIDE, i * DESK_STRIDE + 6);
+    assert.ok(y + hy <= DESK_BOX.h + PROPS_LIFT, `plank ${i} under them`);
+  }
+  const meet = ([a0, a1], [b0, b1]) => [0, 2].every(k => a0[k] < b1[k] && b0[k] < a1[k]);
+  const lampBase = [[LAMP.at[0] - LAMP.base.r, 0, LAMP.at[2] - LAMP.base.r], [LAMP.at[0] + LAMP.base.r, 1, LAMP.at[2] + LAMP.base.r]];
+  for (const [i, b] of PROPS_KEEP_OUT.entries()) {
+    for (const device of ['laptop', 'tablet']) {
+      for (const d of LAMP_KEEP_OUT[device].slice(0, 2)) assert.ok(!meet(b, d), `thing ${i} clear of the ${device}`);
+    }
+    assert.ok(!meet(b, lampBase), `thing ${i} clear of the lamp's base`);
+    for (const [j, c] of PROPS_KEEP_OUT.entries()) if (j > i) assert.ok(!meet(b, c), `things ${i} and ${j} apart`);
+  }
+  // A drag of the lamp stops at them too.
+  for (const w of [[0.33, 0.8, -0.17], [0.27, 0.77, 0.04], [-0.3, 0.78, -0.08]]) {
+    assert.ok(lampClear(poseFree(LAMP_POSE, w, 'laptop'), 'laptop'), 'a drag stops at them');
+  }
+  assert.ok(moonlit.tea && !duskEmber.tea, 'tea by night, coffee by day');
 });
 
 function geoArgs(r) {

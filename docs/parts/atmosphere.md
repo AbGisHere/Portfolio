@@ -654,6 +654,30 @@ it while there's grass, so `0.2` frames are untouched).
   falls, fading as day comes back); at rest by night, `makeFlicker` on
   the frame loop's clock (none under reduced motion, `?freeze=1` or a
   switch).
+- **The things on the desk** (`0.3.12`, `gl/propsShader.js`; their
+  places, sizes and colours in `gl/propsShape.js` `PROPS`): an open
+  notebook and pen, a mug, a pad of sticky notes and one torn off, and
+  folded glasses, each built in its own frame from `meshKit.js` primitives
+  (lathe, rods, swept tubes, boxes, surfaces from a function) and turned
+  and placed on the desk (`place`), standing `PROPS_LIFT` over
+  `DESK_BOX.h` (the planks sit up to 1.5 mm proud). One static mesh
+  (`propsMesh`, `PROPS_STRIDE` 9: position, normal, part, s, t; the parts
+  listed in the shader), drawn after the lamp and before the desk. Paper
+  is ruled and written on in the shader (`hand`: strokes, never words),
+  the derivative taken once outside the branches. Lit as the lamp is,
+  darker by night, plus the lamp's light with the device blocking it as
+  on the desk. **The swap:** the recipe's `tea` (`moonlit.js`): `uTea` 0
+  coffee, 1 tea, following the switch's `e` like the lamp; the drink's
+  colour mixes and the tag and string dissolve (discarded on a noise
+  threshold). **The steam** (`STEAM_*`, no buffer: `STEAM_WISPS` quads from
+  `gl_VertexID`, turned to the camera about the vertical) is drawn after
+  the meadow pass, depth-tested, blended, writing no depth, on `skyT`.
+  **Shadows on the desk** (`PROPS_SHADE_GLSL`, in the desk's shader): the
+  mug as an upright capsule (`lampCast`), each flat thing's outline swept
+  up the light in six steps (`propRect`, so a low light's long shadow
+  stays whole), contact dark round each; the mug blocks the lamp's light
+  on the wood (`PROPS_BLOCK_GLSL`). `PROPS_KEEP_OUT` (each thing's box)
+  joins both devices' `LAMP_KEEP_OUT`, so a drag of the lamp stops at them.
 - **The lamp as a control** (`0.3.11`, `components/LampToggle.jsx`): every
   rebuild the renderer projects the lamp's parts (`lampHitOn`: each a
   convex hull on screen, a 22 px disc round a small shade) and publishes
@@ -674,7 +698,7 @@ it while there's grass, so `0.2` frames are untouched).
   incoming one's on the switch's `e` (it used to take the incoming one's
   at once).
 - **Flags:** `?grass=0` leaves the blades out (profiling); `?trees=0` the
-  trees; `?table=0` the desk; `?laptop=0` the laptop or tablet; `?lamp=0` the lamp; `?boot=<n>` draws boot n instead of a random one (stills).
+  trees; `?table=0` the desk; `?laptop=0` the laptop or tablet; `?lamp=0` the lamp; `?props=0` the things on the desk, their shadows and the steam; `?boot=<n>` draws boot n instead of a random one (stills).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.

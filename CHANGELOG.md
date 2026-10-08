@@ -6,6 +6,53 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.12 — 2026-10-08
+
+The stationery and accessories (the owner, 2026-10-08: a notebook and pen,
+a mug swapped per theme, sticky notes and glasses).
+
+- **The things on the desk** (`gl/propsShader.js`, `gl/propsShape.js`),
+  built in code like the lamp, one static mesh drawn under the same
+  camera and depth, clear of the laptop, the tablet's books, the lamp's
+  base and each other on both kinds of frame:
+  - **an open notebook** front left, cloth-bound, its pages rising from
+    the gutter, ruled, the left page written on and a few lines on the
+    right, with a black fountain pen across it (a brass clip, band and nib);
+  - **a mug** front right, stoneware glazed sea green outside and cream
+    inside, its handle to the user's right: **coffee by day** (a ring of
+    crema), **tea by night** with its tag over the rim. This is the one
+    thing swapped per theme (`ROADMAP.md`, "Theming"): the recipe's `tea`
+    (on in `moonlit.js`); mid-switch the drink turns with the sky and the
+    tag dissolves in or out, speckled, not faded;
+  - **steam** off the mug: three wisps curling up on the frame loop's
+    clock (still under reduced motion and `?freeze=1`), lit by the sky and
+    the lamp;
+  - **sticky notes** behind on the left: a pad with its top sheet's
+    corner lifting, a short list on it (one line struck through), and one
+    note torn off beside it;
+  - **folded glasses** right of the device, in the lamp's pool:
+    tortoiseshell, the front leaning back on the folded arms, the lenses
+    mirroring the sky over the wood under them.
+- **Lit like the rest:** the scene's light and the sky's tint, the lamp's
+  light (blocked by the lid, the tablet, the laptop's base or the books, as
+  on the desk), shine on the glaze, the drink, the pen, the brass and the
+  lenses; darker by night than the lamp's enamel so the paper doesn't
+  glow against the night's wood.
+- **Their shadows** on the desk (`PROPS_SHADE_GLSL`): the mug as an
+  upright capsule cast along the light, each flat thing's outline swept up
+  the light from its height, a contact dark round each; the mug blocks
+  the lamp's light on the desk (`PROPS_BLOCK_GLSL`).
+- **The lamp keeps clear of them:** a drag stops short of every one
+  (their boxes join `LAMP_KEEP_OUT`).
+- **They stand on the planks' top** (`PROPS_LIFT`, 1.6 mm over
+  `DESK_BOX.h`): the planks sit up to 1.5 mm proud, and one was hiding half
+  the loose note (a unit test keeps every plank under them).
+- **`meshKit.js`:** the lathe, rod, swept tube, box, surface and placing
+  primitives, shared by the lamp and the things on the desk (the lamp's
+  vertices gain a ninth float).
+- `?props=0` leaves them, their shadows and the steam out (profiling).
+  Two more shaders (`props`, `steam`) in `PROGRAMS` for `npm run devices`.
+
 ## 0.3.11 — 2026-10-06
 
 The lamp (the owner, 2026-10-04 and 2026-10-06).

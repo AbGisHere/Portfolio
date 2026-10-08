@@ -54,6 +54,8 @@ const moonlit = {
   // (0.3.11) The desk lamp is on: night is the lamp switched on, day the
   // lamp off (ROADMAP.md, "The lamp is a theme toggle").
   lamp: true,
+  // (0.3.12) The mug on the desk holds tea by night, coffee by day.
+  tea: true,
 
   // How this scene animates when it becomes the active theme.
   transition: {

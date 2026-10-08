@@ -12,71 +12,15 @@
 import { LAMP, LAMP_POSE, lampAt } from './lampShape';
 import { METAL_GLSL } from './laptopShader';
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
+import { KIT_STRIDE, add, lathe, tube, unit } from './meshKit';
 
 const f = x => x.toFixed(5);
-const unit = v => {
-  const l = Math.hypot(...v);
-  return v.map(x => x / l);
-};
-const add = (a, b, k = 1) => a.map((x, i) => x + b[i] * k);
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
-/** Floats per vertex: position (3), normal (3), the part (0 enamel, 1 the
- * shade's inside, 2 steel, 3 the bulb, 4 a spring, 5 the shade's outside),
- * and how far along its own axis (metres: the springs' coils, the shade's lip). */
-export const LAMP_STRIDE = 8;
-
-/** Two unit vectors square to `a` and to each other. */
-function basis(a) {
-  const t = Math.abs(a[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
-  const e1 = unit(cross(a, t));
-  return [e1, cross(a, e1)];
-}
-
-/**
- * A profile turned about an axis from `o` along `a`: `prof` is [r, y] pairs
- * (y along the axis), its outside to the left as it runs (so outward when it
- * climbs, up when it runs in). Smooth normals, `seg` round.
- */
-function lathe(out, o, a, prof, part, seg = 28) {
-  const [e1, e2] = basis(a);
-  const n = prof.map((p, i) => {
-    const q = prof[Math.max(0, i - 1)];
-    const r = prof[Math.min(prof.length - 1, i + 1)];
-    const t = [r[0] - q[0], r[1] - q[1]];
-    const l = Math.hypot(...t) || 1;
-    return [t[1] / l, -t[0] / l];
-  });
-  const vert = (i, k) => {
-    const phi = (k / seg) * Math.PI * 2;
-    const e = add(e1.map(x => x * Math.cos(phi)), e2, Math.sin(phi));
-    const [r, y] = prof[i];
-    const pos = add(add(o, e, r), a, y);
-    const nor = add(e.map(x => x * n[i][0]), a, n[i][1]);
-    return [...pos, ...nor, part, y];
-  };
-  for (let i = 0; i + 1 < prof.length; i++) {
-    for (let k = 0; k < seg; k++) {
-      const v00 = vert(i, k);
-      const v01 = vert(i, k + 1);
-      const v10 = vert(i + 1, k);
-      const v11 = vert(i + 1, k + 1);
-      out.push(...v00, ...v10, ...v11, ...v00, ...v11, ...v01);
-    }
-  }
-}
-
-/** A rod from p to q, capped round. */
-function tube(out, p, q, r, part, seg = 12) {
-  const d = add(q, p, -1);
-  const len = Math.hypot(...d);
-  const prof = [[0, -r]];
-  for (let i = 1; i < 4; i++) prof.push([r * Math.sin((i / 4) * (Math.PI / 2)), -r * Math.cos((i / 4) * (Math.PI / 2))]);
-  prof.push([r, 0], [r, len]);
-  for (let i = 1; i < 4; i++) prof.push([r * Math.cos((i / 4) * (Math.PI / 2)), len + r * Math.sin((i / 4) * (Math.PI / 2))]);
-  prof.push([0, len + r]);
-  lathe(out, p, unit(d), prof, part, seg);
-}
+/** Floats per vertex (meshKit.js): position (3), normal (3), the part (0
+ * enamel, 1 the shade's inside, 2 steel, 3 the bulb, 4 a spring, 5 the
+ * shade's outside), how far along its own axis (metres: the springs'
+ * coils, the shade's lip), and the kit's second coordinate (unused here). */
+export const LAMP_STRIDE = KIT_STRIDE;
 
 /** The lamp in a pose (lampShape.js), placed: `{ data, count }`. Rebuilt
  * when it's dragged. */

@@ -22,6 +22,7 @@ import { LAMP_BLOCK_GLSL, LAMP_LIGHT_GLSL, LAMP_SHADE_GLSL } from './lampShape';
 import { TREE_STRIDE } from './treeShader';
 import { LAPTOP, LAPTOP_SHADE_GLSL } from './laptopShape';
 import { TABLET, TABLET_SHADE_GLSL } from './tabletShape';
+import { PROPS_BLOCK_GLSL, PROPS_SHADE_GLSL } from './propsShape';
 
 const TOP_T = 0.035; // the top's thickness (metres)
 const TOP_X = DESK_BOX.w / 2 + 0.03; // the top's half-length, with its overhang
@@ -209,12 +210,15 @@ out vec4 outColor;
 uniform vec2 uLid;      // the laptop's lid: cos, sin of how far it's open
 uniform vec3 uGlow;     // its screen's light (0.3.9)
 uniform float uTablet;  // (0.3.10) 1: the tablet stands there instead
+uniform float uProps;   // (0.3.12) 1: the things on the desk are there
 ${DESK_SHADE_GLSL}
 ${LAPTOP_SHADE_GLSL}
 ${TABLET_SHADE_GLSL}
 ${LAMP_LIGHT_GLSL}
 ${LAMP_BLOCK_GLSL}
 ${LAMP_SHADE_GLSL}
+${PROPS_BLOCK_GLSL}
+${PROPS_SHADE_GLSL}
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
   uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -289,6 +293,9 @@ void main() {
     }
     // (0.3.11) The lamp's shadow on the top.
     col *= 1.0 - 0.6 * lampShade(vWorld);
+    // (0.3.12) And the things on it: the mug's, the notebook's, the notes'
+    // and the glasses'.
+    col *= 1.0 - 0.6 * propsShade(vWorld) * uProps;
   }
   // (0.3.11) The lamp's light, on the wood's own colour; the device in its
   // way casts its shadow (the lid or the tablet, the base or the books).
@@ -299,6 +306,8 @@ void main() {
       float far = lampFar(vWorld);
       vec3 q = vWorld - (uTablet > 0.5 ? vec3(${TABLET.at.map(v => v.toFixed(4)).join(', ')}) : vec3(${LAPTOP.at.map(v => v.toFixed(4)).join(', ')}));
       float occ = uTablet > 0.5 ? max(tabletAlong(q, Lb, far), lampBlockBooks(vWorld)) : max(laptopLidAlong(q, Lb, far), lampBlockBase(vWorld));
+      // (0.3.12) And the mug.
+      occ = max(occ, lampBlockMug(vWorld) * uProps);
       col += LAMP_WOOD * grain * ll * (1.0 - 0.9 * occ);
     }
   }

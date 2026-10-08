@@ -207,6 +207,14 @@ pointer cursor and a faint warm glow over it on hover. Focus shows the whole
 box with the sun's two-tone ring. Its light turns with the sky through a
 switch, never cutting on or off.
 
+### The things on the desk (0.3.12)
+Real objects, not interface: an open notebook and pen, a mug, sticky notes
+and folded glasses, built in code and lit by the scene like the desk, none
+of them a control. They make the desk read as someone's, used: handwriting
+on the pages and the notes is illegible by design (strokes, never words),
+so no copy lives on it. Only the mug changes with the theme, coffee by day
+and tea by night, turning with the sky's switch.
+
 ### Action links (error screens)
 Underlined text in Warm Ink with no background, border or padding, at least
 44px tall. The underline sits at 0.3em, half-strength at rest, and turns

@@ -41,6 +41,7 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
+import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
   DESCENT_VEIL,
@@ -362,6 +363,38 @@ export default function MistCanvas({ recipe, onFail }) {
       lamp = { prog: mp, vao, buf: mb, count, pose, u: name => (MU[name] ??= gl.getUniformLocation(mp, name)) };
       return lamp;
     };
+    // (0.3.12) The things on the desk (propsShader.js): one mesh, built once;
+    // and the steam off the mug, a small pass of its own (no buffer).
+    let props = null;
+    const propsProgram = () => {
+      if (props !== null) return props;
+      const pp = passProgram(gl, 'props', PROPS_VERTEX, PROPS_FRAGMENT);
+      if (!pp) return (props = false);
+      const { data, count } = propsMesh();
+      const pb = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, pb);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, PROPS_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const PU = {};
+      props = { prog: pp, vao, buf: pb, count, u: name => (PU[name] ??= gl.getUniformLocation(pp, name)) };
+      return props;
+    };
+    let steam = null;
+    const steamProgram = () => {
+      if (steam !== null) return steam;
+      const sp = passProgram(gl, 'steam', STEAM_VERTEX, STEAM_FRAGMENT);
+      if (!sp) return (steam = false);
+      const SU = {};
+      steam = { prog: sp, vao: gl.createVertexArray(), u: name => (SU[name] ??= gl.getUniformLocation(sp, name)) };
+      return steam;
+    };
     const DEPTH_AB = (() => {
       const n = DEPTH.near * 40;
       const f = DEPTH.far * 40;
@@ -503,6 +536,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noLaptop = params.get('laptop') === '0';
     // `?lamp=0` leaves the lamp out (profiling).
     const noLamp = params.get('lamp') === '0';
+    // `?props=0` leaves the things on the desk out (profiling).
+    const noProps = params.get('props') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -1245,6 +1280,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
       gl.uniform3fv(g.u('uGlow'), laptopLight().glow);
       gl.uniform1f(g.u('uTablet'), meadowAt.device === 'tablet' && !noLaptop ? 1 : 0);
+      gl.uniform1f(g.u('uProps'), noProps ? 0 : 1);
       lampUniforms(g, true);
       if (shade) {
         gl.bindVertexArray(g.shadowVao);
@@ -1346,6 +1382,77 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.3.12) What's in the mug: 0 coffee (day), 1 tea (night, the recipe's
+    // `tea`). Mid-switch it turns with the sky, as the lamp does.
+    function teaNow() {
+      let k = recipeRef.current.tea ? 1 : 0;
+      if (orbit) {
+        const t = Math.min(1, Math.max(0, (orbit.e - 0.15) / 0.7));
+        const e = t * t * (3 - 2 * t);
+        k = orbit.next.tea ? (orbit.prev.tea ? 1 : e) : orbit.prev.tea ? 1 - e : 0;
+      }
+      return k;
+    }
+
+    // (0.3.12) The things on the desk, writing their depth.
+    function drawProps() {
+      const g = propsProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.wood));
+      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1f(g.u('uTea'), teaNow());
+      const lid = ((meadowAt.lid ?? 0) * Math.PI) / 180;
+      gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
+      gl.uniform1f(g.u('uTablet'), meadowAt.device === 'tablet' && !noLaptop ? 1 : 0);
+      lampUniforms(g);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.3.12) The steam off the mug, over everything drawn, behind what
+    // stands in front of it (depth tested, writing none). Its clock is the
+    // closing sky's (still under reduced motion and `?freeze=1`).
+    function drawSteam() {
+      const g = steamProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform1f(g.u('uT'), skyT);
+      gl.uniform1f(g.u('uSteam'), 1);
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uLamp'), lampLight());
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, STEAM_WISPS * 6);
+      gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
       gl.useProgram(prog);
     }
 
@@ -1524,6 +1631,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // behind it.
       if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
       if (deskOn && !noLamp) drawLamp();
+      if (deskOn && !noProps) drawProps();
       if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);
@@ -1543,6 +1651,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // depth test skips the rest), writing no depth.
       gl.depthMask(false);
       drawMeadow(prints);
+      if (deskOn && !noProps) drawSteam();
       gl.depthMask(true);
       gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
@@ -1755,7 +1864,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (laptop) gl.deleteTexture(laptop.tex);
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
-      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp]) {
+      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, steam]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

@@ -252,6 +252,8 @@ components/
     gl/lampShader.js, gl/lampShape.js — the desk lamp: its mesh from a pose; its light, shadow, flicker, on-screen outline and drag (0.3.11)
     lampSpot.js, lampPose.js — the lamp's outline on screen and its dragged pose, outside React (0.3.11)
     treeSeed.js — the copses' seed: kept per browser, new on a hard refresh (0.3.11)
+    gl/propsShader.js, gl/propsShape.js — the things on the desk: notebook and pen, mug and steam, sticky notes, glasses; their places, shadows and the lamp's keep-out (0.3.12)
+    gl/meshKit.js — the primitives the lamp and the things on the desk are built from (0.3.12)
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
@@ -293,7 +295,7 @@ The invariants any change must keep, whatever part it touches:
 - **Three clocks only:** the spring at rest, the switch clock and, from
   `0.3.1`, the footprint clock (the grass's footsteps fading, ticked inside
   GL's frame loop, `ROADMAP.md` "0.3"). The wind (and the meadow's cloud
-  shadows), the closing sky's birds, clouds and stars and the lamp's flicker run on GL's frame loop too, not a loop of their
+  shadows), the closing sky's birds, clouds and stars, the lamp's flicker and the mug's steam run on GL's frame loop too, not a loop of their
   own. Don't add another animation loop. The camera is a pure function of
   scroll, never sprung; the scroll itself only snaps onto the stops.
 - **Frame budget:** 120 fps on the sweeps in `npm run perf`, and sharp on
@@ -306,7 +308,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.12`+: the stationery and accessories, then the device screen (`ROADMAP.md`, "0.3") |
+| `0.3.13`+: the device screen (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
