@@ -39,6 +39,8 @@ export const LAMP = {
   // Enamel, a warm ivory; the bulb's light when it's on.
   paint: '#E4DACB',
   bulb: '#FFB86E',
+  // How bright the bulb burns (its colour times this).
+  power: 1.6,
   // The desk's wood as the bulb shows it: its own colour under a warm
   // light, not the scene's (which the night tints blue).
   wood: '#A26C42',

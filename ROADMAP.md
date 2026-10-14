@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -410,7 +410,8 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.10` | **Shipped.** The tablet (the owner, 2026-10-06): on a portrait frame it stands in the laptop's place, leaning on a stack of cloth hardbacks, space black with the logo on its back, its screen waking as the camera comes round; the path ends looking down onto its screen, which spans up to 74% of a phone's width. Landscape frames keep the laptop; only one is ever on the desk. |
 | `0.3.11` | **Shipped.** The lamp (the owner, 2026-10-04 and 2026-10-06): an ivory anglepoise in the desk's back right corner, built in code; on by night with its pool by the device, off by day. Click anywhere on it, wherever it's in the frame, to switch night and day; drag its top half to move the head and its light. The bulb, the light and the shadows turn with the sky's switch rather than snapping, and by night the bulb now and then flickers. Where the sun and moon are off the frame, their hit target leaves the tab order (the audit, 2026-10-04). The lamp's light never passes through the laptop or tablet, and a drag stops at them. A reload starts at the top of the page (the theme kept), and a hard refresh moves the copses (the lone tree stays). |
 | `0.3.12` | **Shipped.** The stationery and accessories (the owner, 2026-10-08): an open notebook with a fountain pen, a mug with coffee by day and tea by night (its tag dissolving with the switch) and steam off it, a pad of sticky notes with one torn off, and folded tortoiseshell glasses in the lamp's pool; built in code, lit by the sky and the lamp, with their shadows on the desk, and the lamp's drag stopping at them. |
-| `0.3.13`+ | The device screen. |
+| `0.3.13` | **Shipped.** A brighter lamp (the owner, 2026-10-14): its light 1.6× (`LAMP.power`). |
+| `0.3.14`+ | The device screen. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -885,6 +886,17 @@ scroll affordance" in the first viewport.
 - **Keep:** the first three seconds belong to the scene, nothing loops,
   reduced motion gets a still version, and both renderers draw the same
   frames so parity holds.
+
+## Later — a secret on the sticky notes
+
+**Status:** an idea, recorded 2026-10-14 (the owner). Not scheduled.
+
+A hidden easter egg on the sticky notes on the desk (`0.3.12`): one note
+reads **"If you are reading this, visit another website"**, written by hand
+like the notebook's. It stays a secret, so nothing points to it, and only a
+visitor who looks closely finds it. Exactly where it sits and how it's found
+are still open: the torn-off note, under the pad's top sheet, or legible
+only from up close.
 
 ## Later — a notice for the fallback renderer
 

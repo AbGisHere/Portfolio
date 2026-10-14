@@ -1333,7 +1333,7 @@ export default function MistCanvas({ recipe, onFail }) {
         };
         k = orbit.next.lamp ? (orbit.prev.lamp ? 1 : smooth(0.05, 1, orbit.e)) : orbit.prev.lamp ? 1 - smooth(0, 0.8, orbit.e) : 0;
       } else if (k && !motion.matches && !frozen) k *= flicker(skyT);
-      return rgb01(LAMP.bulb).map(v => v * k);
+      return rgb01(LAMP.bulb).map(v => v * k * LAMP.power);
     }
     // Where the lamp's bulb is and where its shade points, for every pass
     // its light falls on; with `segs`, the arms and shade its shadow is

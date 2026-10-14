@@ -6,6 +6,18 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.13 — 2026-10-14
+
+A brighter lamp (the owner, 2026-10-14).
+
+- **The lamp's light** is 1.6× what it was (`LAMP.power`, `lampShape.js`):
+  its pool on the desk and the things in it, the shade's lit lip and the
+  bulb.
+- **Roadmap:** a hidden easter egg on the sticky notes ("If you are reading
+  this, visit another website"), not scheduled.
+- **Not measured:** `npm run qa` skipped on the owner's call, for this
+  release and `0.3.12`.
+
 ## 0.3.12 — 2026-10-08
 
 The stationery and accessories (the owner, 2026-10-08: a notebook and pen,
