@@ -51,7 +51,7 @@ export const DESK_BOX = { w: 1.2, h: 0.75, d: 0.7 };
  * scroll's stops (../scroll/stops.js): the end of the pull-back, the sun half
  * set, and the top-down shot.
  */
-const TABLET_END = { pitch: 19, centre: 0.95, zoom: 1.5 };
+const TABLET_END = { y: 1.07, pitch: 19, centre: 0.95, zoom: 1.5 };
 
 export const DESK_PATH = {
   d0: 60,
@@ -71,11 +71,13 @@ export const DESK_PATH = {
     { at: 0.82, d: -1.0, y: 1.2, pitch: 18, centre: 0.9, zoom: 1.05 },
     // The reading position, held.
     // (0.3.8) In close: the open laptop's screen about 42% of a 16:10
-    // frame's width, the mountains over its lid.
+    // frame's width, the mountains over its lid. (0.3.14) Closer, the
+    // screen about 57% of the width, from an eye a little lower so the
+    // mountains stay over the lid.
     // (0.3.10) A portrait frame looks down onto the tablet's screen, its
     // middle at the frame's, the mountains over its top.
-    { at: 0.92, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1, tablet: TABLET_END },
-    { at: 1, d: -0.3, y: 1.07, pitch: 13, centre: 0.85, zoom: 1.7, fit: 1, tablet: TABLET_END },
+    { at: 0.92, d: -0.3, y: 1.0, pitch: 10.5, centre: 0.85, zoom: 2.2, fit: 1, tablet: TABLET_END },
+    { at: 1, d: -0.3, y: 1.0, pitch: 10.5, centre: 0.85, zoom: 2.2, fit: 1, tablet: TABLET_END },
   ],
 };
 

@@ -6,6 +6,29 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.3.14 — 2026-10-23
+
+A closer final shot (the owner, 2026-10-23, after the home-page critique:
+more of the laptop's screen, since it will hold the projects).
+
+- **The reading position** (`DESK_PATH`, `deskCamera.js`): zoom 1.7 → 2.2,
+  the eye 1.07 → 1.0 m and the pitch 13° → 10.5°, so the mountains stay
+  over the lid. The screen takes about 57% of a 16:10 frame's width (was
+  41%), 52% at 16:9 and 70% at 4:3; the lamp's shade stays partly in frame
+  as the switch. The tablet keeps its eye (`TABLET_END`), so portrait
+  frames are unchanged.
+- **Roadmap:** the mountains move to stylised 3D, to match the meadow and
+  the desk (not scheduled); the device screen moves to `0.3.15`+.
+- **`npm run qa`** leaves the checks CI runs on every push (both test
+  suites, hygiene) to CI (the owner, 2026-10-23); `--ci` runs them locally
+  too.
+- **Measured** (`qa --full`): parity 46/46 (worst mean 0.96, p99 3), switch
+  12/12 (×2.9), both suites and hygiene pass. **Perf failed, pushed on the
+  owner's call:** gate 2/6, min scroll 82.3 fps at 1728×1117@2 (6 frames
+  > 20 ms); 114.1 at 1440×900@2, 116.7 at 393×852@2, 117.1 for the layered
+  fallback at 1440×900@2; dropout 5/6 (1 of 2616 frames at 3440×1440@1
+  night). Not yet traced to `0.3.12`, `0.3.13` or this release.
+
 ## 0.3.13 — 2026-10-14
 
 A brighter lamp (the owner, 2026-10-14).

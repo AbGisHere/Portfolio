@@ -12,7 +12,7 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
+| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
 | `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
 | `0.5.x` | A header on top of the site to navigate between the sections. |
 | `0.6.x` | Populating the site with the real content. |
@@ -411,7 +411,8 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.11` | **Shipped.** The lamp (the owner, 2026-10-04 and 2026-10-06): an ivory anglepoise in the desk's back right corner, built in code; on by night with its pool by the device, off by day. Click anywhere on it, wherever it's in the frame, to switch night and day; drag its top half to move the head and its light. The bulb, the light and the shadows turn with the sky's switch rather than snapping, and by night the bulb now and then flickers. Where the sun and moon are off the frame, their hit target leaves the tab order (the audit, 2026-10-04). The lamp's light never passes through the laptop or tablet, and a drag stops at them. A reload starts at the top of the page (the theme kept), and a hard refresh moves the copses (the lone tree stays). |
 | `0.3.12` | **Shipped.** The stationery and accessories (the owner, 2026-10-08): an open notebook with a fountain pen, a mug with coffee by day and tea by night (its tag dissolving with the switch) and steam off it, a pad of sticky notes with one torn off, and folded tortoiseshell glasses in the lamp's pool; built in code, lit by the sky and the lamp, with their shadows on the desk, and the lamp's drag stopping at them. |
 | `0.3.13` | **Shipped.** A brighter lamp (the owner, 2026-10-14): its light 1.6× (`LAMP.power`). |
-| `0.3.14`+ | The device screen. |
+| `0.3.14` | **Shipped.** A closer final shot (the owner, 2026-10-23, after the home-page critique: more of the laptop's screen, since it will hold the projects): the screen about 57% of a 16:10 frame's width (was 41%), from an eye 1.0 m up (was 1.07) and 10.5° of pitch, so the mountains stay over the lid; the tablet unchanged. |
+| `0.3.15`+ | The device screen. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -528,7 +529,9 @@ no laptop, a landscape frame no tablet.]
 
 ### Rendering
 
-The mountains are effectively at infinity, so they can stay 2D. The desk
+The mountains are effectively at infinity, so they can stay 2D (superseded
+2026-10-23: they move to stylised 3D, see "Later — the mountains in
+stylised 3D"). The desk
 can't be faked: a hinge opening while the camera orbits from above to the
 front needs real geometry.
 
@@ -897,6 +900,32 @@ like the notebook's. It stays a secret, so nothing points to it, and only a
 visitor who looks closely finds it. Exactly where it sits and how it's found
 are still open: the torn-off note, under the pad's top sheet, or legible
 only from up close.
+
+## Later — the mountains in stylised 3D
+
+**Status:** agreed 2026-10-23 (the owner), after the home-page critique.
+Not scheduled.
+
+The descent is drawn in two styles. The mountains are flat painted mist,
+while the meadow, the trees and the desk (`0.3.1`–`0.3.12`) are stylised 3D,
+and the handover shows most around `desk` 0.025, where the violet ridges
+with their drawn crests give way to a 3D meadow. The owner's call is to
+bring the mountains over to the stylised 3D look, so the whole descent
+reads as one world. This replaces "the mountains can stay 2D" in
+"Rendering" above.
+
+- **Prior attempt:** a sideways drift with per-ridge parallax, slope-lit
+  faces and a wider tonal spread across the ridges was built on 2026-10-14
+  and reverted at the owner's request. It only dressed up the 2D ridges,
+  which is why the look still split.
+- **Keep:** the opening frame (the `0.1` atmosphere, its two recipes, the
+  sun setting into the ridges and the crest light), the ridges' breathing,
+  the day/night switch with no cut, the camera as a pure function of
+  scroll, the frame budget and sharpness on every display, and parity with
+  the layered fallback, or a decision about what the fallback draws.
+- **Still open:** real geometry (a heightfield or meshes) versus shading
+  the current ridges as 3D, how far the look changes at scroll 0, and which
+  release takes it.
 
 ## Later — a notice for the fallback renderer
 

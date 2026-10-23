@@ -7,13 +7,16 @@
  *
  *   npm run build && npx next start -p 3001
  *   npm run qa [-- --base http://localhost:3001] [--full | --quick]
- *              [--only parity,perf] [--skip switch]
+ *              [--only parity,perf] [--skip switch] [--ci]
  *
  * Tier: `quick` when everything changed against origin/main (committed,
  * uncommitted and untracked) is docs (*.md, *.txt, LICENSE, .gitignore, and
  * a package.json or lockfile whose only change is the version), else `full`.
  * It keeps going after a failure, prints a failed check's failing cases
  * (the detail is in scripts/out/<check>/), and exits 1 if any check failed.
+ * The checks CI runs on every push (ci.yml: the two test suites, hygiene)
+ * are left to CI (the owner, 2026-10-23); `--ci`, or naming one in
+ * `--only`, runs them here too.
  */
 import { execSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
@@ -50,9 +53,9 @@ const [TIER, WHY] = pickTier();
 const node = (...a) => ['node', ...a];
 const harness = (name, ...a) => node(`scripts/${name}.mjs`, '--base', BASE, '--quiet', ...a);
 const CHECKS = [
-  { name: 'test:adaptive', cmd: node('--test', 'scripts/adaptive-test.mjs'), tiers: ['quick', 'full'] },
-  { name: 'test:unit', cmd: node('--import', './scripts/lib/resolve-js.mjs', '--test', 'scripts/unit-test.mjs'), tiers: ['quick', 'full'] },
-  { name: 'hygiene', cmd: harness('hygiene'), tiers: ['quick', 'full'], server: true },
+  { name: 'test:adaptive', cmd: node('--test', 'scripts/adaptive-test.mjs'), tiers: ['quick', 'full'], ci: true },
+  { name: 'test:unit', cmd: node('--import', './scripts/lib/resolve-js.mjs', '--test', 'scripts/unit-test.mjs'), tiers: ['quick', 'full'], ci: true },
+  { name: 'hygiene', cmd: harness('hygiene'), tiers: ['quick', 'full'], ci: true, server: true },
   { name: 'parity', cmd: harness('parity', ...(TIER === 'quick' ? ['--scrolls', '0'] : [])), tiers: ['quick', 'full'], server: true },
   { name: 'perf', cmd: harness('perf', '--gate'), tiers: ['full'], server: true },
   { name: 'switch', cmd: harness('switch'), tiers: ['full'], server: true },
@@ -97,6 +100,7 @@ for (const check of CHECKS) {
   let row = { name: check.name, keys: '' };
   if (!check.tiers.includes(TIER)) row.result = `skipped (${TIER})`;
   else if ((only.length && !only.includes(check.name)) || skip.includes(check.name)) row.result = 'skipped (flag)';
+  else if (check.ci && !args.ci && !only.includes(check.name)) row.result = 'skipped (CI runs it)';
   else if (check.server && !up) row.result = 'FAIL (no server)';
   else {
     const t = Date.now();

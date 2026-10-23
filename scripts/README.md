@@ -24,14 +24,19 @@ uncommitted and untracked files):
 
 | Tier | When | Runs | Time (M4) |
 |---|---|---|---|
-| quick | only docs changed (`*.md`, `*.txt`, `LICENSE`, `.gitignore`, a version-only bump of `package.json` or its lockfile) | `test:adaptive`, `test:unit`, `hygiene`, `parity --scrolls 0` | ~2 min |
-| full | anything else | all of the above with parity at every scroll, then `perf --gate` (with its dropout pass) and `switch` | ~20 min (parity 4, perf 8, switch 8) |
+| quick | only docs changed (`*.md`, `*.txt`, `LICENSE`, `.gitignore`, a version-only bump of `package.json` or its lockfile) | `parity --scrolls 0` | ~1 min |
+| full | anything else | parity at every scroll, then `perf --gate` (with its dropout pass) and `switch` | ~20 min (parity 4, perf 8, switch 8) |
+
+`test:adaptive`, `test:unit` and `hygiene` belong to both tiers but are
+left to CI, which runs them on every push (`.github/workflows/ci.yml`; the
+owner, 2026-10-23). `--ci` runs them here as well.
 
 | Flag | Meaning |
 |---|---|
 | `--base` | The production server every check runs against (default `http://localhost:3001`) |
 | `--full`, `--quick` | Force a tier |
 | `--only a,b`, `--skip a,b` | Run a subset, by the names in the table |
+| `--ci` | Also run the checks CI runs (`test:adaptive`, `test:unit`, `hygiene`) |
 
 It is quiet: it runs each script with `--quiet` and prints one line per
 check (its key numbers and time), then a table. A failing check adds only

@@ -94,8 +94,11 @@ it picks from the diff against `origin/main` (`scripts/README.md`):
 
 | Push | Tier | Runs |
 |---|---|---|
-| Only docs (`*.md`, `*.txt`, `LICENSE`) | quick | both test suites, hygiene, parity at scroll 0 |
-| Anything else | full | the quick tier, plus parity at every scroll, perf with its gate, switch |
+| Only docs (`*.md`, `*.txt`, `LICENSE`) | quick | parity at scroll 0 |
+| Anything else | full | parity at every scroll, perf with its gate, switch |
+
+The checks CI already runs (both test suites, hygiene) are left to CI and
+not run locally (the owner, 2026-10-23); `npm run qa -- --ci` adds them.
 
 From `0.3` on, the full tier narrows further: `qa` tests only the parts a
 change reaches, found through the import graph plus declared links, with a
@@ -308,7 +311,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.14`+: the device screen (`ROADMAP.md`, "0.3") |
+| `0.3.15`+: the device screen (`ROADMAP.md`, "0.3") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
