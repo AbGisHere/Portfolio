@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.6 — 2026-10-24
+
+The house's lighting by night (the owner: "fancier").
+
+- **LED strips** (`HOUSE_STRIPS`, line lights from their nearest point,
+  each shining one way, by room): under the kitchen's wall units, along
+  its toe-kicks and the island's, under the stair's treads, washing the
+  wall behind each bed's panel, under the nightstands, along the bookcase;
+  each a thin bright line where it's fitted.
+- **Outside:** uplights (kind 4, a narrow beam up) at the columns' feet,
+  under the timber panels, along the stone base from the lawn, into the
+  olive; four bronze bollards down the path.
+- **Exposure:** interior lamps toned down to pools; by night the house's
+  shading rolls off toward white (a film's shoulder) instead of clipping.
+- **Bloom** (`bloom.js`): by night round the house, what burns (past 0.9)
+  taken to a quarter size, blurred in two widening passes, added back.
+  `?bloom=0` leaves it out.
+- **Fix:** the living room's bookcase faced the study's wall.
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.5 — 2026-10-24
 
 Overlaps, and finer furniture (the owner: "elite and finer design and

@@ -7,8 +7,8 @@
  * (meshKit.js); the glass panes and the water are houseGlass.js's.
  */
 
-import { EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_PART, MOUND, PLAN, POOL, STOREY, TERRACE, WALL, moundY } from './houseShape';
-import { box, grid, lathe } from './meshKit';
+import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, STOREY, TERRACE, WALL, moundY } from './houseShape';
+import { box, grid, lathe, tube } from './meshKit';
 import { lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
 import { boxwood, fig, olive } from './plantMesh';
@@ -140,6 +140,15 @@ export function houseLayout() {
     box(out, [x - 0.36, y - 0.08, z - 0.26], [x + 0.36, y + 0.035, z + 0.26], v(P.stone, 0.5 + 0.04 * (i % 5)));
   }
 
+  // (0.4.6) The path's bollards: a bronze post, its light in a slot near
+  // its top; the uplights' cans, sunk flush.
+  for (const [x, z] of BOLLARDS) {
+    const y = moundY(x, z);
+    box(out, [x - 0.05, y - 0.1, z - 0.05], [x + 0.05, y + 0.6, z + 0.05], v(P.brass, 0.6));
+    box(out, [x - 0.051, y + 0.5, z - 0.051], [x + 0.051, y + 0.56, z + 0.051], P.lamp);
+  }
+  for (const [x, y, z, , , kind] of HOUSE_LIGHTS) if (kind === 4) lathe(out, [x, y - 0.04, z], [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.04], [0.035, 0.04], [0, 0.043]], P.lamp, 14);
+
   // ---- The stone base, its forecourt, the steps and their cheek walls.
   box(out, [-9.5, 0.2, -81], [9.5, B, -57.5], P.stone);
   const front = moundY(0, -57.5);
@@ -192,6 +201,8 @@ export function houseLayout() {
   box(out, [ix[0], B, iz[0]], [ix[1], B + 0.02, iz[1]], P.oak, { bottom: false });
   holed(out, [ix[0], top - 0.02, iz[0]], [ix[1], top, iz[1]], VOID, P.ceiling);
   groundRooms(out, ix, iz);
+  // (0.4.6) The LED strips, each a thin bright line where it's fitted.
+  for (const [a, b] of HOUSE_STRIPS) tube(out, a, b, 0.005, P.lamp, 6);
   // The recessed lights in both ceilings (HOUSE_LIGHTS kind 3).
   for (const [x, y, z, , , kind] of HOUSE_LIGHTS) {
     if (kind === 3) lathe(out, [x, y + 0.05, z], [0, -1, 0], [[0.075, 0], [0.06, 0.012], [0, 0.012]], P.lamp, 16);

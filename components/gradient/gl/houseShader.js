@@ -12,7 +12,7 @@
 
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
-import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
+import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { houseLayout } from './houseMesh';
 
 export const HOUSE_STRIDE = 9;
@@ -145,6 +145,10 @@ bool lampSees(vec3 l, vec3 p, int room, int at) {
 const vec4 LAMPS[${HOUSE_LIGHTS.length}] = vec4[](${HOUSE_LIGHTS.map(([x, y, z, r]) => `vec4(${f(x)}, ${f(y)}, ${f(z)}, ${f(r)})`).join(', ')});
 const vec3 LAMP_K[${HOUSE_LIGHTS.length}] = vec3[](${HOUSE_LIGHTS.map(([, , , , s, k, z]) => `vec3(${f(s)}, ${f(k)}, ${f(z)})`).join(', ')});
 const vec3 WARM = vec3(1.0, 0.71, 0.44);
+const vec3 STRIP_A[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([a]) => v3(a)).join(', ')});
+const vec3 STRIP_B[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, b]) => v3(b)).join(', ')});
+const vec3 STRIP_D[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, , d]) => { const l = Math.hypot(...d); return v3(d.map(x => x / l)); }).join(', ')});
+const vec3 STRIP_K[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, , , r, k, z]) => v3([r, k, z])).join(', ')});
 
 // The lamps' light at p (normal N, to the eye V), by night: diffuse and a
 // soft highlight of roughness a.
@@ -157,7 +161,7 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     int kind = int(LAMP_K[i].y + 0.5);
     int at = int(LAMP_K[i].z + 0.5);
     // Every lamp in a room fills all of it a little, bounced off its walls.
-    if (at != 0 && room == at) sum += WARM * LAMP_K[i].x * 0.05;
+    if (at != 0 && room == at) sum += WARM * LAMP_K[i].x * 0.04;
     if (r > LAMPS[i].w) continue;
     // The soffit's and the porch's downlights light only outside.
     if (at == 0 && room != 0) continue;
@@ -165,13 +169,31 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     vec3 Ld = d / r;
     float fall = pow(clamp(1.0 - pow(r / LAMPS[i].w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
     // A downlight throws down, in a cone.
-    if (kind != 0) fall *= mix(0.12, 1.0, smoothstep(0.25, 0.8, Ld.y));
+    if (kind == 1 || kind == 3) fall *= mix(0.12, 1.0, smoothstep(0.25, 0.8, Ld.y));
+    // (0.4.6) An uplight throws up, a narrow beam grazing what it's under.
+    if (kind == 4) fall *= smoothstep(0.55, 0.9, -Ld.y) * 1.6;
     vec3 H = normalize(Ld + V);
     float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
     // (With a share of its light bounced round the room, from every side.)
     sum += WARM * LAMP_K[i].x * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? 0.05 : 0.3));
   }
-  return sum * 2.2;
+  // (0.4.6) The LED strips: each lights what's before it along its way,
+  // from its nearest point.
+  for (int i = 0; i < ${HOUSE_STRIPS.length}; i++) {
+    int at = int(STRIP_K[i].z + 0.5);
+    if (room != at) continue;
+    vec3 a = STRIP_A[i];
+    vec3 ab = STRIP_B[i] - a;
+    vec3 c = a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
+    vec3 d = c - p;
+    float r = length(d);
+    if (r > STRIP_K[i].x) continue;
+    vec3 Ld = d / max(r, 1e-4);
+    float fall = pow(clamp(1.0 - pow(r / STRIP_K[i].x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 2.0);
+    fall *= smoothstep(-0.1, 0.6, dot(-Ld, STRIP_D[i]));
+    sum += WARM * STRIP_K[i].y * fall * max(dot(N, Ld), 0.0);
+  }
+  return sum * 1.35;
 }
 `;
 
@@ -644,6 +666,10 @@ void main() {
     vec2 o = max(abs(vWorld.xz - ${v2([POOL.at[0], POOL.at[2]])}) - ${v2([POOL.w / 2, POOL.d / 2])}, 0.0);
     col += alb * vec3(0.25, 0.75, 0.85) * 0.5 * uNight * exp(-length(o) * 0.9) * (0.4 + 0.6 * max(N.y, 0.0));
   }
+  // (0.4.6) By night the lamps' light rolls off toward white rather than
+  // clipping (a film's shoulder), so a lit wall keeps its gradient and only
+  // the lamps themselves burn.
+  if (uNight > 0.0) col = mix(col, (1.0 - exp(-col * 1.35)) * 1.08, uNight * (1.0 - step(0.5, length(emit))));
   if (uGrainA > 0.0) {
     ivec2 gi = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));
     float gn = texelFetch(uGrain, gi, 0).r;

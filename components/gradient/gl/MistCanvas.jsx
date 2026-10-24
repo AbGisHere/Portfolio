@@ -45,6 +45,7 @@ import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, house
 import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
 import { HOUSE_BOUNDS, POOL } from './houseShape';
 import { makeWater } from './poolWater';
+import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
 import { BIRD_STRIDE, birdMesh } from './birdShape';
 import { BIRD_INSTANCE, birdsAt } from './birdFlight';
@@ -602,7 +603,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const Y1 = Math.min(canvas.height, canvas.height - Math.floor(y0 * k) + 4);
       return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : null;
     };
-    const copyFrame = g => {
+    const copyFrame = (g, full = false) => {
       gl.activeTexture(gl.TEXTURE11);
       gl.bindTexture(gl.TEXTURE_2D, g.tex);
       if (g.size[0] !== canvas.width || g.size[1] !== canvas.height) {
@@ -614,7 +615,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
-      const r = houseRect();
+      const r = full ? [0, 0, canvas.width, canvas.height] : houseRect();
       if (r) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, r[0], r[1], r[0], r[1], r[2], r[3]);
       gl.activeTexture(gl.TEXTURE0);
     };
@@ -848,6 +849,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noGlass = params.get('glass') === '0';
     const noMirror = params.get('mirror') === '0';
     const noCaustics = params.get('caustics') === '0';
+    const noBloom = params.get('bloom') === '0';
+    let bloom;
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -2135,6 +2138,16 @@ export default function MistCanvas({ recipe, onFail }) {
       if (deskOn && !noProps) drawSteam();
       gl.depthMask(true);
       if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
+      // (0.4.6) By night round the house, the bright spills a glow.
+      const night = laptopLight().night;
+      if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
+        bloom ??= makeBloom(gl, 14) || false;
+        if (bloom) {
+          copyFrame(glass, true);
+          bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
+          gl.useProgram(prog);
+        }
+      }
       gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
     }
@@ -2366,6 +2379,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
       water?.dispose();
+      if (bloom) bloom.dispose();
       if (birdPass) {
         for (const k of birdPass.kinds) {
           gl.deleteVertexArray(k.vao);

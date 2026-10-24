@@ -195,7 +195,7 @@ export function groundRooms(out, ix, iz) {
   floorLamp(out, [-7.2, B, -70.3]);
   console_(out, [ix[0] + 0.24, B, -68.2], Math.PI / 2, 2.0);
   tv(out, [ix[0] + 0.05, B + 1.45, -68.2], Math.PI / 2);
-  bookcase(out, [-3.4, B, -72.55], Math.PI, 3.8, 2.4, 17);
+  bookcase(out, [-3.4, B, -72.935], 0, 3.8, 2.4, 17);
 
   // ---- The dining room: a table for eight under a long pendant.
   marbleTable(out, [2.55, B, -67.9], Math.PI / 2, { w: 2.6, d: 1.05 });

@@ -99,6 +99,9 @@ export const ZONES = [
  * porch's), 3 one recessed in a room's ceiling (throwing down). Zone:
  * ZONES's, 0 outside.
  */
+/** (0.4.6) The path's bollards (x, z). */
+export const BOLLARDS = [[-0.95, -55.2], [0.95, -51.6], [-0.95, -48.0], [0.95, -44.4]];
+
 const down = (zone, ceil, pts, r = 5, k = 0.45) => pts.map(([x, z]) => [x, ceil - 0.05, z, r, k, 3, zone]);
 export const HOUSE_LIGHTS = [
   ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3], [2.5, -65.5], [2.5, -70.3], [3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6], [6.2, -65.0], [-5.8, -74.5], [0, -67.5]]),
@@ -121,6 +124,39 @@ export const HOUSE_LIGHTS = [
   [6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
   // The soffit's downlights over the terrace.
   ...[-6, -2, 2, 6].map(x => [x, TERRACE + STOREY - 0.42, -69.8, 4.5, 0.55, 1, 0]),
+  // (0.4.6) Outside by night: uplights (kind 4, throwing up) grazing the
+  // columns, the timber, the stone base, and into the olive; low bollards
+  // along the path (kind 1).
+  [-8.1, FLOOR + 0.05, -58.42, 4, 0.7, 4, 0],
+  [8.1, FLOOR + 0.05, -58.42, 4, 0.7, 4, 0],
+  [5.0, FLOOR + 0.05, -62.75, 4, 0.6, 4, 0],
+  [7.4, FLOOR + 0.05, -62.75, 4, 0.6, 4, 0],
+  ...[3.4, 5.4, 7.4].map(x => [x, TERRACE + 0.08, -70.75, 3.6, 0.55, 4, 0]),
+  ...[-6, -3, 3, 6].map(x => [x, moundY(x, -56.9) + 0.05, -56.9, 3.5, 0.6, 4, 0]),
+  [-7.2, TERRACE + 0.78, -59.0, 3, 0.6, 4, 0],
+  ...BOLLARDS.map(([x, z]) => [x, moundY(x, z) + 0.55, z, 3.2, 0.55, 1, 0]),
+];
+
+/**
+ * (0.4.6) The LED strips by night: [a (x, y, z), b, the way they shine
+ * (x, y, z), radius, strength, zone]: under the kitchen's wall units and
+ * along its toe-kicks and the island's, along the stair's treads, washing
+ * the wall behind each bed's panel, under the nightstands, along the
+ * bookcase. Each lights what's before it along its way, falling off from
+ * its whole length.
+ */
+export const HOUSE_STRIPS = [
+  [[2.6, FLOOR + 1.44, -78.42], [4.85, FLOOR + 1.44, -78.42], [0, -1, 0.2], 1.6, 0.5, 3],
+  [[2.6, FLOOR + 0.03, -78.15], [7.3, FLOOR + 0.03, -78.15], [0, -0.4, 1], 1.0, 0.4, 3],
+  [[3.1, FLOOR + 0.03, -74.46], [5.7, FLOOR + 0.03, -74.46], [0, -0.4, 1], 1.0, 0.4, 3],
+  [[3.1, FLOOR + 0.03, -75.34], [5.7, FLOOR + 0.03, -75.34], [0, -0.4, -1], 1.0, 0.4, 3],
+  [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.2, 0.45, 3],
+  [[-2.65, TERRACE + 1.38, -75.73], [0.75, TERRACE + 1.38, -75.73], [0, 1, 0.15], 1.4, 0.55, 4],
+  [[3.65, TERRACE + 1.38, -78.71], [6.65, TERRACE + 1.38, -78.71], [0, 1, 0.15], 1.4, 0.5, 7],
+  [[-2.5, TERRACE + 0.46, -75.44], [-2.0, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
+  [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
+  [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3],
+  [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3],
 ];
 
 /** The bounds the sun's shadow map covers (houseShadow.js): everything the
