@@ -27,7 +27,7 @@ import { hexToRgb, mix, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
-import { DEPTH, cameraMetres, deskWidest, groundAt, pitchSpan, toVirtual } from '../deskCamera';
+import { DEPTH, cameraMetres, deskWidest, groundAt, pitchSpan, planeAt, toVirtual } from '../deskCamera';
 import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
@@ -42,6 +42,10 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
+import { POOL } from './houseShape';
+import { makeWater } from './poolWater';
+import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
+import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -53,6 +57,7 @@ import {
   veilAt,
 } from '../camera';
 import { getDescent, subscribeDescent } from '../../scroll/descent';
+import { getFreeCam, subscribeFreeCam } from '../freeCam';
 import { publishSunSpot } from '../sunSpot';
 import { publishLampSpot } from '../lampSpot';
 import { getLampPose, subscribeLampPose } from '../lampPose';
@@ -394,7 +399,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (house !== null) return house;
       const hp = passProgram(gl, 'house', HOUSE_VERTEX, HOUSE_FRAGMENT);
       if (!hp) return (house = false);
-      const { data, count } = houseMesh();
+      const { data, count, glass: panes } = houseMesh();
       const hb = gl.createBuffer();
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
@@ -407,9 +412,68 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       const HU = {};
-      house = { prog: hp, vao, buf: hb, count, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
+      house = { prog: hp, vao, buf: hb, count, panes, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
       return house;
     };
+    // (0.4.2) The pool's water (poolWater.js), on texture unit 8: made the
+    // first time the pool's in view (null: it can't run here).
+    let water;
+    const waterSim = () => (water === undefined ? (water = makeWater(gl, 8)) : water);
+    // Whether the pool can be seen: the camera turned to the house.
+    let poolSeen = false;
+    // And whether the house can (turned at least 50° toward it).
+    let houseSeen = false;
+    // (0.4.2) The sun's shadow over the house (houseShadow.js): its depth
+    // map on texture unit 9 and the program that draws it (null: none here).
+    let shadow;
+    const houseShadow = () => {
+      if (shadow !== undefined) return shadow;
+      const sp = passProgram(gl, 'house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT);
+      const map = sp ? makeShadow(gl, 9) : null;
+      shadow = map ? { prog: sp, map, u: gl.getUniformLocation(sp, 'uLightVP') } : null;
+      return shadow;
+    };
+    // (0.4.2) The glass and the water (houseGlass.js): their mesh and the
+    // copy of the frame they bend (texture unit 11, the canvas's size).
+    let glass = null;
+    const glassProgram = () => {
+      if (glass !== null) return glass;
+      const hp = houseProgram();
+      const gp = hp ? passProgram(gl, 'house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null;
+      if (!gp) return (glass = false);
+      const mesh = glassMesh(hp.panes);
+      const gb = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gb);
+      gl.bufferData(gl.ARRAY_BUFFER, mesh.data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, 9 * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const GU = {};
+      glass = { prog: gp, vao, buf: gb, mesh, tex: gl.createTexture(), size: [0, 0], u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
+      return glass;
+    };
+    // The frame so far, into the glass's copy.
+    const copyFrame = g => {
+      gl.activeTexture(gl.TEXTURE11);
+      gl.bindTexture(gl.TEXTURE_2D, g.tex);
+      if (g.size[0] !== canvas.width || g.size[1] !== canvas.height) {
+        g.size = [canvas.width, canvas.height];
+        // (The canvas has no alpha: its copy is RGB.)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, canvas.width, canvas.height, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      }
+      gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, canvas.width, canvas.height);
+      gl.activeTexture(gl.TEXTURE0);
+    };
+    const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     let steam = null;
     const steamProgram = () => {
       if (steam !== null) return steam;
@@ -871,6 +935,7 @@ export default function MistCanvas({ recipe, onFail }) {
     function rebuild() {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
+      const free = getFreeCam();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
       // rest it's the spring's, as ever. The descent's time of day goes on
@@ -895,6 +960,7 @@ export default function MistCanvas({ recipe, onFail }) {
         about,
         desk,
         contact,
+        free,
         reduced: motion.matches,
         w,
         h,
@@ -1017,6 +1083,8 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!pitch) {
         meadowShown = false;
         meadowAt = null;
+        poolSeen = false;
+        houseSeen = false;
       }
       if (pitch) {
         gl.uniform4f(uniform('uPitch'), pitch.cos, pitch.sin, pitch.f, pitch.zoom);
@@ -1051,6 +1119,9 @@ export default function MistCanvas({ recipe, onFail }) {
           }
           return lo;
         };
+        // (0.4.2) Turned to the house, the pool's in view.
+        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free);
+        houseSeen = !!frame.grass && (pitch.yc < 0.6 || !!free);
         meadowAt = frame.grass
           ? {
               pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid, device: frame.device,
@@ -1258,7 +1329,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uT'), windPhase / WIND.speed);
       gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
-      gl.uniform1f(g.u('uFarM'), farM);
+      // (Turned to the house there are no mountains' foot to fade at.)
+      gl.uniform1f(g.u('uFarM'), houseSeen ? 1e5 : farM);
       gl.uniform1f(g.u('uA'), a);
       gl.uniform3fv(g.u('uShadeC'), rgb01(colours.leafShade));
       gl.uniform3fv(g.u('uLeaf'), rgb01(colours.leaf));
@@ -1468,6 +1540,19 @@ export default function MistCanvas({ recipe, onFail }) {
       const g = houseProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
+      // (0.4.2) The sun's shadow map, redrawn when the light moves.
+      const L = lightDir(colours.dir);
+      const sh = houseShadow();
+      if (sh) {
+        sh.map.render(m => {
+          gl.useProgram(sh.prog);
+          gl.uniformMatrix4fv(sh.u, false, m);
+          gl.bindVertexArray(g.vao);
+          gl.drawArrays(gl.TRIANGLES, 0, g.count);
+        }, L);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        sh.map.bind();
+      }
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
@@ -1481,10 +1566,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
       gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
       gl.uniform3fv(g.u('uLawn'), rgb01(colours.far));
-      gl.uniform3fv(g.u('uLawnTip'), rgb01(colours.tip));
       gl.uniform3fv(g.u('uHaze'), rgb01(colours.env[1]));
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniformMatrix4fv(g.u('uLightVP'), false, sh ? sh.map.matrix : IDENTITY);
+      gl.uniform1i(g.u('uShadow'), 9);
+      gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
+      gl.uniform1i(g.u('uCaustics'), 10);
+      gl.uniform1f(g.u('uCausticsOn'), 0);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
@@ -1492,6 +1581,52 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
+    // (0.4.2) The glass and the water, last, over copies of the frame: the
+    // windows and the water, then the terrace's glass in front of them.
+    function drawGlass() {
+      const g = glassProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+      gl.depthMask(false);
+      copyFrame(g);
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
+      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1i(g.u('uScene'), 11);
+      const sim = poolSeen ? waterSim() : null;
+      sim?.bind();
+      gl.uniform1i(g.u('uWater'), 8);
+      gl.uniform1f(g.u('uWaterOn'), sim ? 1 : 0);
+      gl.uniform1f(g.u('uWaterT'), skyT);
+      gl.uniform1i(g.u('uReflect'), 12);
+      gl.uniform1f(g.u('uReflectOn'), 0);
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniformMatrix4fv(g.u('uLightVP'), false, shadow ? shadow.map.matrix : IDENTITY);
+      gl.uniform1i(g.u('uShadow'), 9);
+      gl.uniform1f(g.u('uShadowOn'), shadow ? 1 : 0);
+      gl.bindVertexArray(g.vao);
+      const { windows, rails, water: pool } = g.mesh;
+      gl.drawArrays(gl.TRIANGLES, windows[0], windows[1]);
+      gl.drawArrays(gl.TRIANGLES, pool[0], pool[1]);
+      copyFrame(g);
+      gl.drawArrays(gl.TRIANGLES, rails[0], rails[1]);
+      gl.bindVertexArray(null);
+      gl.depthMask(true);
+      gl.depthFunc(gl.LESS);
       gl.useProgram(prog);
     }
 
@@ -1702,7 +1837,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
       if (deskOn && !noLamp) drawLamp();
       if (deskOn && !noProps) drawProps();
-      if (deskOn && !noHouse) drawHouse();
+      if (deskOn && !noHouse && houseSeen) drawHouse();
       if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);
@@ -1724,6 +1859,7 @@ export default function MistCanvas({ recipe, onFail }) {
       drawMeadow(prints);
       if (deskOn && !noProps) drawSteam();
       gl.depthMask(true);
+      if (deskOn && !noHouse && houseSeen) drawGlass();
       gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
     }
@@ -1798,7 +1934,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
       // The closing sky, the meadow and the grass in the wind move every frame, not on
       // the idle tick; so do footprints springing back.
-      const living = ((lifeShown || !!grassAt || meadowShown) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
+      const living = ((lifeShown || !!grassAt || meadowShown || poolSeen) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
       if (living) skyT += dt;
       // A scroll, a switch or the spring redraws every frame; at rest the
       // drift, the wind and the veils share one IDLE_HZ tick.
@@ -1824,6 +1960,11 @@ export default function MistCanvas({ recipe, onFail }) {
       // The birds fly at the display's rate, not the idle tick's.
       if (living && !busy) gl.uniform1f(uniform('uSkyT'), skyT);
       const vs = veils(dt);
+      // (0.4.2) The pool's water steps while it's in view.
+      if (poolSeen && !motion.matches && !frozen && waterSim()) {
+        water.step(dt);
+        gl.useProgram(prog);
+      }
       if (busy || crestMoved || windMoved || living || (tick && changed(vs))) draw(vs);
 
       const moving = !settled();
@@ -1874,6 +2015,11 @@ export default function MistCanvas({ recipe, onFail }) {
       dirty = true;
       kick();
     });
+    // (0.4.2) The /house route's free camera, moved.
+    const unsubscribeFree = subscribeFreeCam(() => {
+      dirty = true;
+      kick();
+    });
     // (0.3.11) A drag of the lamp: its mesh, light and outline follow.
     const unsubscribeLamp = subscribeLampPose(() => {
       dirty = true;
@@ -1890,6 +2036,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.1) Footsteps: the pointer cast onto the ground while the grass
     // shows. A moving mouse walks; a touch taps one step.
     function onPointer(e) {
+      // (0.4.2) Over the pool, the pointer stirs the water.
+      if (poolSeen && water && meadowAt && !motion.matches && (e.type === 'pointermove' || e.type === 'pointerdown')) {
+        const rect = canvas.getBoundingClientRect();
+        const q = planeAt(meadowAt.pitch, meadowAt.cam, e.clientX - rect.left, e.clientY - rect.top, POOL.at[1]);
+        if (q && water.drop(q.x, q.z, e.type === 'pointerdown' ? 0.5 : 0.3, e.type === 'pointerdown' ? 0.03 : 0.008)) kick();
+      }
       if (!footCam) return;
       // Not while on (or dragging) the lamp.
       if (e.target?.closest?.('[data-lamp-toggle]')) return void walker.lift();
@@ -1924,6 +2076,7 @@ export default function MistCanvas({ recipe, onFail }) {
       motion.removeEventListener('change', onMotion);
       unsubscribe();
       unsubscribeLamp();
+      unsubscribeFree();
       canvas.removeEventListener('webglcontextlost', onLost);
       gl.deleteTexture(skyTex);
       gl.deleteTexture(crestTex);
@@ -1935,7 +2088,11 @@ export default function MistCanvas({ recipe, onFail }) {
       if (laptop) gl.deleteTexture(laptop.tex);
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
-      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, house, steam]) {
+      water?.dispose();
+      shadow?.map.dispose();
+      if (glass) gl.deleteTexture(glass.tex);
+      if (shadow) gl.deleteProgram(shadow.prog);
+      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, house, glass, steam]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

@@ -6,6 +6,40 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.2 — 2026-10-24
+
+The house rebuilt (the owner, 2026-10-24: 0.4.1 was "2/10"; every surface
+lit as its material, every room real), with the pool's water. The plan
+is `docs/parts/house.md`.
+
+- **Plan:** ground floor (foyer and front door, open living and dining,
+  floating stair, kitchen, study, WC), upper floor (landing over the
+  stair's void, main bedroom, walk-in wardrobe, en-suite, guest room);
+  partitions with framed, open doors; band windows at the back. The
+  terrace cantilevers 4.4 m over a porch, the pool in it, its basin the
+  porch's roof on two steel columns.
+- **Meshes:** walls with thickness and openings (`houseMesh.js`); rooms
+  (`houseRooms.js`); furniture as made (`furniture.js`: stuffed piped
+  cushions, a draped duvet, eased tops, lathed ceramics, brass, a TV);
+  the house's own plants (`plantMesh.js`: olive, fiddle-leaf fig,
+  boxwood); `meshKit.js` gains `soft` (superellipsoids) and `obox`.
+- **Light:** a sun shadow map (`houseShadow.js`, a rotated Poisson
+  filter); physical materials (GGX, Fresnel, per-part roughness, procedural
+  patterns filtered by their footprint); daylight in through the front or
+  back glass; by night 41 lights by room (`ZONES`), out only through the
+  front openings, with bounce.
+- **Glass and water** (`houseGlass.js`), over copies of the frame: glass at
+  n 1.52 with dispersion, Fresnel per angle for a two-faced slab, roller
+  wave, laminated tint, edges to the millimetre; the scenery reflected
+  (sky, ranges, meadow). Water from a GPU height field (`poolWater.js`,
+  256 × 112, pointer drops), per-colour refraction (n 1.331–1.337) to the
+  basin, pure water's absorption.
+- **`/house`** (dev only, never built for production): a free camera
+  through the house (`freeCam.js`, `HouseExplorer.jsx`), with jump points
+  to every room.
+- **Measured:** unit tests 28/28; no console errors at every jump point.
+  No QA run (the owner: QA before the push).
+
 ## 0.4.1 — 2026-10-24
 
 The house in 3D (the owner, 2026-10-24: built like the desk, not

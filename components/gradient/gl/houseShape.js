@@ -6,20 +6,24 @@
  * desk). The camera's last arcs (deskCamera.js CONTACT_PATH) are laid out
  * from these.
  *
- * (0.4.1) Built in 3D (houseShader.js meshes it): a lawn mound rising out of
- * the meadow, a stone base with steps up its front, a glazed ground floor,
- * its roof the terrace with the pool and a steel railing, a smaller upper
- * floor set back with its roof reaching out over the terrace. Modern, white
- * render, timber and dark frames.
+ * (0.4.2) Built as a real building: walls with thickness and openings (so
+ * the glass sits back in reveals), rooms inside them furnished and lit, a
+ * terrace with frameless glass, loungers and a tree in a pot, a pool with
+ * steps down into it. houseMesh.js meshes it; houseShader.js lights it;
+ * houseGlass.js draws its glass and water.
  */
 
-/** Which material each part is (houseShader.js). */
+/**
+ * The materials (houseShader.js). A part's number is its material; its
+ * fraction, a variant of it (a book's colour, a cushion's).
+ */
 export const HOUSE_PART = {
-  lawn: 0, stone: 1, render: 2, timber: 3, glass: 4, frame: 5, slab: 6, deck: 7, tile: 8, water: 9, steel: 10, coping: 11,
+  lawn: 0, stone: 1, render: 2, timber: 3, frame: 4, slab: 5, deck: 6, tile: 7, plaster: 8, ceiling: 9,
+  oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30,
 };
 
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */
-export const MOUND = { at: [0, -74], r: [34, 28], h: 3.2 };
+export const MOUND = { at: [0, -72], r: [40, 32], h: 3.2 };
 
 /** The mound's height over the meadow at (x, z): a smooth dome, flat at its
  * foot. */
@@ -28,111 +32,86 @@ export function moundY(x, z) {
   return s < 1 ? MOUND.h * (1 - s * s) ** 2 : 0;
 }
 
-/** The ground floor (the stone base's top) and the terrace, heights. */
-export const FLOOR = 3.2;
-export const TERRACE = FLOOR + 3.65;
+/** The ground floor (the stone base's top), the floor-to-floor heights, the
+ * terrace (the upper floor). */
+export const FLOOR = 3.6;
+export const STOREY = 3.6;
+export const TERRACE = FLOOR + STOREY;
 
-/** The pool in the terrace: its water's middle, its size (x, z) and depth. */
-export const POOL = { at: [0, TERRACE - 0.1, -66], w: 9, d: 4, deep: 1.3 };
+/** The walls' thickness: render outside, plaster in. */
+export const WALL = 0.28;
 
-const B = FLOOR;
-const T = TERRACE;
-const [px0, px1] = [POOL.at[0] - POOL.w / 2, POOL.at[0] + POOL.w / 2];
-const [pz0, pz1] = [POOL.at[2] - POOL.d / 2, POOL.at[2] + POOL.d / 2];
-// The coping round the pool, its width.
-const CW = 0.35;
+/** The house's plan (x, z) per floor: the ground floor's box and the upper
+ * floor's, set back. */
+export const PLAN = {
+  ground: { x: [-8, 8], z: [-79, -63] },
+  upper: { x: [-8, 8], z: [-79, -71] },
+  roof: { x: [-8.9, 8.9], z: [-79.9, -68.6] },
+};
 
-/** Glazing across a wall's face at z (facing +z), from x0 to x1, y0 to y1:
- * the glass, its frame and mullions `bay` apart. */
-function glazing(out, x0, x1, y0, y1, z, bay) {
-  out.push([[x0, y0, z - 0.06], [x1, y1, z - 0.02], 'glass']);
-  const n = Math.max(1, Math.round((x1 - x0) / bay));
-  for (let k = 0; k <= n; k++) {
-    const x = x0 + ((x1 - x0) * k) / n;
-    out.push([[x - 0.045, y0, z - 0.06], [x + 0.045, y1, z + 0.03], 'frame']);
-  }
-  out.push([[x0 - 0.045, y1 - 0.05, z - 0.06], [x1 + 0.045, y1 + 0.05, z + 0.03], 'frame']);
-  out.push([[x0 - 0.045, y0 - 0.05, z - 0.06], [x1 + 0.045, y0 + 0.05, z + 0.03], 'frame']);
-}
+/** The pool in the terrace: its water's middle, its size (x, z), depth, and
+ * how far the water lies under the coping. */
+export const POOL = { at: [0, TERRACE - 0.08, -60.7], w: 9, d: 3.8, deep: 1.1 };
 
-/** The house's boxes: [lo, hi, part]. */
-export const HOUSE_BOXES = (() => {
-  const out = [];
-  // The stone base, half sunk in the mound, its top a paved forecourt.
-  out.push([[-9, 0.2, -81], [9, B, -58], 'stone']);
-  // Steps down the base's front to the lawn.
-  for (let i = 0; i < 10; i++) out.push([[-1.3, 0.2, -58 + i * 0.3], [1.3, B - (i + 1) * 0.18, -58 + (i + 1) * 0.3], 'stone']);
-  // The ground floor: render, a timber panel at one end, glass across the
-  // rest of its front, and a slit window down each side.
-  out.push([[-8, B, -79], [8, B + 3.3, -63], 'render']);
-  out.push([[5, B, -63.02], [8, B + 3.3, -62.96], 'timber']);
-  glazing(out, -7.2, 5, B + 0.08, B + 3.12, -62.94, 1.53);
-  out.push([[7.98, B + 0.5, -73], [8.04, B + 2.9, -66], 'glass']);
-  out.push([[-8.04, B + 0.5, -73], [-7.98, B + 2.9, -66], 'glass']);
-  // The terrace's slab, round the pool's hole.
-  const sy = [B + 3.3, T];
-  out.push([[-8.4, sy[0], -79.4], [8.4, sy[1], pz0], 'slab']);
-  out.push([[-8.4, sy[0], pz1], [8.4, sy[1], -62.6], 'slab']);
-  out.push([[-8.4, sy[0], pz0], [px0, sy[1], pz1], 'slab']);
-  out.push([[px1, sy[0], pz0], [8.4, sy[1], pz1], 'slab']);
-  // The pool: its tiled basin, and the water a little under the rim.
-  const fl = T - POOL.deep;
-  out.push([[px0, fl - 0.05, pz0], [px1, fl, pz1], 'tile']);
-  out.push([[px0, fl, pz0], [px0 + 0.02, T, pz1], 'tile']);
-  out.push([[px1 - 0.02, fl, pz0], [px1, T, pz1], 'tile']);
-  out.push([[px0, fl, pz0], [px1, T, pz0 + 0.02], 'tile']);
-  out.push([[px0, fl, pz1 - 0.02], [px1, T, pz1], 'tile']);
-  out.push([[px0 + 0.02, POOL.at[1] - 0.02, pz0 + 0.02], [px1 - 0.02, POOL.at[1], pz1 - 0.02], 'water']);
-  // The coping round it, and the deck's boards round that.
-  const dy = [T, T + 0.05];
-  out.push([[px0 - CW, dy[0], pz0 - CW], [px1 + CW, dy[1] + 0.01, pz0], 'coping']);
-  out.push([[px0 - CW, dy[0], pz1], [px1 + CW, dy[1] + 0.01, pz1 + CW], 'coping']);
-  out.push([[px0 - CW, dy[0], pz0], [px0, dy[1] + 0.01, pz1], 'coping']);
-  out.push([[px1, dy[0], pz0], [px1 + CW, dy[1] + 0.01, pz1], 'coping']);
-  out.push([[-8.4, dy[0], pz1 + CW], [8.4, dy[1], -62.6], 'deck']);
-  out.push([[-8.4, dy[0], -71], [8.4, dy[1], pz0 - CW], 'deck']);
-  out.push([[-8.4, dy[0], pz0 - CW], [px0 - CW, dy[1], pz1 + CW], 'deck']);
-  out.push([[px1 + CW, dy[0], pz0 - CW], [8.4, dy[1], pz1 + CW], 'deck']);
-  // The upper floor, set back off the terrace: render, timber, glass.
-  out.push([[-8, T, -79], [8, T + 3, -71], 'render']);
-  out.push([[3, T, -71.02], [8, T + 3, -70.96], 'timber']);
-  glazing(out, -7, 3, T + 0.1, T + 2.8, -70.94, 2);
-  // Its roof, reaching out over the terrace.
-  out.push([[-8.8, T + 3, -79.8], [8.8, T + 3.3, -69.2], 'slab']);
-  return out;
-})();
+/** The terrace's front edge: it reaches out past the ground floor's glass,
+ * the pool in that cantilever, its basin the porch's roof. */
+export const EDGE = -58.6;
 
-/** The railing round the terrace's open sides: posts, a top rail and two
- * rails under it, as [from, to, radius] (houseShader.js tubes them). */
-export const RAILING = (() => {
-  const out = [];
-  const y0 = T + 0.05;
-  const hgt = 1.05;
-  const z = -62.75;
-  const x = 8.25;
-  const run = [[-x, -70.95], [-x, z], [x, z], [x, -70.95]];
-  for (let i = 0; i < run.length - 1; i++) {
-    const [a, b] = [run[i], run[i + 1]];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const n = Math.round(len / 1.5);
-    for (let k = i === 0 ? 0 : 1; k <= n; k++) {
-      const t = k / n;
-      const px = a[0] + (b[0] - a[0]) * t;
-      const pz = a[1] + (b[1] - a[1]) * t;
-      out.push([[px, y0, pz], [px, y0 + hgt, pz], 0.022]);
-    }
-    out.push([[a[0], y0 + hgt, a[1]], [b[0], y0 + hgt, b[1]], 0.028]);
-    for (const h of [0.38, 0.7]) out.push([[a[0], y0 + h, a[1]], [b[0], y0 + h, b[1]], 0.009]);
-  }
-  return out;
-})();
+/** How thick the glass is (metres): every pane, the windows' and the
+ * terrace's (houseGlass.js, at its index 1.52). */
+export const GLASS_THICK = 0.012;
 
-/** What casts the house's shadows (its big boxes: [lo, hi]). */
-export const HOUSE_OCCLUDERS = [
-  [[-9, 0.2, -81], [9, B, -58]],
-  [[-8, B, -79], [8, B + 3.3, -63]],
-  // (The slab a little under its top, so the pool's water isn't inside it.)
-  [[-8.4, B + 3.3, -79.4], [8.4, T - 0.2, -62.6]],
-  [[-8, T, -79], [8, T + 3, -71]],
-  [[-8.8, T + 3, -79.8], [8.8, T + 3.3, -69.2]],
+const CEIL_G = FLOOR + STOREY - 0.35;
+const CEIL_U = TERRACE + STOREY - 0.35;
+
+/**
+ * The rooms as the light knows them (docs/parts/house.md): [lo, hi, light]
+ * boxes, the first that holds a point its room; `light`, where its daylight
+ * comes in: 1 the front glass (its lamps' light goes out there too), 2 a
+ * window in the back wall, 0 only side slots or none. A room's index + 1 is
+ * its zone (0 outside).
+ */
+export const ZONES = [
+  [[4.66, FLOOR, -71.44], [7.72, CEIL_G, -67.56], 0], // 1 the WC
+  [[-5.34, FLOOR, -78.72], [1.54, CEIL_G, -73.06], 2], // 2 the study
+  [[-7.72, FLOOR, -78.72], [7.72, CEIL_G, -63.28], 1], // 3 the ground floor, open plan
+  [[-4.44, TERRACE, -75.74], [2.54, CEIL_U, -71.28], 1], // 4 the main bedroom
+  [[-4.44, TERRACE, -77.44], [2.54, CEIL_U, -75.86], 0], // 5 the wardrobe
+  [[2.66, TERRACE, -74.94], [7.72, CEIL_U, -71.28], 0], // 6 the en-suite
+  [[2.66, TERRACE, -78.72], [7.72, CEIL_U, -75.06], 2], // 7 the guest bedroom
+  [[-7.72, TERRACE, -78.72], [7.72, CEIL_U, -71.28], 1], // 8 the landing and the hall
 ];
+
+/**
+ * The lights by night: [x, y, z, radius (m), strength, kind, zone]. Kind 0
+ * a lamp (shining every way), 1 a downlight outside (the soffit's, the
+ * porch's), 3 one recessed in a room's ceiling (throwing down). Zone:
+ * ZONES's, 0 outside.
+ */
+const down = (zone, ceil, pts, r = 5, k = 0.45) => pts.map(([x, z]) => [x, ceil - 0.05, z, r, k, 3, zone]);
+export const HOUSE_LIGHTS = [
+  ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3], [2.5, -65.5], [2.5, -70.3], [3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6], [6.2, -65.0], [-6.6, -74.5], [0, -67.5]]),
+  [2.55, FLOOR + 1.8, -67.9, 5, 0.7, 0, 3],
+  [4.4, FLOOR + 2.1, -74.9, 5, 0.7, 0, 3],
+  [-7.2, FLOOR + 1.55, -70.3, 3.5, 0.7, 0, 3],
+  ...down(1, CEIL_G, [[6.2, -69.5]], 4),
+  ...down(2, CEIL_G, [[-2, -76]]),
+  [-2.75, FLOOR + 1.1, -78.2, 2.5, 0.5, 0, 2],
+  ...down(8, CEIL_U, [[-6.1, -73.0], [-6.1, -76.0], [-1, -78.1], [1.5, -78.1]]),
+  ...down(4, CEIL_U, [[-2.5, -73.0], [0.8, -73.0], [-1, -74.8]]),
+  [-2.45, TERRACE + 0.85, -75.45, 2.5, 0.55, 0, 4],
+  [0.55, TERRACE + 0.85, -75.45, 2.5, 0.55, 0, 4],
+  ...down(5, CEIL_U, [[-2.5, -76.65], [0.8, -76.65]], 3.5),
+  ...down(6, CEIL_U, [[4, -72.6], [6.4, -72.6], [5.2, -74.2]], 4),
+  ...down(7, CEIL_U, [[5.2, -76.9]], 4),
+  [6.4, TERRACE + 0.85, -78.4, 2.5, 0.5, 0, 7],
+  // Two downlights in the porch's ceiling, under the cantilever.
+  [-6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
+  [6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
+  // The soffit's downlights over the terrace.
+  ...[-6, -2, 2, 6].map(x => [x, TERRACE + STOREY - 0.42, -69.8, 4.5, 0.55, 1, 0]),
+];
+
+/** The bounds the sun's shadow map covers (houseShadow.js): everything the
+ * house can shade. */
+export const HOUSE_BOUNDS = { lo: [-13, 0, -92], hi: [13, TERRACE + STOREY + 0.6, -50] };

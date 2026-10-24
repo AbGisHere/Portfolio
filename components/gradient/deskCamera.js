@@ -198,6 +198,30 @@ export function deskCameraAt(desk, recipe, opts = {}) {
   return cameraOn(DESK_PATH, desk, descentAt(1, recipe, opts), opts.device);
 }
 
+/**
+ * (0.4.2) The free camera (freeCam.js: metres, radians) as the scene's
+ * camera, for the dev-only /house route: anywhere, looking anywhere.
+ */
+export function freeCameraAt(free, recipe, opts = {}) {
+  const end = descentAt(1, recipe, opts);
+  const deskBack = end.back + DESK_PATH.d0 / WORLD_M;
+  const y = Math.max(0.05, free.y);
+  return {
+    ...end,
+    back: deskBack - free.z / WORLD_M,
+    rise: y / WORLD_M - 1,
+    pitch: free.pitch,
+    yaw: free.yaw,
+    centre: 1,
+    zoom: free.zoom,
+    fit: 0,
+    eye: y / WORLD_M,
+    ahead: -free.z / WORLD_M,
+    x: free.x,
+    end,
+  };
+}
+
 /** (0.4.0) The camera at `contact` (> 0), past the desk: CONTACT_PATH. */
 export function contactCameraAt(contact, recipe, opts = {}) {
   return cameraOn(CONTACT_PATH, contact, descentAt(1, recipe, opts), opts.device);
@@ -447,7 +471,7 @@ export function grassOf(recipe, { prev = null, e = 1 } = {}) {
 
 /** The camera in metres, the desk's centre on the ground at the origin: y
  * up, z forward (toward the mountains). */
-export const cameraMetres = cam => ({ x: 0, y: cam.eye * WORLD_M, z: -cam.ahead * WORLD_M });
+export const cameraMetres = cam => ({ x: cam.x ?? 0, y: cam.eye * WORLD_M, z: -cam.ahead * WORLD_M });
 
 /** The near and far planes for depth (world units): the grass, the desk's
  * things and the trees (the far copses, 0.3.5) lie between. */
@@ -459,12 +483,18 @@ export const DEPTH = { near: 0.04 / WORLD_M, far: 400 / WORLD_M };
  * it points at the sky.
  */
 export function groundAt(P, cam, x, y) {
+  return planeAt(P, cam, x, y, 0);
+}
+
+/** (0.4.2) Where a screen point meets the level plane `at` metres up
+ * (groundAt's fields), or null when it points away from it. */
+export function planeAt(P, cam, x, y, at) {
   if (!P) return null;
   // The ray (y down), then y up.
   const r = worldRay(P, x, y);
-  if (r.y <= 1e-6) return null;
   const c = cameraMetres(cam);
-  const t = c.y / r.y;
+  if (r.y <= 1e-6 || c.y <= at) return null;
+  const t = (c.y - at) / r.y;
   const dx = r.x * t;
   const dz = r.z * t;
   return { x: c.x + dx, z: c.z + dz, d: Math.hypot(dx, dz) };

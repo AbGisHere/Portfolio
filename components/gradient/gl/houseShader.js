@@ -1,43 +1,28 @@
 /**
  * (0.4.0) The house on the hill and the pool on its terrace (houseShape.js).
- * (0.4.1) Built in code in 3D like the desk: the lawn mound it stands on,
- * the house's boxes and its railing, one mesh, lit live by the sky (no
- * lightmaps) like the things on the desk (propsShader.js), its glass and
- * water mirroring the sky (laptopShader.js METAL_GLSL). The sun's shadows
- * come from its big boxes (HOUSE_OCCLUDERS), traced per pixel. By night
- * its windows are lit from inside and the pool from under the water.
+ * (0.4.2) Its opaque surfaces, lit as physical materials: each part an
+ * albedo, a roughness and a Fresnel reflectance (GGX with Schlick, the sky
+ * mirrored by roughness: laptopShader.js METAL_GLSL), the sun through a
+ * shadow map (houseShadow.js), the sky's light falling off inside the rooms
+ * toward their backs. By night the rooms' lamps light them, and the outside
+ * only through their openings; the soffit's downlights light the terrace;
+ * the pool's light spills onto the coping. The glass and the water are drawn
+ * after, over these (houseGlass.js).
  */
 
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
-import { HOUSE_BOXES, HOUSE_OCCLUDERS, HOUSE_PART, MOUND, RAILING, moundY } from './houseShape';
-import { KIT_STRIDE, box, grid, tube } from './meshKit';
+import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
+import { houseLayout } from './houseMesh';
 
-export const HOUSE_STRIDE = KIT_STRIDE;
+export const HOUSE_STRIDE = 9;
 
-const f = x => x.toFixed(4);
+const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const v3 = a => `vec3(${a.map(f).join(', ')})`;
+const v2 = a => `vec2(${a.map(f).join(', ')})`;
 
-/** The mound, the house and its railing, as one mesh: `{ data, count }`.
- * Built once. */
-export function houseMesh() {
-  const out = [];
-  // The mound: rings out from its top, a little past its foot so it meets
-  // the meadow flat.
-  const [cx, cz] = MOUND.at;
-  const [rx, rz] = MOUND.r;
-  grid(out, 40, 72, (u, v) => {
-    const r = 1.12 * u ** 1.4;
-    const a = v * Math.PI * 2;
-    const x = cx + rx * r * Math.cos(a);
-    const z = cz + rz * r * Math.sin(a);
-    return { p: [x, moundY(x, z), z], part: HOUSE_PART.lawn, s: x, t: z };
-  });
-  for (const [lo, hi, part] of HOUSE_BOXES) box(out, lo, hi, HOUSE_PART[part], { bottom: false });
-  for (const [p, q, r] of RAILING) tube(out, p, q, r, HOUSE_PART.steel, 8);
-  const data = new Float32Array(out);
-  return { data, count: data.length / HOUSE_STRIDE };
-}
+/** The house's opaque mesh (`{ data, count, glass }`), built once. */
+export const houseMesh = houseLayout;
 
 export const HOUSE_VERTEX = `#version 300 es
 precision highp float;
@@ -48,22 +33,128 @@ layout(location = 2) in float aPart;
 layout(location = 3) in vec2 aST;
 
 ${CAMERA_GLSL}
+uniform mat4 uLightVP;
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
+out vec4 vLight;
 flat out int vPart;
+flat out float vVar;
 
 ${PROJECT_GLSL}
 void main() {
   vWorld = aPos;
   vNorm = aNorm;
   vST = aST;
-  vPart = int(aPart + 0.5);
+  vPart = int(floor(aPart + 0.001));
+  vVar = aPart - float(vPart);
+  // Looked up a little off the surface, so it never shades itself.
+  vLight = uLightVP * vec4(aPos + aNorm * 0.03, 1.0);
   gl_Position = project(aPos);
 }
 `;
 
 const P = HOUSE_PART;
+const G = PLAN.ground;
+const U = PLAN.upper;
+const top = FLOOR + STOREY - 0.35;
+const utop = TERRACE + STOREY - 0.35;
+// The rooms' insides (lo, hi), and their front openings (x0, x1, y0, y1, z).
+export const ROOMS = [
+  [[G.x[0] + WALL, FLOOR, G.z[0] + WALL], [G.x[1] - WALL, top, G.z[1] - WALL], [-7.4, 4.6, FLOOR, top, G.z[1]]],
+  [[U.x[0] + WALL, TERRACE, U.z[0] + WALL], [U.x[1] - WALL, utop, U.z[1] - WALL], [-7.2, 2.6, TERRACE, utop, U.z[1]]],
+];
+const opening = i => `vec4(${ROOMS[i][2].slice(0, 4).map(f).join(', ')})`;
+
+/** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
+ * the lamps by night. Needs METAL_GLSL's ggx. */
+export const HOUSE_LIGHT_GLSL = `
+uniform highp sampler2DShadow uShadow;
+uniform float uShadowOn;
+
+bool inBox(vec3 p, vec3 lo, vec3 hi) {
+  return all(greaterThanEqual(p, lo)) && all(lessThanEqual(p, hi));
+}
+
+// How much of the sun reaches here (0 … 1).
+float sunShadow(vec4 lp) {
+  if (uShadowOn < 0.5) return 1.0;
+  vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
+  if (any(lessThan(q, vec3(0.0))) || any(greaterThan(q, vec3(1.0)))) return 1.0;
+  // 12 taps on a rotated disc (a Poisson set), turned per pixel so the
+  // map's texels don't show as steps.
+  const vec2 DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621), vec2(0.962, -0.195), vec2(0.473, -0.48),
+    vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
+  float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+  mat2 rot = mat2(cos(a), sin(a), -sin(a), cos(a));
+  float s = 0.0;
+  for (int i = 0; i < 12; i++) s += texture(uShadow, vec3(q.xy + rot * DISC[i] * ${f(2.2 / 2048)}, q.z));
+  return s / 12.0;
+}
+
+// Which room a point is in (houseShape.js ZONES): 0 outside.
+int roomOf(vec3 p) {
+${ZONES.map(([lo, hi], i) => `  if (inBox(p, ${v3(lo)} - 0.03, ${v3(hi)} + 0.03)) return ${i + 1};`).join('\n')}
+  return 0;
+}
+
+// Whether a room looks out through the front glass.
+bool fronts(int z) {
+  return ${ZONES.map(([, , d], i) => (d === 1 ? `z == ${i + 1}` : null)).filter(Boolean).join(' || ')};
+}
+
+// Whether its daylight comes in at a window in the back wall.
+bool backs(int z) {
+  return ${ZONES.map(([, , d], i) => (d === 2 ? `z == ${i + 1}` : null)).filter(Boolean).join(' || ')};
+}
+
+// Whether a lamp at l in room at reaches p in room: the same room, or
+// out through its floor's front opening (where the line between them
+// crosses the glass's plane).
+bool lampSees(vec3 l, vec3 p, int room, int at) {
+  if (room == at) return true;
+  if (room != 0 || !fronts(at)) return false;
+  bool up = l.y > ${f(TERRACE)};
+  vec4 o = up ? ${opening(1)} : ${opening(0)};
+  float z = up ? ${f(ROOMS[1][2][4])} : ${f(ROOMS[0][2][4])};
+  if (p.z <= z) return false;
+  vec3 c = mix(l, p, (z - l.z) / (p.z - l.z));
+  return c.x > o.x && c.x < o.y && c.y > o.z && c.y < o.w;
+}
+
+const vec4 LAMPS[${HOUSE_LIGHTS.length}] = vec4[](${HOUSE_LIGHTS.map(([x, y, z, r]) => `vec4(${f(x)}, ${f(y)}, ${f(z)}, ${f(r)})`).join(', ')});
+const vec3 LAMP_K[${HOUSE_LIGHTS.length}] = vec3[](${HOUSE_LIGHTS.map(([, , , , s, k, z]) => `vec3(${f(s)}, ${f(k)}, ${f(z)})`).join(', ')});
+const vec3 WARM = vec3(1.0, 0.71, 0.44);
+
+// The lamps' light at p (normal N, to the eye V), by night: diffuse and a
+// soft highlight of roughness a.
+vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < ${HOUSE_LIGHTS.length}; i++) {
+    vec3 l = LAMPS[i].xyz;
+    vec3 d = l - p;
+    float r = length(d);
+    int kind = int(LAMP_K[i].y + 0.5);
+    int at = int(LAMP_K[i].z + 0.5);
+    // Every lamp in a room fills all of it a little, bounced off its walls.
+    if (at != 0 && room == at) sum += WARM * LAMP_K[i].x * 0.05;
+    if (r > LAMPS[i].w) continue;
+    // The soffit's and the porch's downlights light only outside.
+    if (at == 0 && room != 0) continue;
+    if (at != 0 && !lampSees(l, p, room, at)) continue;
+    vec3 Ld = d / r;
+    float fall = pow(clamp(1.0 - pow(r / LAMPS[i].w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
+    // A downlight throws down, in a cone.
+    if (kind != 0) fall *= mix(0.12, 1.0, smoothstep(0.25, 0.8, Ld.y));
+    vec3 H = normalize(Ld + V);
+    float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
+    // (With a share of its light bounced round the room, from every side.)
+    sum += WARM * LAMP_K[i].x * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? 0.05 : 0.3));
+  }
+  return sum * 2.2;
+}
+`;
+
 export const HOUSE_FRAGMENT = `#version 300 es
 precision highp float;
 
@@ -72,12 +163,13 @@ uniform vec3 uSun;
 uniform vec3 uSky;
 uniform vec3 uEnvTop;
 uniform vec3 uEnvLow;
-uniform vec3 uWood;     // what the glass mirrors below the horizon: the lawn
+uniform vec3 uWood;     // what a surface mirrors below the horizon: the lawn
 uniform vec3 uLawn;     // the lawn: the grass's colour from afar
-uniform vec3 uLawnTip;
 uniform vec3 uHaze;     // what the meadow hazes into with distance
 uniform vec2 uHazeAt;   // over these distances (metres)
 uniform float uNight;
+uniform sampler2D uCaustics; // the sun on the pool's floor (houseGlass.js)
+uniform float uCausticsOn;
 uniform sampler2D uGrain;
 uniform float uGrainA;
 uniform float uCssPerPx;
@@ -86,117 +178,358 @@ uniform float uResY;
 in vec3 vWorld;
 in vec3 vNorm;
 in vec2 vST;
+in vec4 vLight;
 flat in int vPart;
+flat in float vVar;
 out vec4 outColor;
 
 ${METAL_GLSL}
+${HOUSE_LIGHT_GLSL}
 
-// Whether the ray from p toward the light meets one of the house's big
-// boxes (a slab test each).
-bool shadowed(vec3 p, vec3 L) {
-  vec3 inv = 1.0 / L;
-${HOUSE_OCCLUDERS.map(([lo, hi]) => `  {
-    vec3 a = (${v3(lo)} - p) * inv;
-    vec3 b = (${v3(hi)} - p) * inv;
-    vec3 n = min(a, b);
-    vec3 x = max(a, b);
-    float t0 = max(max(n.x, n.y), n.z);
-    float t1 = min(min(x.x, x.y), x.z);
-    if (t1 > max(t0, 0.0)) return true;
-  }`).join('\n')}
-  return false;
+// Boards: which board a coordinate is on, and how far into the dark of the
+// gap at its edge (w the board's width, g the gap's).
+// (Filtered: where a board is only a few pixels wide its gaps fade to
+// their average, so they never alias into moiré.)
+vec2 boards(float x, float w, float g) {
+  float b = floor(x / w);
+  float e = abs(fract(x / w) - 0.5) * w;
+  float px = fwidth(x);
+  float gap = smoothstep(w * 0.5 - g - px, w * 0.5 - g * 0.3 + px, e);
+  float seen = 1.0 - smoothstep(w * 0.08, w * 0.3, px);
+  return vec2(b, mix(g / w * 1.4, gap, seen));
 }
+
+// How much of a pattern of period p can be seen at this pixel (1 sharp,
+// 0 finer than a pixel or two: show its average).
+float detail(float p, vec2 q) {
+  return 1.0 - smoothstep(p * 0.15, p * 0.45, length(fwidth(q)));
+}
+
+// The pool's tiles (25 cm, pale aqua, white grout).
+vec3 poolTile(vec2 q) {
+  vec2 g = abs(fract(q / 0.25) - 0.5) * 0.25;
+  float px = length(fwidth(q));
+  float grout = mix(0.1, 1.0 - smoothstep(0.003 - px, 0.007 + px, 0.125 - max(g.x, g.y)), 1.0 - smoothstep(0.03, 0.09, px));
+  return mix(vec3(0.36, 0.68, 0.76), vec3(0.86, 0.92, 0.92), grout * 0.8);
+}
+
+const vec3 BOOKS[10] = vec3[](vec3(0.55, 0.16, 0.12), vec3(0.15, 0.24, 0.38), vec3(0.78, 0.7, 0.52), vec3(0.2, 0.32, 0.22),
+  vec3(0.1, 0.1, 0.11), vec3(0.7, 0.45, 0.18), vec3(0.85, 0.82, 0.76), vec3(0.42, 0.22, 0.3), vec3(0.3, 0.42, 0.48), vec3(0.6, 0.3, 0.2));
 
 void main() {
   vec3 N = normalize(vNorm);
   vec3 V = normalize(uCam - vWorld);
   vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
-  float lam = dot(N, L);
-  // In the house's shadow, lit as if turned away.
-  if (lam > -0.2 && shadowed(vWorld + N * 0.04, L)) lam = -0.2;
-  vec3 lit = mix(0.5, 1.15, smoothstep(-0.45, 0.65, lam)) * mix(vec3(1.0), uSky, 0.12 + 0.08 * max(N.y, 0.0) + 0.25 * uNight) * mix(1.0, 0.26, uNight);
-  // Each face's own coordinates (metres): x or z along it, y up it (the
-  // tops: x and z).
   vec2 st = vST;
-  vec3 col;
+  float k = vVar * 10.0;
+  // The material: albedo, roughness, F0 (metals take their albedo), light
+  // of its own.
+  vec3 alb = vec3(0.8);
+  float rough = 0.8;
+  float f0 = 0.04;
+  float metal = 0.0;
+  vec3 emit = vec3(0.0);
   if (vPart == ${P.lawn}) {
     // At its foot the mound frays into the meadow (which shows where it's
     // left out), so there's no line round it.
     if (vWorld.y < 0.25 * noise2(vWorld.xz * 0.9) + 0.04 * hash2(floor(gl_FragCoord.xy))) discard;
-    // Mown lawn: the grass's colour from afar, in faint stripes down the
-    // slope, mottled.
     float stripe = smoothstep(0.35, 0.65, abs(fract(st.x / 3.0) - 0.5) * 2.0);
     float mott = noise2(st * 0.6) * 0.6 + noise2(st * 3.1) * 0.4;
-    vec3 c = uLawn * (0.95 + 0.04 * stripe + 0.08 * mott);
-    // Darker in against the house's base.
-    float foot = 1.0 - smoothstep(0.0, 2.5, max(abs(vWorld.x) - 9.0, max(vWorld.z + 58.0, -81.0 - vWorld.z)));
-    // Lit like the meadow round it (mistShader.js's ground): the grass's
-    // far colour under the sky, hazing a little with distance,
-    // with only the slope's light on top.
-    float relief = mix(0.85, 1.08, smoothstep(-0.2, 0.6, dot(N, L) - dot(vec3(0.0, 1.0, 0.0), L)));
-    c *= mix(vec3(1.0), uSky, 0.25) * relief * (1.0 - 0.3 * foot);
-    col = mix(c, uHaze, 0.35 * smoothstep(uHazeAt.x, uHazeAt.y, length(uCam - vWorld)));
+    alb = uLawn * (0.95 + 0.04 * stripe + 0.08 * mott);
+    rough = 1.0;
   } else if (vPart == ${P.stone}) {
-    // Coursed stone: blocks of a warm grey, each a little its own.
+    // Coursed stone, blocks each a little their own, raked joints; the
+    // forecourt's flags and the coping laid flat.
     float row = floor(st.y / 0.32);
-    float blk = floor(st.x / 0.9 + 0.5 * mod(row, 2.0));
-    vec3 c = vec3(0.6, 0.56, 0.5) * (0.85 + 0.25 * hash2(vec2(blk, row)));
-    float joint = max(1.0 - smoothstep(0.0, 0.02, abs(fract(st.y / 0.32) - 0.5) * 0.32 - 0.14), 0.0);
-    if (N.y > 0.5) { c = vec3(0.66, 0.62, 0.56) * (0.9 + 0.15 * noise2(vWorld.xz * 1.3)); joint = 0.0; }
-    col = c * (1.0 - 0.35 * joint) * lit;
-  } else if (vPart == ${P.render}) {
-    col = vec3(0.9, 0.87, 0.81) * (0.96 + 0.06 * noise2(st * 2.0)) * lit;
-  } else if (vPart == ${P.timber}) {
-    // Vertical cladding: boards 14 cm wide, each its own shade.
-    float b = floor(st.x / 0.14);
-    vec3 c = vec3(0.5, 0.32, 0.2) * (0.8 + 0.35 * hash2(vec2(b, 7.0)));
-    c *= 0.9 + 0.15 * noise2(vec2(b * 3.0, st.y * 6.0));
-    c *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.012, abs(fract(st.x / 0.14) - 0.5) * 0.14 - 0.058));
-    col = c * lit;
-  } else if (vPart == ${P.glass}) {
-    // The sky mirrored over a dim room; by night the room lit, a pane at a
-    // time, some brighter than others.
-    gSat = 0.8;
-    gSpec = 0.4;
-    float pane = floor((vWorld.x + vWorld.z) / 1.6);
-    vec3 room = vec3(0.09, 0.1, 0.11) * (0.8 + 0.4 * hash2(vec2(pane, 2.0)));
-    vec3 glow = vec3(1.0, 0.72, 0.42) * (0.45 + 0.55 * hash2(vec2(pane, 5.0))) * (0.6 + 0.4 * smoothstep(0.0, 2.5, st.y - floor(st.y / 3.5) * 3.5));
-    room = mix(room * lit, glow * 0.85, uNight);
-    col = room + shine(N, V, L, 0.04, 0.06) * mix(1.0, 0.35, uNight);
-  } else if (vPart == ${P.frame}) {
-    col = vec3(0.13, 0.135, 0.14) * lit + shine(N, V, L, 0.35, 0.04) * 0.4;
-  } else if (vPart == ${P.slab}) {
-    col = vec3(0.8, 0.78, 0.74) * (0.95 + 0.08 * noise2(st * 1.5)) * lit;
-  } else if (vPart == ${P.deck}) {
-    // Decking: boards along x, 14 cm, with dark gaps.
-    float b = floor(st.y / 0.14);
-    vec3 c = vec3(0.55, 0.38, 0.25) * (0.82 + 0.3 * hash2(vec2(b, 3.0)) + 0.1 * noise2(vec2(st.x * 0.8, b)));
-    c *= 1.0 - 0.5 * (1.0 - smoothstep(0.0, 0.01, abs(fract(st.y / 0.14) - 0.5) * 0.14 - 0.062));
-    col = c * lit;
-  } else if (vPart == ${P.tile} || vPart == ${P.water}) {
-    // The pool's tiles (25 cm, pale aqua with white grout) and, through the
-    // water, the same tiles, deepened and tinted, the sky mirrored over
-    // them more as the view lowers; by night lit from under the water.
-    vec2 tq = vPart == ${P.water} ? vWorld.xz : st;
-    vec2 g = abs(fract(tq / 0.25) - 0.5) * 0.25;
-    float grout = 1.0 - smoothstep(0.004, 0.009, min(g.x, g.y));
-    vec3 tile = mix(vec3(0.42, 0.74, 0.8), vec3(0.88, 0.94, 0.94), grout * 0.7);
-    if (vPart == ${P.tile}) col = tile * lit;
-    else {
-      vec2 w = vWorld.xz * 1.7;
-      vec3 Nw = normalize(vec3(noise2(w) - 0.5, 9.0, noise2(w + 17.0) - 0.5));
-      float nv = max(dot(Nw, V), 0.0);
-      float fr = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
-      vec3 under = tile * vec3(0.55, 0.8, 0.85) * lit;
-      under = mix(under, vec3(0.3, 0.85, 0.95) * 0.7, uNight * 0.75);
-      gSat = 0.9;
-      gSpec = 0.6;
-      col = mix(under, envAt(reflect(-V, Nw)) * mix(1.0, 0.5, uNight), fr) + uSun * pow(max(dot(reflect(-L, Nw), V), 0.0), 80.0) * 0.6 * (1.0 - uNight);
+    float sx = st.x / 0.9 + 0.5 * mod(row, 2.0);
+    vec3 c = vec3(0.6, 0.56, 0.5) * (0.82 + 0.28 * hash2(vec2(floor(sx), row) + k));
+    float jy = 0.16 - abs(fract(st.y / 0.32) - 0.5) * 0.32;
+    float jx = 0.45 - abs(fract(sx) - 0.5) * 0.9;
+    float joint = 1.0 - smoothstep(0.004, 0.011, min(jy, jx));
+    if (N.y > 0.5) {
+      vec2 fq = vWorld.xz / vec2(0.9, 0.6);
+      vec2 fe = 0.5 - abs(fract(fq) - 0.5);
+      c = vec3(0.68, 0.64, 0.58) * (0.86 + 0.2 * hash2(floor(fq))) * (0.92 + 0.12 * noise2(vWorld.xz * 2.3));
+      joint = 1.0 - smoothstep(0.006, 0.016, min(fe.x * 0.9, fe.y * 0.6));
     }
+    alb = c * (1.0 - 0.45 * joint);
+    rough = vVar > 0.75 ? 0.55 : 0.85;
+  } else if (vPart == ${P.render}) {
+    alb = vec3(0.9, 0.87, 0.82) * (0.95 + 0.07 * noise2(st * 3.0) + 0.03 * noise2(st * 40.0));
+    rough = 0.92;
+  } else if (vPart == ${P.timber}) {
+    vec2 b = boards(st.x, 0.14, 0.008);
+    alb = vec3(0.47, 0.3, 0.19) * (0.78 + 0.36 * hash2(vec2(b.x, 7.0))) * (0.88 + 0.18 * noise2(vec2(b.x * 3.0, st.y * 9.0)));
+    alb *= 1.0 - 0.6 * b.y;
+    rough = 0.62;
+  } else if (vPart == ${P.frame}) {
+    alb = vec3(0.09, 0.095, 0.1);
+    rough = 0.35;
+    metal = 1.0;
+  } else if (vPart == ${P.slab}) {
+    // Concrete; the counters' quartz smooth and pale; the fascia's band.
+    alb = vVar > 0.5 ? vec3(0.9, 0.89, 0.86) : vec3(0.76, 0.74, 0.7) * (0.92 + 0.1 * noise2(st * 1.7) + 0.04 * noise2(st * 23.0));
+    if (vVar > 0.2 && vVar < 0.5) alb *= 0.86;
+    rough = vVar > 0.5 ? 0.18 : 0.88;
+  } else if (vPart == ${P.deck}) {
+    // Oiled hardwood decking, weathered: boards 14.5 cm with 6 mm gaps,
+    // staggered end joints, each board its own tone; a grain that streams
+    // along it round knots, the end grain darker at the joints, two screws
+    // at every joist. Rough, so it scatters the light rather than mirrors
+    // it: only a faint sheen at a glance, where the oil sits.
+    vec2 b = boards(st.y, 0.145, 0.006);
+    float off = hash2(vec2(b.x, 1.0)) * 2.4;
+    float run = st.x + off;
+    float jn = floor(run / 2.4);
+    float along = fract(run / 2.4) * 2.4;
+    float joint = 1.0 - smoothstep(0.002, 0.006, min(along, 2.4 - along));
+    vec2 id = vec2(b.x, jn);
+    float across = fract(st.y / 0.145);
+    float wob = noise2(vec2(run * 0.7, across * 3.0 + id.x)) * 1.6 + noise2(vec2(run * 3.0, across * 9.0)) * 0.25;
+    float grain = 0.5 + 0.5 * sin((across * 26.0 + wob * 4.0) * 3.14159);
+    grain = mix(0.3, pow(grain, 3.0), detail(0.01, st));
+    vec3 tone = mix(vec3(0.42, 0.29, 0.19), vec3(0.56, 0.4, 0.27), hash2(id));
+    tone = mix(tone, vec3(0.5, 0.47, 0.42), 0.18 + 0.2 * noise2(vec2(run * 0.3, b.x)));
+    alb = tone * (0.86 + 0.18 * grain) * (0.93 + 0.1 * noise2(vec2(run * 0.4, across * 1.5 + id.x)));
+    float screw = 0.0;
+    for (int jj = -1; jj <= 1; jj++) {
+      float jx = (floor(st.x / 0.6) + float(jj)) * 0.6;
+      for (int sc = 0; sc < 2; sc++) {
+        vec2 sp = vec2(jx, b.x * 0.145 + (sc == 0 ? 0.03 : 0.115));
+        screw = max(screw, 1.0 - smoothstep(0.003, 0.0045, length(vec2(st.x, st.y) - sp)));
+      }
+    }
+    alb = mix(alb, vec3(0.12, 0.11, 0.1), screw * detail(0.02, st));
+    alb *= 1.0 - 0.75 * b.y;
+    alb *= 1.0 - 0.35 * joint;
+    // Each board cups a little, its edges up: the light catches its middle.
+    N = normalize(N + vec3(0.0, 0.0, (across - 0.5) * 0.06));
+    rough = 0.82;
+    f0 = 0.03;
+  } else if (vPart == ${P.tile}) {
+    vec2 tq = abs(N.y) > 0.5 ? vWorld.xz : (abs(N.x) > 0.5 ? vWorld.zy : vWorld.xy);
+    if (vVar > 0.3) {
+      // Large-format stone tiles (60 × 120 cm, 2 mm joints), honed: a warm
+      // grey with its own veining, each tile cut from its own part.
+      vec2 g = tq / vec2(1.2, 0.6);
+      vec2 cell = floor(g);
+      vec2 e = abs(fract(g) - 0.5);
+      float joint = 1.0 - smoothstep(0.0015, 0.003, min((0.5 - e.x) * 1.2, (0.5 - e.y) * 0.6));
+      float vein = smoothstep(0.82, 0.98, noise2(tq * 3.0 + cell * 7.0 + noise2(tq * 9.0) * 1.5));
+      alb = mix(vec3(0.72, 0.69, 0.64), vec3(0.62, 0.59, 0.55), hash2(cell)) * (0.94 + 0.08 * noise2(tq * 14.0));
+      alb = mix(alb, vec3(0.86, 0.84, 0.8), vein * 0.5) * (1.0 - 0.4 * joint);
+      rough = 0.35;
+    } else {
+      alb = poolTile(tq);
+      rough = 0.15;
+    }
+    f0 = 0.05;
+  } else if (vPart == ${P.plaster}) {
+    alb = vec3(0.93, 0.91, 0.88);
+    rough = 0.95;
+  } else if (vPart == ${P.ceiling}) {
+    alb = vec3(0.95, 0.94, 0.92);
+    rough = 0.95;
+  } else if (vPart == ${P.oak}) {
+    vec2 b = boards(vWorld.z, 0.19, 0.003);
+    alb = vec3(0.6, 0.43, 0.28) * (0.85 + 0.25 * hash2(vec2(b.x, 2.0))) * (0.9 + 0.15 * noise2(vec2(vWorld.x * 2.0, b.x * 7.0)));
+    alb *= 1.0 - 0.4 * b.y;
+    rough = 0.38;
+  } else if (vPart == ${P.fabric}) {
+    // Upholstery: woven, so a fine basket of threads, and a soft sheen
+    // that rises toward the edges as cloth's fibres catch the light there.
+    alb = k < 2.0 ? vec3(0.56, 0.53, 0.49) : k < 3.5 ? vec3(0.2, 0.27, 0.35) : k < 5.0 ? vec3(0.52, 0.33, 0.24) : k < 7.0 ? vec3(0.33, 0.37, 0.3) : k < 8.7 ? vec3(0.9, 0.9, 0.88) : vec3(0.88, 0.88, 0.86);
+    vec3 wq = vWorld * 700.0;
+    float weave = mix(0.5, 0.5 + 0.5 * sin(wq.x + wq.y) * sin(wq.z - wq.y), detail(0.009, vWorld.xy + vWorld.zz));
+    alb *= (0.94 + 0.08 * weave) * (0.95 + 0.08 * noise2(vWorld.xz * 40.0 + vWorld.y * 30.0));
+    emit = alb * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.12 * (1.0 - uNight * 0.7);
+    rough = 1.0;
+    f0 = 0.02;
+  } else if (vPart == ${P.walnut}) {
+    // Walnut: a dark streaming grain; the doors and fronts a cut of it a
+    // shade lighter, satin oiled.
+    float gw = noise2(vec2(st.x * 2.0, st.y * 0.5)) * 3.0;
+    float g = mix(0.4, pow(0.5 + 0.5 * sin((st.x * 60.0 + gw * 6.0)), 2.0), detail(0.04, st));
+    alb = mix(vec3(0.24, 0.15, 0.09), vec3(0.36, 0.23, 0.14), g * 0.6 + 0.2 * noise2(st * 9.0)) * (vVar > 0.3 ? 1.12 : 1.0);
+    rough = 0.45;
   } else if (vPart == ${P.steel}) {
-    col = vec3(0.55, 0.56, 0.58) * 0.5 * lit + shine(N, V, L, 0.25, 0.6) * 0.6;
+    // Black steel; brushed stainless at the sink.
+    alb = vVar > 0.3 ? vec3(0.62, 0.62, 0.6) : vec3(0.05, 0.05, 0.055);
+    rough = vVar > 0.3 ? 0.28 : 0.4;
+    metal = 1.0;
+  } else if (vPart == ${P.book}) {
+    alb = BOOKS[int(k + 0.5) % 10] * (0.9 + 0.15 * hash2(vWorld.xy * 13.0));
+    rough = 0.75;
+  } else if (vPart == ${P.leaf}) {
+    // Leaves: both sides theirs (the underside's own colour); a midrib
+    // and, on the fig, veins off it; the olive grey-green over silver, the
+    // fig dark and glossy, the box small and bright on its dark core.
+    bool top = gl_FrontFacing;
+    if (!top) N = -N;
+    float rib = 1.0 - smoothstep(0.0, 0.08, abs(st.y));
+    if (vVar < 0.25) {
+      alb = top ? vec3(0.26, 0.31, 0.2) : vec3(0.55, 0.58, 0.52);
+      rough = top ? 0.55 : 0.8;
+    } else if (vVar < 0.55) {
+      float vein = 1.0 - smoothstep(0.0, 0.05, abs(fract(st.x * 7.0 - abs(st.y) * 1.6) - 0.5) * 0.6 - 0.27);
+      alb = (top ? vec3(0.09, 0.2, 0.07) : vec3(0.2, 0.3, 0.15)) * (1.0 + 0.5 * rib + 0.25 * vein * smoothstep(0.1, 0.4, abs(st.y)));
+      rough = top ? 0.28 : 0.6;
+      f0 = 0.05;
+    } else if (vVar < 0.72) {
+      alb = vec3(0.12, 0.26, 0.08) * (0.8 + 0.4 * hash2(floor(vWorld.xz * 60.0)));
+      rough = 0.45;
+    } else {
+      alb = vec3(0.04, 0.08, 0.03);
+      rough = 0.9;
+    }
+    alb *= 0.92 + 0.12 * rib;
+  } else if (vPart == ${P.bark}) {
+    // The olive's bark grey and fissured; the fig's stems green-brown.
+    alb = vVar < 0.3 ? vec3(0.36, 0.33, 0.28) * (0.7 + 0.5 * noise2(vec2(st.x * 40.0, st.y * 6.0))) : vec3(0.3, 0.27, 0.16);
+    rough = 0.85;
+  } else if (vPart == ${P.curtain}) {
+    // Lined linen curtains: both faces cloth, a loose slubbed weave, a
+    // little sheen at a glance; the light behind them comes through
+    // (below, with the light).
+    if (!gl_FrontFacing) N = -N;
+    vec2 wq = vec2(st.x * 900.0, st.y * 900.0);
+    float weave = mix(0.5, 0.5 + 0.25 * sin(wq.x) + 0.25 * sin(wq.y), detail(0.007, st));
+    float slub = noise2(vec2(st.x * 60.0, st.y * 2.0)) * 0.6 + noise2(vec2(st.x * 4.0, st.y * 140.0)) * 0.4;
+    alb = vec3(0.93, 0.91, 0.86) * (0.95 + 0.05 * weave) * (0.95 + 0.07 * slub);
+    emit = alb * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.1 * (1.0 - uNight * 0.7);
+    rough = 1.0;
+    f0 = 0.02;
+  } else if (vPart == ${P.ceramic}) {
+    // Glazed ceramic: white, or (by its variant) a stoneware glaze.
+    alb = vVar < 0.2 ? vec3(0.93, 0.92, 0.89) : vVar < 0.4 ? vec3(0.86, 0.85, 0.83) : vVar < 0.7 ? vec3(0.55, 0.42, 0.33) : vec3(0.28, 0.36, 0.34);
+    rough = vVar > 0.2 && vVar < 0.4 ? 0.3 : 0.12;
+    f0 = 0.045;
+  } else if (vPart == ${P.mirror}) {
+    alb = vec3(0.92, 0.93, 0.92);
+    rough = 0.02;
+    metal = 1.0;
+  } else if (vPart == ${P.brass}) {
+    alb = vec3(0.8, 0.62, 0.36);
+    rough = 0.3;
+    metal = 1.0;
+  } else if (vPart == ${P.clothes}) {
+    alb = k < 2.0 ? vec3(0.12, 0.14, 0.2) : k < 4.0 ? vec3(0.85, 0.84, 0.8) : k < 5.5 ? vec3(0.4, 0.36, 0.3) : k < 7.0 ? vec3(0.55, 0.2, 0.17) : k < 8.5 ? vec3(0.2, 0.2, 0.21) : vec3(0.5, 0.56, 0.6);
+    alb *= 0.92 + 0.1 * noise2(vWorld.xy * 50.0);
+    rough = 1.0;
+    f0 = 0.02;
+  } else if (vPart == ${P.paper}) {
+    alb = vec3(0.95, 0.94, 0.9);
+    rough = 0.9;
+  } else if (vPart == ${P.fruit}) {
+    alb = vec3(0.85, 0.7, 0.12) * (0.9 + 0.15 * noise2(vWorld.xz * 80.0));
+    rough = 0.35;
+  } else if (vPart == ${P.screen}) {
+    // The TV's screen, off: black glass, a mirror at a glance.
+    alb = vec3(0.012, 0.013, 0.016);
+    rough = 0.05;
+    f0 = 0.045;
+  } else if (vPart == ${P.art}) {
+    // A print: soft fields of colour on paper.
+    vec2 q = st * vec2(1.6, 1.0);
+    alb = mix(vec3(0.86, 0.82, 0.74), mix(vec3(0.72, 0.45, 0.32), vec3(0.32, 0.4, 0.46), smoothstep(-0.2, 0.2, sin(q.x * 3.0 + q.y * 1.5 + noise2(q * 2.0) * 2.0))), 0.7 * smoothstep(0.02, 0.06, min(fract(q.x * 0.0 + st.x), 1.0)));
+    rough = 0.9;
+  } else if (vPart == ${P.planter}) {
+    alb = vVar > 0.3 ? vec3(0.6, 0.35, 0.23) : vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
+    rough = 0.85;
+  } else if (vPart == ${P.soil}) {
+    alb = vec3(0.16, 0.11, 0.08) * (0.8 + 0.4 * noise2(vWorld.xz * 30.0));
+    rough = 1.0;
+  } else if (vPart == ${P.lamp}) {
+    // A shade or a bulb: lit from inside by night.
+    alb = vec3(0.92, 0.9, 0.85);
+    rough = 0.6;
+    emit = WARM * 2.4 * uNight;
+  } else if (vPart == ${P.cushion}) {
+    alb = k < 0.5 ? vec3(0.9, 0.88, 0.84) : k < 2.0 ? vec3(0.74, 0.56, 0.25) : k < 4.5 ? vec3(0.3, 0.35, 0.4) : vec3(0.86, 0.82, 0.74);
+    alb *= 0.94 + 0.08 * noise2(vWorld.xz * 30.0 + vWorld.y * 20.0);
+    rough = 1.0;
+    f0 = 0.02;
+  } else if (vPart == ${P.rug}) {
+    // A wool rug: a dense pile (fine noise, its tufts catching the light),
+    // a border band in from its edge, a soft field; the fringe the warp's
+    // ends.
+    vec2 q = st;
+    float edge = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y));
+    float band = smoothstep(0.04, 0.045, edge) - smoothstep(0.075, 0.08, edge);
+    float pile = noise2(vWorld.xz * 220.0) * 0.5 + noise2(vWorld.xz * 60.0) * 0.5;
+    vec3 field = vVar < 0.2 ? vec3(0.62, 0.57, 0.5) : vVar < 0.4 ? vec3(0.5, 0.46, 0.44) : vec3(0.33, 0.36, 0.38);
+    vec3 border = vVar < 0.2 ? vec3(0.34, 0.27, 0.22) : vec3(0.82, 0.8, 0.74);
+    alb = mix(field, border, band) * (0.86 + 0.22 * pile);
+    rough = 1.0;
+    f0 = 0.02;
+    N = normalize(N + vec3(noise2(vWorld.xz * 300.0) - 0.5, 0.0, noise2(vWorld.xz * 300.0 + 7.0) - 0.5) * 0.35);
+  }
+
+  // ---- The light.
+  int room = roomOf(vWorld);
+  float shade = sunShadow(vLight);
+  float sun = max(dot(N, L), 0.0) * shade;
+  // The sky's light: from above outside; inside, what comes in at the glass,
+  // falling off toward the room's back.
+  float open = 1.0;
+  if (room != 0) {
+    float fz = vWorld.y < ${f(TERRACE - 0.1)} ? ${f(G.z[1])} : ${f(U.z[1])};
+    float bz = ${f(G.z[0])};
+    open = fronts(room) ? 0.28 + 0.7 * exp(-(fz - vWorld.z) * 0.13) * (0.6 + 0.4 * max(N.z, 0.0))
+      : backs(room) ? 0.2 + 0.55 * exp(-(vWorld.z - bz) * 0.3) * (0.6 + 0.4 * max(-N.z, 0.0)) : 0.2;
+  }
+  vec3 skyLight = mix(uEnvLow * 0.75 + uWood * 0.25, uEnvTop, 0.5 + 0.5 * N.y) * mix(vec3(1.0), uSky, 0.3);
+  // Inside, the daylight has bounced off the floor, the walls and the
+  // ceiling first: it comes in warmer and less coloured by the sky.
+  if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.25;
+  float dim = mix(1.0, 0.3, uNight);
+  vec3 lamps = uNight > 0.0 ? lampsAt(vWorld, N, V, rough, room) * uNight : vec3(0.0);
+  vec3 col;
+  if (vPart == ${P.lawn}) {
+    // The lawn lit like the meadow round it, the house's shadow and the
+    // lamps' spill on top.
+    float relief = mix(0.85, 1.08, smoothstep(-0.2, 0.6, dot(N, L) - L.y));
+    vec3 c = alb * mix(vec3(1.0), uSky, 0.25) * relief * mix(0.55, 1.0, shade);
+    col = mix(c, uHaze, 0.35 * smoothstep(uHazeAt.x, uHazeAt.y, length(uCam - vWorld))) + alb * lamps;
   } else {
-    col = vec3(0.86, 0.82, 0.75) * (0.95 + 0.08 * noise2(vWorld.xz * 3.0)) * lit;
+    vec3 F0 = mix(vec3(f0), alb, metal);
+    vec3 H = normalize(L + V);
+    float nv = max(dot(N, V), 1e-3);
+    float lh = max(dot(L, H), 0.0);
+    float a = max(rough * rough, 0.02);
+    vec3 Fs = F0 + (1.0 - F0) * pow(1.0 - lh, 5.0);
+    vec3 spec = Fs * ggx(max(dot(N, H), 0.0), a) * 0.25 / max(lh * lh, 0.1) * sun;
+    vec3 Fv = F0 + (1.0 - F0) * pow(1.0 - nv, 5.0) * (1.0 - rough * 0.7);
+    vec3 R = reflect(-V, N);
+    vec3 env = mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, rough * 0.85) * open * dim;
+    // Inside, what a surface mirrors is the room: the glass and the sky
+    // past it toward the front, the walls and their light elsewhere.
+    if (room != 0) {
+      vec3 walls = vec3(0.92, 0.9, 0.86) * (skyLight * 0.35 * dim + lamps * 0.35);
+      env = mix(walls, mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, rough * 0.85) * dim, smoothstep(0.1, 0.6, R.z));
+    }
+    // The sun on the pool's floor is focused by the water (the caustics
+    // map), and by night the pool's own light is down there.
+    vec3 sunCol = uSun;
+    bool under = vPart == ${P.tile} && vWorld.y < ${f(POOL.at[1])};
+    if (under && uCausticsOn > 0.5) {
+      vec2 uv = (vWorld.xz - ${v2([POOL.at[0] - POOL.w / 2, POOL.at[2] - POOL.d / 2])}) / ${v2([POOL.w, POOL.d])};
+      sunCol *= texture(uCaustics, clamp(uv, 0.0, 1.0)).rgb;
+    }
+    vec3 diffuse = (sunCol * sun * 1.05 + skyLight * 0.62 * open) * dim + lamps;
+    if (under) diffuse += vec3(0.35, 0.85, 1.0) * 0.9 * uNight;
+    col = alb * (1.0 - metal) * diffuse * (1.0 - Fv * 0.5) + Fv * env + spec * sunCol * dim * 3.0 + emit;
+    // A curtain lets the light behind it through: the day at the glass,
+    // the lamps in the room by night.
+    if (vPart == ${P.curtain}) col += alb * ((uSun * max(dot(-N, L), 0.0) * shade + skyLight) * 0.28 * dim + lamps * 0.25);
+    // A leaf lets the light through it: lit from behind, it glows its own
+    // yellow-green.
+    if (vPart == ${P.leaf} && vVar < 0.72) col += alb * vec3(1.4, 1.6, 0.6) * (uSun * max(dot(-N, L), 0.0) * shade * dim + lamps * 0.4) * 0.6;
+  }
+  // By night the pool's light spills onto the terrace round it.
+  if (uNight > 0.0 && vWorld.y > ${f(TERRACE - 0.3)} && room == 0) {
+    vec2 o = max(abs(vWorld.xz - ${v2([POOL.at[0], POOL.at[2]])}) - ${v2([POOL.w / 2, POOL.d / 2])}, 0.0);
+    col += alb * vec3(0.25, 0.75, 0.85) * 0.5 * uNight * exp(-length(o) * 0.9) * (0.4 + 0.6 * max(N.y, 0.0));
   }
   if (uGrainA > 0.0) {
     ivec2 gi = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

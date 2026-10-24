@@ -187,3 +187,82 @@ export function place(out, from, at, yaw = 0) {
     out[i + 5] = -s * nx + c * nz;
   }
 }
+
+/**
+ * (0.4.2) A soft solid: a superellipsoid round `c` with half-sizes `half`
+ * along the axes `ax` (three unit vectors), `e1` how square it is up its
+ * own y (0.1 nearly a box, 1 round), `e2` round it (in x and z). `pinch`
+ * thins it toward its corners, as a stuffed cushion or a pillow sits.
+ * Outward smooth normals (inward, `inside`: its hollow seen from within);
+ * `s`, `t` round and up it (0 … 1).
+ */
+export function soft(out, c, half, part, { e1 = 0.3, e2 = 0.2, pinch = 0, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], nu = 28, nv = 14, inside = false } = {}) {
+  const sp = (x, e) => Math.sign(x) * Math.abs(x) ** e;
+  const pts = [];
+  for (let j = 0; j <= nv; j++) {
+    const phi = -Math.PI / 2 + (Math.PI * j) / nv;
+    for (let i = 0; i <= nu; i++) {
+      const th = -Math.PI + (2 * Math.PI * i) / nu;
+      const cp = sp(Math.cos(phi), e1);
+      let x = half[0] * cp * sp(Math.cos(th), e2);
+      let z = half[2] * cp * sp(Math.sin(th), e2);
+      let y = half[1] * sp(Math.sin(phi), e1);
+      if (pinch) y *= 1 - pinch * Math.abs(Math.cos(th) * Math.sin(th)) * 2 * cp ** 4;
+      pts.push(add(add(add(c, ax[0], x), ax[1], y), ax[2], z));
+    }
+  }
+  const P = (i, j) => pts[Math.max(0, Math.min(nv, j)) * (nu + 1) + ((i + nu) % nu)];
+  const vert = (i, j) => {
+    const q = P(i, j);
+    let N = cross(add(P(i, j + 1), P(i, j - 1), -1), add(P(i + 1, j), P(i - 1, j), -1));
+    if (Math.hypot(...N) < 1e-12) N = add(q, c, -1);
+    N = unit(N);
+    if ((dot(N, add(q, c, -1)) < 0) !== inside) N = scale(N, -1);
+    return [...q, ...N, part, i / nu, j / nv];
+  };
+  for (let j = 0; j < nv; j++) {
+    for (let i = 0; i < nu; i++) {
+      const a = vert(i, j);
+      const b = vert(i + 1, j);
+      const d = vert(i, j + 1);
+      const e = vert(i + 1, j + 1);
+      if (inside) out.push(...a, ...e, ...b, ...a, ...d, ...e);
+      else out.push(...a, ...b, ...e, ...a, ...e, ...d);
+    }
+  }
+}
+
+/** The axes of a frame turned `pitch` back about x (radians), then `yaw`
+ * about the vertical: for `soft`'s `ax`. */
+export function axes(pitch = 0, yaw = 0) {
+  const [cp, spt] = [Math.cos(pitch), Math.sin(pitch)];
+  const [cy, sy] = [Math.cos(yaw), Math.sin(yaw)];
+  const turn = v => [cy * v[0] + sy * v[2], v[1], -sy * v[0] + cy * v[2]];
+  return [turn([1, 0, 0]), turn([0, cp, -spt]), turn([0, spt, cp])];
+}
+
+/**
+ * (0.4.2) A box round `c`, half-sizes `half` along the axes `ax` (as
+ * `soft`'s), flat faces. `s`, `t`: the face's own coordinates (metres).
+ */
+export function obox(out, c, half, part, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) {
+  const at = (i, j, k) => add(add(add(c, ax[0], half[0] * i), ax[1], half[1] * j), ax[2], half[2] * k);
+  const faces = [
+    [0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1],
+  ];
+  for (const [a, sg] of faces) {
+    const [b, d] = [(a + 1) % 3, (a + 2) % 3];
+    const corner = (u, w) => {
+      const idx = [0, 0, 0];
+      idx[a] = sg;
+      idx[b] = u;
+      idx[d] = w;
+      return at(...idx);
+    };
+    const N = scale(ax[a], sg);
+    const q = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+    const st = [[-half[b], -half[d]], [half[b], -half[d]], [half[b], half[d]], [-half[b], half[d]]];
+    const order = sg > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+    for (const i of order) out.push(...q[i], ...N, part, ...st[i]);
+  }
+}

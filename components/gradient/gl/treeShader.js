@@ -35,6 +35,7 @@
  */
 
 import { seeded } from './bootPrint';
+import { moundY } from './houseShape';
 
 const LONE = { x: -6.4, z: 9.5, h: 8, spread: 4.4, depth: 4, leaves: 30, leafSize: 0.58 };
 
@@ -79,7 +80,7 @@ export function treeLayout(seed = null) {
   const woods = [];
   const leafs = [];
   const shadows = [];
-  const tree = ({ x, z, h, spread, depth, leaves, leafSize }) => {
+  const tree = ({ x, z, h, spread, depth, leaves, leafSize, y: footY = 0, shadow = true }) => {
     const bark = rnd();
     const wood = (a, b, wa, wb) => woods.push([...a, wa, ...b, wb, 0, bark, x, z]);
     const leaf = (p, n) => leafs.push([...p, leafSize * (0.8 + 0.4 * rnd()), ...n, rnd() * Math.PI * 2, 3, rnd(), x, z]);
@@ -133,7 +134,7 @@ export function treeLayout(seed = null) {
     const at = y => {
       const t = Math.max(0, y) / trunkH;
       const sway = Math.sin(t * 2.6 + ph) * 0.06 * h * 0.05 * 2;
-      return [x + lean[0] * y + sway, y, z + lean[1] * y + Math.cos(t * 2.1 + ph) * 0.04 * h * 0.05 * 2];
+      return [x + lean[0] * y + sway, footY + y, z + lean[1] * y + Math.cos(t * 2.1 + ph) * 0.04 * h * 0.05 * 2];
     };
     const radius = y => base * (1.15 - 0.4 * Math.max(0, y) / trunkH + 0.95 * Math.exp(-Math.max(0, y) / 0.35));
     const ys = [-0.2, 0.15, 0.5, trunkH * 0.3, trunkH * 0.55, trunkH * 0.8, trunkH];
@@ -145,7 +146,8 @@ export function treeLayout(seed = null) {
     for (let l = 0; l < limbs; l++) {
       grow(top, turn([0, 1, 0], 0.35 + 0.55 * rnd(), az0 + l * 2.39996 + rnd() * 0.5), (h - trunkH) * (0.55 + 0.2 * rnd()), radius(trunkH) * 0.85, 1);
     }
-    shadows.push([x, 0, z, spread, h, 0, 0, 0, 2, rnd(), x, z]);
+    // (A plant off the meadow is shaded by the house's own shadow map.)
+    if (shadow) shadows.push([x, 0, z, spread, h, 0, 0, 0, 2, rnd(), x, z]);
   };
   tree(LONE);
   // The copses: as placed, or jittered by the visitor's seed: up to 5 m
@@ -165,6 +167,12 @@ export function treeLayout(seed = null) {
       const h = 6 + 5 * rnd();
       tree({ x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 1.0 });
     }
+  }
+  // (0.4.2) A few trees round the house on its mound, from a fixed seed
+  // (its own plants are houseMesh.js's).
+  rnd = seeded(0x40a5e);
+  for (const [x, z, h] of [[-17, -63, 7], [15, -66, 6], [-14, -86, 8], [18, -82, 7.5], [-24, -74, 6.5]]) {
+    tree({ x, z, y: moundY(x, z) - 0.1, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 0.9, shadow: false });
   }
   // Nearest first from the closing shot's camera, where the lone tree is
   // biggest: the depth test then skips the leaves behind before shading them.

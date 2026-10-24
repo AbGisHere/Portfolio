@@ -11,6 +11,9 @@ import { LAPTOP_FRAGMENT, LAPTOP_VERTEX } from '../../components/gradient/gl/lap
 import { TABLET_FRAGMENT, TABLET_VERTEX } from '../../components/gradient/gl/tabletShader.js';
 import { LAMP_FRAGMENT, LAMP_VERTEX } from '../../components/gradient/gl/lampShader.js';
 import { HOUSE_FRAGMENT, HOUSE_VERTEX } from '../../components/gradient/gl/houseShader.js';
+import { WATER_PROGRAMS } from '../../components/gradient/gl/poolWater.js';
+import { SHADOW_FRAGMENT, SHADOW_VERTEX } from '../../components/gradient/gl/houseShadow.js';
+import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/houseGlass.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
 import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
@@ -26,6 +29,9 @@ export const PROGRAMS = [
   ['lamp', LAMP_VERTEX, LAMP_FRAGMENT],
   ['props', PROPS_VERTEX, PROPS_FRAGMENT],
   ['house', HOUSE_VERTEX, HOUSE_FRAGMENT],
+  ['house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT],
+  ['house-glass', GLASS_VERTEX, GLASS_FRAGMENT],
+  ...WATER_PROGRAMS,
   ['steam', STEAM_VERTEX, STEAM_FRAGMENT],
   ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
   ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],

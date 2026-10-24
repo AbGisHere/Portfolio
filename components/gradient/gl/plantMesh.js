@@ -1,0 +1,147 @@
+/**
+ * (0.4.2) The house's own plants, each its species, built leaf by leaf in
+ * code (not the meadow's trees, treeShader.js): every leaf a small curved
+ * surface of its own shape, on stems and branches that carry it.
+ *
+ * - **Olive** (the terrace): a gnarled trunk that twists as it climbs and
+ *   parts into a few limbs, twigs off them, and on the twigs narrow
+ *   lance-shaped leaves in pairs, grey-green above, silver beneath.
+ * - **Fiddle-leaf fig** (by the glass inside): a few stems up from the
+ *   pot, big fiddle-shaped leaves off them on short stalks, cupped and
+ *   drooping, glossy, a pale midrib.
+ * - **Boxwood** (the forecourt's planters): mounds of small oval leaves on
+ *   a dense dark core, clipped round.
+ *
+ * Leaves are HOUSE_PART.leaf with the species as its variant (.1 olive,
+ * .4 fig, .7 box), their own coordinates `s` along the leaf (0 … 1) and
+ * `t` across it (−1 … 1); stems are HOUSE_PART.bark (.1 olive, .5 fig).
+ * houseShader.js shades both sides and the light through them.
+ */
+
+import { HOUSE_PART } from './houseShape';
+import { add, ball, cross, grid, scale, sweep, tube, unit } from './meshKit';
+
+const LEAF = HOUSE_PART.leaf;
+const BARK = HOUSE_PART.bark;
+
+function seeded(seed) {
+  let s = seed % 2147483647 || 1;
+  return () => (s = (s * 16807) % 2147483647) / 2147483647;
+}
+
+/**
+ * One leaf from `p` along `dir`, its face toward `up` (both unit): `len`
+ * long, `wid` wide at its widest, its outline `shape(u)` (0 … 1 of the
+ * width along it), cupped by `cup` (its edges up) and drooping by `droop`
+ * toward its tip.
+ */
+function leaf(out, p, dir, up, len, wid, shape, cup, droop, variant) {
+  const side = unit(cross(dir, up));
+  const face = unit(cross(side, dir));
+  grid(out, 6, 4, (u, w) => {
+    const v = w * 2 - 1;
+    const half = wid * 0.5 * shape(u);
+    let q = add(p, dir, len * u);
+    q = add(q, side, half * v);
+    q = add(q, face, cup * half * v * v - droop * len * u * u);
+    return { p: q, part: LEAF + variant, s: u, t: v };
+  }, face);
+}
+
+// The species' outlines.
+const lance = u => Math.pow(Math.sin(Math.PI * u), 0.9) * (1 - 0.25 * u);
+const fiddle = u => {
+  const a = Math.sin(Math.PI * Math.pow(u, 0.75));
+  // Waisted below the middle, broadest toward the tip.
+  return Math.max(0.05, a * (0.75 + 0.35 * u) * (1 - 0.18 * Math.exp(-((u - 0.35) ** 2) / 0.01)));
+};
+const oval = u => Math.sin(Math.PI * u);
+
+/** A direction off `d` by `ang`, turned `az` round it. */
+function turn(d, ang, az) {
+  const t1 = unit(cross(d, Math.abs(d[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0]));
+  const t2 = cross(d, t1);
+  const off = add(scale(t1, Math.cos(az)), t2, Math.sin(az));
+  return unit(add(scale(d, Math.cos(ang)), off, Math.sin(ang)));
+}
+
+/** An olive whose trunk stands at `base`, `h` tall. */
+export function olive(out, base, h, seed) {
+  const rnd = seeded(seed);
+  // The trunk: a twisting climb, thick at the foot.
+  const trunk = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    const a = t * 2.6 + rnd() * 0.3;
+    trunk.push([base[0] + Math.sin(a) * 0.07 * t, base[1] + t * h * 0.42, base[2] + Math.cos(a * 1.3) * 0.06 * t]);
+  }
+  sweep(out, trunk, 0.055, BARK + 0.1, { seg: 10 });
+  // Knots where it twists.
+  for (const k of [2, 4, 6]) ball(out, add(trunk[k], [0.03 * (rnd() - 0.5), 0, 0.03 * (rnd() - 0.5)]), 0.05, BARK + 0.1, 8);
+  const top = trunk.at(-1);
+  // Limbs, then twigs, then leaves in pairs along the twigs.
+  const limbs = 4;
+  for (let l = 0; l < limbs; l++) {
+    const d = turn([0, 1, 0], 0.5 + rnd() * 0.35, (l / limbs) * Math.PI * 2 + rnd() * 0.5);
+    const len = h * (0.3 + 0.12 * rnd());
+    const mid = add(add(top, d, len * 0.5), [0, 0.05, 0]);
+    const end = add(top, d, len);
+    sweep(out, [top, mid, end], 0.028, BARK + 0.1, { seg: 7 });
+    for (let k = 0; k < 14; k++) {
+      const from = add(top, d, len * (0.3 + 0.7 * rnd()));
+      const td = turn(d, 0.4 + rnd() * 0.6, rnd() * Math.PI * 2);
+      const tl = 0.22 + 0.22 * rnd();
+      const tend = add(from, td, tl);
+      tube(out, from, tend, 0.006, BARK + 0.1, 5);
+      for (let j = 0; j < 12; j++) {
+        const at = add(from, td, tl * (0.12 + 0.88 * (j / 11)));
+        for (const s of [-1, 1]) {
+          const ld = turn(td, 0.6 + rnd() * 0.4, s * Math.PI * 0.5 + rnd() * 0.6);
+          const lu = unit(add([0, 1, 0], ld, -0.3));
+          leaf(out, at, ld, lu, 0.065 + 0.025 * rnd(), 0.013 + 0.004 * rnd(), lance, 0.25, 0.15, 0.1);
+        }
+      }
+    }
+  }
+}
+
+/** A fiddle-leaf fig in its pot, its stems from `base`, `h` tall. */
+export function fig(out, base, h, seed) {
+  const rnd = seeded(seed);
+  for (let st = 0; st < 3; st++) {
+    const lean = [(rnd() - 0.5) * 0.25, 0, (rnd() - 0.5) * 0.25];
+    const hh = h * (0.7 + 0.3 * rnd());
+    const pts = [0, 0.35, 0.7, 1].map(t => [base[0] + lean[0] * t * t * hh + (st - 1) * 0.04, base[1] + t * hh, base[2] + lean[2] * t * t * hh]);
+    sweep(out, pts, 0.012, BARK + 0.5, { seg: 6 });
+    // Leaves up the stem's top two thirds, alternating round it, bigger
+    // lower down; a cluster at the crown.
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      const t = 0.35 + 0.65 * (i / (n - 1));
+      const k = Math.min(2, Math.floor(t * 3));
+      const at = add(pts[k], add(pts[k + 1], pts[k], -1), t * 3 - k);
+      const az = i * 2.4 + st * 1.1 + rnd() * 0.4;
+      const d = turn([0, 1, 0], 1.05 + rnd() * 0.3 - t * 0.35, az);
+      const stalk = add(at, d, 0.04);
+      tube(out, at, stalk, 0.004, BARK + 0.5, 4);
+      const ld = unit(add(d, [0, 0.25, 0]));
+      const size = 0.26 + 0.1 * (1 - t) + 0.05 * rnd();
+      leaf(out, stalk, ld, unit(add([0, 1, 0], ld, -0.5)), size, size * 0.62, fiddle, 0.18, 0.28, 0.4);
+    }
+  }
+}
+
+/** A clipped boxwood mound centred at `c`, `r` round. */
+export function boxwood(out, c, r, seed) {
+  const rnd = seeded(seed);
+  // The dense dark core the leaves stand on.
+  ball(out, add(c, [0, -r * 0.08, 0]), r * 0.9, LEAF + 0.75, 12);
+  for (let i = 0; i < 420; i++) {
+    const a = rnd() * Math.PI * 2;
+    const e = Math.asin(rnd() * 1.6 - 0.6);
+    const n = [Math.cos(e) * Math.cos(a), Math.sin(e) * 0.85, Math.cos(e) * Math.sin(a)];
+    const p = add(c, n, r * (0.9 + 0.12 * rnd()));
+    const d = turn(unit(n), 1.1 + rnd() * 0.4, rnd() * Math.PI * 2);
+    leaf(out, p, d, unit(n), 0.03 + 0.01 * rnd(), 0.016, oval, 0.2, 0.05, 0.7);
+  }
+}

@@ -36,6 +36,14 @@ if (typeof window !== 'undefined') {
 
 export const isPinned = () => pinned != null;
 
+/** (0.4.2) Pins the store from code (the dev-only /house route): the scroll
+ * layer then writes nothing until `null` lets it go. */
+export function pinDescent(next) {
+  pinned = next;
+  if (next) Object.assign(state, next);
+  for (const fn of listeners) fn(state);
+}
+
 export const getDescent = () => state;
 
 export function setDescent(next) {

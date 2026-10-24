@@ -16,7 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
-import { contactCameraAt, deskCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
+import { contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -49,6 +49,7 @@ export function sceneAt({
   about,
   desk = 0,
   contact = 0,
+  free = null,
   reduced = false,
   w,
   h,
@@ -64,9 +65,12 @@ export function sceneAt({
   // Past the pull-back (`desk` > 0) the 0.3 camera takes over from where
   // it left off (deskCamera.js).
   // (0.4.0) Past the desk (`contact` > 0) the contact path does.
-  const onDesk = desk > 0 || contact > 0;
+  // (0.4.2) The dev-only /house route's free camera takes over from both.
+  const onDesk = desk > 0 || contact > 0 || !!free;
   const camOpts = { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h) };
-  const cam = contact > 0
+  const cam = free
+    ? freeCameraAt(free, r, camOpts)
+    : contact > 0
     ? contactCameraAt(contact, r, camOpts)
     : onDesk
       ? deskCameraAt(desk, r, camOpts)
