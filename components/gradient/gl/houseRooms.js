@@ -8,7 +8,7 @@
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
 import { add, ball, box, grid, lathe, obox, tube } from './meshKit';
 import {
-  bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island,
+  bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island, placeSetting, vase,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
 } from './furniture';
 
@@ -285,7 +285,15 @@ export function groundRooms(out, ix, iz, glass) {
   chair(out, [2.55, B, -69.45], 0);
   chair(out, [2.55, B, -66.35], Math.PI);
   for (const z of [-68.5, -67.3]) pendant(out, [2.55, B + 2.05, z], CEIL_G, 0.16);
-  lathe(out, [2.55, B + 0.75, -67.9], [0, 1, 0], [[0, 0], [0.05, 0], [0.06, 0.12], [0.03, 0.26], [0.025, 0.3]], v(P.ceramic, 0.8), 18);
+  // (0.4.20) A round stoneware vase in the middle (it was a plain angular
+  // bottle), and a place laid at each of the eight seats.
+  vase(out, [2.55, B + 0.75, -67.9], 0.3, v(P.ceramic, 0.8));
+  for (const z of [-68.85, -67.9, -66.95]) {
+    placeSetting(out, [2.27, B + 0.75, z], [-1, 0]);
+    placeSetting(out, [2.83, B + 0.75, z], [1, 0]);
+  }
+  placeSetting(out, [2.55, B + 0.75, -68.95], [0, -1]);
+  placeSetting(out, [2.55, B + 0.75, -66.85], [0, 1]);
   picture(out, [4.54, B + 1.6, -68.6], -Math.PI / 2, 1.2, 0.9, 0.2);
 
   // ---- The WC: a wall-hung WC, a basin, a mirror.

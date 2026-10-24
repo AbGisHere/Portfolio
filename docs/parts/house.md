@@ -95,8 +95,10 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
 - **No coplanar skins:** surfaces under a few millimetres apart flicker
   from the garden, so things are built as they're made. Cabinet and drawer
   fronts are 19 mm doors 2 mm off their carcasses (`DOOR`, `HINGE` in
-  `furniture.js`); pictures are a moulding round a back board with the
-  mount laid in and the print proud of it; a mirror's glass and the TV's
+  `furniture.js`); pictures (`0.4.20`) are a stepped walnut moulding (a
+  raised lip, two steps down) round a back board, a brass slip, a mount
+  with a bevel-cut window and the print behind it, each print its own soft
+  abstract under a glass sheen; a mirror's glass and the TV's
   sit in their frames' rebates; frames clear their openings by 2 mm.
 - **Soft things rest where they're held** (`0.4.19`): each pillow and
   cushion stands with its foot on what's under it and leans back
@@ -105,6 +107,12 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   sofa's and the lounge chair's scatter cushions on the seat, against the
   back. The sofa's throw follows the arm's section with a centimetre's
   clearance, two faces 8 mm apart, its hems rolled.
+- **Styling** (`0.4.20`): the dining table laid for eight (`placeSetting()`:
+  a plate on a charger, a napkin under the fork, a knife and a spoon) round
+  a thrown stoneware vase (`vase()`); the bookcase leaves about one
+  compartment in five to a single piece (a tall bottle and a small vessel,
+  a brass sphere on a stone block, a print propped), its flat stacks topped
+  by a brass dish or a small pot.
 - **Hardware** (`0.4.18`): brass bar pulls on posts with feet
   (`barPull()`, `pullOn()` in `furniture.js`) on every drawer and cabinet
   door, a long one each side of the front door, black slim ones on the

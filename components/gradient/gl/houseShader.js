@@ -683,10 +683,20 @@ void main() {
     rough = 0.05;
     f0 = 0.045;
   } else if (vPart == ${P.art}) {
-    // A print: soft fields of colour on paper.
-    vec2 q = st * vec2(1.6, 1.0);
-    alb = mix(vec3(0.86, 0.82, 0.74), mix(vec3(0.72, 0.45, 0.32), vec3(0.32, 0.4, 0.46), smoothstep(-0.2, 0.2, sin(q.x * 3.0 + q.y * 1.5 + noise2(q * 2.0) * 2.0))), 0.7 * smoothstep(0.02, 0.06, min(fract(q.x * 0.0 + st.x), 1.0)));
-    rough = 0.9;
+    // A print: (0.4.20) each its own (by its variant), soft fields of two
+    // colours drifting over the paper, a third in a band; under glass, so
+    // it gives back a faint sheen (it had a hard seam down its middle).
+    vec2 q = st * 2.4 + vVar * 17.0;
+    float fld = noise2(q * 0.8) * 0.6 + noise2(q * 2.1) * 0.4;
+    int pk = int(floor(vVar * 2.999));
+    vec3 ca = pk == 0 ? vec3(0.72, 0.45, 0.32) : pk == 1 ? vec3(0.78, 0.62, 0.3) : vec3(0.22, 0.27, 0.42);
+    vec3 cb = pk == 0 ? vec3(0.32, 0.4, 0.46) : pk == 1 ? vec3(0.45, 0.52, 0.4) : vec3(0.82, 0.74, 0.6);
+    vec3 cc = pk == 0 ? vec3(0.9, 0.8, 0.62) : pk == 1 ? vec3(0.3, 0.26, 0.22) : vec3(0.7, 0.36, 0.28);
+    vec3 ink = mix(ca, cb, smoothstep(0.4, 0.62, fld + 0.25 * sin(q.x * 1.1 + q.y * 0.7)));
+    ink = mix(ink, cc, smoothstep(0.03, 0.0, abs(fract(q.y * 0.21 + fld * 0.3) - 0.5) - 0.12) * 0.8);
+    alb = mix(vec3(0.9, 0.87, 0.8), ink, 0.8);
+    rough = 0.14;
+    f0 = 0.04;
   } else if (vPart == ${P.planter}) {
     if (vVar > 0.3) {
       alb = vec3(0.6, 0.35, 0.23);

@@ -6,6 +6,35 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.20 — 2026-10-25
+
+Shelves, frames and the dining table.
+
+- **The bookcase styled:** its single things were a shallow bowl or a
+  cup-like blob. They're now a tall stoneware bottle beside a small round
+  vessel, a polished brass sphere on a stone block, or a print propped
+  against the back, leaning. About one compartment in five is left to one
+  of them (one in eight before), so the case has room in it, and the
+  stacks laid flat have something on top (a brass dish, a small pot).
+- **Frames made as frames are:** a stepped walnut moulding 4 cm wide (a
+  raised outer lip, then two steps down toward the picture), a brass slip
+  inside it, a white mount with its window cut on a bevel (its white core
+  showing round the opening), the print set behind the window, then the
+  back board; each layer still millimetres clear of the next, so nothing
+  flickers. The prints had a hard seam down their middle (a pattern
+  bug); each is now its own soft abstract (two colours drifting, a band of
+  a third, three palettes by its variant), under a faint glass sheen.
+  Still abstract: no photographs, nothing personal.
+- **The dining table:** the angular bottle in the middle is a thrown
+  stoneware vase (a full belly, a short neck, a turned-out lip, hollow down
+  the neck), and each of the eight seats has a place: a white plate on a
+  stoneware charger, a fork (four tines) on a folded linen napkin to the
+  left, a knife and a spoon to the right, in brushed stainless, each
+  turned to its chair.
+- **Open:** flowers in the vase and glassware weren't added (left to
+  discuss).
+- **Measured:** unit tests 28/28.
+
 ## 0.4.19 — 2026-10-25
 
 Upholstery and the curtains' ties.

@@ -9,7 +9,7 @@
  */
 
 import { HOUSE_PART } from './houseShape';
-import { add, axes, barPull, box, grid, lathe, lever, obox, scale, soft, sweep, tube } from './meshKit';
+import { add, axes, ball, barPull, box, grid, lathe, lever, obox, scale, soft, sweep, tube } from './meshKit';
 
 const P = HOUSE_PART;
 /** A part with a variant (0 … 0.9): houseShader.js reads the fraction. */
@@ -365,6 +365,57 @@ export function marbleTable(out, c, yaw, { w = 2.6, d = 1.05, h = 0.75 } = {}) {
   }
 }
 
+/**
+ * (0.4.20) A place setting at c (on the table's top), the diner toward
+ * `to` (unit x, z, from the plate): a white plate on a stoneware charger, a
+ * fork on its left, a knife (its edge toward the plate) and a spoon on its
+ * right, a folded linen napkin under the fork. Stainless, brushed.
+ */
+export function placeSetting(out, c, to) {
+  const fwd = [-to[0], 0, -to[1]];
+  const left = [-to[1], 0, to[0]];
+  const ax = [left, [0, 1, 0], fwd].map(x => x);
+  const at = (x, y, z) => add(add(add(c, ax[0], x), ax[1], y), ax[2], z);
+  lathe(out, at(0, 0, 0), [0, 1, 0], [[0, 0], [0.13, 0], [0.155, 0.008], [0.16, 0.011], [0.155, 0.012], [0.13, 0.006], [0, 0.006]], v(P.ceramic, 0.5), 40);
+  lathe(out, at(0, 0.006, 0), [0, 1, 0], [[0, 0], [0.085, 0], [0.11, 0.012], [0.135, 0.019], [0.137, 0.021], [0.133, 0.021], [0.108, 0.016], [0.085, 0.006], [0, 0.006]], v(P.ceramic, 0), 40);
+  const S = v(P.steel, 0.5);
+  // The napkin, folded in three, under the fork.
+  obox(out, at(0.215, 0.006, 0.01), [0.055, 0.006, 0.1], v(P.fabric, 0.9), [ax[0], ax[1], ax[2]]);
+  // The fork: a handle widening to its end, a neck, four tines.
+  const fx = 0.215;
+  const fy = 0.016;
+  obox(out, at(fx, fy, -0.07), [0.008, 0.0022, 0.055], S, ax);
+  obox(out, at(fx, fy, 0.005), [0.0045, 0.0018, 0.025], S, ax);
+  obox(out, at(fx, fy + 0.001, 0.04), [0.011, 0.0015, 0.012], S, ax);
+  for (let k = 0; k < 4; k++) obox(out, at(fx - 0.0085 + k * 0.0057, fy + 0.002, 0.07), [0.0013, 0.0013, 0.021], S, ax);
+  // The knife: a handle, a bolster, its blade thin and rounded at the tip.
+  const kx = -0.2;
+  obox(out, at(kx, 0.0062, -0.075), [0.0075, 0.0055, 0.055], S, ax);
+  obox(out, at(kx + 0.002, 0.0035, 0.04), [0.0095, 0.0012, 0.065], S, ax);
+  ball(out, at(kx + 0.002, 0.0035, 0.105), 0.0095, S, 10, 4);
+  // The spoon: a handle, its bowl.
+  const sx = -0.245;
+  obox(out, at(sx, 0.0035, -0.06), [0.0055, 0.0018, 0.07], S, ax);
+  soft(out, at(sx, 0.006, 0.04), [0.019, 0.005, 0.028], S, { e1: 1, e2: 1, ax, nu: 14, nv: 6 });
+}
+
+/** (0.4.20) A vase thrown round, a full belly narrowing to a short neck and
+ * a turned-out lip, hollow down the neck (its inside drawn). */
+export function vase(out, c, h, part) {
+  const r = h * 0.32;
+  const prof = [];
+  for (let i = 0; i <= 18; i++) {
+    const t = i / 18;
+    const belly = Math.sin(Math.PI * Math.min(1, t / 0.78)) * (1 - 0.25 * t);
+    const rad = t < 0.78 ? r * (0.45 + 0.55 * belly) : r * (0.3 + 0.1 * Math.pow((t - 0.78) / 0.22, 2));
+    prof.push([rad, t * h]);
+  }
+  prof.unshift([0, 0]);
+  const lip = prof[prof.length - 1][0];
+  prof.push([lip + 0.006, h + 0.004], [lip - 0.004, h + 0.006], [lip - 0.008, h - 0.02], [lip - 0.012, h - 0.1], [0, h - 0.12]);
+  lathe(out, c, [0, 1, 0], prof, part, 40);
+}
+
 /** A low coffee table: a thick walnut slab on two panel ends. */
 export function coffeeTable(out, c, yaw) {
   const f = frame(c, yaw);
@@ -712,26 +763,46 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
       const y = ys[r] + t / 2;
       const room = ys[r + 1] - ys[r] - t;
       const roll = rnd();
-      if (roll < 0.12 && things < Math.ceil(bays * 0.8)) {
+      // (0.4.20) Room left for them, about one compartment in five.
+      if (roll < 0.2 && things < Math.ceil(bays * 1.4)) {
         // One thing alone in it.
         things++;
         const cx = (x0 + x1) / 2 + (rnd() - 0.5) * 0.2;
         const kind = rnd();
-        if (kind < 0.4) lathe(out, f.at(cx, y, 0.18), [0, 1, 0], [[0, 0], [0.07, 0], [0.13, 0.06], [0.135, 0.075], [0.125, 0.075], [0.06, 0.02], [0, 0.02]], v(P.ceramic, 0.5), 22);
-        else if (kind < 0.7) {
-          soft(out, f.at(cx, y + 0.11, 0.18), [0.05, 0.11, 0.05], v(P.ceramic, 0.8), { e1: 0.6, e2: 1, ax: f.ax, nu: 16, nv: 10 });
-        } else picture(out, f.at(cx, y + Math.min(0.17, room / 2), 0.05), yaw, 0.26, Math.min(0.32, room - 0.04), rnd());
+        // (0.4.20) One of a few chosen pieces (they were a shallow bowl or a
+        // cup-like blob): a tall stoneware bottle beside a small round
+        // vessel; a sculpture (a polished sphere on a stone block); or a
+        // print propped against the back, leaning.
+        if (kind < 0.4) {
+          vase(out, f.at(cx - 0.05, y, 0.18), Math.min(0.3, room - 0.04), v(P.ceramic, 0.8));
+          vase(out, f.at(cx + 0.1, y, 0.2), Math.min(0.13, room - 0.04), v(P.ceramic, 0.5));
+        } else if (kind < 0.7) {
+          obox(out, f.at(cx, y + 0.04, 0.18), [0.06, 0.04, 0.06], v(P.stone, 0.8), f.ax);
+          ball(out, f.at(cx, y + 0.08 + 0.055, 0.18), 0.055, P.brass, 24, 14);
+        } else {
+          const ph = Math.min(0.32, room - 0.04);
+          const lean = 0.12;
+          const la = axes(-lean, yaw);
+          const pf = { ax: la, at: (px, py, pz) => add(add(add(f.at(cx, y, 0.03 + Math.sin(lean) * ph / 2), la[0], px), la[1], py), la[2], pz) };
+          picture(out, pf.at(0, ph / 2 + 0.003, 0), yaw, 0.26, ph, rnd());
+        }
         continue;
       }
-      if (roll < 0.3) {
+      if (roll < 0.38) {
         // A stack laid flat, something small on it.
         let sy = y;
+        const small = rnd();
         const sx = x0 + 0.08 + rnd() * (x1 - x0 - 0.4);
         for (let b = 0; b < 4 + Math.floor(rnd() * 4); b++) {
           const th = 0.025 + 0.02 * rnd();
           const fa = axes(0, yaw + (rnd() - 0.5) * 0.12);
           book(out, f.at(sx + 0.13 + (rnd() - 0.5) * 0.02, sy + th / 2, 0.19), [fa[1], fa[0], fa[2]], th / 2, 0.12 + 0.04 * rnd(), 0.1 + 0.03 * rnd(), v(P.book, rnd()));
           sy += th;
+        }
+        // (0.4.20) On top: a small brass dish, or a stoneware pot.
+        if (room - (sy - y) > 0.1) {
+          if (small < 0.5) lathe(out, f.at(sx + 0.13, sy, 0.19), [0, 1, 0], [[0, 0], [0.03, 0], [0.045, 0.012], [0.047, 0.015], [0.044, 0.015], [0.028, 0.004], [0, 0.004]], P.brass, 24);
+          else vase(out, f.at(sx + 0.13, sy, 0.19), 0.08, v(P.ceramic, 0.8));
         }
         // And standing books beside it.
         let x = sx + 0.32;
@@ -768,18 +839,46 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
 /** A picture on a wall at c, facing yaw: a walnut frame, a mount, a print. */
 export function picture(out, c, yaw, w, h, variant = 0) {
   const f = frame(c, yaw);
-  // (0.4.14) Built as a frame is: a walnut moulding 3 cm deep round a
-  // back board, the mount laid in it and the print on the mount, each
-  // clear of the next by millimetres (not half of one, which flickers from
-  // across the garden).
-  const m = 0.03;
+  // (0.4.14) Built as a frame is, each layer clear of the next by
+  // millimetres (not half of one, which flickers from across the garden).
+  // (0.4.20) A stepped walnut moulding 4 cm wide (a raised outer lip, then
+  // two steps down toward the picture), a brass slip inside it; a white
+  // mount 2.5 mm thick with its window cut on a bevel (the white core
+  // showing round it), the print set behind the window; a back board.
+  const m = 0.04;
   obox(out, f.at(0, 0, 0.004), [w / 2 - 0.002, h / 2 - 0.002, 0.004], v(P.walnut, 0), f.ax);
-  for (const s of [-1, 1]) {
-    obox(out, f.at(s * (w / 2 - m / 2), 0, 0.015), [m / 2, h / 2, 0.015], v(P.walnut, 0), f.ax);
-    obox(out, f.at(0, s * (h / 2 - m / 2), 0.015), [w / 2 - m, m / 2, 0.015], v(P.walnut, 0), f.ax);
+  const steps = [[0, 0.014, 0.034], [0.014, 0.028, 0.029], [0.028, m, 0.024]];
+  for (const [a, b, dz] of steps) {
+    for (const s2 of [-1, 1]) {
+      obox(out, f.at(s2 * (w / 2 - (a + b) / 2), 0, dz / 2), [(b - a) / 2, h / 2 - a, dz / 2], v(P.walnut, 0), f.ax);
+      obox(out, f.at(0, s2 * (h / 2 - (a + b) / 2), dz / 2), [w / 2 - b, (b - a) / 2, dz / 2], v(P.walnut, 0), f.ax);
+    }
   }
-  obox(out, f.at(0, 0, 0.012), [w / 2 - m - 0.001, h / 2 - m - 0.001, 0.004], P.paper, f.ax);
-  obox(out, f.at(0, 0, 0.0195), [w / 2 - 0.1, h / 2 - 0.1, 0.0015], v(P.art, variant), f.ax);
+  // The slip.
+  const sl = 0.005;
+  for (const s2 of [-1, 1]) {
+    obox(out, f.at(s2 * (w / 2 - m - sl / 2), 0, 0.011), [sl / 2, h / 2 - m, 0.011], P.brass, f.ax);
+    obox(out, f.at(0, s2 * (h / 2 - m - sl / 2), 0.011), [w / 2 - m - sl, sl / 2, 0.011], P.brass, f.ax);
+  }
+  // The print behind the mount's window, then the mount round it.
+  const iw = w / 2 - m - sl;
+  const ih = h / 2 - m - sl;
+  const [pw, ph] = [Math.max(0.04, iw - 0.07), Math.max(0.04, ih - 0.07)];
+  obox(out, f.at(0, 0, 0.0115), [pw + 0.01, ph + 0.01, 0.0015], v(P.art, variant), f.ax);
+  for (const s2 of [-1, 1]) {
+    obox(out, f.at(s2 * (pw + (iw - pw) / 2), 0, 0.0155), [(iw - pw) / 2, ih, 0.00125], P.paper, f.ax);
+    obox(out, f.at(0, s2 * (ph + (ih - ph) / 2), 0.0155), [pw, (ih - ph) / 2, 0.00125], P.paper, f.ax);
+  }
+  // The bevel: a strip of the mount's core round the window, angled in.
+  const bev = 0.003;
+  const tilt = 0.8;
+  for (const s2 of [-1, 1]) {
+    const ax = axes(0, yaw).map(x => x);
+    const sideA = [ax[0].map((q, i) => q * Math.cos(tilt) + ax[2][i] * Math.sin(tilt) * s2 * -1), ax[1], ax[2].map((q, i) => q * Math.cos(tilt) - ax[0][i] * Math.sin(tilt) * s2 * -1)];
+    obox(out, f.at(s2 * (pw + bev / 2), 0, 0.0145), [bev / 2, ph, 0.0006], v(P.paper, 0.5), sideA);
+    const sideB = [ax[0], ax[1].map((q, i) => q * Math.cos(tilt) + ax[2][i] * Math.sin(tilt) * s2 * -1), ax[2].map((q, i) => q * Math.cos(tilt) - ax[1][i] * Math.sin(tilt) * s2 * -1)];
+    obox(out, f.at(0, s2 * (ph + bev / 2), 0.0145), [pw + bev, bev / 2, 0.0006], v(P.paper, 0.5), sideB);
+  }
 }
 
 /** (0.4.18) Every mirror the mesh has (its glass's middle and its facing),
