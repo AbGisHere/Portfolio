@@ -6,6 +6,30 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.1 — 2026-10-24
+
+The house in 3D (the owner, 2026-10-24: built like the desk, not
+painted).
+
+- **The mound** (`houseShape.js` `MOUND`, `moundY`): a dome 3.2 m high,
+  68 × 56 m, meshed in rings; a mown lawn in faint stripes, lit like the
+  meadow round it (the grass's far colour under the sky, a little haze), its
+  foot frayed into the meadow so there's no line round it. No blades on it.
+- **The house** (`HOUSE_BOXES`, `RAILING`): a coursed stone base half sunk
+  in the mound with a forecourt and ten steps; a ground floor of white
+  render, glass in dark frames and a timber panel; the terrace slab round
+  the pool's hole, its decking, the coping, the tiled basin and the water;
+  a set-back upper floor and its roof over the terrace; a steel railing
+  round the terrace's open sides. One mesh (`houseShader.js`), lit live
+  like the things on the desk, the glass and water mirroring the sky
+  (`METAL_GLSL`); shadows traced per pixel against its five big boxes
+  (`HOUSE_OCCLUDERS`). By night the panes glow, each its own, and the pool
+  is lit from under the water.
+- **The pool** moves with the terrace (9 × 4 m, its water at 6.75 m); the
+  pool hold follows it.
+- **Measured:** unit tests 28/28; stills at 1440×900 by day and night. No
+  QA run (the owner: QA before the push).
+
 ## 0.4.0 — 2026-10-24
 
 The contact line opens, ahead of the device screen (the owner,

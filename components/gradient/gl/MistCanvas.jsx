@@ -387,8 +387,8 @@ export default function MistCanvas({ recipe, onFail }) {
       props = { prog: pp, vao, buf: pb, count, u: name => (PU[name] ??= gl.getUniformLocation(pp, name)) };
       return props;
     };
-    // (0.4.0) The house on the hill and its pool, grey boxes for now
-    // (houseShader.js): one mesh, built once.
+    // (0.4.0) The house on the hill and its pool (houseShader.js; in 3D
+    // from 0.4.1): one mesh, built once.
     let house = null;
     const houseProgram = () => {
       if (house !== null) return house;
@@ -400,7 +400,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, hb);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6]]) {
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
         gl.enableVertexAttribArray(i);
         gl.vertexAttribPointer(i, n, gl.FLOAT, false, HOUSE_STRIDE * 4, at * 4);
       }
@@ -1476,7 +1476,19 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
       gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
+      gl.uniform3fv(g.u('uLawn'), rgb01(colours.far));
+      gl.uniform3fv(g.u('uLawnTip'), rgb01(colours.tip));
+      gl.uniform3fv(g.u('uHaze'), rgb01(colours.env[1]));
+      gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
