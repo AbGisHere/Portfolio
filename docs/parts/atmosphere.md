@@ -400,19 +400,20 @@ camera at `about` 1 exactly (unit-tested).
 - **The closing sky** (`skyLifeAt`, fading in over `LIFE_IN` .62–.86): the
   sky ramp spread from the frame's top to the horizon (`DESK_SKY`,
   `deskSkyAt`), two cloud banks (far and near, drifting at their own pace,
-  slowly changing shape, patchy, hazed toward the sky's colour), birds by
-  day (four flocks on irregular cycles, one to seven birds, depth setting
-  size, haze and, from `0.3.5`, where they fly: a near flock in front of
-  every ridge, a far one low among them, behind one to four, from how much
-  each ridge covers the pixel; gliding between wingbeats) and twinkling stars at night;
-  mid-switch they blend on `e`. They run on `skyT`, seconds on GL's frame
-  loop while the sky shows, and redraw every frame there (not the idle
-  tick) so the birds move smoothly. Integer hashing (`pcg`), so every GPU
-  draws the same sky. Reduced motion holds the sky still, without birds;
-  `?skyt=` starts the clock at a given second (stills, with `?freeze=1`).
-- **Not yet** (still, after `0.3.1`): the layered fallback ignores `desk` (it holds the
-  pull-back's end), reduced motion runs the full path, and parity, perf
-  and switch cover the `0.2` stretch only.
+  slowly changing shape, patchy, hazed toward the sky's colour), and
+  twinkling stars at night. Mid-switch they blend on `e`, running on
+  `skyT`, seconds on GL's frame loop while the sky shows. Integer hashing
+  (`pcg`) keeps the sky consistent across GPUs. Reduced motion holds it
+  still; `?skyt=` starts the clock at a given second (stills, with
+  `?freeze=1`). The old painted bird flocks were removed in `0.4.7`.
+  Birds now use the instanced 3D pass (`birdShape.js`, `birdFlight.js`,
+  `birdShader.js`): swallows around the meadow, desk and house, red kites
+  circling high, and passing geese. Their flight runs on the same `skyT`
+  clock, without another animation loop.
+- **Known gaps:** the layered fallback ignores `desk` and `contact` (it
+  holds the pull-back's end), and reduced motion runs the full desk path.
+  Parity and switch still cover the `0.2` stretch. From `0.4.15`, perf also
+  offers a house-only sweep (`--house`), informational and outside `qa`.
 
 ## The meadow (0.3.1)
 
@@ -430,12 +431,14 @@ it while there's grass, so `0.2` frames are untouched).
 - **The ground** (`uGrassGround` → `uGrassFar` by 24 m, tinted by the sky)
   hazes into the painted `0.2` meadow over `GRASS_HAZE` (8–58 m): the
   descent starts ~64 m up, so there it is that meadow exactly.
-- **The blades** (`GRASS`): five rings of world-snapped cells (0.1 m, then
-  doubling) around the camera's foot, 16 blades a cell, placed by an
+- **The blades** (`GRASS`): six rings of world-snapped cells (0.1 m, then
+  doubling; six from `0.4.16`, so the house's hill is as full as the desk's
+  meadow) around the camera's foot, 32 blades a cell, placed by an
   integer hash (`pcg`): nothing moves when the camera does. A target
-  density `min(cap 600, 1600 / d²)` per m² is shared between rings by a
+  density `min(cap 600, 5000 / d²)` per m² is shared between rings by a
   crossfade at each edge; each blade has its own threshold and grows in as
-  the density passes it (no pops). Past `reach` (32 m) none; a blade under
+  the density passes it (no pops). Past `reach` (56 m) none, and none at all with the camera over `over`
+  (32 m) up; a blade under
   ~1 px tall on screen is culled (no shimmer, and the cost). Each blade is a
   tapered ribbon bent as one arc of constant curvature (its length holds),
   with its own kind (ordinary, broad leaf, tall wisp), height, width, taper,
@@ -509,8 +512,11 @@ it while there's grass, so `0.2` frames are untouched).
 - **Denser from above:** the grass's density is ×(1 + 2 sin² pitch), up to
   ×3 straight down, where a blade shows only its curl.
 - **Flowers** (`0.3.5`, `gl/flowerShader.js`): instanced like the blades
-  (three rings of world-snapped cells, `FLOWERS`) and drawn just after them
-  against their depth, within `FLOWERS.fade` (9–13 m) of the camera, where
+  (six rings of world-snapped cells, `FLOWERS`, from `0.4.16`; they stopped
+  at 13 m, the bottom of the approach's frame) and drawn just after them
+  against their depth, within `FLOWERS.fade` (52–64 m) of the camera (far
+  off a ring's cells hold more than their slots, so the drifts set the share
+  that grow, and a stem thinner than a pixel is left out, the head kept), where
   the painted flowers (`MEADOW_FLOWERS`, `uFlowerNear`) fade in. They grow
   in the same drifts (the meadow texture's A at 30 m, read in the vertex
   shader), with strays between: daisies and buttercups in patches of their
@@ -667,8 +673,9 @@ it while there's grass, so `0.2` frames are untouched).
   is ruled and written on in the shader (`hand`: strokes, never words),
   the derivative taken once outside the branches. Lit as the lamp is,
   darker by night, plus the lamp's light with the device blocking it as
-  on the desk. **The swap:** the recipe's `tea` (`moonlit.js`): `uTea` 0
-  coffee, 1 tea, following the switch's `e` like the lamp; the drink's
+  on the desk. **The swap:** the recipes' `tea` flag (`dusk-ember.js`
+  sets it): tea by day, coffee by night since `0.4.0`. `uTea` is 0 for
+  coffee, 1 for tea, following the switch's `e` like the lamp; the drink's
   colour mixes and the tag and string dissolve (discarded on a noise
   threshold). **The steam** (`STEAM_*`, no buffer: `STEAM_WISPS` quads from
   `gl_VertexID`, turned to the camera about the vertical) is drawn after

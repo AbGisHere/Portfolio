@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.15](https://img.shields.io/badge/version-0.4.15-informational)
+![Version 0.4.16](https://img.shields.io/badge/version-0.4.16-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -15,8 +15,9 @@ The whole site sits on a single full-bleed scene: mountain ridges under
 drifting haze, with a sun (or at night, a moon) in the sky. Every scroll delta
 stages the next beat of that scene instead of paging through sections. The
 site is being rebuilt one layer at a time. `0.1.x` built the atmosphere,
-and `0.2.x` starts the camera moving as you scroll. Content, projects and
-contact come in later lines (see [Versioning](#versioning)).
+`0.2.x` built the camera pull-back, and `0.3.x` built the descent onto
+the desk. The current `0.4.x` line adds the house and pool; the contact
+form, project screen and real content are still to come (see [Versioning](#versioning)).
 
 ## Contents
 

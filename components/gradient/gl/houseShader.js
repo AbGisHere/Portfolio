@@ -578,6 +578,14 @@ void main() {
       // The grass's plumes: straw.
       alb = vec3(0.78, 0.68, 0.48) * (0.85 + 0.2 * hash2(floor(vWorld.xy * 80.0)));
       rough = 0.8;
+    } else if (vVar > 0.94) {
+      // (0.4.16) A coneflower's cone: rust, darker at its base.
+      alb = vec3(0.36, 0.17, 0.06) * (0.75 + 0.4 * hash2(floor(vWorld.xz * 300.0)));
+      rough = 0.85;
+    } else if (vVar > 0.88) {
+      // Its petals: a warm pink, deeper toward the cone.
+      alb = mix(vec3(0.55, 0.2, 0.36), vec3(0.8, 0.42, 0.58), smoothstep(0.0, 0.7, st.x));
+      rough = 0.6;
     } else if (vVar > 0.8) {
       // Lavender's flowers.
       alb = vec3(0.42, 0.32, 0.62) * (0.85 + 0.25 * hash2(floor(vWorld.xz * 90.0)));
@@ -690,7 +698,9 @@ void main() {
     } else alb = vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
     rough = 0.85;
   } else if (vPart == ${P.soil}) {
-    alb = vec3(0.16, 0.11, 0.08) * (0.8 + 0.4 * noise2(vWorld.xz * 30.0));
+    // (0.4.16) Dark mulch, its bark chips catching the light.
+    float chip = noise2(vWorld.xz * 70.0);
+    alb = vec3(0.16, 0.11, 0.08) * (0.7 + 0.4 * noise2(vWorld.xz * 30.0)) * (0.8 + 0.6 * smoothstep(0.62, 0.8, chip));
     rough = 1.0;
   } else if (vPart == ${P.lamp}) {
     // A shade or a bulb: lit from inside by night.

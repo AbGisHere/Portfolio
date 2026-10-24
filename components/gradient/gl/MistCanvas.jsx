@@ -1454,7 +1454,7 @@ export default function MistCanvas({ recipe, onFail }) {
       publishLampSpot(shown ? { ...hit, cam: { P: meadowAt.pitch, cm: meadowAt.cm }, pose: lampPose, device: meadowAt.device } : null);
       // The grass, once the camera is low enough to see blades.
       const cmY = pitch ? cam.eye * 40 : Infinity;
-      grassAt = pitch && frame.grass && cmY < GRASS.reach && !noGrass
+      grassAt = pitch && frame.grass && cmY < GRASS.over && !noGrass
         ? { pitch, cam: cameraMetres(cam), colours: frame.grass, haze: frame.ground ? frame.ground.stops[1][1] : frame.grass.ground }
         : null;
       footCam = grassAt ? { pitch, cam } : null;

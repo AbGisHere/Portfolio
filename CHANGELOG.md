@@ -6,6 +6,48 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.16 — 2026-10-25
+
+Landscape and planting, the first of the owner's feedback batch
+(`ROADMAP.md`, "Upcoming patch releases").
+
+- **Flowers the whole way to the house:** the meadow's 3D flowers grew in
+  three rings round the camera to 13 m, and the painted ones drop out once
+  a flower is under a pixel, so on the approach they filled only the
+  bottom of the frame. Six rings now, out to 64 m (10 slots a cell, not
+  6). A ring's cells keep about the same density on screen at any
+  distance, and far off the drifts set the share that grow, so they keep
+  their shape. A stem that would have to widen past three times its own
+  width is left out (the head stays, two pixels at least).
+- **Grass as full round the house as at the desk:** blades grew in five
+  rings to 32 m at 1600/d² a m², so the hill was bare paint from the
+  approach, and the hill's grass was mown to under half height. Six rings
+  to 56 m, 32 blades a cell, 5000/d², the hill's grass the meadow's height.
+  None is drawn with the camera over 32 m up (`GRASS.over`), as before.
+- **Branches end in twigs:** every twig ended blunt, a tube cut flat at
+  70 % of its width poking through the leaves. Twigs now taper to a point
+  and fork two to four fine twiglets off their outer half, which carry
+  the leaves. Branches still narrow 30 % to where their leader carries on.
+- **The entrance planters planted properly:** they were solid blocks, the
+  steel coping a plate over the whole top, so no soil showed. They're
+  hollow shells now, the coping a rim round their walls, with a heaped bed
+  of dark mulch (bark chips catching the light) 7 cm down. The clipped
+  box balls at each end (the owner's "circle with pokey things": 420 tiny
+  leaves on a sphere) gave way to coneflowers, with leaves at the soil,
+  stems with a leaf or two, rust cones and drooping pink petals. The bed is
+  planted in drifts (grass, then lavender or coneflowers by a slow wave,
+  each spot nudged off the line) rather than a repeat.
+- **Land behind the house:** six clumps of trees past the hill, with gaps,
+  their crowns under the roof from the approach, and a belt of woodland
+  175–220 m out. Trees away from the mountains haze as the ground does
+  there (`TURNED_HAZE`) instead of toward the mountains' mist (purple
+  silhouettes otherwise).
+- **Open:** gentle terrain behind the house and a distant ridge (the
+  plan's suggestion) aren't built; the ground is still one plane past the
+  hill. Perf isn't re-measured: more grass, flowers and trees cost frame
+  time, left for `0.4.26`.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.15 — 2026-10-25
 
 - **CI's hygiene passes again:** Turbopack writes an empty source map (no

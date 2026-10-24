@@ -9,11 +9,14 @@
  * - **Fiddle-leaf fig** (by the glass inside): a few stems up from the
  *   pot, big fiddle-shaped leaves off them on short stalks, cupped and
  *   drooping, glossy, a pale midrib.
- * - **Boxwood** (the forecourt's planters): mounds of small oval leaves on
- *   a dense dark core, clipped round.
+ * - **Boxwood**: mounds of small oval leaves on a dense dark core, clipped
+ *   round (no longer planted, 0.4.16).
+ * - **Coneflowers** (the forecourt's planters, 0.4.16): a rosette of
+ *   leaves at the soil, and stems up from it, each with a raised cone and
+ *   its ring of drooping pink petals.
  *
  * Leaves are HOUSE_PART.leaf with the species as its variant (.1 olive,
- * .4 fig, .7 box), their own coordinates `s` along the leaf (0 … 1) and
+ * .4 fig, .7 box, .91 a coneflower's petals, .97 its cone), their own coordinates `s` along the leaf (0 … 1) and
  * `t` across it (−1 … 1); stems are HOUSE_PART.bark (.1 olive, .5 fig).
  * houseShader.js shades both sides and the light through them.
  */
@@ -149,6 +152,51 @@ export function boxwood(out, c, r, seed) {
     const p = add(c, n, r * (0.9 + 0.12 * rnd()));
     const d = turn(unit(n), 1.1 + rnd() * 0.4, rnd() * Math.PI * 2);
     leaf(out, p, d, unit(n), 0.03 + 0.01 * rnd(), 0.016, oval, 0.2, 0.05, 0.7);
+  }
+}
+
+/**
+ * (0.4.16) Coneflowers (echinacea) from the soil at `c`, about `h` tall: a
+ * rosette of long rough leaves arching out low, then stems wandering up,
+ * a leaf or two along each, every stem topped by a raised rust cone and a
+ * ring of long petals drooping from it, no two at the same height.
+ */
+export function coneflower(out, c, h, seed) {
+  const rnd = seeded(seed);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2 + rnd() * 0.5;
+    const lean = 0.9 + 0.45 * rnd();
+    const d = unit([Math.cos(a) * Math.sin(lean), Math.cos(lean), Math.sin(a) * Math.sin(lean)]);
+    leaf(out, add(c, [Math.cos(a) * 0.02, 0.005, Math.sin(a) * 0.02]), d, unit(add([0, 1, 0], d, -0.4)), 0.15 + 0.08 * rnd(), 0.045, lance, 0.25, 0.3, 0.68);
+  }
+  const stems = 5 + Math.floor(rnd() * 4);
+  for (let i = 0; i < stems; i++) {
+    const a = rnd() * Math.PI * 2;
+    const foot = add(c, [Math.cos(a) * 0.05 * rnd(), 0, Math.sin(a) * 0.05 * rnd()]);
+    const tall = h * (0.7 + 0.3 * rnd());
+    const pts = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      pts.push(add(foot, [Math.cos(a) * 0.1 * t * t + 0.01 * Math.sin(t * 5 + i), tall * t, Math.sin(a) * 0.1 * t * t + 0.01 * Math.cos(t * 4 + i)]));
+    }
+    sweep(out, pts, 0.0032, LEAF + 0.68, { seg: 5 });
+    for (const t of [0.3, 0.55]) {
+      const at = pts[Math.round(t * 6)];
+      const la = a + (t > 0.4 ? Math.PI : 0) + rnd();
+      const d = unit([Math.cos(la), 0.5, Math.sin(la)]);
+      leaf(out, at, d, unit(add([0, 1, 0], d, -0.5)), 0.08 + 0.03 * rnd(), 0.022, lance, 0.2, 0.25, 0.68);
+    }
+    const top = pts[6];
+    const up = unit(add(pts[6], pts[5], -1));
+    ball(out, add(top, up, 0.008), 0.017, LEAF + 0.97, 8, 5);
+    const n = 13;
+    const az0 = rnd() * Math.PI * 2;
+    for (let k = 0; k < n; k++) {
+      const az = az0 + (k / n) * Math.PI * 2;
+      const out1 = [Math.cos(az), 0, Math.sin(az)];
+      const d = unit(add(out1, up, -0.25 - 0.35 * rnd()));
+      leaf(out, add(top, out1, 0.012), d, unit(add(up, out1, -0.2)), 0.045 + 0.012 * rnd(), 0.013, oval, 0.15, 0.3, 0.91);
+    }
   }
 }
 

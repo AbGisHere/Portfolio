@@ -66,8 +66,10 @@ components:
 **Creative North Star: "The Descent"**
 
 The whole site is one camera move. It starts in the sky over a range of
-painted mountains, pulls back as the visitor scrolls (`0.2`), and will come
-down onto a desk in a meadow where an open laptop holds the projects (`0.3`).
+painted mountains, pulls back as the visitor scrolls (`0.2`), comes down
+onto a desk in a meadow with a laptop or tablet (`0.3`), then turns toward
+a house and ends over its terrace pool (`0.4`). The project screen (`0.5`)
+and contact form over the pool are still to come.
 Every visual decision is staged along that move: a new layer earns its place
 by being somewhere the camera passes, not by being a section on a page.
 
@@ -187,7 +189,8 @@ The lamp's hit target takes the lamp's own outline, for the same reason.
 ## Components
 
 The content layers are not built yet; the visitor will scroll through the
-whole descent before the content is designed. Three components exist today.
+whole descent before the content is designed. The interface components
+and desk props documented below already exist.
 
 ### The sun (signature component)
 The painted sun or moon is the day/night switch. Its button is invisible
@@ -212,8 +215,8 @@ Real objects, not interface: an open notebook and pen, a mug, sticky notes
 and folded glasses, built in code and lit by the scene like the desk, none
 of them a control. They make the desk read as someone's, used: handwriting
 on the pages and the notes is illegible by design (strokes, never words),
-so no copy lives on it. Only the mug changes with the theme, coffee by day
-and tea by night, turning with the sky's switch.
+so no copy lives on it. Only the mug changes with the theme, tea by day
+and coffee by night (since `0.4.0`), turning with the sky's switch.
 
 ### Action links (error screens)
 Underlined text in Warm Ink with no background, border or padding, at least

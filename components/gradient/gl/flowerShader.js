@@ -3,7 +3,7 @@
  * blades (grassShader.js), drawn just after them against the same depth.
  * One draw, no vertex data: every flower comes from its instance number.
  *
- * - **Where.** Three rings of world-snapped cells around the camera's foot
+ * - **Where.** Six rings (0.4.16; three before) of world-snapped cells around the camera's foot
  *   (a flower never moves when the camera does), SLOTS flowers a cell,
  *   placed by an integer hash. They grow in the meadow's drifts, the same
  *   ones its painted flowers keep to (meadowTexture.js, A at 30 m), with a
@@ -31,17 +31,19 @@ import { MOUND_GLSL } from './houseShape';
 const f = v => v.toFixed(6);
 
 export const FLOWERS = {
-  rings: 3,
+  // (0.4.16) Six rings, out to 64 m: the flowers run the whole way from the
+  // desk to the house (they stopped at 13 m, the bottom of the approach).
+  rings: 6,
   // Cells per ring side, and the innermost ring's cell size (metres).
   side: 16,
   cell: 0.5,
-  slots: 6,
+  slots: 10,
   // Flowers per m² in a drift, and between drifts.
   drift: 7,
   stray: 0.5,
   // Metres from the camera over which they fade out (the painted flowers
   // fade in over the same).
-  fade: [9, 13],
+  fade: [52, 64],
   // The drifts' scale (metres) in the meadow's texture: MEADOW_FLOWERS's.
   driftScale: 30,
 };
@@ -146,14 +148,16 @@ void main() {
   float d = length(vec3(rel.x, uCam.y - gy, rel.y));
   float drift = smoothstep(0.45, 0.7, textureLod(uMeadow, pos / ${f(FLOWERS.driftScale)}, 0.0).a);
   float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d));
-  float p = own * want * c * c / ${f(FLOWERS.slots)};
+  // A far ring's cell holds more than its slots: there the drifts set the
+  // share that grow, so they keep their shape rather than filling in.
+  float p = own * min(want * c * c / ${f(FLOWERS.slots)}, want / ${f(FLOWERS.stray + FLOWERS.drift)});
   float grow = clamp((p - rnd(s)) / 0.1, 0.0, 1.0);
   vec3 q0 = viewOf(vec3(rel.x, gy - uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   float fz = uPitch.w * uPitch.z;
   // A device pixel at the root, in metres.
   float pxM = z0 > 0.0 ? uPxCss * z0 / fz : 1.0;
-  if (grow <= 0.0 || z0 <= 0.0 || pxM > 0.03) {
+  if (grow <= 0.0 || z0 <= 0.0 || pxM > 0.12) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -188,8 +192,11 @@ ${PUSH_SUM}
   float phi = min(length(bend) * 1.3, 1.5);
   vec2 bd = length(bend) > 1e-5 ? normalize(bend) : face;
   int v = gl_VertexID;
-  // A stem at least a device pixel wide (no shimmer far off).
+  // A stem at least a device pixel wide (no shimmer far off); (0.4.16) one
+  // that would have to widen past three times its own is left out (far off
+  // it's thinner than a pixel and only the head reads).
   float sw = max(0.0035, pxM * 0.9);
+  if (sw > 0.0105) sw = 0.0;
   vec3 w;
   vFront = 1.0;
   vLit = 0.0;
@@ -216,8 +223,8 @@ ${PUSH_SUM}
     float y = phi < 1e-3 ? hgt : hgt * sin(phi) / phi;
     vec3 tip = vec3(pos.x + bd.x * off, y + gy, pos.y + bd.y * off);
     vec3 tang = vec3(bd.x * sin(phi), cos(phi), bd.y * sin(phi));
-    // Never under a pixel and a half across.
-    float R = max(rad, pxM * 1.5);
+    // Never under a pixel and a half across (two, far off).
+    float R = max(rad, pxM * mix(1.5, 2.0, smoothstep(0.01, 0.03, pxM)));
     vec3 a1;
     vec3 a2;
     vec3 n;

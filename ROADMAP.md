@@ -12,8 +12,8 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
-| `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes, `0.4.1` the house in 3D, `0.4.2` the house rebuilt room by room, its glass, the pool's water, `0.4.3` caustics, the mirrored house, grass on the hill, contact shadows, `0.4.4` real birds, sliding glass, curtains tied by day and closed by night; `0.4.5` clean frames, wishbone chairs, a marble table, hotel beds, `0.4.6` lighting by night, `0.4.7` the stair, the bookcases, birds by the desk, `0.4.8` books, pillows, marble counters, a glass balustrade, the planters, tied curtains, `0.4.9` limestone paving and steps, daylight indoors, the stair's handrail, `0.4.10` the camera on foot from the desk through the house to the pool (replaced), `0.4.11` the turn made looking straight down over the desk, `0.4.12` the meadow running on behind the house, the hill's lawn its grass, `0.4.13` no stall on the first turn to the house, `0.4.14` no flicker on the kitchen and pictures, the upstairs glass open, curtains untied by night, `0.4.15` CI's hygiene fixed, the house in perf (info). |
+| `0.3.x` | The desk: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. The descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, ending at a laptop (a tablet on portrait viewports). Its project screen comes in `0.5.x`. |
+| `0.4.x` | Current line — contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form is planned (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes, `0.4.1` the house in 3D, `0.4.2` the house rebuilt room by room, its glass, the pool's water, `0.4.3` caustics, the mirrored house, grass on the hill, contact shadows, `0.4.4` real birds, sliding glass, curtains tied by day and closed by night; `0.4.5` clean frames, wishbone chairs, a marble table, hotel beds, `0.4.6` lighting by night, `0.4.7` the stair, the bookcases, birds by the desk, `0.4.8` books, pillows, marble counters, a glass balustrade, the planters, tied curtains, `0.4.9` limestone paving and steps, daylight indoors, the stair's handrail, `0.4.10` the camera on foot from the desk through the house to the pool (replaced), `0.4.11` the turn made looking straight down over the desk, `0.4.12` the meadow running on behind the house, the hill's lawn its grass, `0.4.13` no stall on the first turn to the house, `0.4.14` no flicker on the kitchen and pictures, the upstairs glass open, curtains untied by night, `0.4.15` CI's hygiene fixed, the house in perf (info), `0.4.16` flowers and grass to the house, twigs, the entrance planting, the land behind. |
 | `0.5.x` | The device screen: the projects inside the laptop and the tablet (see "The device screen"; moved here from `0.3.15`+, the owner, 2026-10-24). |
 | `0.6.x` | A header on top of the site to navigate between the sections. |
 | `0.7.x` | Populating the site with the real content. |
@@ -179,7 +179,7 @@ By version line:
       names individual visitors. To tell recruiters apart, share
       UTM-tagged links (`?utm_source=linkedin`), and use the contact form.
 - [ ] **Privacy policy** (`0.4`): a `/privacy` route, in the sitemap. Nothing
-      links to it until the `0.5` header or a footer. It covers the host
+      links to it until the `0.6` header or a footer. It covers the host
       (Vercel), the theme in `localStorage`, the analytics, the contact
       form's data and retention, how to ask for deletion, and that the site
       isn't directed at children. It must stay true, and it's a derived
@@ -200,22 +200,22 @@ By version line:
       isn't directed at children and has no accounts, so an age gate would
       collect data for no reason. The privacy policy says so. Revisit only
       if accounts or profile data ever appear.
-- [ ] **Keyboard navigation** (`0.3`, `0.5`). Today the sun is a real button
+- [ ] **Keyboard navigation** (`0.5`, `0.6`). Today the sun is a real button
       with a visible focus ring, and scrolling works with the keyboard.
-      `0.3`: project cards are focusable, and an opened project's iframe can
-      be left with the keyboard. `0.5`: a skip link, a logical tab order
+      `0.5`: project cards are focusable, and an opened project's iframe can
+      be left with the keyboard. `0.6`: a skip link, a logical tab order
       through the header, and visible focus everywhere.
-- [ ] **Colour contrast** (`0.6`, and every derived surface). Text meets WCAG
+- [ ] **Colour contrast** (`0.7`, and every derived surface). Text meets WCAG
       AA (4.5:1, or 3:1 for large text and UI such as focus rings) over the
       moving scene, in both themes and at every scroll position, using
       scrims where the sky is too bright. Check the error screens with every
       version line.
-- [ ] **Alt text** (`0.3`, `0.6`). Project images and screenshots get
+- [ ] **Alt text** (`0.5`, `0.7`). Project images and screenshots get
       meaningful `alt`. Decorative ones use `alt=""`. `npm run hygiene`
       checks every `<img>` has one.
 - [ ] **Third-party audit** (every version line). Today's runtime
       dependencies are `next`, `react`, `react-dom` and `lenis` (`gsap` was
-      removed in `0.2.8`). `0.3`'s project iframes load third-party pages, so
+      removed in `0.2.8`). `0.5`'s project iframes load third-party pages, so
       sandbox them (`sandbox`, `allow` kept to what each project needs, no
       `allow-top-navigation`).
 - [x] **Unsupported claims** (audited at `0.2.4`). The site copy, metadata,
@@ -378,7 +378,7 @@ differences: no idle drift or reshaping in the fallback, and no wind.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
-  real content (`0.6.x`).
+  real content (`0.7.x`).
 - **The favourite so far: sky lanterns** (the user, 2026-09-24; not final).
   Each lantern carries a line about Abhinav and rises into the darkening
   sunset as you scroll, sinking again when you scroll back. It's the only
@@ -463,12 +463,11 @@ The night darkens it through its light, never a different colour.
   gets low. Otherwise mid-arc you'd be looking at a half-open edge.
 
 **Theming: swapped versus relit.**
-- **Swapped per theme:** at most one or two accessories. [`0.3.12`: the
-  mug, coffee by day and tea by night, the owner's pick, 2026-10-08.] (The laptop's
-  and tablet's finish no longer swaps: one space black, relit, from
-  `0.3.9`.) Switching theme with the laptop on screen dissolves its
-  material over the switch's `ms`, so it reads as part of the scene turning,
-  not a swap.
+- **Swapped per theme:** at most one or two accessories. The mug holds
+  tea by day and coffee by night (`0.4.0`, the owner's pick, 2026-10-24,
+  reversing `0.3.12`'s coffee-by-day choice). The drink and its tag turn
+  with the sky on the switch's clock. The laptop and tablet keep one
+  space black finish, relit by the scene, from `0.3.9`.
 - **Relit per theme:** the grass, the wood and everything else. They take
   their light from the sky palette, like the ridges do: warm sun at dusk,
   cool moonlight and the lamp's pool of light at night.
@@ -541,49 +540,41 @@ front needs real geometry.
   ground is a per-pixel ray–plane intersection, the far meadow; near the
   desk, instanced 3D grass blades stand on it (see "0.3 — the desk"). The ridges' mist band at their
   feet (`stops[1]`) hides the seam between mountains and ground.
-- **Desk objects: a mesh pass in the same WebGL2 context.** The scene is
-  simple for 3D: only the camera and the lid hinge move, so the lighting can
-  be baked.
-  - Bake two lightmaps offline (Blender): day, and night with the lamp's pool
-    of light. Theming blends between them on the switch clock, which is the
-    relighting above at almost no runtime cost.
-  - Shading is texture × lightmap. No runtime shadows or PBR.
-  - A build-time script converts the glTF models into a small binary format
-    of our own (positions, UVs, indices), so no loader ships. Expect roughly
-    10–20 KB of our own code.
-  - One context and one canvas, driven by one camera: no sync issues between
-    the mountains and the desk.
-  - If writing the mesh pass ourselves proves a pain, the fallback option is
-    **OGL** (about 25–30 KB gzipped: meshes, cameras, a glTF loader).
-    **three.js is ruled out on weight** (about 150–180 KB gzipped with its
-    loader), and a full three.js scene would also discard both renderers and
-    the parity setup.
-- **Assets:** low-poly models with baked detail (only the laptop gets close),
-  KTX2 textures, meshopt-compressed geometry, and one lightmap resolution per
-  device class. Budget: under about 1–1.5 MB for the whole desk scene.
-- **The layered fallback** follows the mountains' part as layer transforms,
-  and shows the desk as stills with a crossfade.
+- **Desk objects: procedural mesh passes in the same WebGL2 context.**
+  The desk, devices, lamp and accessories are built in code and lit live by
+  the sky and lamp, with runtime shadows and material shading. One context,
+  canvas and camera keep them in step with the mountains. They ship no glTF
+  models or baked lightmaps. This supersedes the original Blender lightmap,
+  glTF conversion and OGL contingency plan; three.js remains ruled out.
+- **Assets:** the original 1–1.5 MB desk asset budget, KTX2 textures and
+  meshopt-compressed models were provisions for imported models. The shipped
+  desk uses procedural geometry and generated textures instead. Revisit
+  asset budgets if an imported accessory is chosen.
+- **The layered fallback** follows the mountains' part as layer transforms.
+  Desk stills with a crossfade are planned; it currently holds the
+  pull-back's end through the desk stretch.
 - **Parity:** `?scroll=` pins the progress, and `npm run parity` compares
   the renderers at the top, middle and end of the `0.2` stretch
   (`--scrolls`). Extend both to the `0.3` stretch.
 
 ### Authoring in Spline, and a desk that's alive
 
-[2026-10-04: the table is built in code instead (`0.3.6`, the owner's
-pick on the recommendation): procedural planks lit live by the sky match
-the grass and trees, need no baked lightmaps and ship no asset. So is the
-laptop (`0.3.8`, the owner's pick, 2026-10-05). Spline stays an option for
-an accessory that needs a real model.]
+**Current approach:** all shipped desk objects are built in code and lit
+live (`0.3.6`–`0.3.12`), without imported models or baked lightmaps. Spline
+stays an option for a future accessory that needs an authored model. The
+original decision and handover below are retained as history, not the
+current implementation plan.
 
-[2026-09-30: user decision.] **The desk objects are modelled in
+[2026-09-30: original user decision, superseded for the shipped objects.]
+**The original plan was to model desk objects in
 [Spline](https://spline.design).** It's the design tool, not the runtime:
 Spline's own embed would be a second WebGL engine (several hundred KB, its
 own camera and light, no fallback, scene files from its servers), so it's
-ruled out on the same grounds as three.js. The user models and dresses the
-scene in Spline. It exports glTF, which the mesh pass above draws in our
-own context, under our camera and light.
+ruled out on the same grounds as three.js. The plan was for the user to
+model and dress the scene in Spline, then export glTF for our own mesh pass,
+under our camera and light.
 
-**Handover from Spline:**
+**Original handover from Spline (for any future imported model):**
 - **glTF per object, in one scene file.** Every part that moves on its own
   is its own node, with its pivot where it turns: the lid's hinge, the
   pencil, the clock's hands, the lamp head.
@@ -638,11 +629,11 @@ Nothing should load all at once, and nobody should have to scroll and wait.
    it mostly extends the running shader. Pre-compile the new shaders in the
    background (`KHR_parallel_shader_compile`), so the first frame that needs
    them doesn't stall.
-3. **The desk, in the background:**
-   - Fetch models and textures at low network priority, nearest-needed first:
-     the table and laptop, then the lamp, then the stationery.
-   - Load a low-resolution lightmap first and swap in the sharp one later.
-   - Decode textures off the main thread, in a worker.
+3. **The desk, in the background:** build procedural meshes and generated
+   textures without blocking the first atmosphere paint. The original plan
+   to fetch models, decode textures in a worker and progressively load
+   lightmaps is superseded for the shipped desk; those steps apply only if
+   future imported assets need them.
    - Upload to the GPU a piece at a time across idle frames. One large upload
      in a single frame is the classic cause of a hitch while scrolling.
    - Pause background work while a sun switch runs.
@@ -666,7 +657,8 @@ The rule: it must never feel slow, laggy or buggy.
   today.
 - **Adaptive quality** (the resolution step is live from `0.2.4`; `0.3`
   adds its own knobs). If frames run long, lower the canvas DPR, the grass
-  detail and the lightmap size before anything visibly stutters. Tiers: the
+  detail before anything visibly stutters (lightmap sizing belonged to the
+  superseded baked-asset plan). Tiers: the
   full scene; a lighter scene; stills of the desk with a crossfade; the
   non-WebGL fallback.
 - **No visible seams** between the mountains and the ground at any aspect
@@ -684,8 +676,8 @@ The rule: it must never feel slow, laggy or buggy.
 
 ## The device screen — projects inside the laptop
 
-**Status:** recorded 2026-09-23, for the `0.3.x` line. The path to the
-device is "The descent" above.
+**Status:** recorded 2026-09-23, now for the `0.5.x` line (moved from
+`0.3.x` on 2026-10-24). The path to the device is "The descent" above.
 
 - **The screen is not an OS.** [2026-09-23: user decision.] What the laptop
   (or tablet) shows is another beautiful atmosphere-grade background, in the
@@ -758,13 +750,12 @@ Known catches:
 
 ### First steps, when it's picked up
 
-1. **Prototype the camera** with the mountains and the ground plane only, and
-   a grey box for the table, to validate the spline and the holds before any
-   models exist.
+1. Use the shipped desk camera and device geometry (`0.3.0`–`0.3.14`) to
+   prototype the live DOM screen at the reading holds on both frame shapes.
 2. List every project with its deployed URL and check its response headers
    for embeddability. This sizes how many projects need changes.
-3. Source or model the desk assets, bake the day and night lightmaps, and
-   check them against the asset budget.
+3. Choose the screen's background and project tiles, then build them as
+   accessible DOM projected onto the existing laptop and tablet screens.
 
 ## 0.4 — contact: the house and the pool
 
@@ -777,6 +768,120 @@ looks out at the mountains, and comes down over a pool on its balcony. The
 person from the desk walks up to the house as the camera turns, and is
 stepping into the water when the pool comes into view. The contact form
 sits over the pool.
+
+### Upcoming patch releases — ordered plan
+
+The owner has finished the current feedback pass and delegated release ordering.
+Group related fixes into coherent releases rather than one version per fix.
+Each release below retains the detailed requests and acceptance checks gathered
+so far. Further feedback can extend the plan; visual choices marked open still
+need design exploration within their release. These are planned changes, not
+shipped behavior; the current release stays `0.4.16`. No implementation, commit
+or push is part of this planning pass.
+
+| Version | Scope | Acceptance |
+|---|---|---|
+| `0.4.16` | **Landscape and planting.** Meadow coverage from desk to house: extend flowers across the whole patch (the owner reports them only in the bottom quarter of the screen), and increase grass density around the house to match the fullness of the meadow around the main desk. Tree branch endings and canopy construction. The owner's close-up screenshot shows blunt, flat-ended cylindrical branch stubs protruding through the foliage. Improve how branches taper, fork and terminate within the canopy. Entrance flowers and planters. Add visible soil and improve plant selection, arrangement and rendering. The owner particularly dislikes an entrance plant described as a circle with pokey things outside; identify the exact plant/mesh before reworking or replacing it. Landscape backdrop behind the house. The owner's wide approach screenshot shows the house surrounded by a broad, empty ground-to-sky horizon, making the setting feel unfinished. Design a backdrop that grounds the house in its landscape; the exact treatment remains open. | Flowers cover the whole intended patch along the route without a visible screen-space cutoff. Grass around the house reads as full and dense as the desk meadow, following the hill while keeping paths, steps and the house clear. Verify both themes and portrait/landscape views, preserving the scene's quality and frame-budget rules. Branches narrow naturally toward smaller twigs, with believable joins and no conspicuous flat-cut ends sticking out through leaves. Balance foliage placement with the branch structure rather than hiding every defect with denser leaves. Inspect the affected tree species close up and from the normal route, by day and night, while preserving the scene's style and frame-budget rules. Plants visibly grow from recessed soil within the planters, with believable stems, foliage, flowers and varied forms. Remove the artificial circular/spiky appearance flagged by the owner. Choose a coherent planting composition suited to the entrance, with natural spacing and proportions rather than repeated geometric clumps. Check the entrance close up and along the approach in both themes; coordinate branch/foliage improvements with `0.4.16` and preserve the frame-budget rules. Establish depth behind the house with a coherent landscape composition rather than an abrupt empty horizon. Keep the house silhouette, terrace and pool readable, and preserve the desk-to-house reveal. Review the actual scroll route as well as wide views, portrait/landscape framing, both themes and the transition between them. Coordinate with grass coverage in `0.4.16` and tree improvements in `0.4.16`, preserving the scene's frame budget. |
+| `0.4.17` | **Exterior architecture, pool and railings.** Roof architecture and materials. The roof currently reads as a plain cuboid; improve texture, edge detailing and architectural design. The final profile remains open for brainstorming. Poolside details: the olive planter, its lighting, the pool edge against the glass railing, and gold handrails on the exterior glass balustrades. First improve the pot's geometry and material so it reads as an actual flowerpot rather than a plain block; then correct the uplight currently sitting at its rim. The owner also reports one pool edge extending beyond the glass; inspect and correct that alignment. Stair detailing and lighting. Correct the reported gaps between the steel connectors on the left-side glass balustrade and the handrail, which make the handrail appear to float. Ensure the under-tread lights turn on and visibly illuminate the stairs at night. | The roof reads as a designed architectural element with convincing materials and construction detail rather than a plain block; explore fascia, soffit, seams and surface texture without committing to a roof profile yet.  Check approach, terrace and wide views in both themes. A convincing pot with a defined rim, visible soil and a grounded base, proportioned to the olive and terrace. Place the uplight on the terrace beside the pot, aimed into the plant, with no fixture sitting on or intersecting the pot. The pool edge stays inside the terrace's glass boundary, with appropriate clearance and no intersections, checked from the approach and top-down pool hold. Add a gold-toned metal handrail/cap along the top of the exterior glass balustrades, interpreted from the owner's request for gold railings over the glass. Keep the glass visible below, join corners and ends cleanly, and make all supports visibly connect. Carry the same gold handrail treatment onto the first-floor glass balustrade beside the stairs, coordinated with the stair work in `0.4.17`. Exact profile, finish and any additional rail members remain open for discussion. Check the planter, light, pool edge and gold rails by day, by night and through the theme switch. Every intended steel-to-handrail connection visibly meets the rail along the stair, including the ends and changes in height. Keep the glass balustrade and ensure the first-floor section beside the stairs uses the gold handrail treatment from `0.4.17`, superseding its previous walnut finish there. Confirm the finish of the remaining sloped stair rail when designing the junction. Leave no visible gaps or fittings protruding through the rail. The underlights give the steps a clear, attractive glow at night and follow the day/night switch smoothly. Verify close views and the normal camera path by day and night. |
+| `0.4.18` | **Doors, hardware and reflections.** Doors and hardware throughout the house. The owner's screenshot shows repetitive horizontal banding on the wooden doors; improve their material and construction. Replace thin or unconvincing handles with proper 3D hardware on all doors, drawers, cabinets and other handled storage. Working mirror reflections throughout the house. The owner reports that mirrors currently appear grey; make every mirror reflect the surrounding room and scene. | Wood grain reads naturally at the right scale and orientation, without conspicuous repeated horizontal stripes; inspect whether the banding comes from grain, shading or geometry before choosing the fix. Give doors convincing thickness, edges and frames. Handles have modeled grips, mounting plates/rosettes or feet where appropriate, enough clearance to be grasped, and secure attachment without floating or clipping. Use suitable hardware for hinged doors, sliding doors, drawers and cabinets rather than one shape everywhere. Coordinate finishes with the gold rails and room designs; check all affected rooms close up and from the normal route in both themes. Reflections respond correctly to the viewing angle and mirror plane, with appropriate framing, perspective and day/night lighting, rather than a grey fill or a generic shine. Cover all mirrors, including the foyer and redesigned washrooms. Choose a rendering approach after assessing visual quality, multiple-mirror behavior and cost in the existing WebGL2 renderer; preserve the project's frame-budget rules and scope the fallback treatment explicitly. |
+| `0.4.19` | **Upholstery and curtain details.** Pillows, couch cushions, bedding placement and sofa-throw intersections. The owner reports the same unnatural downward shift/flattening on both bed pillows and couch cushions; the bedroom screenshot includes a displaced-looking accent cushion. Inspect their geometry, orientation and placement before diagnosing whether any movement is involved. Curtain tieback ropes. Replace the thick, rigid-looking rope ring flagged in the screenshot with a convincing fabric tieback treatment. | Pillows have convincing volume and rest against the headboard, mattress or other pillows with believable contact and gravity. Eliminate unintended sliding, floating, clipping and excessive flattening; align the duvet and folded bedding with the mattress. Apply the same corrections to couch cushions, giving them natural support against the seat, backrest or armrest. Fix the sofa-arm throw overlap: the owner's screenshot shows grey upholstery breaking through the brown draped fabric. Inspect the surfaces and depth separation, then shape the throw to clear the arm with believable fabric thickness and contact, without visible intersections or a floating gap. Check both beds and all affected couch cushions, relevant camera angles, and both themes, including the transition between them. Improve the curtain tiebacks: the owner's screenshot shows a thick, rigid-looking rope ring. Give the ropes convincing scale, braided texture, flexible drape, a believable wrap/attachment and a refined knot or tassel treatment; keep them seated against the gathered fabric without clipping, and preserve the curtain's day/night transition.  Check close views and the normal route in both themes. |
+| `0.4.20` | **Shelf, frame and dining styling.** Bookshelf styling and photo frames throughout the house. Rework the random cup/bowl-like shelf ornaments and the lone shallow bowl composition. Dining-table vase and cutlery. Improve the plain angular bottle-like vase and add deliberate place settings. | Balance books, decorative objects and open space with convincing proportions, materials and placement. Rework or replace the cup/bowl-like pieces as needed; brainstorm the object selection before implementation rather than filling every compartment. Improve photo-frame profiles, materials, mounts, glazing/depth and placement throughout the house, with convincing construction and no flicker between surfaces. The choice of photos/art remains open; do not invent personal photographs or biographical content.  Check proportions and finish by day and night. Improve the dining-table vase's silhouette, rim/opening, material and finish: the owner's screenshot shows a plain, angular bottle-like object. Add cutlery in deliberate place settings, proportioned to the table and seats, with convincing metal shading and no floating or intersecting pieces. Flowers in the vase and additional tableware remain open for discussion.  Check the table close up and along the route in both themes. |
+| `0.4.21` | **Entrance clothing and wardrobe.** Entrance coat rack and believable garments. Establish garment construction and variation that can also support the wardrobe work. Luxury walk-in wardrobe and realistic clothes. Improve cabinetry, storage, materials and garments as one room design. | Redesign the entrance's hanging clothes and their rack: the owner's screenshot shows bulky overlapping rounded shapes that do not read as garments. Use recognizable garment silhouettes, convincing fabric folds and thickness, visible hooks/hangers and believable suspension. Improve spacing and scale so the clothes do not merge into a solid mass or crowd the adjacent mirror and bench; garment selection remains open.  Check close views and circulation by day and night; coordinate garment geometry with the following wardrobe release. Redesign the walk-in wardrobe to feel more luxurious, with better cabinetry, material finishes and considered storage/display details. Explore integrated lighting and fittings as part of its design; the exact finishes and layout remain open. Rework its hanging and folded clothes to look like real garments, with recognizable silhouettes, believable fabric drape, folds, seams and thickness, proper hangers and natural spacing. Coordinate this garment work with the entrance coat rack so neither area relies on bulky anonymous shapes. Keep the styling consistent with the house and readable by day and night, both close up and from the normal camera path. |
+| `0.4.22` | **Mini-bar and lived-in home details.** Mini-bar nook beside the upstairs bedroom glazing. Use the large wooden section to the left of the glass, facing the pool terrace, identified in the owner's screenshot. Plug points and Apple Home display. Add recognizable electrical details throughout the house and a considered Home control screen to bring life into a room. | The bar belongs to the house's existing materials and scale, reads clearly from the terrace/pool approach, and preserves bedroom access and circulation. Explore a counter, storage/shelving and integrated lighting before settling the design; these are options, not an approved object list.  Check by day and night from the terrace and pool approach. Add recognizable socket plates at practical locations throughout the house, accounting for bedside use, the study, kitchen appliances and other furnished areas; coordinate nearby light-switch plates as part of the design. Choose the socket style and plate finish before implementation. Design a room-mounted or placed Apple Home display (the owner's term: Apple homeview); the exact device, room, placement and extent of interaction remain open. Its screen should feel like a considered part of the occupied home; agree on the visible controls and any live behavior before building them. Treat these as visual architectural details; interactive electrical controls are not yet planned.  Check room views and the normal approach in both themes; exact device, placement and interactions remain open. |
+| `0.4.23` | **Marble washrooms.** Redesign the downstairs WC and upstairs en-suite with Italian marble throughout and strong, warm lighting. The owner requests a long horizontal mirror, approximately 3:1 width to height; a proper toilet (reported missing/not apparent); and a spacious, premium shower area in the en-suite, including a hand shower and refined fittings. | Plan each room's fixtures and circulation together. Provide a clearly recognizable, usable toilet in each washroom. Carry Italian marble across the room's architectural surfaces, with convincing veining, slab joins and wet-area detailing; the marble variety and fitting finishes remain open. Give the en-suite a well-defined shower space with a main shower, hand shower and appropriate drainage. Fit the wide mirror at the vanity where the layout allows. Warm ambient, vanity/task and shower lighting should bring out the marble and illuminate the rooms clearly, rather than leaving them dim or relying only on decorative glow. Verify both rooms by day, by night and through the theme switch. |
+| `0.4.24` | **Butterflies and character design.** Butterflies throughout the outdoor scene, including the desk meadow, flowers along the route and garden around the house. Add life to the landscape; species, colours, density and night treatment remain open for brainstorming. Design the person who walks from the desk to the house. Establish the character's silhouette, proportions, clothing, materials and level of detail before building the walking performance. Follow the existing story below: stylised, small in frame, not a detailed likeness; first seen walking away rather than seated at the desk. | Butterflies have recognizable wing shapes, convincing wingbeats and varied, light flight paths at a scale that fits the scene. Distribute them across the landscape rather than one isolated cluster, with no obvious synchronized motion or intersections with the house and props. Use the existing GL frame loop, respect reduced motion and verify the added cost against the project's frame-budget rules across viewport sizes. Agree on the character design and check its scale and readability beside the desk, along the path and at the house in both themes and viewport shapes. Plan joints and clothing for the later scroll-driven walk and pool sequence. Robe/towel details remain open. Walking animation, route integration and pool entry/swimming need their own agreed scope after the design; they are not complete merely because the character is designed. |
+| `0.4.25` | **Responsive pool framing.** Pool framing on phones and shorter screens — exploratory. Improve how the pool and terrace fit the viewport during the approach and final contact hold. Brainstorm the treatment before implementation: camera distance/pitch and hold framing, responsive pool proportions, or a combination. | The pool reads clearly on phone portrait, phone landscape and short desktop viewports, with useful space for the future contact form. Preserve the continuous, reversible camera path. The specific camera or geometry changes remain undecided; this is a viewport/framing request, not a confirmed performance defect. |
+| `0.4.26` | **Full-quality loading and optimization.** Progressive loading and scene preparation at full visual quality. Prioritize the opening mountain view, prepare the desk during the mountain section, and prepare the house before its approach. Audit the current loading/rendering architecture first; these are candidate improvements, not confirmed existing bottlenecks. | Measure initial load and frame-time spikes before and after changes. Defer eligible scene-specific code/resources, spread geometry generation and GPU preparation into small scheduled tasks, and reuse prepared geometry/buffers instead of rebuilding them during scrolling. Priorities follow the visitor's position and direction, including fast scrolling and direct entry; retain prepared scenes for smooth reverse scrolling within measured memory limits. Check compression, cache behavior and repeat visits. Preserve the full intended geometry, material quality, grass variation and scene appearance: this release does not authorize reduced detail, lower-resolution rendering or adaptive quality cuts. Verify the complete forward/reverse journey on phones and desktop, with cold and warm caches, both themes and no newly introduced pop-in or stalls. |
+
+#### Design and implementation suggestions
+
+The owner welcomes suggestions alongside the requested fixes. The ideas below
+are recommendations to explore, not settled visual decisions. Keep requested
+outcomes separate from optional additions when finalising each release.
+
+| Area | Suggested approach |
+|---|---|
+| Meadow (`0.4.16`) | Check world-space coverage, camera-facing placement and distance fades before increasing counts. Match the desk meadow's fullness and vary density in natural drifts rather than a uniform carpet; preserve the intended individual blade and flower detail. |
+| Poolside (`0.4.17`) | Try a substantial tapered planter with a real rim and soil recess, then a small shielded uplight beside its base. Use a restrained brushed-gold finish for the rails, with believable corner joints and mounting hardware. Resolve pool/glass alignment before ornamental detailing. |
+| Pool framing (`0.4.25`) | Start with aspect-aware camera distance and framing, keeping one consistent world and pool geometry if possible. Test the shortest viewport and portrait frame early, with a temporary contact-form layout to reserve reading space. Avoid abrupt camera changes at aspect breakpoints. |
+| Roof and bar (`0.4.17`, `0.4.22`) | Explore a layered fascia, recessed timber soffit and subtle roof-surface seams, with discreet drainage details. For the bar, try a recessed counter with a restrained backlit shelf and concealed storage; confirm the roof overhang, bedroom opening and circulation before adding props. |
+| Sockets and Home display (`0.4.22`) | Reuse a small family of socket/switch plates with aligned heights and a consistent finish. Try the Home display at a reachable wall position, showing a few legible lighting/room controls; start with a considered screen before deciding whether interactions add value. |
+| Shelves, frames and dining (`0.4.20`) | Use a few distinct ceramic/sculptural pieces, grouped with books at varied heights, and leave purposeful empty space. Give frames real rebates and mounts. Try a rounded ceramic vase with a visible hollow neck, plus cutlery that follows the seat layout; plates, glassware and flowers are optional follow-ups. |
+| Ropes, clothes and wardrobe (`0.4.19`, `0.4.21`) | Model a few convincing garment types and reuse them with controlled variation in pose and drape. Use thinner, flexible tiebacks with clear anchoring. For the wardrobe, explore walnut cabinetry, warm concealed strips and restrained metal fittings, with practical hanging/folded storage rather than dense filler. |
+| Stairs (`0.4.17`) | Derive brackets and handrail from the same stair slope/path so their endpoints meet reliably. Recess each light beneath the tread nose and light the riser below, keeping the source shielded and avoiding blown-out strips. |
+| Washrooms (`0.4.23`) | Explore bookmatched Italian marble at focal walls with calmer slabs elsewhere, so veining does not compete everywhere. Consider a floating vanity, the requested wide mirror with warm task lighting, a rain shower plus hand shower, a shower niche and discreet linear drain. Choose one coordinated metal finish and keep toilets clearly accessible. |
+| Person (`0.4.24`) | Agree on front/side silhouettes and a small material palette before detailed modelling. Test the character at actual route distance, then establish stride length and foot contact before adding clothing motion or the robe/towel sequence. |
+| Mirrors and glass (`0.4.18`) | Prototype a planar reflected view for one mirror first, with clipping at its plane; measure it before extending to all visible mirrors. Limit reflection work to visible mirrors, avoid recursive mirror rendering, and evaluate resolution against the sharpness bar. Also explore reducing the stacked green tints in `houseGlass.js`, keeping broad panes clear with a subtle edge tint; the owner raised the green cast, and this treatment is a suggested improvement. |
+| Butterflies (`0.4.24`) | Use a few varied flight patterns with short flower visits and staggered wingbeats. Concentrate encounters near flower drifts while distributing them along the route; decide night behaviour separately. Share the existing frame clock and instance repeated geometry. |
+| Trees (`0.4.16`) | Check branch tips against leaf placement and branch taper together. Add finer terminal twigs where visible, varying their lengths and directions. Preserve fine branch construction and check silhouettes as well as close-ups. |
+| Doors and hardware (`0.4.18`) | Try restrained walnut or another agreed wood with subtle grain variation, realistic edge treatment and clean frame reveals. Build a small coordinated hardware family: lever handles with rosettes for room doors, suitable pulls for sliding doors, and bar/knob pulls for drawers and cabinets. Give metal rounded edges, readable highlights and mounting details; inspect the current banding before deciding whether it needs shader or geometry changes. |
+
+**Pillow and cushion suggestion (`0.4.19`):** define each pillow in a local frame,
+with fuller centres, compressed contact areas and softly rounded seams.
+Arrange the rear pillows against the headboard, the front pillows supported
+by them, and the accent cushion with a deliberate resting pose. Apply the
+same approach to couch cushions, with slight compression at the seat and
+backrest and varied, supported resting angles. Build the sofa throw's drape
+around the arm's actual shape with fabric thickness and enough clearance;
+verify whether the visible breakthrough is intersecting geometry or a depth
+precision issue before fixing it. Check oblique views as well as straight on. Separate
+camera perspective from actual geometry or transform errors when diagnosing
+the reported shift; a still screenshot alone does not establish animation.
+
+**Entrance planting suggestion (`0.4.16`):** try layered planting with
+a few soft grasses, flowering stems and a trailing plant, leaving visible
+soil between groups. Treat this as a candidate palette, not fixed species.
+Give stems a clear origin in the soil and vary leaf angles, cluster sizes
+and flower heights; avoid uniformly radial, spike-covered spheres.
+
+**Landscape backdrop suggestion (`0.4.16`):** begin with gentle terrain
+undulations behind the house, an irregular middle-distance grove of varied
+tree heights, and a quieter distant ridge softened by atmospheric haze.
+Use gaps and asymmetric clusters to frame the architecture, keeping foliage
+clear of the roof silhouette and avoiding a solid wall of identical trees.
+Compare this layered garden/woodland direction with a restrained courtyard
+boundary if a more enclosed setting is preferred; neither is a fixed design
+decision yet. Check camera sightlines before adding detail and measure the
+completed backdrop against the existing render budget without reducing visual quality.
+
+**Loading and preparation suggestions (`0.4.26`):** distinguish network
+loading from CPU geometry generation, shader compilation and GPU uploads;
+profile each before choosing changes. Make the opening scene usable first,
+then prepare upcoming sections with enough lead time for fast scrolling.
+Schedule preparation within the existing render architecture, without a second
+animation loop, and avoid moving one large stall to the moment a scene enters
+view. Cache unchanged resources and avoid unnecessary per-frame allocations
+or UI updates. Scene readiness must also handle direct entry and reversing
+direction; measure retained memory rather than keeping unlimited duplicates.
+Sharing geometry or instancing is optional only where it preserves the intended
+individual variation: grass blades can retain distinct positions, orientations,
+heights, bends, colours and wind phases. Do not substitute identical parallel
+blades or simplify the artwork to achieve a performance result. Record the
+baseline, applied changes and measured gains; do not promise speedups before
+profiling. This release stays last in the current batch at the owner's request,
+so its tuning includes the completed visual and scene changes.
+
+**Release sequencing:** complete landscape and planting together, then the
+roof, pool boundaries, gold rails and stair connections as one exterior pass.
+Fix shared doors/hardware and mirror rendering before final room finishes.
+Group fabric corrections, decorative styling, and garment/wardrobe work into
+coherent packages. Within `0.4.21`, establish the garment shapes before finishing
+the wardrobe; within the house, complete mirrors before final washroom lighting.
+The mini-bar, sockets and Home display share a lived-in-home release. Finish
+scenery and character design before final phone/short-screen pool framing
+(`0.4.25`). All detailed checks above remain part of their grouped release.
+
+**Optimization is the final release (`0.4.26`).** Apply progressive loading,
+preparation, caching and reuse to the completed batch, preserving full visual
+quality. Continue normal correctness and performance checks as each feature
+lands; this catches regressions without moving the dedicated optimization pass
+forward. If more fixes enter this batch, keep optimization after them and
+renumber it as needed. Future fixes may still require follow-up measurement;
+one optimization pass cannot guarantee performance for changes made afterward.
+
+The scroll-driven walk and pool entry/swim still need explicit implementation
+scopes after the character design; `0.4.24` does not claim to deliver those
+performances. Keep that existing story work visible when planning the next batch.
 
 ### The camera path, continued
 
@@ -880,7 +985,7 @@ above: the mountains are at −Z and the camera never rolls.
 
 ## Later — cues to scroll and to touch the sun
 
-**Status:** agreed 2026-10-01 (user): built with the content, around `0.4`,
+**Status:** agreed 2026-10-01 (user): built with the content (`0.7.x`),
 after the whole scroll exists. Raised by the 2026-10-01 audit.
 
 Today nothing on screen says the page scrolls or that the sun and moon can
@@ -959,7 +1064,7 @@ the ridges don't breathe or reshape, and the desk shows as stills.
 - Small JetBrains Mono label on a palette-tinted scrim, like `ErrorScreen`,
   following day/night, with a z-index above the scene.
 - Bottom-left: the moon rises on the right and the sun's target moves.
-  Recheck against the content sections and the `0.5.x` header when it's
+  Recheck against the content sections and the `0.6.x` header when it's
   built.
 - `role="status"`, a real close button, no motion under reduced motion, and
   a Playwright check via `?renderer=layers`.
@@ -995,7 +1100,7 @@ recognisable one. It runs as a Go command-line tool, so output can be
 pre-rendered to SVG rather than computed in the browser.
 
 - **Where it could help:** not decided. Possible fits: project thumbnails on
-  the desk screen (`0.3`), a portrait for the about-me layer, or placeholder
+  the desk screen (`0.5`), a portrait for the about-me layer, or placeholder
   images that resolve shape by shape as they load.
 - **Same rules as anything else in the scene:** the palette and light come
   from `sceneAt`, and it stays inside parity and the frame budget.

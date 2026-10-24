@@ -101,8 +101,17 @@ Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
   steps (`underHouse`). Stepping stones run down it toward the desk,
   between bollards.
 - **The forecourt and steps:** honed limestone (`paver`); board-formed
-  concrete planters of grass, lavender, box and creeping fig
-  (`plantMesh.js`).
+  concrete planters, hollow shells with a steel rim round their walls and
+  a heaped bed of dark mulch 7 cm down (`0.4.16`), planted in drifts:
+  feather-reed grass, lavender, coneflowers (pink petals drooping from a
+  rust cone; the clipped box balls they replaced read as spiky spheres) and
+  creeping fig trailing over the front (`plantMesh.js`).
+- **The land round it** (`treeShader.js`, `0.4.16`): five trees on the
+  hill, then a grove of clumps past it (gaps between, crowns under the roof
+  from the approach) and a hazed belt of woodland farther off. Trees away
+  from the mountains haze as the ground there does (`TURNED_HAZE`), not
+  toward the mist at the mountains' foot. Every twig tapers to a point and
+  forks into fine twiglets that carry the leaves.
 - **The terrace:** the pool in its cantilever (its basin the porch's
   roof), frameless glass round the open sides, loungers, an olive in a
   pot.

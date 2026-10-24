@@ -11,7 +11,13 @@ import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_P
 import { box, grid, lathe, tube } from './meshKit';
 import { lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
-import { boxwood, fig, grassClump, lavender, olive, trailing } from './plantMesh';
+import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
+
+// (0.4.16) A seeded stream for the planting's drifts.
+const seededMesh = seed => {
+  let s = seed % 2147483647 || 1;
+  return () => (s = (s * 16807) % 2147483647) / 2147483647;
+};
 
 const B = FLOOR;
 const T = TERRACE;
@@ -177,23 +183,61 @@ export function houseLayout() {
     box(out, [1.399, y, z - 0.05], [1.401, y + 0.035, z + 0.05], P.lamp);
   }
   // (0.4.8) The forecourt's planters: board-formed concrete (the planks'
-  // marks across them), a thin steel coping, dark mulch, and a mixed bed:
-  // feather-reed grass arching over, lavender in drifts, a clipped box at
-  // each end, rosemary trailing over the front.
+  // marks across them), a thin steel coping, and (0.4.16) a bed of dark
+  // mulch set 7 cm down, heaped a little, and planted in drifts: feather-
+  // reed grass arching over, lavender, coneflowers in twos and threes,
+  // creeping fig trailing over the front, the mulch showing between.
   for (const [x0, x1] of [[-9.2, -3.2], [3.2, 9.2]]) {
-    box(out, [x0, B, -58.5], [x1, B + 0.6, -57.7], v(P.planter, 0.15));
-    box(out, [x0 - 0.008, B + 0.6, -58.508], [x1 + 0.008, B + 0.612, -57.692], v(P.steel, 0.2));
-    box(out, [x0 + 0.04, B + 0.55, -58.46], [x1 - 0.04, B + 0.57, -57.74], P.soil);
-    const n = Math.round((x1 - x0) / 0.42);
-    const step = (x1 - x0 - 0.5) / (n - 1);
-    for (let k = 0; k < n; k++) {
-      const x = x0 + 0.25 + k * step;
-      const seed = 31 + k * 7 + (x0 < 0 ? 0 : 3);
-      const end = k === 0 || k === n - 1;
-      if (end) boxwood(out, [x, B + 0.82, -58.1], 0.26, seed);
-      else if (k % 3 === 1) grassClump(out, [x, B + 0.57, -58.2], 0.7, seed);
-      else lavender(out, [x, B + 0.57, k % 2 ? -58.22 : -57.98], 0.3, seed);
-      if (!end && k % 2 === 0) trailing(out, [x + 0.1, B + 0.61, -57.72], [0, 0, 1], 0.45, seed + 1);
+    // (0.4.16) A shell 6 cm thick, filled to the bed (it was solid, its
+    // coping a plate over the whole top, so no soil showed), the coping a
+    // rim round its walls.
+    const t = 0.06;
+    const shell = [
+      [[x0, -58.5], [x1, -58.5 + t]],
+      [[x0, -57.7 - t], [x1, -57.7]],
+      [[x0, -58.5 + t], [x0 + t, -57.7 - t]],
+      [[x1 - t, -58.5 + t], [x1, -57.7 - t]],
+    ];
+    for (const [[ax, az], [bx, bz]] of shell) {
+      box(out, [ax, B, az], [bx, B + 0.6, bz], v(P.planter, 0.15));
+      box(out, [ax - 0.008, B + 0.6, az - 0.008], [bx + 0.008, B + 0.612, bz + 0.008], v(P.steel, 0.2));
+    }
+    box(out, [x0 + t, B, -58.5 + t], [x1 - t, B + 0.49, -57.7 - t], P.soil, { bottom: false });
+    const bed = (x, z) => {
+      const ex = Math.min(x - x0 - t, x1 - t - x) / 0.25;
+      const ez = Math.min(z + 58.5 - t, -57.7 - t - z) / 0.12;
+      const heap = Math.min(1, Math.max(0, Math.min(ex, ez)));
+      return B + 0.5 + 0.035 * Math.sqrt(heap) + 0.006 * Math.sin(x * 23 + z * 7) * Math.sin(z * 31 - x * 5);
+    };
+    grid(out, Math.round((x1 - x0) * 12), 8, (u, w) => {
+      const x = x0 + t + u * (x1 - x0 - 2 * t);
+      const z = -58.5 + t + w * (0.8 - 2 * t);
+      return { p: [x, bed(x, z), z], part: P.soil, s: u, t: w };
+    });
+    // Each spot's plant from where it falls along the bed (drifts, not a
+    // repeat): the grass every metre or so, then lavender or coneflowers by
+    // a slow wave, each spot nudged off the line.
+    const right = x0 > 0;
+    const rnd = seededMesh(right ? 77 : 41);
+    let x = x0 + 0.3;
+    let k = 0;
+    while (x < x1 - 0.25) {
+      const z = -58.1 + (rnd() - 0.5) * 0.36;
+      const seed = 31 + k * 7 + (right ? 3 : 0);
+      const wave = Math.sin((x - x0) * 1.3 + (right ? 2 : 0));
+      const y = bed(x, z);
+      if (k % 4 === 2) {
+        grassClump(out, [x, y, -58.15], 0.7, seed);
+        x += 0.4;
+      } else if (wave > 0.1) {
+        coneflower(out, [x, y, z], 0.55 + 0.15 * rnd(), seed);
+        x += 0.22 + 0.1 * rnd();
+      } else {
+        lavender(out, [x, y, z], 0.28, seed);
+        x += 0.3 + 0.08 * rnd();
+      }
+      if (rnd() < 0.45) trailing(out, [x, B + 0.61, -57.72], [0, 0, 1], 0.45, seed + 1);
+      k++;
     }
   }
 

@@ -36,6 +36,7 @@
 
 import { seeded } from './bootPrint';
 import { moundY } from './houseShape';
+import { TURNED_HAZE_GLSL } from '../deskCamera';
 
 const LONE = { x: -6.4, z: 9.5, h: 8, spread: 4.4, depth: 4, leaves: 30, leafSize: 0.58 };
 
@@ -87,14 +88,19 @@ export function treeLayout(seed = null) {
     // One branch from p along dir, in a few bending segments; then its own
     // branches, or, at the twigs, its leaves.
     const grow = (p, dir, len, rad, d) => {
-      const segs = d < 2 ? 3 : 2;
+      const segs = d < 2 ? 3 : d >= depth ? 3 : 2;
       const pts = [p];
       let at = p;
       let dr = dir;
+      // (0.4.16) A twig tapers to a point (it ended blunt, cut flat at 70 %
+      // of its width, poking out through the leaves); a branch narrows by
+      // 30 % to where its leader carries on at that width.
+      const end = d >= depth ? 0.94 : 0.3;
+      const wAt = t => rad * (1 - end * Math.pow(t, d >= depth ? 0.8 : 1));
       for (let i = 1; i <= segs; i++) {
         dr = norm(dr.map((v, k) => v + (rnd() - 0.5) * 0.35 + (k === 1 ? 0.1 : 0)));
         const next = at.map((v, k) => v + dr[k] * (len / segs));
-        wood(at, next, rad * (1 - 0.3 * ((i - 1) / segs)), rad * (1 - 0.3 * (i / segs)));
+        wood(at, next, wAt((i - 1) / segs), wAt(i / segs));
         pts.push(next);
         at = next;
       }
@@ -110,6 +116,23 @@ export function treeLayout(seed = null) {
         }
       };
       if (d >= depth) {
+        // Fine twiglets forking off along the twig's outer half, each its
+        // own length and way, tapering to nothing: what the leaves hang on.
+        const n = 2 + Math.floor(rnd() * 3);
+        for (let k = 0; k < n; k++) {
+          const t = 0.45 + 0.5 * rnd();
+          const i = Math.min(segs - 1, Math.floor(t * segs));
+          const f = t * segs - i;
+          const from = pts[i].map((v, c) => v + (pts[i + 1][c] - v) * f);
+          const td = turn(dr, 0.5 + 0.5 * rnd(), rnd() * Math.PI * 2);
+          const tl = len * (0.22 + 0.2 * rnd());
+          const mid = from.map((v, c) => v + td[c] * tl * 0.5);
+          const bend = norm(td.map((v, c) => v + (rnd() - 0.5) * 0.4 + (c === 1 ? 0.15 : 0)));
+          const tip = mid.map((v, c) => v + bend[c] * tl * 0.5);
+          const w0 = wAt(t) * 0.55;
+          wood(from, mid, w0, w0 * 0.45);
+          wood(mid, tip, w0 * 0.45, w0 * 0.04);
+        }
         fill(leaves, 0.1, 0.75);
         return;
       }
@@ -173,6 +196,32 @@ export function treeLayout(seed = null) {
   rnd = seeded(0x40a5e);
   for (const [x, z, h] of [[-17, -63, 7], [15, -66, 6], [-14, -86, 8], [18, -82, 7.5], [-24, -74, 6.5]]) {
     tree({ x, z, y: moundY(x, z) - 0.1, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 0.9, shadow: false });
+  }
+  // (0.4.16) The land behind the house, so it doesn't stand on a bare
+  // horizon: an irregular grove past its hill, in clumps of varied height
+  // with gaps between (the house framed between them, their crowns well
+  // under its roof from the approach), and a belt of woodland farther off
+  // that the haze softens, clumps and gaps of its own.
+  rnd = seeded(0xb4c6d);
+  const groves = [
+    [-34, -100, 5, 9], [-19, -112, 3, 7], [22, -104, 4, 8], [40, -118, 5, 10],
+    [-58, -126, 4, 10], [6, -128, 3, 6],
+  ];
+  const belt = [];
+  for (let i = 0; i < 16; i++) {
+    const x = -190 + i * 25 + (rnd() - 0.5) * 14;
+    if (rnd() < 0.2) continue;
+    belt.push([x, -175 - 45 * rnd(), 5 + Math.floor(rnd() * 4), 14, 1.35]);
+  }
+  for (const [cx, cz, n, r, tall = 1] of [...groves, ...belt]) {
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2;
+      const d = r * Math.sqrt(rnd());
+      const h = (7 + 6 * rnd()) * tall;
+      const x = cx + Math.cos(a) * d;
+      const z = cz + Math.sin(a) * d;
+      tree({ x, z, y: moundY(x, z) - 0.1, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 1.0 });
+    }
   }
   // Nearest first from the closing shot's camera, where the lone tree is
   // biggest: the depth test then skips the leaves behind before shading them.
@@ -262,12 +311,16 @@ vec4 project(vec3 w) {
     zp);
 }
 
+${TURNED_HAZE_GLSL}
 void main() {
   int k = gl_VertexID;
   vec2 cn = vec2((k == 1 || k == 3 || k == 4) ? 1.0 : -1.0, (k == 2 || k == 4 || k == 5) ? 1.0 : -1.0);
   vec2 foot = aC.zw;
   float far = length(foot - uCam.xz);
-  vHaze = 0.92 * smoothstep(6.0, 130.0, far);
+  // (0.4.16) A tree away from the mountains (behind the house) is hazed as
+  // the ground there is (TURNED_HAZE), not toward their foot's mist.
+  float away = smoothstep(0.1, -0.3, (foot.y - uCam.z) / max(far, 1e-3));
+  vHaze = mix(0.92 * smoothstep(6.0, 130.0, far), turnedHaze(length(vec3(foot.x, aA.y, foot.y) - uCam)), away);
   // A tree standing past where the meadow meets the mountains' foot would
   // stand on the ridges, so it fades out there (dithered, as it fades in
   // with the meadow).

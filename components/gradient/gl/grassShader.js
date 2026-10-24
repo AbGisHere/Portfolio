@@ -4,7 +4,7 @@
  * against what it wrote (the desk's box). One draw, no vertex data: every
  * blade comes from its instance number.
  *
- * - **Where.** Five rings of square cells around the camera's foot, each
+ * - **Where.** Six rings (0.4.16; five before) of square cells around the camera's foot, each
  *   ring's cells twice the last's, snapped to the world grid so a blade
  *   never moves when the camera does. Each cell holds BLADES blades, placed
  *   by an integer hash of the cell and blade.
@@ -33,17 +33,21 @@ import { MOUND_GLSL } from './houseShape';
 const f = v => v.toFixed(6);
 
 export const GRASS = {
-  rings: 5,
+  // (0.4.16) Six rings, out to 51 m: the house's hill grows as full as the
+  // desk's meadow from the approach.
+  rings: 6,
   // Cells per ring side, and the innermost ring's cell size (metres).
   side: 32,
   cell: 0.1,
-  blades: 16,
+  blades: 32,
   segments: 4,
   // Target blades per m² near the camera, and the fall-off (DENSITY / d²).
   cap: 600,
-  density: 1600,
-  // Metres from the camera past which the grass has faded out.
-  reach: 32,
+  density: 5000,
+  // Metres from the camera past which the grass has faded out, and the
+  // camera's height past which no blade is drawn at all.
+  reach: 56,
+  over: 32,
 };
 
 export const GRASS_INSTANCES = GRASS.rings * GRASS.side * GRASS.side * GRASS.blades;
@@ -203,8 +207,8 @@ void main() {
   float tall = kind > 0.92 ? 1.6 : kind < 0.1 ? 0.7 : 1.0;
   float broad = kind > 0.92 ? 0.6 : kind < 0.1 ? 1.7 : 1.0;
   float r1 = rnd(s);
-  // (The house's lawn is mown: shorter, more even.)
-  float h = (0.07 + 0.17 * r1 * r1) * tall * swell * grow * mix(1.0, 0.45, smoothstep(0.05, 0.6, gy));
+  // (0.4.16) The hill's grass grows as the meadow's does (it was mown short).
+  float h = (0.07 + 0.17 * r1 * r1) * tall * swell * grow;
   float yaw = rnd(s) * 6.2831853;
   vec2 face = vec2(sin(yaw), cos(yaw));
   vec2 bend = face * (0.1 + 0.5 * rnd(s));
