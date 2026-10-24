@@ -241,65 +241,6 @@ vec3 skyLife(vec3 col, vec2 p) {
   return col;
 }
 
-// Birds by day. Four flocks, each on its own long cycle: it crosses for part
-// of it (at its own speed, height and heading, at a new depth each time)
-// and is away for the rest, so they come irregularly. A flock is one to
-// seven birds in a loose scatter, each beating its wings at its own rate and
-// gliding now and then. Depth sets the size and the haze: far birds are
-// small, soft and taken toward the sky behind them, and (0.3.5) where they
-// fly: a near flock passes in front of every ridge, a far one low among
-// them, behind one to four (\`cover\`: how much each ridge covers the pixel).
-vec3 birds(vec3 col, vec2 p, float aa, float cover[MAX_RIDGES]) {
-  for (int f = 0; f < 4; f++) {
-    float period = 38.0 + 40.0 * h1(ivec2(f, 991));
-    float u = uSkyT / period + h1(ivec2(f, 17));
-    ivec2 id = ivec2(f, int(floor(u)));
-    float travel = 0.5 + 0.4 * h1(id + ivec2(6, 2));
-    float ph = fract(u) / travel;
-    if (ph > 1.0) continue;
-    float z = h1(id + ivec2(9, 4));
-    float dir = h1(id + ivec2(3, 1)) > 0.5 ? 1.0 : -1.0;
-    float s = uSize.y * mix(0.0095, 0.004, z);
-    int behind = z < 0.3 ? 0 : 1 + int((z - 0.3) / 0.7 * 3.99);
-    // (0.4.4) Under the desk camera the near flocks are real birds in the
-    // air (birdShader.js); only the far ones among the ridges are painted.
-    if (uPitched == 1 && behind == 0) continue;
-    float y0 = uHorizon - uSize.y * (behind > 0 ? 0.01 + 0.1 * h1(id + ivec2(2, 8)) : 0.06 + 0.24 * h1(id + ivec2(2, 8)))
-      + uSize.y * 0.025 * (vnoise(vec2(uSkyT * 0.08, float(f) * 5.0)) - 0.5);
-    float x0 = mix(-0.15, 1.15, dir > 0.0 ? ph : 1.0 - ph) * uSize.x;
-    if (abs(p.x - x0) > s * 22.0 || abs(p.y - y0) > s * 14.0) continue;
-    // How much of the flock shows past the ridges in front of it.
-    float shown = 1.0;
-    for (int i = 0; i < MAX_RIDGES; i++) {
-      if (i >= uCount) break;
-      if (i >= uCount - behind) shown *= 1.0 - cover[i];
-    }
-    if (shown <= 0.0) continue;
-    int n = 1 + int(h1(id + ivec2(4, 4)) * 7.0);
-    float haze = 0.25 + 0.55 * z;
-    vec3 bc = mix(uBirdCol, col, haze);
-    float soft = aa * 1.5 + s * 0.06 * (1.0 + z);
-    for (int b = 0; b < 7; b++) {
-      if (b >= n) break;
-      ivec2 bid = ivec2(f * 16 + b, id.y);
-      float bt = uSkyT + 10.0 * h1(bid + ivec2(8, 8));
-      vec2 c = vec2(x0, y0) + s * vec2(
-        -dir * (float(b) * 2.6 + 3.0 * h1(bid)) + 0.8 * sin(bt * 0.31),
-        (h1(bid + ivec2(1, 1)) - 0.5) * 9.0 + 0.7 * sin(bt * 0.47));
-      // Flapping, eased in and out of glides (wings held a little up).
-      float flap = smoothstep(0.35, 0.6, vnoise(vec2(bt * 0.3, float(b) * 3.1 + float(f))));
-      float fl = mix(-0.3, sin(bt * 6.2831853 * (2.6 + 1.4 * h1(bid + ivec2(2, 2)))), flap);
-      vec2 q = (p - c) / s;
-      q.x = abs(q.x);
-      vec2 elbow = vec2(0.5, -0.12 - 0.32 * fl);
-      vec2 tip = vec2(1.05, 0.05 - 0.6 * fl);
-      float d = min(seg(q, vec2(0.0, 0.08), elbow), seg(q, elbow, tip)) * s;
-      float a = 1.0 - smoothstep(0.0, soft * 2.0, d - max(0.4, s * 0.085));
-      col = mix(col, bc, a * 0.9 * uLifeMix.x * uLifeA * shown);
-    }
-  }
-  return col;
-}
 
 // A crest between columns (column x, fractional under the pitch only: whole
 // columns read exactly as texelFetch).
@@ -547,7 +488,7 @@ void main() {
 #endif
 
   // (0.3) Birds: near ones in front of the ridges, far ones among them.
-  if (uLifeA > 0.0 && uLifeMix.x > 0.0 && p.y < uFront) col = birds(col, p, aa, cover);
+  // (0.4.4) The birds are birdShader.js's, in the air; none are painted.
   // (0.3.1) The ground under the desk camera: the meadow's own ground near
   // (in clumps), hazing out into the painted 0.2 meadow by GRASS_HAZE's far
   // end, so from where the descent starts it's that meadow exactly. The

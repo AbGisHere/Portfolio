@@ -143,20 +143,21 @@ export const HOUSE_LIGHTS = [
  * along its toe-kicks and the island's, along the stair's treads, washing
  * the wall behind each bed's panel, under the nightstands, along the
  * bookcase. Each lights what's before it along its way, falling off from
- * its whole length.
+ * its whole length. (`hidden`: its light only, its fittings drawn on their
+ * own, as the stair's under each tread.)
  */
 export const HOUSE_STRIPS = [
   [[2.6, FLOOR + 1.44, -78.42], [4.85, FLOOR + 1.44, -78.42], [0, -1, 0.2], 1.6, 0.5, 3],
   [[2.6, FLOOR + 0.03, -78.15], [7.3, FLOOR + 0.03, -78.15], [0, -0.4, 1], 1.0, 0.4, 3],
   [[3.1, FLOOR + 0.03, -74.46], [5.7, FLOOR + 0.03, -74.46], [0, -0.4, 1], 1.0, 0.4, 3],
   [[3.1, FLOOR + 0.03, -75.34], [5.7, FLOOR + 0.03, -75.34], [0, -0.4, -1], 1.0, 0.4, 3],
-  [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.2, 0.45, 3],
+  [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.2, 0.45, 3, true],
   [[-2.65, TERRACE + 1.38, -75.73], [0.75, TERRACE + 1.38, -75.73], [0, 1, 0.15], 1.4, 0.55, 4],
   [[3.65, TERRACE + 1.38, -78.71], [6.65, TERRACE + 1.38, -78.71], [0, 1, 0.15], 1.4, 0.5, 7],
   [[-2.5, TERRACE + 0.46, -75.44], [-2.0, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
   [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
-  [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3],
-  [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3],
+  [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3, true],
+  [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3, true],
 ];
 
 /** The bounds the sun's shadow map covers (houseShadow.js): everything the

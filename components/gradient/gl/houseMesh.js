@@ -202,7 +202,7 @@ export function houseLayout() {
   holed(out, [ix[0], top - 0.02, iz[0]], [ix[1], top, iz[1]], VOID, P.ceiling);
   groundRooms(out, ix, iz);
   // (0.4.6) The LED strips, each a thin bright line where it's fitted.
-  for (const [a, b] of HOUSE_STRIPS) tube(out, a, b, 0.005, P.lamp, 6);
+  for (const [a, b, , , , , hidden] of HOUSE_STRIPS) if (!hidden) tube(out, a, b, 0.005, P.lamp, 6);
   // The recessed lights in both ceilings (HOUSE_LIGHTS kind 3).
   for (const [x, y, z, , , kind] of HOUSE_LIGHTS) {
     if (kind === 3) lathe(out, [x, y + 0.05, z], [0, -1, 0], [[0.075, 0], [0.06, 0.012], [0, 0.012]], P.lamp, 16);

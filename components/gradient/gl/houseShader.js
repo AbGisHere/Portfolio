@@ -445,12 +445,26 @@ void main() {
     rough = 1.0;
     f0 = 0.02;
   } else if (vPart == ${P.walnut}) {
-    // Walnut: a dark streaming grain; the doors and fronts a cut of it a
-    // shade lighter, satin oiled.
-    float gw = noise2(vec2(st.x * 2.0, st.y * 0.5)) * 3.0;
-    float g = mix(0.4, pow(0.5 + 0.5 * sin((st.x * 60.0 + gw * 6.0)), 2.0), detail(0.04, st));
-    alb = mix(vec3(0.24, 0.15, 0.09), vec3(0.36, 0.23, 0.14), g * 0.6 + 0.2 * noise2(st * 9.0)) * (vVar > 0.3 ? 1.12 : 1.0);
-    rough = 0.45;
+    // American black walnut, oiled: straight grain streaming along the
+    // board, a cathedral figure (nested arches) where the cut crosses the
+    // rings, chocolate heartwood with lighter streaks of sap, open pores
+    // as fine dark flecks; the fronts and drawers a shade lighter.
+    vec2 q = st;
+    if (abs(N.y) > 0.5) q = vWorld.xz;
+    float along = q.x;
+    float across = q.y;
+    float wav = noise2(vec2(along * 0.8, across * 3.0)) * 0.06 + noise2(vec2(along * 4.0, across * 9.0)) * 0.01;
+    float ring = across + wav + 0.05 * pow(abs(fract(along * 0.35) - 0.5), 2.0) * 8.0 * smoothstep(0.3, 0.7, noise2(vec2(floor(along * 0.35), 3.0)));
+    float lines = 0.5 + 0.5 * sin(ring * 260.0);
+    lines = mix(0.5, pow(lines, 4.0), detail(0.006, q));
+    float streak = smoothstep(0.55, 0.85, noise2(vec2(along * 0.25, across * 14.0)));
+    float pores = step(0.94, hash2(floor(vec2(along * 700.0, across * 180.0)))) * detail(0.003, q);
+    vec3 heart = vec3(0.23, 0.145, 0.09);
+    vec3 light = vec3(0.4, 0.27, 0.17);
+    alb = mix(heart, light, 0.22 + 0.25 * lines + 0.35 * streak) * (1.0 - 0.35 * pores);
+    alb *= vVar > 0.15 && vVar < 0.35 ? 0.95 : vVar > 0.35 ? 1.12 : 1.0;
+    rough = 0.42 - 0.12 * lines;
+    f0 = 0.04;
   } else if (vPart == ${P.steel}) {
     // Black steel; brushed stainless at the sink.
     alb = vVar > 0.3 ? vec3(0.62, 0.62, 0.6) : vec3(0.05, 0.05, 0.055);

@@ -67,7 +67,7 @@ function swallows(out, t, weight, centre, rx, rz, n, seed0) {
       const dz = 3.5 * (noise(tt * 0.4 + s * 3) - 0.5) + 1.5 * (noise(tt * 1.2 + s * 4) - 0.5);
       return [
         centre[0] + rx * Math.sin(a) * (0.7 + 0.3 * hash(s + 3)) + dx,
-        centre[1] + 2.5 * Math.sin(a * 2 + s) + 2.5 * (noise(tt * 0.3 + s * 5) - 0.5),
+        Math.max(1.3, centre[1] + 1.6 * Math.sin(a * 2 + s) + 2.0 * (noise(tt * 0.3 + s * 5) - 0.5)),
         centre[2] + rz * Math.sin(2 * a + hash(s + 4) * 3) * 0.6 + rz * 0.5 * Math.cos(a) + dz,
       ];
     };
@@ -127,8 +127,9 @@ export function birdsAt(t, weight) {
   const swallow = new Float32Array(15 * BIRD_INSTANCE);
   const near = new Float32Array(9 * BIRD_INSTANCE);
   const house = new Float32Array(6 * BIRD_INSTANCE);
-  // Low over the meadow before the desk, and round the house on its hill.
-  swallows(near, t, weight, [0, 6.5, 26], 24, 14, 9, 11);
+  // Low over the meadow round the desk (skimming past the laptop), and
+  // round the house on its hill.
+  swallows(near, t, weight, [0, 3.2, 11], 13, 8, 9, 11);
   swallows(house, t, weight, [0, 12, -55], 18, 12, 6, 97);
   swallow.set(near, 0);
   swallow.set(house, near.length);

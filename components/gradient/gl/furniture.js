@@ -518,30 +518,89 @@ export function tallUnit(out, c, yaw, w, h) {
   }
 }
 
-/** A bookcase against a wall: walnut, its shelves full of books, a few
- * things between them. */
+/**
+ * A bookcase against a wall: solid walnut, a grid of compartments (bays
+ * ~0.8 m wide between full-height uprights, shelves at their own heights per
+ * bay), a plinth and a top; most compartments filled with books standing
+ * (some leaning on a bookend), a few with books laid flat in a stack, now
+ * and then one left for a single thing (a bowl, a small sculpture, a
+ * framed print propped).
+ */
 export function bookcase(out, c, yaw, w, h, seed = 1) {
   const f = frame(c, yaw);
   let s = seed;
   const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  obox(out, f.at(0, h / 2, 0.02), [w / 2, h / 2, 0.02], v(P.walnut, 0), f.ax);
-  for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.015), h / 2, 0.2), [0.015, h / 2, 0.18], v(P.walnut, 0), f.ax);
-  const rows = Math.round(h / 0.38);
-  for (let r = 0; r <= rows; r++) obox(out, f.at(0, r * (h / rows), 0.2), [w / 2, 0.012, 0.18], v(P.walnut, 0), f.ax);
-  for (let r = 0; r < rows; r++) {
-    const y = r * (h / rows) + 0.012;
-    let x = -w / 2 + 0.05;
-    while (x < w / 2 - 0.08) {
-      if (rnd() < 0.07) {
-        lathe(out, f.at(x + 0.08, y, 0.2), [0, 1, 0], [[0, 0], [0.05, 0], [0.06, 0.1], [0.03, 0.18], [0, 0.18]], v(P.ceramic, rnd()), 14);
-        x += 0.2;
+  const W = v(P.walnut, 0.25);
+  const D = 0.36;
+  const t = 0.025;
+  obox(out, f.at(0, h / 2, 0.01), [w / 2, h / 2, 0.01], W, f.ax);
+  obox(out, f.at(0, 0.04, D / 2), [w / 2, 0.04, D / 2 - 0.02], W, f.ax);
+  obox(out, f.at(0, h - t / 2, D / 2), [w / 2 + 0.01, t / 2, D / 2 + 0.005], W, f.ax);
+  const bays = Math.max(1, Math.round(w / 0.8));
+  const bw = w / bays;
+  for (let k = 0; k <= bays; k++) obox(out, f.at(-w / 2 + k * bw, h / 2, D / 2), [t / 2, h / 2, D / 2], W, f.ax);
+  let things = 0;
+  for (let k = 0; k < bays; k++) {
+    const x0 = -w / 2 + k * bw + t / 2;
+    const x1 = x0 + bw - t;
+    // This bay's shelves: 3 to 5, offset bay to bay.
+    const n = 4 + (k % 2) + (rnd() < 0.3 ? -1 : 0);
+    const ys = [0.08];
+    for (let r = 1; r < n; r++) ys.push(0.08 + ((h - 0.08 - t) * r) / n + (k % 2 ? 0.06 : -0.04));
+    ys.push(h - t);
+    for (let r = 1; r < ys.length - 1; r++) obox(out, f.at((x0 + x1) / 2, ys[r], D / 2), [(x1 - x0) / 2, t / 2, D / 2 - 0.005], W, f.ax);
+    for (let r = 0; r < ys.length - 1; r++) {
+      const y = ys[r] + t / 2;
+      const room = ys[r + 1] - ys[r] - t;
+      const roll = rnd();
+      if (roll < 0.12 && things < Math.ceil(bays * 0.8)) {
+        // One thing alone in it.
+        things++;
+        const cx = (x0 + x1) / 2 + (rnd() - 0.5) * 0.2;
+        const kind = rnd();
+        if (kind < 0.4) lathe(out, f.at(cx, y, 0.18), [0, 1, 0], [[0, 0], [0.07, 0], [0.13, 0.06], [0.135, 0.075], [0.125, 0.075], [0.06, 0.02], [0, 0.02]], v(P.ceramic, 0.5), 22);
+        else if (kind < 0.7) {
+          soft(out, f.at(cx, y + 0.11, 0.18), [0.05, 0.11, 0.05], v(P.ceramic, 0.8), { e1: 0.6, e2: 1, ax: f.ax, nu: 16, nv: 10 });
+        } else picture(out, f.at(cx, y + Math.min(0.17, room / 2), 0.05), yaw, 0.26, Math.min(0.32, room - 0.04), rnd());
         continue;
       }
-      const bw = 0.02 + 0.03 * rnd();
-      const bh = 0.2 + 0.1 * rnd();
-      const lean = rnd() < 0.05 ? 0.25 : 0;
-      obox(out, f.at(x + bw / 2, y + bh / 2, 0.2), [bw / 2, bh / 2, 0.1 + 0.04 * rnd()], v(P.book, rnd()), lean ? axes(lean, yaw) : f.ax);
-      x += bw + 0.002;
+      if (roll < 0.3) {
+        // A stack laid flat, something small on it.
+        let sy = y;
+        const sx = x0 + 0.08 + rnd() * (x1 - x0 - 0.4);
+        for (let b = 0; b < 4 + Math.floor(rnd() * 4); b++) {
+          const th = 0.025 + 0.02 * rnd();
+          obox(out, f.at(sx + 0.13 + (rnd() - 0.5) * 0.02, sy + th / 2, 0.19), [0.12 + 0.04 * rnd(), th / 2, 0.1 + 0.03 * rnd()], v(P.book, rnd()), axes(0, yaw + (rnd() - 0.5) * 0.12));
+          sy += th;
+        }
+        // And standing books beside it.
+        let x = sx + 0.32;
+        while (x < x1 - 0.04) {
+          const bwid = 0.02 + 0.03 * rnd();
+          const bh = Math.min(room - 0.02, 0.2 + 0.1 * rnd());
+          obox(out, f.at(x + bwid / 2, y + bh / 2, 0.19), [bwid / 2, bh / 2, 0.1 + 0.04 * rnd()], v(P.book, rnd()), f.ax);
+          x += bwid + 0.002;
+        }
+        continue;
+      }
+      // Books standing, filling it, sometimes short of the end with the
+      // last few leaning.
+      let x = x0 + 0.005;
+      const stop = roll < 0.5 ? x1 - 0.12 - rnd() * 0.2 : x1 - 0.005;
+      while (x < stop) {
+        const bwid = 0.018 + 0.032 * rnd();
+        const bh = Math.min(room - 0.02, 0.19 + 0.13 * rnd());
+        obox(out, f.at(x + bwid / 2, y + bh / 2, 0.19), [bwid / 2, bh / 2, 0.1 + 0.04 * rnd()], v(P.book, rnd()), f.ax);
+        x += bwid + 0.0015;
+      }
+      if (roll < 0.5) {
+        for (let b = 0; b < 3; b++) {
+          const bh = Math.min(room - 0.04, 0.22 + 0.06 * rnd());
+          const lean = 0.22 + 0.06 * b;
+          const cx = x + 0.05 + b * 0.03 + Math.sin(lean) * bh / 2;
+          obox(out, f.at(cx, y + (Math.cos(lean) * bh) / 2, 0.19), [0.014, bh / 2, 0.11], v(P.book, rnd()), [f.ax[0].map((q, i) => q * Math.cos(lean) - f.ax[1][i] * Math.sin(lean)), f.ax[1].map((q, i) => q * Math.cos(lean) + f.ax[0][i] * Math.sin(lean)), f.ax[2]]);
+        }
+      }
     }
   }
 }

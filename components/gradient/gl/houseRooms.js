@@ -6,7 +6,7 @@
  */
 
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
-import { box, grid, lathe, tube } from './meshKit';
+import { add, box, grid, lathe, obox, tube } from './meshKit';
 import {
   bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
@@ -229,13 +229,43 @@ export function groundRooms(out, ix, iz) {
   picture(out, [-5.32, B + 1.55, -76.4], Math.PI / 2, 1.0, 0.75, 0.6);
   rug(out, [-4.8, -77.8], [0.6, -73.8], y, 0.5);
 
-  // ---- The stair: floating walnut treads up the left wall, a steel
-  // handrail on the wall.
+  // ---- The stair: solid walnut treads cantilevered from a walnut
+  // stringer on the wall (the steel that carries them hidden inside it),
+  // each with its LED under the nosing; slim black balusters up its open
+  // side carrying a handrail, and a rail on the wall on brackets.
+  const run = 0.28;
+  const rise = 0.2;
+  const z0 = -72.2;
+  const sx = ix[0] + 0.045;
   for (let i = 1; i <= 17; i++) {
-    const z = -72.2 - (i - 1) * 0.28;
-    box(out, [ix[0], B + i * 0.2 - 0.06, z - 0.3], [ix[0] + 1.2, B + i * 0.2, z], v(P.walnut, 0));
+    const z = z0 - (i - 1) * run;
+    const y = B + i * rise;
+    box(out, [sx, y - 0.07, z - 0.3], [ix[0] + 1.22, y, z], v(P.walnut, 0));
+    // The LED tucked under its nosing.
+    box(out, [sx + 0.04, y - 0.075, z - 0.04], [ix[0] + 1.16, y - 0.07, z - 0.025], P.lamp);
   }
-  tube(out, [ix[0] + 0.05, B + 0.9, -72.0], [ix[0] + 0.05, T + 0.9, -76.9], 0.02, P.steel, 8);
+  // The stringer: a plate 4.5 cm thick against the wall, its top and bottom
+  // edges parallel to the stair's pitch.
+  {
+    const pitch = Math.atan2(rise, run);
+    const len = Math.hypot(17 * run + 0.3, 17 * rise) + 0.2;
+    const mid = [ix[0] + 0.0225, B + (17 * rise) / 2 - 0.02, z0 - (17 * run) / 2 + 0.1];
+    const along = [0, Math.sin(pitch), -Math.cos(pitch)];
+    const up = [0, Math.cos(pitch), Math.sin(pitch)];
+    obox(out, mid, [0.0225, 0.2, len / 2], v(P.walnut, 0.2), [[1, 0, 0], up, along]);
+  }
+  // The open side: a baluster from each tread to the handrail.
+  const ox = ix[0] + 1.17;
+  const railAt = i => [ox, B + i * rise + 0.92, z0 - (i - 1) * run - 0.15];
+  for (let i = 1; i <= 17; i++) tube(out, [ox, B + i * rise, z0 - (i - 1) * run - 0.15], railAt(i), 0.007, P.steel, 6);
+  tube(out, add(railAt(1), [0, -0.12, 0.25]), railAt(17), 0.022, v(P.walnut, 0), 10);
+  // The wall's rail, on brackets.
+  const wr = t => [ix[0] + 0.07, B + 0.9 + t * (17 * rise), z0 + 0.1 - t * (17 * run + 0.3)];
+  tube(out, wr(0), wr(1), 0.02, P.steel, 8);
+  for (let k = 1; k < 5; k++) {
+    const p = wr(k / 5);
+    tube(out, [ix[0] + 0.005, p[1] - 0.06, p[2]], [p[0], p[1] - 0.02, p[2]], 0.007, P.steel, 6);
+  }
 
   // ---- Curtains at the glass: stacked at the ends and between the rooms.
   const cz = -63.42;

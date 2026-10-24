@@ -6,6 +6,23 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.7 — 2026-10-25
+
+- **The stair:** 7 cm walnut treads cantilevered from a 4.5 cm walnut
+  stringer on the wall, an LED under each nosing (the strip that ran
+  through the middle of the stair now only lights, `hidden`); black steel
+  balusters from every tread to a walnut handrail up the open side; the
+  wall rail on brackets.
+- **Bookcases** (`bookcase`): compartments of ~0.8 m bays between
+  full-height uprights, shelves offset bay to bay, a plinth and a top;
+  books standing, some leaning on the last, some stacks laid flat, and only
+  now and then a single thing (a bowl, a vase, a propped print); their LED
+  strips hidden.
+- **Walnut:** straight grain with cathedral figure, sap streaks, pores.
+- **Birds:** the painted ones are gone entirely; the swallows' near flock
+  hunts round the desk (centre 11 m out, 1.3 m up at least).
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.6 — 2026-10-24
 
 The house's lighting by night (the owner: "fancier").
