@@ -6,6 +6,32 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.4 — 2026-10-24
+
+The birds (the owner: the painted ones were "1/10"), the glass that
+slides, the curtains that tie back.
+
+- **Birds in 3D** (`birdShape.js`, `birdFlight.js`, `birdShader.js`):
+  meshed per species (a body, a head and bill, eyes, a tail, two wings of
+  an arm and a hand, their trailing edges feathered or, for the kite and
+  the goose, fingered), drawn instanced; the arm turns about the shoulder
+  and the hand about the wrist (lagging it) as they beat, both sweep back
+  as they glide; banked into their turns by speed² / radius. Swallows (15:
+  low over the meadow and round the house, ~10 m/s, ~7 Hz in bursts), a
+  pair of red kites circling a drifting thermal (rare slow beats), a
+  skein of seven geese in a V every ~2 minutes (2.9 Hz, each a beat behind
+  the one ahead). All a pure function of the sky's clock; thinned with the
+  sky's life, none by night or under reduced motion. Lit by the sun and
+  sky, the light through their wings, hazed with distance. Under the desk
+  camera only the far flocks among the ridges are still painted.
+- **Sliding glass**: the front glazing as panels in their own frames on
+  two tracks; one on each floor slid open over its neighbour.
+- **Curtains** (`curtainMesh`): each built twice, tied back (a gathered
+  stack pinched at a tie-back, swagged below) and drawn closed, the house's
+  shader moving between them with the night (`uMorph`): tied by day,
+  closed by night, closing with the switch.
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.3 — 2026-10-24
 
 The house, carried further (the owner: perfect the house before any
@@ -17,7 +43,7 @@ cuts; no QA until the push).
   field plus the wind's ripples (`WAVES_GLSL`: six trains, 11 – 47 cm, at
   deep water's speeds) and a constant chop of small drops.
 - **The pool mirrors the house**: the house drawn again reflected in the
-  water's plane (quarter-free: half the canvas), shown by Fresnel and
+  water's plane (at half the canvas), shown by Fresnel and
   rippled by the surface.
 - **Grass on the mound**: the blades rise with it (`MOUND_GLSL`), mown
   shorter, none under the stone base; no flowers on the lawn.

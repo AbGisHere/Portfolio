@@ -31,10 +31,13 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
 layout(location = 2) in float aPart;
 layout(location = 3) in vec2 aST;
+layout(location = 4) in vec3 aPos2;   // (0.4.4) the curtains' other shape
+layout(location = 5) in vec3 aNorm2;
 
 ${CAMERA_GLSL}
 uniform mat4 uLightVP;
 uniform vec2 uMirror;   // (0.4.2) on, and the water's height: drawn mirrored in it
+uniform float uMorph;   // (0.4.4) how far toward the other shape (the curtains closed)
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
@@ -44,18 +47,20 @@ flat out float vVar;
 
 ${PROJECT_GLSL}
 void main() {
-  vWorld = aPos;
-  vNorm = aNorm;
+  vec3 pos = mix(aPos, aPos2, uMorph);
+  vec3 nrm = uMorph > 0.0 ? normalize(mix(aNorm, aNorm2, uMorph) + 1e-5) : aNorm;
+  vWorld = pos;
+  vNorm = nrm;
   vST = aST;
   vPart = int(floor(aPart + 0.001));
   vVar = aPart - float(vPart);
   // Looked up a little off the surface, so it never shades itself; further
   // off where the light grazes it, where the map's texels stretch.
   vec3 Lv = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
-  vLight = uLightVP * vec4(aPos + aNorm * mix(0.03, 0.14, 1.0 - abs(dot(aNorm, Lv))), 1.0);
+  vLight = uLightVP * vec4(pos + nrm * mix(0.03, 0.14, 1.0 - abs(dot(nrm, Lv))), 1.0);
   // Mirrored in the water, it's lit where it really is but seen where its
   // reflection is.
-  vec3 at = aPos;
+  vec3 at = pos;
   if (uMirror.x > 0.5) at.y = 2.0 * uMirror.y - at.y;
   gl_Position = project(at);
 }

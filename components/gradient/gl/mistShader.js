@@ -261,6 +261,9 @@ vec3 birds(vec3 col, vec2 p, float aa, float cover[MAX_RIDGES]) {
     float dir = h1(id + ivec2(3, 1)) > 0.5 ? 1.0 : -1.0;
     float s = uSize.y * mix(0.0095, 0.004, z);
     int behind = z < 0.3 ? 0 : 1 + int((z - 0.3) / 0.7 * 3.99);
+    // (0.4.4) Under the desk camera the near flocks are real birds in the
+    // air (birdShader.js); only the far ones among the ridges are painted.
+    if (uPitched == 1 && behind == 0) continue;
     float y0 = uHorizon - uSize.y * (behind > 0 ? 0.01 + 0.1 * h1(id + ivec2(2, 8)) : 0.06 + 0.24 * h1(id + ivec2(2, 8)))
       + uSize.y * 0.025 * (vnoise(vec2(uSkyT * 0.08, float(f) * 5.0)) - 0.5);
     float x0 = mix(-0.15, 1.15, dir > 0.0 ? ph : 1.0 - ph) * uSize.x;

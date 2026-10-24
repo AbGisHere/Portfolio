@@ -47,40 +47,119 @@ function partition(out, [x0, z0], [x1, z1], y0, y1, gaps = []) {
   piece(at, b, y0, y1);
 }
 
+/** (0.4.4) A curtain's vertex: its place and normal tied back (by day),
+ * the same drawn closed (by night), its material, and (s, t) on the cloth
+ * (metres across, down). houseShader.js moves it between the two with the
+ * night. */
+export const CURTAIN_STRIDE = 15;
+
 /**
- * Curtains on a ceiling track from x0 to x1 at z (in front of glass facing
- * +z), from y0 (the track) to y1 (the hem): lined linen, pinch-pleated at
- * the head, falling in deep uneven folds that flare a little toward a
- * weighted hem; `gathered`, bunched tight.
+ * The curtains: lined linen on ceiling tracks before the front glass, each
+ * from x0 to x1 (closed), tied back toward `to` (−1 its left end, 1 its
+ * right) by day. Pinch-pleated at the head; tied, the cloth gathers into a
+ * tight stack, pinched at the tie-back a little below the middle, swagging
+ * out below to the hem; closed, it hangs in even folds across its glass.
  */
-function curtain(out, x0, x1, z, y0, y1, gathered, seed) {
-  let s = seed;
-  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  const folds = Math.max(3, Math.round((x1 - x0) / (gathered ? 0.075 : 0.16)));
-  const amp = gathered ? 0.07 : 0.055;
-  const jit = Array.from({ length: folds + 2 }, () => 0.7 + 0.6 * rnd());
-  box(out, [x0 - 0.05, y0, z - 0.03], [x1 + 0.05, y0 + 0.03, z + 0.03], v(P.steel, 0.5));
-  grid(out, folds * 8, 28, (u, w) => {
-    const y = y0 - 0.02 + (y1 - y0 + 0.02) * w;
-    const fx = u * folds;
-    const k = Math.floor(fx);
-    const deep = amp * (jit[k] * (1 - (fx - k)) + jit[k + 1] * (fx - k));
-    // The head: pleats pinched in groups of three, then the cloth falling
-    // free below them.
-    const head = Math.min(1, w / 0.06);
-    const flare = 1 + 0.35 * w * w;
-    const ph = fx * Math.PI * 2;
-    const dz = Math.cos(ph) * deep * (0.35 + 0.65 * head) * flare;
-    const dx = Math.sin(ph) * deep * 0.18 * head;
-    // The hem: a turned-up band, weighted.
-    const hem = w > 0.97 ? (w - 0.97) / 0.03 : 0;
-    return { p: [x0 + (x1 - x0) * u + dx, y - hem * 0.01, z + dz + hem * 0.006 * Math.cos(ph)], part: P.curtain, s: u * (x1 - x0), t: (y1 - y0) * w };
-  }, [0, 0, 1]);
+const CURTAINS = [];
+
+/** The curtains' mesh: `{ data, count }` (CURTAIN_STRIDE floats a vertex). */
+export function curtainMesh() {
+  const out = [];
+  for (const [x0, x1, z, y0, y1, to, seed] of CURTAINS) {
+    let sd = seed;
+    const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const width = x1 - x0;
+    const folds = Math.round(width / 0.15);
+    const jit = Array.from({ length: folds + 2 }, () => 0.75 + 0.5 * rnd());
+    const nu = folds * 8;
+    const nv = 32;
+    const H = y0 - y1;
+    const tieW = 0.62;
+    const end = to < 0 ? x0 : x1;
+    const at = (u, w, tied) => {
+      const fx = u * folds;
+      const k = Math.floor(fx);
+      const deepJ = jit[k] * (1 - (fx - k)) + jit[k + 1] * (fx - k);
+      const ph = fx * Math.PI * 2;
+      const head = Math.min(1, w / 0.05);
+      const y = y0 - H * w;
+      if (!tied) {
+        const amp = 0.045 * deepJ * (1 + 0.25 * w * w);
+        return [x0 + width * u + Math.sin(ph) * amp * 0.15 * head, y, z + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
+      }
+      // Tied: the cloth's width at this height, gathered to the end it's
+      // tied to: a stack at the head, the waist at the tie, swagged out
+      // below it.
+      const below = Math.max(0, w - tieW) / (1 - tieW);
+      const above = Math.min(1, w / tieW);
+      const span = w < tieW ? 0.34 - 0.2 * Math.sin(above * Math.PI * 0.5) ** 2 : 0.14 + 0.32 * Math.sin(below * Math.PI * 0.5);
+      // Above the tie it swags toward the room's side a little, so the
+      // middle of the stack bows away from the glass.
+      const bow = w < tieW ? 0.05 * Math.sin(above * Math.PI) : 0.04 * Math.sin(below * Math.PI);
+      const amp = 0.075 * deepJ * (w < tieW ? 1 - 0.55 * Math.sin(above * Math.PI * 0.5) ** 2 : 0.5 + 0.6 * below);
+      const offX = to < 0 ? end + span * u : end - span * (1 - u);
+      return [offX + Math.sin(ph) * amp * 0.2, y + (w > 0.98 ? (w - 0.98) * 0.4 : 0), z - bow + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
+    };
+    const grid2 = [];
+    for (let j = 0; j <= nv; j++) {
+      for (let i = 0; i <= nu; i++) {
+        const u = i / nu;
+        const w = j / nv;
+        grid2.push({ a: at(u, w, true), b: at(u, w, false), s: u * width, t: w * H });
+      }
+    }
+    const G = (i, j) => grid2[Math.max(0, Math.min(nv, j)) * (nu + 1) + Math.max(0, Math.min(nu, i))];
+    const nrm = (i, j, key) => {
+      const du = [0, 1, 2].map(k => G(i + 1, j)[key][k] - G(i - 1, j)[key][k]);
+      const dv = [0, 1, 2].map(k => G(i, j + 1)[key][k] - G(i, j - 1)[key][k]);
+      let n = [du[1] * dv[2] - du[2] * dv[1], du[2] * dv[0] - du[0] * dv[2], du[0] * dv[1] - du[1] * dv[0]];
+      const l = Math.hypot(...n) || 1;
+      n = n.map(x => x / l);
+      // Facing into the room (−z) on its front.
+      return n[2] > 0 ? n.map(x => -x) : n;
+    };
+    const vert = (i, j) => {
+      const g = G(i, j);
+      return [...g.a, ...nrm(i, j, 'a'), HOUSE_PART.curtain, g.s, g.t, ...g.b, ...nrm(i, j, 'b')];
+    };
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i < nu; i++) {
+        const q = [vert(i, j), vert(i + 1, j), vert(i + 1, j + 1), vert(i, j + 1)];
+        out.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
+      }
+    }
+  }
+  // The tie-backs: a band of the same cloth round each waist, there by day;
+  // by night each lies shrunk to nothing inside the closed curtain's fold.
+  for (const [x0, x1, z, y0, y1, to] of CURTAINS) {
+    const H = y0 - y1;
+    const c = [to < 0 ? x0 + 0.075 : x1 - 0.075, y0 - H * 0.62, z];
+    const ring = (a, k) => [c[0] + Math.cos(a) * 0.095 * k, c[1], c[2] + Math.sin(a) * 0.075 * k];
+    const n = 24;
+    for (let i = 0; i < n; i++) {
+      const [a0, a1] = [(i / n) * Math.PI * 2, ((i + 1) / n) * Math.PI * 2];
+      const corner = (a, dy) => {
+        const p = ring(a, 1);
+        const nn = [Math.cos(a), 0, Math.sin(a)];
+        return [p[0], p[1] + dy, p[2], ...nn, HOUSE_PART.curtain, a, dy, ...c, ...nn];
+      };
+      const [p, q, r, t] = [corner(a0, -0.03), corner(a1, -0.03), corner(a1, 0.03), corner(a0, 0.03)];
+      out.push(...p, ...q, ...r, ...p, ...r, ...t);
+    }
+  }
+  const data = new Float32Array(out);
+  return { data, count: data.length / CURTAIN_STRIDE };
+}
+
+/** A curtain's track (steel, on the ceiling), for the house's own mesh. */
+function track(out, x0, x1, z, y) {
+  box(out, [x0 - 0.05, y, z - 0.03], [x1 + 0.05, y + 0.03, z + 0.03], v(P.steel, 0.5));
 }
 
 /** The ground floor's rooms. `ix`, `iz`: its inside's x and z. */
 export function groundRooms(out, ix, iz) {
   const y = B + 0.02;
+  CURTAINS.length = 0;
   // ---- Partitions (docs/parts/house.md).
   partition(out, [4.6, -66.0], [4.6, -71.5], B, CEIL_G);
   partition(out, [4.6, -67.5], [ix[1], -67.5], B, CEIL_G, [[5.0, 5.9]]);
@@ -158,9 +237,8 @@ export function groundRooms(out, ix, iz) {
 
   // ---- Curtains at the glass: stacked at the ends and between the rooms.
   const cz = -63.42;
-  curtain(out, -7.35, -6.25, cz, CEIL_G - 0.02, B + 0.01, true, 3);
-  curtain(out, -0.2, 0.9, cz, CEIL_G - 0.02, B + 0.01, true, 5);
-  curtain(out, 3.5, 4.55, cz, CEIL_G - 0.02, B + 0.01, true, 7);
+  for (const [x0, x1, to] of [[-7.35, -4.4, -1], [-4.4, -1.45, 1], [-1.35, 1.6, -1], [1.6, 4.55, 1]]) CURTAINS.push([x0, x1, cz, CEIL_G - 0.02, B + 0.01, to, 3 + CURTAINS.length * 7]);
+  track(out, -7.35, 4.55, cz, CEIL_G - 0.03);
 }
 
 /** The upper floor's rooms. `jx`, `jz`: its inside's x and z; `glass`
@@ -227,7 +305,6 @@ export function upperRooms(out, glass, jx, jz) {
 
   // ---- Curtains at the glass.
   const cz = -71.42;
-  curtain(out, -7.1, -6.3, cz, CEIL_U - 0.02, T + 0.08, true, 11);
-  curtain(out, -4.4, -3.5, cz, CEIL_U - 0.02, T + 0.08, true, 13);
-  curtain(out, 1.6, 2.5, cz, CEIL_U - 0.02, T + 0.08, true, 17);
+  for (const [x0, x1, to] of [[-7.1, -2.35, -1], [-2.35, 2.5, 1]]) CURTAINS.push([x0, x1, cz, CEIL_U - 0.02, T + 0.08, to, 11 + CURTAINS.length * 7]);
+  track(out, -7.1, 2.5, cz, CEIL_U - 0.03);
 }

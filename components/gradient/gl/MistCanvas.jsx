@@ -42,8 +42,12 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
+import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
 import { HOUSE_BOUNDS, POOL } from './houseShape';
 import { makeWater } from './poolWater';
+import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
+import { BIRD_STRIDE, birdMesh } from './birdShape';
+import { BIRD_INSTANCE, birdsAt } from './birdFlight';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
@@ -412,7 +416,20 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       const HU = {};
-      house = { prog: hp, vao, buf: hb, count, panes, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
+      // (0.4.4) The curtains: their own buffer, both their shapes.
+      const cm = curtainMesh();
+      const cb = gl.createBuffer();
+      const cvao = gl.createVertexArray();
+      gl.bindVertexArray(cvao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cb);
+      gl.bufferData(gl.ARRAY_BUFFER, cm.data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7], [4, 3, 9], [5, 3, 12]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, CURTAIN_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      house = { prog: hp, vao, buf: hb, count, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
       return house;
     };
     // (0.4.2) The pool's water (poolWater.js), on texture unit 8: made the
@@ -513,9 +530,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
       gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
       gl.uniform2f(a.u('uMirror'), 0, 0);
-      gl.bindVertexArray(g.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, g.count);
-      gl.bindVertexArray(null);
+      houseGeometry(g, a.u);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE13);
@@ -603,6 +618,74 @@ export default function MistCanvas({ recipe, onFail }) {
       if (r) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, r[0], r[1], r[0], r[1], r[2], r[3]);
       gl.activeTexture(gl.TEXTURE0);
     };
+    // (0.4.4) The birds (birdShader.js): a program, and per species its mesh
+    // and a buffer of its flock's instances, filled every frame.
+    let birdPass = null;
+    const birdProgram = () => {
+      if (birdPass !== null) return birdPass;
+      const bp = passProgram(gl, 'birds', BIRD_VERTEX, BIRD_FRAGMENT);
+      if (!bp) return (birdPass = false);
+      const kinds = ['swallow', 'kite', 'goose'].map((name, kind) => {
+        const { data, count } = birdMesh(name);
+        const mb = gl.createBuffer();
+        const ib = gl.createBuffer();
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, mb);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+        for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribPointer(i, n, gl.FLOAT, false, BIRD_STRIDE * 4, at * 4);
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, ib);
+        for (const [i, at] of [[4, 0], [5, 4], [6, 8]]) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribPointer(i, 4, gl.FLOAT, false, BIRD_INSTANCE * 4, at * 4);
+          gl.vertexAttribDivisor(i, 1);
+        }
+        gl.bindVertexArray(null);
+        return { name, kind, vao, mb, ib, count, joints: jointsOf(name) };
+      });
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const BU = {};
+      birdPass = { prog: bp, kinds, u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
+      return birdPass;
+    };
+    function drawBirds() {
+      const g = birdProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      const flocks = birdsAt(skyT, birdWeight);
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
+      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
+      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
+      gl.uniform3fv(g.u('uHaze'), rgb01(meadowAt.mist ?? colours.env[1]));
+      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1i(g.u('uGrain'), 2);
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
+      gl.uniform1f(g.u('uResY'), canvas.height);
+      for (const k of g.kinds) {
+        const data = flocks[k.name];
+        gl.bindBuffer(gl.ARRAY_BUFFER, k.ib);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+        gl.uniform1i(g.u('uKind'), k.kind);
+        gl.uniform3fv(g.u('uShoulder'), k.joints.shoulder);
+        gl.uniform1f(g.u('uWrist'), k.joints.wrist);
+        gl.bindVertexArray(k.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, k.count, data.length / BIRD_INSTANCE);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.useProgram(prog);
+    }
     const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     let steam = null;
     const steamProgram = () => {
@@ -712,6 +795,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3) The closing shot's sky (clouds, birds, stars): shown, and its
     // clock, seconds on this loop's clock while it shows.
     let lifeShown = false;
+    let birdWeight = 0;
     // (0.3.2) The meadow's paint is in the frame (its wind and clouds move).
     let meadowShown = false;
     // What the meadow pass draws with, from the last rebuild (null: none).
@@ -1303,6 +1387,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!footCam) walker.lift();
       const { life } = frame;
       lifeShown = !!life;
+      // (0.4.4) The birds by day, as many as the sky's life has (none under
+      // reduced motion: they'd hang in the air).
+      birdWeight = life && !motion.matches ? life.amount * life.birds : 0;
       gl.uniform1f(uniform('uLifeA'), life ? life.amount : 0);
       if (life) {
         // Under reduced motion the sky holds still and the birds stay away.
@@ -1672,6 +1759,19 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
+    // (0.4.4) The house's mesh, then its curtains (tied back by day, drawn
+    // closed by night: closing on the switch's clock as the lamp's light
+    // comes up), under whichever program is bound (`u` its uniforms).
+    function houseGeometry(g, u) {
+      gl.uniform1f(u('uMorph'), 0);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      gl.uniform1f(u('uMorph'), laptopLight().night);
+      gl.bindVertexArray(g.curtains.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.curtains.count);
+      gl.bindVertexArray(null);
+    }
+
     // (0.4.0) The house and its pool, writing their depth.
     function drawHouse(mirror = false) {
       const g = houseProgram();
@@ -1719,21 +1819,19 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      gl.bindVertexArray(g.vao);
       if (!mirror && aoReady) {
         // (0.4.2) Its depth first, colour off (the depth pass's program,
         // which shades nothing), then each pixel shaded once.
         const a = aoPass;
         gl.useProgram(a.prog);
         gl.colorMask(false, false, false, false);
-        gl.drawArrays(gl.TRIANGLES, 0, g.count);
+        houseGeometry(g, a.u);
         gl.colorMask(true, true, true, true);
         gl.useProgram(g.prog);
         gl.depthFunc(gl.LEQUAL);
-        gl.drawArrays(gl.TRIANGLES, 0, g.count);
+        houseGeometry(g, g.u);
         gl.depthFunc(gl.LESS);
-      } else gl.drawArrays(gl.TRIANGLES, 0, g.count);
-      gl.bindVertexArray(null);
+      } else houseGeometry(g, g.u);
       gl.useProgram(prog);
     }
 
@@ -2020,6 +2118,7 @@ export default function MistCanvas({ recipe, onFail }) {
         drawFlowers(prints);
       }
       if (treesOn) drawTrees(false);
+      if (birdWeight > 0 && meadowAt) drawBirds();
       gl.useProgram(prog);
       gl.bindVertexArray(null);
       gl.depthFunc(gl.LEQUAL);
@@ -2267,6 +2366,14 @@ export default function MistCanvas({ recipe, onFail }) {
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
       water?.dispose();
+      if (birdPass) {
+        for (const k of birdPass.kinds) {
+          gl.deleteVertexArray(k.vao);
+          gl.deleteBuffer(k.mb);
+          gl.deleteBuffer(k.ib);
+        }
+        gl.deleteProgram(birdPass.prog);
+      }
       shadow?.map.dispose();
       if (glass) gl.deleteTexture(glass.tex);
       if (aoPass) {

@@ -68,6 +68,28 @@ function frameX(out, x0, x1, y0, y1, z, xs = []) {
   for (const x of xs) box(out, [x - 0.035, y0, d[0]], [x + 0.035, y1, d[1]], P.frame);
 }
 
+/**
+ * (0.4.4) A wall of sliding glass: panels between the xs, each in its own
+ * slim aluminium frame, on two tracks (alternate panels a track behind, so
+ * they pass); `open` slides a panel (by its index) along its track by that
+ * many metres, over its neighbour.
+ */
+function sliders(out, pane, xs, y0, y1, z, open = {}) {
+  for (let i = 0; i < xs.length - 1; i++) {
+    const shift = open[i] ?? 0;
+    const tz = i % 2 ? z - 0.075 : z;
+    const [x0, x1] = [xs[i] + 0.01 + shift, xs[i + 1] - 0.01 + shift];
+    const d = [tz - 0.03, tz + 0.03];
+    box(out, [x0, y0, d[0]], [x0 + 0.055, y1, d[1]], P.frame);
+    box(out, [x1 - 0.055, y0, d[0]], [x1, y1, d[1]], P.frame);
+    box(out, [x0, y1 - 0.06, d[0]], [x1, y1, d[1]], P.frame);
+    box(out, [x0, y0, d[0]], [x1, y0 + 0.08, d[1]], P.frame);
+    // A slim pull on the meeting stile.
+    box(out, [x1 - 0.075, y0 + 0.9, tz + 0.03], [x1 - 0.06, y0 + 1.5, tz + 0.05], P.frame);
+    pane([x0 + 0.05, y0 + 0.075, tz - GLASS_THICK / 2], [x1 - 0.05, y1 - 0.055, tz + GLASS_THICK / 2]);
+  }
+}
+
 /** The same along z at x. */
 function frameZ(out, z0, z1, y0, y1, x) {
   const d = [x - 0.04, x + 0.04];
@@ -144,8 +166,8 @@ export function houseLayout() {
   box(out, [fd[1] - 0.16, B + 0.9, G.z[1] - 0.09], [fd[1] - 0.13, B + 1.9, G.z[1] - 0.05], P.brass);
   const gz = G.z[1] - 0.12;
   const gx = [-7.4, -4.4, -1.4, 1.6, 4.6];
-  frameX(out, gOpen[0], gOpen[1], gOpen[2], gOpen[3], gz, gx.slice(1, -1));
-  for (let i = 0; i < gx.length - 1; i++) pane([gx[i] + 0.035, B + 0.05, gz - GLASS_THICK / 2], [gx[i + 1] - 0.035, gOpen[3] - 0.06, gz + GLASS_THICK / 2]);
+  frameX(out, gOpen[0], gOpen[1], gOpen[2], gOpen[3], gz, []);
+  sliders(out, pane, gx, B + 0.05, gOpen[3] - 0.06, gz, { 2: -2.6 });
   // The sides, a slot window each (by the living room's front corner; high
   // in the WC); the back, blind.
   for (const sx of [G.x[0], G.x[1]]) {
@@ -239,8 +261,8 @@ export function houseLayout() {
   box(out, [2.6, T + 0.05, U.z[1]], [U.x[1], utop, U.z[1] + 0.04], P.timber);
   const uz = U.z[1] - 0.12;
   const ux = [-7.2, -3.93, -0.67, 2.6];
-  frameX(out, uOpen[0], uOpen[1], uOpen[2], uOpen[3], uz, ux.slice(1, -1));
-  for (let i = 0; i < ux.length - 1; i++) pane([ux[i] + 0.035, uOpen[2] + 0.05, uz - GLASS_THICK / 2], [ux[i + 1] - 0.035, uOpen[3] - 0.06, uz + GLASS_THICK / 2]);
+  frameX(out, uOpen[0], uOpen[1], uOpen[2], uOpen[3], uz, []);
+  sliders(out, pane, ux, uOpen[2] + 0.05, uOpen[3] - 0.06, uz, { 1: -2.5 });
   // The sides: blind on the landing's; on the far side a slot for the
   // en-suite and one for the guest room.
   wall(out, { alongZ: true, face: U.x[0], a: U.z[0] + WALL, b: U.z[1] - WALL, y0: T + 0.05, y1: utop });
