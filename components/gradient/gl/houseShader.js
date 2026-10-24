@@ -481,6 +481,34 @@ void main() {
     emit = alb * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.1 * (1.0 - uNight * 0.7);
     rough = 1.0;
     f0 = 0.02;
+  } else if (vPart == ${P.marble}) {
+    // Calacatta marble, polished: a warm white, clouded faintly grey, with
+    // the long branching veins that run through a block (grey, here and
+    // there touched with gold), finer threads off them.
+    vec2 q = vWorld.xz * 1.4;
+    float warp = noise2(q * 0.9) * 2.2 + noise2(q * 2.7) * 0.8;
+    float main = abs(sin((q.x * 0.8 + q.y * 0.45) * 2.2 + warp * 2.4));
+    float vein = 1.0 - smoothstep(0.0, 0.05 + 0.04 * noise2(q * 3.0), main);
+    float thread = 1.0 - smoothstep(0.0, 0.02, abs(sin((q.x * 0.3 - q.y * 1.1) * 5.0 + warp * 4.0 + noise2(q * 6.0) * 2.0)));
+    float cloud = noise2(q * 1.7) * 0.6 + noise2(q * 5.0) * 0.4;
+    alb = vec3(0.93, 0.915, 0.89) * (0.94 + 0.08 * cloud);
+    vec3 vc = mix(vec3(0.52, 0.52, 0.53), vec3(0.72, 0.62, 0.45), smoothstep(0.55, 0.8, noise2(q * 0.6 + 4.0)));
+    alb = mix(alb, vc, vein * 0.85 + thread * 0.3 * (1.0 - vein));
+    rough = 0.07;
+    f0 = 0.045;
+  } else if (vPart == ${P.cord}) {
+    // Paper cord woven over the seat's rails, wrapped in from its four
+    // edges: in each quarter the cords run toward the middle, a basket
+    // over-and-under between them.
+    vec2 q = st - 0.5;
+    bool side = abs(q.x) > abs(q.y);
+    float along = side ? q.y : q.x;
+    float cords = fract(along * 60.0);
+    float over = step(0.5, fract((side ? q.x : q.y) * 60.0 + floor(along * 60.0) * 0.5));
+    float rope = smoothstep(0.0, 0.3, cords) * smoothstep(1.0, 0.7, cords);
+    alb = vec3(0.76, 0.66, 0.48) * (0.6 + 0.4 * rope) * (0.88 + 0.12 * over) * (0.95 + 0.08 * noise2(vWorld.xz * 90.0));
+    alb *= 1.0 - 0.45 * (1.0 - smoothstep(0.42, 0.5, max(abs(q.x), abs(q.y))) * 0.0);
+    rough = 0.85;
   } else if (vPart == ${P.ceramic}) {
     // Glazed ceramic: white, or (by its variant) a stoneware glaze.
     alb = vVar < 0.2 ? vec3(0.93, 0.92, 0.89) : vVar < 0.4 ? vec3(0.86, 0.85, 0.83) : vVar < 0.7 ? vec3(0.55, 0.42, 0.33) : vec3(0.28, 0.36, 0.34);

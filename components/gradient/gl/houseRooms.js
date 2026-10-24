@@ -8,8 +8,8 @@
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
 import { box, grid, lathe, tube } from './meshKit';
 import {
-  bath, bed, bedside, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island,
-  kitchenRun, loungeChair, mirror, pendant, picture, rug, shower, sofa, stool, table, tableLamp, tallUnit, tv, v, vanity, wc,
+  bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island,
+  kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
 } from './furniture';
 
 const P = HOUSE_PART;
@@ -34,15 +34,17 @@ function partition(out, [x0, z0], [x1, z1], y0, y1, gaps = []) {
     else box(out, [c - PART_T / 2, t0, s0], [c + PART_T / 2, t1, s1], P.plaster);
   };
   let at = a;
+  // (The plaster stops a few millimetres inside each frame, never in the
+  // plane of one of its faces.)
   for (const [g0, g1] of [...gaps].sort((p, q) => p[0] - q[0])) {
-    piece(at, g0, y0, y1);
-    piece(g0, g1, y0 + 2.2, y1);
+    piece(at, g0 - 0.004, y0, y1);
+    piece(g0 - 0.004, g1 + 0.004, y0 + 2.204, y1);
     // The frame: jambs and head, 6 cm walnut, proud of both faces.
     const fr = (s0, s1, t0, t1) => (alongX ? box(out, [s0, t0, c - PART_T / 2 - 0.01], [s1, t1, c + PART_T / 2 + 0.01], v(P.walnut, 0.5)) : box(out, [c - PART_T / 2 - 0.01, t0, s0], [c + PART_T / 2 + 0.01, t1, s1], v(P.walnut, 0.5)));
     fr(g0 - 0.06, g0, y0, y0 + 2.26);
     fr(g1, g1 + 0.06, y0, y0 + 2.26);
     fr(g0 - 0.06, g1 + 0.06, y0 + 2.2, y0 + 2.26);
-    at = g1;
+    at = g1 + 0.004;
   }
   piece(at, b, y0, y1);
 }
@@ -196,7 +198,7 @@ export function groundRooms(out, ix, iz) {
   bookcase(out, [-3.4, B, -72.55], Math.PI, 3.8, 2.4, 17);
 
   // ---- The dining room: a table for eight under a long pendant.
-  table(out, [2.55, B, -67.9], Math.PI / 2, { w: 2.5, d: 1.0 });
+  marbleTable(out, [2.55, B, -67.9], Math.PI / 2, { w: 2.6, d: 1.05 });
   for (const z of [-68.85, -67.9, -66.95]) {
     chair(out, [2.0, B, z], Math.PI / 2);
     chair(out, [3.1, B, z], -Math.PI / 2);
@@ -265,11 +267,7 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The main bedroom: the bed facing the glass, its tables and lamps,
   // an armchair at the glass, a dresser, a rug.
   rug(out, [-3.6, -75.6], [1.6, -72.0], y, 0.3);
-  bed(out, [-0.95, y, -75.74], 0, { w: 1.9, l: 2.1 });
-  for (const x of [-2.45, 0.55]) {
-    bedside(out, [x, y, -75.45], 0);
-    tableLamp(out, [x, y + 0.5, -75.45]);
-  }
+  bed(out, [-0.95, y, -75.74], 0, { w: 1.9, l: 2.1, ceil: CEIL_U });
   loungeChair(out, [1.7, y, -72.2], Math.PI * 1.2, v(P.fabric, 0.3));
   dresser(out, [-4.38, y, -72.6], Math.PI / 2, 1.3);
   mirror(out, [-4.43, y + 1.55, -72.6], Math.PI / 2, 0.9, 1.0);
@@ -298,9 +296,7 @@ export function upperRooms(out, glass, jx, jz) {
   vanity(out, [jx[1] - 0.02, y, -73.2], -Math.PI / 2, 1.6, 2);
 
   // ---- The guest bedroom: a bed, its table and lamp, a desk.
-  bed(out, [5.2, y, jz[0] + 0.02], 0, { w: 1.5, l: 2.0 });
-  bedside(out, [6.4, y, jz[0] + 0.3], 0);
-  tableLamp(out, [6.4, y + 0.5, jz[0] + 0.3]);
+  bed(out, [5.15, y, jz[0] + 0.02], 0, { w: 1.5, l: 2.0, ceil: CEIL_U, stands: [false, true] });
   desk(out, [jx[1] - 0.4, y, -76.0], -Math.PI / 2, 1.2);
 
   // ---- Curtains at the glass.

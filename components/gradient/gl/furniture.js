@@ -138,42 +138,66 @@ function curvedPanel(out, f, y0, y1, z, r, span, thick, part) {
   }
 }
 
+/** A strip of thin boards along a polyline (a bent plywood part): each a
+ * box from one point to the next, `wide` across (along `across`), `thick`
+ * through. */
+function strip(out, pts, across, wide, thick, part) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const len = Math.hypot(...d);
+    const ay = d.map(x => x / len);
+    const ax0 = across;
+    const az = [ax0[1] * ay[2] - ax0[2] * ay[1], ax0[2] * ay[0] - ax0[0] * ay[2], ax0[0] * ay[1] - ax0[1] * ay[0]];
+    obox(out, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], [wide / 2, len / 2 + 0.002, thick / 2], part, [ax0, ay, az]);
+  }
+}
+
 /**
- * A dining chair at c, facing yaw: solid walnut, the front legs turned and
- * tapering, splayed a little; the back legs rising into the back's posts
- * with a rake; an apron round the seat and stretchers low between the
- * legs; a crowned seat cushion, welted; a back bowed round the sitter, its
- * front upholstered.
+ * A dining chair at c, facing yaw, after Wegner's wishbone: solid walnut,
+ * the back legs curving up and back to meet a steam-bent top rail that
+ * sweeps round the sitter into the arms; a Y-shaped splat of bent plywood
+ * from the seat's back rail up to the rail; turned front legs; a seat of
+ * woven paper cord on round rails, dished a little where it's sat in.
  */
-export function chair(out, c, yaw, fabric = v(P.fabric, 0.6)) {
+export function chair(out, c, yaw) {
   const f = frame(c, yaw);
-  const W = v(P.walnut, 0);
-  const seatY = 0.44;
-  // The front legs: tapered rounds, splayed out and forward.
+  const W = v(P.walnut, 0.2);
+  const seatY = 0.43;
   for (const sx of [-1, 1]) {
-    const foot = f.at(sx * 0.215, 0, 0.215);
-    const top = f.at(sx * 0.2, seatY - 0.02, 0.19);
+    // The front legs: turned, tapering to the floor.
+    const foot = f.at(sx * 0.24, 0, 0.225);
+    const top = f.at(sx * 0.225, seatY + 0.01, 0.2);
     const ax = [top[0] - foot[0], top[1] - foot[1], top[2] - foot[2]];
     const len = Math.hypot(...ax);
-    lathe(out, foot, ax.map(x => x / len), [[0, 0], [0.013, 0], [0.019, len * 0.85], [0.02, len], [0, len]], W, 12);
+    lathe(out, foot, ax.map(x => x / len), [[0, 0], [0.012, 0], [0.018, len * 0.9], [0.017, len], [0, len]], W, 12);
+    // The back legs: up from the floor, raked, into the rail.
+    sweep(out, [f.at(sx * 0.235, 0, -0.25), f.at(sx * 0.222, 0.2, -0.215), f.at(sx * 0.215, seatY, -0.2), f.at(sx * 0.218, 0.58, -0.21), f.at(sx * 0.225, 0.7, -0.23)], 0.016, W, { seg: 10 });
   }
-  // The back legs: from the floor, raked back, up through the seat into the
-  // posts of the back.
-  for (const sx of [-1, 1]) {
-    sweep(out, [f.at(sx * 0.21, 0, -0.24), f.at(sx * 0.2, 0.22, -0.2), f.at(sx * 0.2, seatY, -0.18), f.at(sx * 0.195, 0.62, -0.2), f.at(sx * 0.19, 0.8, -0.24)], 0.016, W, { seg: 8 });
+  // The steam-bent top rail: round the back, forward into the arms.
+  const rail = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    const a = Math.PI * (t - 0.5) * 1.15;
+    rail.push(f.at(Math.sin(a) * 0.255, 0.71 - 0.02 * Math.abs(Math.sin(a)) ** 3, -0.33 * Math.cos(a) + 0.06 * Math.abs(Math.sin(a)) ** 4));
   }
-  // The apron under the seat, and the stretchers.
-  obox(out, f.at(0, seatY - 0.05, 0.19), [0.2, 0.03, 0.012], W, f.ax);
-  obox(out, f.at(0, seatY - 0.05, -0.18), [0.2, 0.03, 0.012], W, f.ax);
-  for (const sx of [-1, 1]) obox(out, f.at(sx * 0.2, seatY - 0.05, 0.005), [0.012, 0.03, 0.18], W, f.ax);
-  for (const sx of [-1, 1]) tube(out, f.at(sx * 0.208, 0.16, 0.2), f.at(sx * 0.205, 0.16, -0.21), 0.009, W, 8);
-  tube(out, f.at(-0.205, 0.2, 0.0), f.at(0.205, 0.2, 0.0), 0.009, W, 8);
-  // The seat: a walnut pan, the cushion crowned on it and welted.
-  obox(out, f.at(0, seatY - 0.012, 0.005), [0.215, 0.012, 0.205], W, f.ax);
-  cushion(out, f, 0, seatY + 0.03, 0.01, 0.215, 0.035, 0.205, fabric, { e1: 0.3, e2: 0.14, pinch: 0.06 });
-  // The back: a bowed walnut shell between the posts, padded in front.
-  curvedPanel(out, f, 0.6, 0.82, -0.2, 0.55, 0.78, 0.014, W);
-  curvedPanel(out, f, 0.62, 0.8, -0.186, 0.536, 0.72, 0.02, fabric);
+  sweep(out, rail, 0.018, W, { seg: 10 });
+  // The seat's round rails, and the cord woven across them.
+  const corners = [f.at(-0.225, seatY, 0.2), f.at(0.225, seatY, 0.2), f.at(0.215, seatY, -0.2), f.at(-0.215, seatY, -0.2)];
+  for (let k = 0; k < 4; k++) tube(out, corners[k], corners[(k + 1) % 4], 0.014, W, 8);
+  grid(out, 12, 12, (u, w) => {
+    const xw = 0.225 - 0.01 * w;
+    const x = (u * 2 - 1) * xw;
+    const z = 0.2 - 0.4 * w;
+    const sag = 0.018 * Math.sin(Math.PI * u) * Math.sin(Math.PI * w);
+    return { p: f.at(x, seatY + 0.012 - sag, z), part: P.cord, s: u, t: w };
+  });
+  // The Y: a stem from the seat's back rail, parting into two arms that
+  // meet the rail either side of its middle.
+  const stem = [f.at(0, seatY + 0.01, -0.205), f.at(0, 0.52, -0.25), f.at(0, 0.58, -0.28)];
+  strip(out, stem, f.ax[0], 0.07, 0.012, W);
+  for (const sx of [-1, 1]) strip(out, [f.at(0, 0.58, -0.28), f.at(sx * 0.05, 0.65, -0.305), f.at(sx * 0.1, 0.705, -0.315)], f.ax[0], 0.04, 0.012, W);
 }
 
 /** A bar stool at c: a round padded seat, a steel ring and four legs. */
@@ -201,6 +225,18 @@ export function table(out, c, yaw, { w = 2.4, d = 1.0, h = 0.75, top = v(P.walnu
     obox(out, f.at(sx * (w / 2 - 0.3), 0.025, 0), [0.05, 0.025, d / 2 - 0.08], v(P.walnut, 0), f.ax);
   }
   obox(out, f.at(0, h - thick - 0.06, 0), [w / 2 - 0.3, 0.035, 0.02], v(P.walnut, 0), f.ax);
+}
+
+/**
+ * A dining table at c: a Calacatta marble top, its edge eased, on two
+ * sculpted walnut pedestals, oval in plan, squared off top and bottom.
+ */
+export function marbleTable(out, c, yaw, { w = 2.6, d = 1.05, h = 0.75 } = {}) {
+  const f = frame(c, yaw);
+  slab(out, f, 0, h - 0.016, 0, w / 2, 0.016, d / 2, v(P.marble, 0));
+  for (const sx of [-1, 1]) {
+    soft(out, f.at(sx * (w / 2 - 0.55), (h - 0.03) / 2, 0), [0.13, (h - 0.03) / 2, 0.3], v(P.walnut, 0), { e1: 0.08, e2: 0.55, ax: f.ax, nu: 36, nv: 10 });
+  }
 }
 
 /** A low coffee table: a thick walnut slab on two panel ends. */
@@ -266,39 +302,92 @@ export function console_(out, c, yaw, w = 2.2) {
   obox(out, f.at(0, 0.035, -0.02), [w / 2 - 0.05, 0.035, 0.18], P.steel, f.ax);
 }
 
-/** A bed, its headboard's middle at c against a wall, facing yaw: an
- * upholstered headboard, the base, a mattress, the duvet draped over its
- * sides and foot and folded back at the top, pillows, a throw cushion. */
-export function bed(out, c, yaw, { w = 1.8, l = 2.1 } = {}) {
+/**
+ * A bed, its middle against a wall at c, facing yaw, as a good hotel's is:
+ * a wall panel behind it, channel-tufted, running behind the nightstands;
+ * an upholstered base floating on a recessed black plinth; a tailored
+ * mattress, welted; a duvet with its thickness, draped over the sides and
+ * the foot and turned back at the top; a wool throw across
+ * the foot; pillows in three sizes, euro squares upright against the panel;
+ * floating walnut nightstands on the panel; glass globe pendants on cords
+ * from the ceiling at `ceil` either side.
+ */
+export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true, true] } = {}) {
   const f = frame(c, yaw);
   const hw = w / 2;
-  soft(out, f.at(0, 0.62, 0.06), [hw + 0.12, 0.5, 0.06], v(P.fabric, 0.4), { e1: 0.18, e2: 0.08, ax: f.ax });
-  for (let k = 0; k < 6; k++) tube(out, f.at(-hw + (w * (k + 0.5)) / 6, 0.24, 0.125), f.at(-hw + (w * (k + 0.5)) / 6, 1.0, 0.125), 0.006, v(P.fabric, 0.4), 6);
-  obox(out, f.at(0, 0.18, 0.12 + l / 2), [hw, 0.1, l / 2], v(P.walnut, 0), f.ax);
-  soft(out, f.at(0, 0.4, 0.12 + l / 2), [hw - 0.02, 0.12, l / 2 - 0.02], v(P.fabric, 0.9), { e1: 0.16, e2: 0.05, ax: f.ax });
-  const top = 0.535;
-  const zs = 0.85;
-  const ze = 0.12 + l + 0.02;
-  grid(out, 40, 34, (u, w2) => {
-    let x = -hw - 0.22 + u * (w + 0.44);
-    let z = zs + w2 * (ze - zs + 0.22);
-    let y = top + 0.012 * Math.sin(x * 9 + z * 4) * Math.sin(z * 7) + 0.02 * Math.exp(-((z - zs - 0.25) ** 2) / 0.02);
+  const panel = w + 1.5;
+  // The panel: vertical channels of upholstery, side by side.
+  const n = Math.round(panel / 0.15);
+  const cw = panel / n;
+  for (let k = 0; k < n; k++) soft(out, f.at(-panel / 2 + cw * (k + 0.5), 0.7, 0.05), [cw / 2 - 0.002, 0.62, 0.045], v(P.fabric, 0.4), { e1: 0.12, e2: 0.7, ax: f.ax, nu: 16, nv: 6 });
+  obox(out, f.at(0, 0.04, 0.05), [panel / 2, 0.04, 0.045], P.steel, f.ax);
+  // The base on its shadow-gap plinth.
+  obox(out, f.at(0, 0.045, 0.1 + l / 2), [hw - 0.1, 0.045, l / 2 - 0.1], P.steel, f.ax);
+  soft(out, f.at(0, 0.21, 0.1 + l / 2), [hw + 0.03, 0.12, l / 2 + 0.02], v(P.fabric, 0.4), { e1: 0.1, e2: 0.05, ax: f.ax, nu: 40, nv: 10 });
+  // The mattress, tailored, welted top and bottom.
+  cushion(out, f, 0, 0.46, 0.1 + l / 2, hw - 0.01, 0.125, l / 2 - 0.02, v(P.fabric, 0.9), { e1: 0.14, e2: 0.05, pinch: 0.02 });
+  // The duvet: a quilt 4 cm thick, its upper face and its lower, draped
+  // over the mattress from below the pillows, hanging over its sides and
+  // foot; a gentle crumple across it.
+  const top = 0.6;
+  const zs = 0.78;
+  const ze = 0.1 + l;
+  const drape = (u, w2, below) => {
+    let x = -hw - 0.24 + u * (w + 0.48);
+    let z = zs + w2 * (ze - zs + 0.24);
+    const crumple = 0.012 * Math.sin(x * 7 + z * 3) * Math.sin(z * 6 + x) + 0.006 * Math.sin(x * 19 + z * 13);
+    let y = top + crumple - (below ? 0.04 : 0);
     const ox = Math.max(-hw - x, x - hw, 0);
     const oz = Math.max(z - ze, 0);
     const o = Math.max(ox, oz);
     if (o > 0) {
-      y -= o * 1.7 + 0.005 + 0.02 * Math.sin(z * 6 + x * 5) * Math.min(1, o * 8);
-      if (ox > 0) x = Math.sign(x) * (hw + 0.035 * (1 - Math.exp(-ox * 40)));
-      if (oz > 0) z = ze + 0.035 * (1 - Math.exp(-oz * 40));
+      const roll = 1 - Math.exp(-o * 30);
+      y -= o * 1.55 + 0.01 * Math.sin(z * 5 + x * 4) * Math.min(1, o * 6);
+      const outBy = 0.045 * roll - (below ? 0.04 : 0);
+      if (ox > 0) x = Math.sign(x) * (hw + outBy);
+      if (oz > 0) z = ze + outBy;
     }
-    return { p: f.at(x, y, z), part: v(P.fabric, 0.85), s: u, t: w2 };
-  });
-  soft(out, f.at(0, top + 0.02, zs + 0.03), [hw + 0.02, 0.035, 0.08], v(P.fabric, 0.85), { e1: 0.6, e2: 0.15, ax: f.ax });
-  for (const px of [-hw / 2, hw / 2]) {
-    cushion(out, f, px, top + 0.1, 0.32, hw / 2 - 0.06, 0.08, 0.16, v(P.cushion, 0.0), { tilt: 1.0, pinch: 0.5, e1: 0.75, e2: 0.32 });
-    cushion(out, f, px, top + 0.05, 0.55, hw / 2 - 0.07, 0.07, 0.17, v(P.cushion, 0.0), { tilt: 0.35, pinch: 0.5, e1: 0.75, e2: 0.32 });
+    return [x, y, z];
+  };
+  for (const below of [false, true]) {
+    grid(out, 44, 38, (u, w2) => ({ p: f.at(...drape(u, w2, below)), part: v(P.fabric, 0.85), s: u, t: w2 }), below ? scale(f.ax[1], -1) : f.ax[1]);
   }
-  cushion(out, f, 0, top + 0.08, 0.68, 0.24, 0.05, 0.1, v(P.cushion, 0.15), { tilt: 0.6, yaw: 0.1, pinch: 0.5, e1: 0.75, e2: 0.32 });
+  // Turned back at the top.
+  cushion(out, f, 0, top + 0.02, zs + 0.06, hw + 0.03, 0.035, 0.09, v(P.fabric, 0.85), { e1: 0.6, e2: 0.12, pipe: false });
+  // The throw across the foot, in a wool of its own.
+  grid(out, 30, 16, (u, w2) => {
+    let x = -hw - 0.2 + u * (w + 0.4);
+    const z = ze - 0.55 + w2 * 0.42;
+    // (Laid over the duvet's crumple, never into it.)
+    let y = top + 0.04 + 0.004 * Math.sin(x * 11);
+    const ox = Math.max(-hw - x, x - hw, 0);
+    if (ox > 0) {
+      y -= ox * 1.55;
+      x = Math.sign(x) * (hw + 0.075 * (1 - Math.exp(-ox * 30)));
+    }
+    return { p: f.at(x, y, z), part: v(P.fabric, 0.45), s: u, t: w2 };
+  });
+  // The pillows: euro squares upright, sleeping pillows before them, a
+  // cushion.
+  for (const px of [-hw / 2, hw / 2]) {
+    cushion(out, f, px, top + 0.25, 0.19, hw / 2 - 0.04, 0.07, 0.3, v(P.cushion, 0.45), { tilt: 1.3, pinch: 0.45, e1: 0.72, e2: 0.28 });
+    cushion(out, f, px, top + 0.1, 0.38, hw / 2 - 0.06, 0.075, 0.2, v(P.cushion, 0.0), { tilt: 0.95, pinch: 0.5, e1: 0.75, e2: 0.3 });
+  }
+  cushion(out, f, 0, top + 0.09, 0.56, 0.28, 0.06, 0.11, v(P.cushion, 0.15), { tilt: 0.55, pinch: 0.5, e1: 0.8, e2: 0.35 });
+  // The nightstands, floating on the panel, a drawer each; the pendants.
+  [-1, 1].forEach((sx, k) => {
+    const x = sx * (hw + 0.36);
+    if (stands[k]) {
+      obox(out, f.at(x, 0.48, 0.3), [0.25, 0.09, 0.2], v(P.walnut, 0), f.ax);
+      obox(out, f.at(x, 0.48, 0.502), [0.235, 0.075, 0.002], v(P.walnut, 0.5), f.ax);
+      obox(out, f.at(x, 0.48, 0.51), [0.07, 0.006, 0.008], P.brass, f.ax);
+      lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
+    }
+    const g = f.at(x, 1.22, 0.3);
+    tube(out, add(g, [0, 0.12, 0]), [g[0], ceil, g[2]], 0.002, P.steel, 6);
+    lathe(out, add(g, [0, 0.11, 0]), [0, 1, 0], [[0.02, 0], [0.02, 0.03]], P.brass, 10);
+    soft(out, g, [0.11, 0.11, 0.11], P.lamp, { e1: 1, e2: 1, nu: 20, nv: 12 });
+  });
 }
 
 /** A bedside table with a drawer, on steel legs. */
@@ -576,7 +665,12 @@ export function lounger(out, x, z0, y) {
 export function door(out, hinge, dir, y0, { w = 0.9, h = 2.2, open = 0.6, part = v(P.walnut, 0.5), thick = 0.04 } = {}) {
   const yaw = Math.atan2(dir[0], dir[1]) - Math.PI / 2 + open;
   const ax = axes(0, yaw);
-  const c = add([hinge[0], y0 + h / 2, hinge[1]], ax[0], w / 2);
+  // Hung a little in from the jamb (its gap), and a little short of the
+  // floor and the head, as a door is.
+  const at = [hinge[0] + dir[0] * 0.012, hinge[1] + dir[1] * 0.012];
+  w -= 0.02;
+  h -= 0.012;
+  const c = add([at[0], y0 + 0.006 + h / 2, at[1]], ax[0], w / 2);
   obox(out, c, [w / 2, h / 2, thick / 2], part, ax);
   for (const sz of [-1, 1]) {
     const hc = add(add(c, ax[0], w / 2 - 0.08), ax[2], sz * (thick / 2 + 0.03));

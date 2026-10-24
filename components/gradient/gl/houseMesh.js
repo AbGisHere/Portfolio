@@ -60,6 +60,8 @@ function wall(out, { alongZ = false, face, a, b, y0, y1, openings = [], skin = P
 /** A frame round an opening in a wall along x at z (the glass's plane):
  * jambs, head and sill as 6 × 8 cm aluminium, and mullions at `xs`. */
 function frameX(out, x0, x1, y0, y1, z, xs = []) {
+  // (2 mm in from the opening all round, never in its reveals' planes.)
+  [x0, x1, y0, y1] = [x0 + 0.002, x1 - 0.002, y0 + 0.002, y1 - 0.002];
   const d = [z - 0.045, z + 0.035];
   box(out, [x0, y0, d[0]], [x0 + 0.06, y1, d[1]], P.frame);
   box(out, [x1 - 0.06, y0, d[0]], [x1, y1, d[1]], P.frame);
@@ -92,6 +94,7 @@ function sliders(out, pane, xs, y0, y1, z, open = {}) {
 
 /** The same along z at x. */
 function frameZ(out, z0, z1, y0, y1, x) {
+  [z0, z1, y0, y1] = [z0 + 0.002, z1 - 0.002, y0 + 0.002, y1 - 0.002];
   const d = [x - 0.04, x + 0.04];
   box(out, [d[0], y0, z0], [d[1], y1, z0 + 0.06], P.frame);
   box(out, [d[0], y0, z1 - 0.06], [d[1], y1, z1], P.frame);

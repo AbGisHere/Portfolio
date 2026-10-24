@@ -6,6 +6,28 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.5 — 2026-10-24
+
+Overlaps, and finer furniture (the owner: "elite and finer design and
+taste").
+
+- **Overlaps:** partitions stop 4 mm inside their door frames (they shared
+  the frames' planes and z-fought); window frames sit 2 mm in from their
+  openings; doors hang 12 mm in from the jamb, short of the floor and the
+  head.
+- **Dining chairs** after Wegner's wishbone: back legs curving into a
+  steam-bent top rail that sweeps round into the arms, a Y splat of bent
+  plywood, turned front legs, a woven paper-cord seat (`cord`) dished on
+  round rails.
+- **The dining table:** a Calacatta marble top (`marble`: veined, threaded,
+  polished) on two oval walnut pedestals.
+- **Beds:** a channel-tufted wall panel behind the bed and its stands, an
+  upholstered base on a recessed plinth, a welted mattress, a 4 cm duvet
+  (both faces) draped over the sides and foot and turned back, a wool
+  throw, euro, sleeping and scatter pillows, floating walnut nightstands,
+  glass globe pendants (the bedside lights moved to them).
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.4 — 2026-10-24
 
 The birds (the owner: the painted ones were "1/10"), the glass that

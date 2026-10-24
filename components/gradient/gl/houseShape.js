@@ -19,7 +19,7 @@
  */
 export const HOUSE_PART = {
   lawn: 0, stone: 1, render: 2, timber: 3, frame: 4, slab: 5, deck: 6, tile: 7, plaster: 8, ceiling: 9,
-  oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30,
+  oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30, marble: 31, cord: 32,
 };
 
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */
@@ -110,12 +110,12 @@ export const HOUSE_LIGHTS = [
   [-2.75, FLOOR + 1.1, -78.2, 2.5, 0.5, 0, 2],
   ...down(8, CEIL_U, [[-6.1, -73.0], [-6.1, -76.0], [-1, -78.1], [1.5, -78.1]]),
   ...down(4, CEIL_U, [[-2.5, -73.0], [0.8, -73.0], [-1, -74.8]]),
-  [-2.45, TERRACE + 0.85, -75.45, 2.5, 0.55, 0, 4],
-  [0.55, TERRACE + 0.85, -75.45, 2.5, 0.55, 0, 4],
+  [-2.26, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
+  [0.36, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
   ...down(5, CEIL_U, [[-2.5, -76.65], [0.8, -76.65]], 3.5),
   ...down(6, CEIL_U, [[4, -72.6], [6.4, -72.6], [5.2, -74.2]], 4),
   ...down(7, CEIL_U, [[5.2, -76.9]], 4),
-  [6.4, TERRACE + 0.85, -78.4, 2.5, 0.5, 0, 7],
+  [6.31, TERRACE + 1.29, -78.38, 3, 0.5, 0, 7],
   // Two downlights in the porch's ceiling, under the cantilever.
   [-6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
   [6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
