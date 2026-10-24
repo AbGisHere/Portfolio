@@ -8,8 +8,8 @@
  */
 
 import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, STOREY, TERRACE, WALL, moundY } from './houseShape';
-import { ball, box, grid, lathe, tube } from './meshKit';
-import { lounger } from './furniture';
+import { ball, barPull, box, grid, lathe, tube } from './meshKit';
+import { MIRRORS, lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
 
@@ -92,8 +92,10 @@ function sliders(out, pane, xs, y0, y1, z, open = {}) {
     box(out, [x1 - 0.055, y0, d[0]], [x1, y1, d[1]], P.frame);
     box(out, [x0, y1 - 0.06, d[0]], [x1, y1, d[1]], P.frame);
     box(out, [x0, y0, d[0]], [x1, y0 + 0.08, d[1]], P.frame);
-    // A slim pull on the meeting stile.
-    box(out, [x1 - 0.075, y0 + 0.9, tz + 0.03], [x1 - 0.06, y0 + 1.5, tz + 0.05], P.frame);
+    // A slim bar pull on the meeting stile (0.4.18, on posts; a block
+    // before), on the face away from the other track, clear of it.
+    const face = i % 2 ? -1 : 1;
+    barPull(out, [x1 - 0.0675, y0 + 0.85, tz + face * 0.03], [x1 - 0.0675, y0 + 1.55, tz + face * 0.03], [0, 0, face], P.frame, { r: 0.008, off: 0.03 });
     pane([x0 + 0.05, y0 + 0.075, tz - GLASS_THICK / 2], [x1 - 0.05, y1 - 0.055, tz + GLASS_THICK / 2]);
   }
 }
@@ -124,6 +126,7 @@ function holed(out, lo, hi, [hx0, hz0, hx1, hz1], part) {
  * plus `glass` (the panes: [lo, hi, rail] boxes, `rail` the terrace's
  * and the balustrades') for houseGlass.js. */
 export function houseLayout() {
+  MIRRORS.length = 0;
   const out = [];
   const glass = [];
   const pane = (lo, hi, rail = false) => glass.push([lo, hi, rail]);
@@ -252,8 +255,10 @@ export function houseLayout() {
   box(out, [4.6, B, G.z[1]], [fd[0], top, G.z[1] + 0.04], P.timber);
   box(out, [fd[1], B, G.z[1]], [G.x[1], top, G.z[1] + 0.04], P.timber);
   box(out, [fd[0], fd[3], G.z[1]], [fd[1], top, G.z[1] + 0.04], P.timber);
-  box(out, [fd[0] + 0.01, B, G.z[1] - 0.18], [fd[1] - 0.01, fd[3] - 0.01, G.z[1] - 0.1], v(P.walnut, 0.5));
-  box(out, [fd[1] - 0.16, B + 0.9, G.z[1] - 0.09], [fd[1] - 0.13, B + 1.9, G.z[1] - 0.05], P.brass);
+  box(out, [fd[0] + 0.01, B, G.z[1] - 0.18], [fd[1] - 0.01, fd[3] - 0.01, G.z[1] - 0.1], v(P.walnut, 0.6));
+  // (0.4.18) A long brass bar pull each side on posts (it was a block).
+  barPull(out, [fd[1] - 0.15, B + 0.85, G.z[1] - 0.1], [fd[1] - 0.15, B + 1.95, G.z[1] - 0.1], [0, 0, 1], P.brass, { r: 0.013, off: 0.06 });
+  barPull(out, [fd[1] - 0.15, B + 0.85, G.z[1] - 0.18], [fd[1] - 0.15, B + 1.95, G.z[1] - 0.18], [0, 0, -1], P.brass, { r: 0.013, off: 0.06 });
   const gz = G.z[1] - 0.12;
   const gx = [-7.4, -4.4, -1.4, 1.6, 4.6];
   frameX(out, gOpen[0], gOpen[1], gOpen[2], gOpen[3], gz, []);
@@ -445,5 +450,5 @@ export function houseLayout() {
   }
 
   const data = new Float32Array(out);
-  return { data, count: data.length / 9, lawn, glass };
+  return { data, count: data.length / 9, lawn, glass, mirrors: MIRRORS.map(m => ({ c: [...m.c], n: [...m.n] })) };
 }

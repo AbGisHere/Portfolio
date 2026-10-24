@@ -75,7 +75,9 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
 - **Guest bedroom** (x 2.6 … 7.72, z −75.5 … −78.72): a bed, a desk.
 
 Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
-0.9 × 2.2 m in walnut, on frames, each open at its own angle.
+0.9 × 2.2 m in walnut, on frames, each open at its own angle, its grain
+running up the leaf (walnut variant `.6`, as on tall cabinet doors), a
+brass lever on a rose each side (`lever()` in `meshKit.js`).
 
 ## Glass, curtains and finish
 
@@ -94,6 +96,19 @@ Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
   `furniture.js`); pictures are a moulding round a back board with the
   mount laid in and the print proud of it; a mirror's glass and the TV's
   sit in their frames' rebates; frames clear their openings by 2 mm.
+- **Hardware** (`0.4.18`): brass bar pulls on posts with feet
+  (`barPull()`, `pullOn()` in `furniture.js`) on every drawer and cabinet
+  door, a long one each side of the front door, black slim ones on the
+  sliders' meeting stiles (on the face away from the other track).
+- **Mirrors** (`mirrorProbe.js`, `0.4.18`): every mirror records itself as
+  the mesh is built (`MIRRORS`, returned with the mesh) and gets a probe,
+  its room seen as six 384 px faces from a metre in front of it, in one
+  atlas (texture unit 15). A mirror's pixel follows its reflected ray to
+  its room's box (a `ZONES` box, or its own for the foyer) and reads the
+  probe there, so the reflection moves with the viewing angle. Faces are
+  drawn one a frame while the house is in view and the mirror within
+  28 m, and again as the switch relights the house; inside a probe the
+  mirrors are plain glass. `?mirror=0` turns them off with the pool's.
 
 ## Outside
 

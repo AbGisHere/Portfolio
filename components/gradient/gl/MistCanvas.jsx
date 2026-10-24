@@ -50,6 +50,7 @@ import { HOUSE_BOUNDS, MOUND, POOL } from './houseShape';
 const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, POOL.at[2] - POOL.d / 2 - 0.5], [POOL.at[0] + POOL.w / 2 + 0.5, POOL.at[1] + 0.3, POOL.at[2] + POOL.d / 2 + 0.5]];
 const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
 import { makeWater } from './poolWater';
+import { PROBE, PROBE_FACES, makeProbes, probeLayout } from './mirrorProbe';
 import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
 import { BIRD_STRIDE, birdMesh } from './birdShape';
@@ -1861,6 +1862,69 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(null);
     }
 
+    // (0.4.18) The mirrors' probes (mirrorProbe.js, texture unit 15): made
+    // when the house is first in view; each mirror's six faces drawn a face
+    // a frame while it's within reach, and again as the switch relights
+    // the house.
+    let probes;
+    let probeSet = null;
+    let probing = false;
+    const mirrorProbes = () => {
+      if (!houseBuilt) return false;
+      if (probes === undefined) probes = (!noMirror && houseBuilt.house.mirrors?.length && makeProbes(gl, 15)) || false;
+      if (probes && !probeSet) probeSet = probeLayout(houseBuilt.house.mirrors).map(m => ({ ...m, faces: 0, night: -1 }));
+      return probes;
+    };
+    function mirrorUniforms(g, on) {
+      const set = probes ? probeSet : null;
+      gl.uniform1f(g.u('uProbeOn'), on && set ? 1 : 0);
+      if (!set) return;
+      probes.bind();
+      gl.uniform1i(g.u('uProbe'), 15);
+      gl.uniform1i(g.u('uProbeN'), set.length);
+      gl.uniform3fv(g.u('uProbeAt'), set.flatMap(m => m.at));
+      gl.uniform3fv(g.u('uProbeLo'), set.flatMap(m => m.lo));
+      gl.uniform3fv(g.u('uProbeHi'), set.flatMap(m => m.hi));
+      gl.uniform3fv(g.u('uMirrorAt'), set.flatMap(m => m.c));
+      gl.uniform1fv(g.u('uProbeReady'), set.map(m => (m.faces >= 6 || m.night >= 0 ? 1 : 0)));
+    }
+    // One face of the probe most in need of it, if any is (true: drawn).
+    function probeStep() {
+      const pr = mirrorProbes();
+      if (!pr || !houseProgram()) return false;
+      const night = houseNight();
+      const cm = meadowAt.cm;
+      let k = -1;
+      let best = Infinity;
+      probeSet.forEach((m, i) => {
+        const d = Math.hypot(m.c[0] - cm.x, m.c[1] - cm.y, m.c[2] - cm.z);
+        const stale = m.faces < 6 || Math.abs(m.night - night) > 0.03;
+        if (stale && d < PROBE.reach && d < best) {
+          best = d;
+          k = i;
+        }
+      });
+      if (k < 0) return false;
+      const m = probeSet[k];
+      if (m.faces >= 6) {
+        m.faces = 0;
+        m.night = -1;
+      }
+      const f = m.faces;
+      const [yaw, pitch] = PROBE_FACES[f];
+      const S = pr.size;
+      const view = { P: { cos: Math.cos(pitch), sin: Math.sin(pitch), f: S / 2, zoom: 1, yc: Math.cos(yaw), ys: Math.sin(yaw), sx: S / 2, sy: S / 2 }, c: { x: m.at[0], y: m.at[1], z: m.at[2] }, size: S };
+      const sky = meadowAt.colours.env;
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LESS);
+      gl.disable(gl.BLEND);
+      pr.face(k, f, rgb01(sky[1]), () => drawHouse(false, false, view));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      m.faces = f + 1;
+      if (m.faces === 6) m.night = night;
+      return true;
+    }
+
     // (0.4.2) The sun's shadow map of the house, redrawn when the light
     // moves (houseShadow.js).
     function houseShadowMap(g, sh, colours) {
@@ -1878,17 +1942,22 @@ export default function MistCanvas({ recipe, onFail }) {
     // `lawn`, only the hill's lawn: after the grass and the ground (the
     // blades stand over it), and the meadow's paint goes on over it as over
     // the ground (meadowShader.js writes the hill's depth).
-    function drawHouse(mirror = false, lawn = false) {
+    // (0.4.18) `view`: drawn for a mirror's probe instead, from its camera
+    // ({ P, c, size }: no shadow map redrawn, no occlusion, no grain).
+    function drawHouse(mirror = false, lawn = false, view = null) {
       const g = houseProgram();
       if (!g) return;
-      const { pitch: P, cm: c, colours } = meadowAt;
+      const { colours } = meadowAt;
+      const P = view ? view.P : meadowAt.pitch;
+      const c = view ? view.c : meadowAt.cm;
+      const [fw, fh] = view ? [view.size, view.size] : [w, h];
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const sh = houseShadow();
-      if (sh && !mirror && !lawn) houseShadowMap(g, sh, colours);
+      if (sh && !mirror && !lawn && !view) houseShadowMap(g, sh, colours);
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
-      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, fw, fh);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
@@ -1909,13 +1978,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);
       gl.uniform2f(g.u('uMirror'), mirror ? 1 : 0, POOL.at[1]);
       gl.uniform1i(g.u('uAO'), 13);
-      gl.uniform1f(g.u('uAOOn'), aoReady && !mirror ? 1 : 0);
+      gl.uniform1f(g.u('uAOOn'), aoReady && !mirror && !view ? 1 : 0);
       gl.uniform2f(g.u('uAORes'), canvas.width, canvas.height);
       gl.uniform1i(g.u('uGrain'), 2);
-      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
+      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut || view ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      if (lawn) houseGeometry(g, g.u, 'lawn'); else if (!mirror && aoReady) {
+      mirrorUniforms(g, !view && !mirror);
+      if (lawn) houseGeometry(g, g.u, 'lawn'); else if (!mirror && !view && aoReady) {
         // (0.4.2) Its depth first, colour off (the depth pass's program,
         // which shades nothing), then each pixel shaded once.
         const a = aoPass;
@@ -2181,6 +2251,9 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uVeilA'), alpha);
       const prints = printsNow();
       gl.viewport(0, 0, canvas.width, canvas.height);
+      // (0.4.18) A face of a mirror's probe, while one wants it (and the
+      // next frame comes for the next).
+      probing = !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep();
       // (0.4.2) The house's depth first, for its ambient occlusion.
       aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
       const grassOn = !!grassAt && !!grassProgram();
@@ -2350,11 +2423,11 @@ export default function MistCanvas({ recipe, onFail }) {
         if (meadowAt && !noCaustics) causticsReady = water.caustics(lightDir(meadowAt.colours.dir), 10, skyT);
         gl.useProgram(prog);
       }
-      if (busy || crestMoved || windMoved || living || (tick && changed(vs))) draw(vs);
+      if (busy || crestMoved || windMoved || living || probing || (tick && changed(vs))) draw(vs);
 
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
-      if ((moving || drifting || living) && visible && onScreen) raf = requestAnimationFrame(frame);
+      if ((moving || drifting || living || probing) && visible && onScreen) raf = requestAnimationFrame(frame);
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is
@@ -2477,6 +2550,7 @@ export default function MistCanvas({ recipe, onFail }) {
       publishLampSpot(null);
       water?.dispose();
       if (bloom) bloom.dispose();
+      if (probes) probes.dispose();
       if (birdPass) {
         for (const k of birdPass.kinds) {
           gl.deleteVertexArray(k.vao);

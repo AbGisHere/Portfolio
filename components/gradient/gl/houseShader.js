@@ -15,6 +15,7 @@ import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
+import { PROBE_GLSL } from './mirrorProbe';
 
 export const HOUSE_STRIDE = 9;
 
@@ -248,7 +249,7 @@ uniform sampler2D uGrain;
 uniform float uGrainA;
 uniform float uCssPerPx;
 uniform float uResY;
-
+${PROBE_GLSL}
 in vec3 vWorld;
 in vec3 vNorm;
 in vec2 vST;
@@ -485,9 +486,13 @@ void main() {
     // as fine dark flecks; the fronts and drawers a shade lighter.
     vec2 q = st;
     if (abs(N.y) > 0.5) q = vWorld.xz;
+    // (0.4.18) A door's and a tall front's grain runs up it (variant .6;
+    // it ran across, so the rings banded it every 2.4 cm).
+    else if (vVar > 0.55) q = q.yx;
     float along = q.x;
     float across = q.y;
-    float wav = noise2(vec2(along * 0.8, across * 3.0)) * 0.06 + noise2(vec2(along * 4.0, across * 9.0)) * 0.01;
+    // The rings unevenly spaced, wandering as a sawn board's do.
+    float wav = noise2(vec2(along * 0.8, across * 3.0)) * 0.06 + noise2(vec2(along * 4.0, across * 9.0)) * 0.01 + noise2(vec2(along * 0.15, across * 1.3)) * 0.05;
     float ring = across + wav + 0.05 * pow(abs(fract(along * 0.35) - 0.5), 2.0) * 8.0 * smoothstep(0.3, 0.7, noise2(vec2(floor(along * 0.35), 3.0)));
     float lines = 0.5 + 0.5 * sin(ring * 260.0);
     lines = mix(0.5, pow(lines, 4.0), detail(0.006, q));
@@ -770,6 +775,7 @@ void main() {
   open *= ao;
   lamps *= mix(1.0, ao, 0.7);
   vec3 col;
+  bool mirrored = false;
   if (vPart == ${P.lawn}) {
     // The lawn lit like the meadow round it, the house's shadow and the
     // lamps' spill on top.
@@ -805,6 +811,15 @@ void main() {
     vec3 diffuse = (sunCol * sun * 1.05 + skyLight * 0.62 * open) * dim + lamps;
     if (under) diffuse += vec3(0.35, 0.85, 1.0) * 0.9 * uNight;
     col = alb * (1.0 - metal) * diffuse * (1.0 - Fv * 0.5) + Fv * env + spec * sunCol * dim * 3.0 + emit;
+    // (0.4.18) A mirror shows its room, from its probe (mirrorProbe.js),
+    // a touch darker and greener than what it sees, as silvered glass is.
+    if (vPart == ${P.mirror} && uProbeOn > 0.5) {
+      int k = probeOf(vWorld);
+      if (k >= 0) {
+        col = probeLook(vWorld, R, k) * vec3(0.9, 0.93, 0.91) + spec * sunCol * dim;
+        mirrored = true;
+      }
+    }
     // A curtain lets the light behind it through: the day at the glass,
     // the lamps in the room by night.
     if (vPart == ${P.curtain}) col += alb * ((uSun * max(dot(-N, L), 0.0) * shade + skyLight) * 0.28 * dim + lamps * 0.25);
@@ -820,7 +835,8 @@ void main() {
   // (0.4.6) By night the lamps' light rolls off toward white rather than
   // clipping (a film's shoulder), so a lit wall keeps its gradient and only
   // the lamps themselves burn.
-  if (uNight > 0.0) col = mix(col, (1.0 - exp(-col * 1.35)) * 1.08, uNight * (1.0 - step(0.5, length(emit))));
+  // (A mirror's probe was drawn with it already.)
+  if (uNight > 0.0 && !mirrored) col = mix(col, (1.0 - exp(-col * 1.35)) * 1.08, uNight * (1.0 - step(0.5, length(emit))));
   if (uGrainA > 0.0) {
     ivec2 gi = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));
     float gn = texelFetch(uGrain, gi, 0).r;

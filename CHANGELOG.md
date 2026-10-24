@@ -6,6 +6,42 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.18 — 2026-10-25
+
+Doors, hardware and reflections.
+
+- **No banding on the doors:** the walnut's rings followed a face's
+  second coordinate, which on a door is its height, so every door was
+  striped across at an even 2.4 cm. A door's grain runs up it now (walnut
+  `.6`, also on the front door and the tall cabinet doors), and the rings
+  wander unevenly, as a sawn board's do.
+- **Real hardware:** the doors' levers were rods floating 3 cm off the
+  leaf. Each is now a lever on a rose each side, its neck out from the
+  rose and the lever bending off it toward the hinge, at a metre up
+  (`lever()`, `meshKit.js`). Every drawer and cabinet pull was a flat
+  block; they're brass bar pulls on two posts, each post on a small foot,
+  with rounded ends (`barPull()`; `pullOn()` in `furniture.js`). The front
+  door has a long one each side; the sliders' meeting stiles have slim
+  black ones on posts, on the face away from the other track so they
+  clear it.
+- **Mirrors reflect the room** (they were a grey shine, the env's):
+  every mirror gets a probe (`mirrorProbe.js`), its room seen from a metre
+  in front of it as six 384 px faces drawn by the house's own pass into
+  one atlas. A mirror's pixel follows its reflected ray to its room's box
+  and reads what the probe saw there (box-projected), so the reflection
+  shifts with the viewing angle. The faces are drawn one a frame while
+  the house is in view and that mirror is within 28 m, nearest first, and
+  again as the switch relights the house, so they match by day and by
+  night. Inside a probe the mirrors are plain glass (no mirror in a
+  mirror). All five mirrors are covered (foyer, WC, bedroom, en-suite's
+  two); `?mirror=0` turns them off. The layered fallback has no house, so
+  nothing changes there.
+- **Open:** what's past a window shows in a mirror as the sky's colour
+  (the probes draw only the house). The probes are a fixed 384 px; their
+  cost (a house draw per face while they're drawn, 21 MB of atlas) is for
+  `0.4.26`.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.17 — 2026-10-25
 
 Exterior architecture, the pool and the railings.

@@ -267,3 +267,45 @@ export function obox(out, c, half, part, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]])
     for (const i of order) out.push(...q[i], ...N, part, ...st[i]);
   }
 }
+
+/**
+ * (0.4.18) A bar pull from `a` to `b` (on a front, world metres), standing
+ * `off` out along `n` (the front's normal): a round bar with rounded ends
+ * on two posts, each post seated on a small foot on the front.
+ */
+export function barPull(out, a, b, n, part, { r = 0.0065, off = 0.032 } = {}) {
+  const along = add(b, a, -1);
+  const len = Math.hypot(...along);
+  const d = scale(along, 1 / len);
+  const inset = Math.min(0.025, len * 0.12);
+  const [p, q] = [add(a, d, inset), add(b, d, -inset)];
+  const A = add(a, n, off);
+  const Bq = add(b, n, off);
+  tube(out, A, Bq, r, part, 12);
+  ball(out, A, r, part, 10, 5);
+  ball(out, Bq, r, part, 10, 5);
+  for (const c of [p, q]) {
+    lathe(out, c, n, [[0, 0.004], [r * 1.5, 0.004], [r * 1.6, 0.002], [r * 1.5, 0], [r * 0.8, 0], [r * 0.75, off]], part, 12);
+  }
+}
+
+/**
+ * (0.4.18) A lever handle on a rose at `c` (on the leaf's face), standing
+ * out along `n`, its lever reaching `len` along `dir` (toward the hinge):
+ * a round rose, a neck out from it, the lever turning off the neck in a
+ * soft bend and narrowing a little to a rounded end.
+ */
+export function lever(out, c, n, dir, part, { len = 0.13 } = {}) {
+  lathe(out, c, n, [[0, 0.009], [0.022, 0.009], [0.026, 0.006], [0.027, 0.002], [0.026, 0]], part, 20);
+  const neck = add(c, n, 0.055);
+  tube(out, add(c, n, 0.008), neck, 0.009, part, 12);
+  const path = [];
+  for (let k = 0; k <= 6; k++) {
+    const t = k / 6;
+    const bend = Math.min(1, t * 3);
+    path.push(add(add(c, n, 0.055 - 0.006 * t * t), dir, len * t * (0.25 + 0.75 * bend) + 0.006 * (1 - bend)));
+  }
+  sweep(out, path, 0.0095, part, { seg: 12 });
+  ball(out, neck, 0.0095, part, 12, 6);
+  ball(out, path[6], 0.0095, part, 12, 6);
+}

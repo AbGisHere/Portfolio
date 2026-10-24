@@ -262,6 +262,7 @@ components/
     gl/houseShape.js, houseMesh.js, houseRooms.js, furniture.js, plantMesh.js — the house on its hill (0.4): its plan, lights and zones; its shell; its rooms and curtains; its furniture; its plants
     gl/houseShader.js, houseShadow.js, houseGlass.js, poolWater.js, bloom.js — its surfaces and lamps; the sun's shadow map; the glass and the water; the pool's waves and caustics; the night's bloom
     gl/houseWorker.js — builds the house's mesh off the main thread from the load (0.4.13)
+    gl/mirrorProbe.js — the mirrors' reflections: a probe of each one's room, box-projected (0.4.18)
     gl/birdShape.js, birdFlight.js, birdShader.js — the birds in 3D: swallows, kites, geese (0.4.4)
     freeCam.js — the /house route's free camera
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)

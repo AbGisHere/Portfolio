@@ -9,7 +9,7 @@
  */
 
 import { HOUSE_PART } from './houseShape';
-import { add, axes, box, grid, lathe, obox, scale, soft, sweep, tube } from './meshKit';
+import { add, axes, barPull, box, grid, lathe, lever, obox, scale, soft, sweep, tube } from './meshKit';
 
 const P = HOUSE_PART;
 /** A part with a variant (0 … 0.9): houseShader.js reads the fraction. */
@@ -363,6 +363,9 @@ const DOOR = 0.019;
 const HINGE = 0.002;
 /** The middle (z) of a door on a carcass whose front is at `z`. */
 const doorZ = z => z + HINGE + DOOR / 2;
+/** (0.4.18) A brass bar pull on a front in furniture frame `f`, from
+ * (x, y) to (x, y) on its face at depth `z` (barPull, meshKit.js). */
+const pullOn = (out, f, [ax0, ay0], [ax1, ay1], z) => barPull(out, f.at(ax0, ay0, z), f.at(ax1, ay1, z), f.ax[2], P.brass);
 
 /** A TV on a wall at c (its screen's middle), facing yaw: a thin black
  * body, a glass screen. */
@@ -466,7 +469,7 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
     if (stands[k]) {
       obox(out, f.at(x, 0.48, 0.3), [0.25, 0.09, 0.2], v(P.walnut, 0), f.ax);
       obox(out, f.at(x, 0.48, doorZ(0.5)), [0.235, 0.075, DOOR / 2], v(P.walnut, 0.5), f.ax);
-      obox(out, f.at(x, 0.48, doorZ(0.5) + DOOR / 2 + 0.008), [0.07, 0.006, 0.008], P.brass, f.ax);
+      pullOn(out, f, [x - 0.07, 0.48], [x + 0.07, 0.48], doorZ(0.5) + DOOR / 2);
       lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
     }
     const g = f.at(x, 1.22, 0.3);
@@ -481,7 +484,7 @@ export function bedside(out, c, yaw) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.34, 0), [0.25, 0.16, 0.21], v(P.walnut, 0), f.ax);
   obox(out, f.at(0, 0.34, doorZ(0.21)), [0.235, 0.145, DOOR / 2], v(P.walnut, 0.5), f.ax);
-  obox(out, f.at(0, 0.38, doorZ(0.21) + DOOR / 2 + 0.008), [0.06, 0.006, 0.008], P.brass, f.ax);
+  pullOn(out, f, [-0.06, 0.38], [0.06, 0.38], doorZ(0.21) + DOOR / 2);
   for (const sx of [-0.21, 0.21]) for (const sz of [-0.17, 0.17]) tube(out, f.at(sx, 0, sz), f.at(sx, 0.18, sz), 0.01, P.steel, 6);
 }
 
@@ -494,7 +497,7 @@ export function dresser(out, c, yaw, w = 1.4) {
       const x = -w / 4 + (k * w) / 2;
       const y = 0.2 + r * 0.25;
       obox(out, f.at(x, y, doorZ(0.24)), [w / 4 - 0.008, 0.118, DOOR / 2], v(P.walnut, 0.5), f.ax);
-      obox(out, f.at(x, y + 0.06, doorZ(0.24) + DOOR / 2 + 0.008), [0.07, 0.007, 0.008], P.brass, f.ax);
+      pullOn(out, f, [x - 0.07, y + 0.06], [x + 0.07, y + 0.06], doorZ(0.24) + DOOR / 2);
     }
   }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) tube(out, f.at(sx * (w / 2 - 0.05), 0, sz * 0.19), f.at(sx * (w / 2 - 0.05), 0.07, sz * 0.19), 0.015, v(P.walnut, 0), 8);
@@ -556,8 +559,8 @@ export function kitchenRun(out, c, yaw, w) {
   obox(out, f.at(0, 0.48, 0.3), [w / 2, 0.38, 0.3], v(P.walnut, 0), f.ax);
   for (let k = 0; k < n; k++) {
     const x = -w / 2 + (w / n) * (k + 0.5);
-    obox(out, f.at(x, 0.48, doorZ(0.6)), [w / n / 2 - 0.004, 0.375, DOOR / 2], v(P.walnut, 0.5), f.ax);
-    obox(out, f.at(x, 0.83, doorZ(0.6) + DOOR / 2 + 0.006), [w / n / 2 - 0.05, 0.004, 0.006], P.brass, f.ax);
+    obox(out, f.at(x, 0.48, doorZ(0.6)), [w / n / 2 - 0.004, 0.375, DOOR / 2], v(P.walnut, 0.6), f.ax);
+    pullOn(out, f, [x - Math.min(0.16, w / n / 2 - 0.06), 0.8], [x + Math.min(0.16, w / n / 2 - 0.06), 0.8], doorZ(0.6) + DOOR / 2);
   }
   soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.marble, 0), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
   // The sink, sunk in the top, and its tap.
@@ -600,8 +603,9 @@ export function tallUnit(out, c, yaw, w, h) {
   obox(out, f.at(0, h / 2, 0.3), [w / 2, h / 2, 0.3], v(P.walnut, 0), f.ax);
   const n = Math.round(w / 0.6);
   for (let k = 0; k < n; k++) {
-    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5), h / 2, doorZ(0.6)), [w / n / 2 - 0.004, h / 2 - 0.01, DOOR / 2], v(P.walnut, 0.5), f.ax);
-    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5) + (k % 2 ? -1 : 1) * (w / n / 2 - 0.05), h * 0.48, doorZ(0.6) + DOOR / 2 + 0.008), [0.006, 0.3, 0.008], P.brass, f.ax);
+    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5), h / 2, doorZ(0.6)), [w / n / 2 - 0.004, h / 2 - 0.01, DOOR / 2], v(P.walnut, 0.6), f.ax);
+    const px = -w / 2 + (w / n) * (k + 0.5) + (k % 2 ? -1 : 1) * (w / n / 2 - 0.05);
+    pullOn(out, f, [px, h * 0.48 - 0.3], [px, h * 0.48 + 0.3], doorZ(0.6) + DOOR / 2);
   }
 }
 
@@ -710,9 +714,14 @@ export function picture(out, c, yaw, w, h, variant = 0) {
   obox(out, f.at(0, 0, 0.0195), [w / 2 - 0.1, h / 2 - 0.1, 0.0015], v(P.art, variant), f.ax);
 }
 
+/** (0.4.18) Every mirror the mesh has (its glass's middle and its facing),
+ * for its probe (mirrorProbe.js); houseLayout empties it first. */
+export const MIRRORS = [];
+
 /** A mirror on a wall at c, facing yaw, in a thin brass frame. */
 export function mirror(out, c, yaw, w, h) {
   const f = frame(c, yaw);
+  MIRRORS.push({ c: f.at(0, 0, 0.017), n: f.ax[2] });
   // (0.4.14) The glass set in the frame's rebate, behind its lip.
   const m = 0.015;
   obox(out, f.at(0, 0, 0.004), [w / 2 - 0.002, h / 2 - 0.002, 0.004], P.brass, f.ax);
@@ -824,7 +833,7 @@ export function lounger(out, x, z0, y) {
 /** A door in an opening: its frame (jambs and head), the leaf on its hinge
  * at `hinge` (x, z), swung open by `open` radians from closing along
  * `dir` (its width's way, unit x, z), a lever handle. */
-export function door(out, hinge, dir, y0, { w = 0.9, h = 2.2, open = 0.6, part = v(P.walnut, 0.5), thick = 0.04 } = {}) {
+export function door(out, hinge, dir, y0, { w = 0.9, h = 2.2, open = 0.6, part = v(P.walnut, 0.6), thick = 0.04 } = {}) {
   const yaw = Math.atan2(dir[0], dir[1]) - Math.PI / 2 + open;
   const ax = axes(0, yaw);
   // Hung a little in from the jamb (its gap), and a little short of the
@@ -834,8 +843,11 @@ export function door(out, hinge, dir, y0, { w = 0.9, h = 2.2, open = 0.6, part =
   h -= 0.012;
   const c = add([at[0], y0 + 0.006 + h / 2, at[1]], ax[0], w / 2);
   obox(out, c, [w / 2, h / 2, thick / 2], part, ax);
+  // (0.4.18) A lever on a rose each side, 7 cm in from the free edge at
+  // a metre up, reaching toward the hinge (it was a rod floating 3 cm off
+  // the leaf).
   for (const sz of [-1, 1]) {
-    const hc = add(add(c, ax[0], w / 2 - 0.08), ax[2], sz * (thick / 2 + 0.03));
-    tube(out, add(hc, [0, -0.05, 0]), add(add(hc, [0, -0.05, 0]), ax[0], -0.12), 0.009, P.brass, 6);
+    const hc = add(add(add(c, ax[0], w / 2 - 0.07), ax[2], sz * (thick / 2)), [0, 1.0 - (0.006 + h / 2), 0]);
+    lever(out, hc, scale(ax[2], sz), scale(ax[0], -1), P.brass);
   }
 }
