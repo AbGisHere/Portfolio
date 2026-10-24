@@ -23,7 +23,7 @@
 
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
 import { hexToRgb } from '../colour';
-import { WORLD_M, YAW_OFF } from '../deskCamera';
+import { TURNED_HAZE_GLSL, WORLD_M, YAW_OFF } from '../deskCamera';
 
 /** Shader features `?off=` can compile out, to profile what a frame costs
  * (harness only: without the flag, no define and no cost). */
@@ -125,6 +125,7 @@ out vec4 outColor;
 // Standard normal CDF (tanh approximation, |error| < 3e-4). The argument is
 // clamped first: pixels far from an edge send x into the thousands, and some
 // GPUs (and SwiftShader) return NaN from tanh() once exp() overflows.
+${TURNED_HAZE_GLSL}
 float Phi(float x) {
   x = clamp(x, -6.0, 6.0);
   return 0.5 * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)));
@@ -504,7 +505,11 @@ void main() {
       // Near, the ground between the blades; farther, where the blades are
       // too small to see, the colour the grass reads as from afar.
       vec3 near = mix(uGrassGround, uGrassFar, smoothstep(4.0, 24.0, dist)) * mix(vec3(1.0), uGrassSky, 0.25);
-      col = mix(col, mix(near, col, smoothstep(uHazeAt.x, uHazeAt.y, dist)), gw);
+      // (0.4.12) Turned off the plane there's no painted meadow to haze
+      // into, so the meadow goes on, hazing into the air only over
+      // kilometres, to the horizon (TURNED_HAZE).
+      float haze = mix(smoothstep(uHazeAt.x, uHazeAt.y, dist), turnedHaze(dist), 1.0 - face);
+      col = mix(col, mix(near, col, haze), gw);
     }
   }
 

@@ -331,6 +331,14 @@ export function planeDepth(P, r) {
  * fade the plane over the same turn. */
 export const YAW_OFF = 0.02;
 
+/** (0.4.12) Turned off the mountains' plane, the ground's haze: where it
+ * starts and the distance over which it thickens (metres; the air's share
+ * 1 − e^(−(d − start) / scale)). The meadow runs on to the horizon
+ * (mistShader.js), and the hill's lawn hazes the same (houseShader.js), so
+ * it sits in it. */
+export const TURNED_HAZE = [60, 350];
+export const TURNED_HAZE_GLSL = `float turnedHaze(float d) { return 1.0 - exp(-max(d - ${TURNED_HAZE[0].toFixed(1)}, 0.0) / ${TURNED_HAZE[1].toFixed(1)}); }`;
+
 /** A screen point on the virtual plane (null: the ray leaves it behind). */
 export function toVirtual(P, x, y) {
   const r = worldRay(P, x, y);

@@ -25,6 +25,7 @@
 import { WORLD_M, YAW_OFF } from '../deskCamera';
 import { LIFE, MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
+import { MOUND, MOUND_GLSL } from './houseShape';
 
 const f = v => v.toFixed(6);
 
@@ -54,6 +55,7 @@ uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual
 uniform float uFront;        // the meadow's top on the virtual plane
 uniform vec2 uEye;           // the camera's height and back, world units
 uniform vec3 uCamM;          // the camera, metres from the desk's centre
+uniform vec2 uDepthAB;       // (0.4.12) the solid passes' depth mapping (deskShader.js project)
 uniform vec2 uHazeAt;        // metres: the ground's haze starts, it's all painted meadow
 uniform sampler2D uMeadow;
 uniform float uMeadowA;      // how much of the paint shows (0 where the descent starts)
@@ -101,6 +103,8 @@ float footQ(float vy) {
   return (uFront - uPrin.w) / max(vy - uPrin.w, 1e-3);
 }
 
+${MOUND_GLSL}
+float hitDepth;
 // This pixel's ground point (metres) and its distance, or false for the
 // sky, the ridges and the desk.
 bool groundHit(out vec2 gm, out float dist) {
@@ -109,6 +113,51 @@ bool groundHit(out vec2 gm, out float dist) {
   // Clamped, so the derivatives hold everywhere (they're taken by the caller).
   float t = uEye.x / max(-dir.y, 1e-4);
   gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
+  // (0.4.12) Up onto the hill where it rises (its lawn is painted like
+  // the ground): a few steps toward where the ray meets it, and its depth
+  // there as the solid passes write it, so the paint passes over the lawn
+  // and stays behind what stands on it.
+  // (Marched along the stretch of the ray over the hill's foot, first
+  // crossing then halved down onto it: the hill's slope can be steeper
+  // than the ray.)
+  float hy = 0.0;
+  vec2 c0 = (uCamM.xz - vec2(${f(MOUND.at[0])}, ${f(MOUND.at[1])})) / vec2(${f(MOUND.r[0])}, ${f(MOUND.r[1])});
+  vec2 dd = dir.xz * ${f(WORLD_M)} / vec2(${f(MOUND.r[0])}, ${f(MOUND.r[1])});
+  float qa = dot(dd, dd);
+  float qb = dot(c0, dd);
+  float disc = qb * qb - qa * (dot(c0, c0) - 1.0);
+  if (disc > 0.0 && qa > 1e-12) {
+    float s0 = max((-qb - sqrt(disc)) / qa, 0.0);
+    float s1 = min((-qb + sqrt(disc)) / qa, t);
+    float above = uEye.x * ${f(WORLD_M)};
+    float lo = s0;
+    float hi = -1.0;
+    for (int i = 1; i <= 24 && s1 > s0; i++) {
+      float tt = s0 + (s1 - s0) * float(i) / 24.0;
+      if (above + dir.y * tt * ${f(WORLD_M)} <= moundY(uCamM.xz + dir.xz * tt * ${f(WORLD_M)})) {
+        hi = tt;
+        break;
+      }
+      lo = tt;
+    }
+    if (hi > 0.0) {
+      for (int i = 0; i < 8; i++) {
+        float mid = 0.5 * (lo + hi);
+        if (above + dir.y * mid * ${f(WORLD_M)} <= moundY(uCamM.xz + dir.xz * mid * ${f(WORLD_M)})) hi = mid;
+        else lo = mid;
+      }
+      t = hi;
+      gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
+      hy = moundY(gm);
+    }
+  }
+  hitDepth = gl_FragCoord.z;
+  if (hy > 0.0) {
+    vec3 o = vec3(gm.x, hy, gm.y) - uCamM;
+    vec3 q = vec3(o.x * uYaw.x - o.z * uYaw.y, o.y, o.x * uYaw.y + o.z * uYaw.x);
+    float zp = max(-q.y * uPitch.y + q.z * uPitch.x, 1e-3);
+    hitDepth = clamp(0.5 + 0.5 * (uDepthAB.x + uDepthAB.y / zp) - 1e-5, 0.0, 1.0);
+  }
   dist = t * length(dir) * ${f(WORLD_M)};
   if (!(dir.y < 0.0 && (v.y > uFront || face < 0.5))) return false;
   return true;
@@ -187,6 +236,7 @@ void main() {
   vec2 gm;
   float dist;
   bool hit = groundHit(gm, dist);
+  gl_FragDepth = hitDepth;
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
   if (!hit) discard;
@@ -213,6 +263,7 @@ void main() {
   vec2 gm;
   float dist;
   bool hit = groundHit(gm, dist);
+  gl_FragDepth = hitDepth;
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
   float px = length(abs(gx) + abs(gy));

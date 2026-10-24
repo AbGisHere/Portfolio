@@ -404,7 +404,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (house !== null) return house;
       const hp = passProgram(gl, 'house', HOUSE_VERTEX, HOUSE_FRAGMENT);
       if (!hp) return (house = false);
-      const { data, count, glass: panes } = houseMesh();
+      const { data, count, lawn, glass: panes } = houseMesh();
       const hb = gl.createBuffer();
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
@@ -430,7 +430,7 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      house = { prog: hp, vao, buf: hb, count, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
+      house = { prog: hp, vao, buf: hb, count, lawn, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
       return house;
     };
     // (0.4.2) The pool's water (poolWater.js), on texture unit 8: made the
@@ -531,7 +531,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
       gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
       gl.uniform2f(a.u('uMirror'), 0, 0);
-      houseGeometry(g, a.u);
+      houseGeometry(g, a.u, 'all');
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE13);
@@ -1776,30 +1776,39 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.4) The house's mesh, then its curtains (tied back by day, drawn
     // closed by night: closing on the switch's clock as the lamp's light
     // comes up), under whichever program is bound (`u` its uniforms).
-    function houseGeometry(g, u) {
+    // (0.4.12) `part`: 'solid' (all but the lawn), 'lawn', or 'all'.
+    function houseGeometry(g, u, part = 'solid') {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      const [from, to] = part === 'lawn' ? [0, g.lawn] : part === 'solid' ? [g.lawn, g.count] : [0, g.count];
+      gl.drawArrays(gl.TRIANGLES, from, to - from);
+      if (part === 'lawn') {
+        gl.bindVertexArray(null);
+        return;
+      }
       gl.uniform1f(u('uMorph'), houseNight());
       gl.bindVertexArray(g.curtains.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.curtains.count);
       gl.bindVertexArray(null);
     }
 
-    // (0.4.0) The house and its pool, writing their depth.
-    function drawHouse(mirror = false) {
+    // (0.4.0) The house and its pool, writing their depth. (0.4.12) Or,
+    // `lawn`, only the hill's lawn: after the grass and the ground (the
+    // blades stand over it), and the meadow's paint goes on over it as over
+    // the ground (meadowShader.js writes the hill's depth).
+    function drawHouse(mirror = false, lawn = false) {
       const g = houseProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const L = lightDir(colours.dir);
       const sh = houseShadow();
-      if (sh && !mirror) {
+      if (sh && !mirror && !lawn) {
         sh.map.render(m => {
           gl.useProgram(sh.prog);
           gl.uniformMatrix4fv(sh.u, false, m);
           gl.bindVertexArray(g.vao);
-          gl.drawArrays(gl.TRIANGLES, 0, g.count);
+          gl.drawArrays(gl.TRIANGLES, g.lawn, g.count - g.lawn);
         }, L);
         gl.viewport(0, 0, canvas.width, canvas.height);
         sh.map.bind();
@@ -1817,6 +1826,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
       gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
       gl.uniform3fv(g.u('uLawn'), rgb01(colours.far));
+      gl.uniform3fv(g.u('uLawnNear'), rgb01(colours.ground));
       gl.uniform3fv(g.u('uHaze'), rgb01(colours.env[1]));
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1f(g.u('uNight'), houseNight());
@@ -1833,7 +1843,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      if (!mirror && aoReady) {
+      if (lawn) houseGeometry(g, g.u, 'lawn'); else if (!mirror && aoReady) {
         // (0.4.2) Its depth first, colour off (the depth pass's program,
         // which shades nothing), then each pixel shaded once.
         const a = aoPass;
@@ -2064,6 +2074,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1f(g.u('uFront'), front);
         gl.uniform2f(g.u('uEye'), c.eye, c.back);
         gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
+        gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
         gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
         gl.uniform1i(g.u('uMeadow'), 5);
         gl.uniform1f(g.u('uMeadowA'), meadowShown ? a : 0);
@@ -2142,6 +2153,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.depthFunc(gl.LESS);
       if (deskOn) drawDesk(true);
       if (treesOn) drawTrees(true);
+      if (deskOn && !noHouse && houseSeen) drawHouse(false, true);
       // Then the meadow over the ground the blades leave uncovered (the
       // depth test skips the rest), writing no depth.
       gl.depthMask(false);

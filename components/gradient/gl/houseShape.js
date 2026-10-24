@@ -39,7 +39,8 @@ export const MOUND_GLSL = `float moundY(vec2 p) {
   return s < 1.0 ? ${MOUND.h.toFixed(3)} * (1.0 - s * s) * (1.0 - s * s) : 0.0;
 }
 bool underHouse(vec2 p) {
-  return p.x > -9.6 && p.x < 9.6 && p.y > -81.1 && p.y < -55.7;
+  // (0.4.12) The stone base's footprint, and its steps'.
+  return p.x > -9.6 && p.x < 9.6 && p.y > -81.1 && (p.y < -57.45 || (abs(p.x) < 1.8 && p.y < -55.75));
 }
 `;
 

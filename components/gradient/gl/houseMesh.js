@@ -132,6 +132,9 @@ export function houseLayout() {
     const z = cz + rz * r * Math.sin(a);
     return { p: [x, moundY(x, z), z], part: P.lawn, s: x, t: z };
   });
+  // (0.4.12) The lawn is drawn on its own, under the meadow's paint
+  // (MistCanvas.jsx): its vertices first, this many.
+  const lawn = out.length / 9;
   // Stepping stones down the mound toward the desk.
   for (let i = 0; i < 14; i++) {
     const z = -55.6 + i * 1.05;
@@ -338,5 +341,5 @@ export function houseLayout() {
   for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, utop - 0.012, -69.87], [x + 0.07, utop, -69.73], P.lamp);
 
   const data = new Float32Array(out);
-  return { data, count: data.length / 9, glass };
+  return { data, count: data.length / 9, lawn, glass };
 }

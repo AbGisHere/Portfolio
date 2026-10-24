@@ -6,6 +6,28 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.12 — 2026-10-25
+
+- **The meadow goes on behind the house** (the owner: the house looked
+  placed on an island in fog): turned away from the mountains' painted
+  plane, the ground used to haze into the sky within 58 m. Now the meadow
+  runs on to the horizon, hazing into the air as distance thickens
+  (`TURNED_HAZE`: from 60 m, 1 − e^(−d/350)).
+- **The hill's lawn is the meadow's grass:** its colour taken as the ground
+  under the camera takes it (between the blades near, the grass from afar
+  farther, about the meadow pass's tint), unmown (no stripes), hazed the
+  same, and its foot dithered over its first metre of height so it gives
+  way to the meadow over metres of ground instead of at a ragged edge.
+- **The meadow's paint goes up the hill** (the owner: "why did we remove
+  the grass around the house?"): the lawn is drawn after the grass and the
+  ground, and the meadow pass finds where each ray meets the hill (marched
+  over its foot, then halved down onto it) and writes the hill's depth
+  there, so its clumps, strokes, prints and painted flowers carry on up to
+  the house. The wildflowers grow on the hill too now, at its height, and
+  the grass and flowers stop only at the stone base and its steps
+  (`underHouse` fitted to them; it reached 1.8 m past the base).
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.11 — 2026-10-25
 
 - **The camera turns while looking down** (the owner: not the walker's

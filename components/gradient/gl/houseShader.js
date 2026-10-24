@@ -14,6 +14,7 @@ import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { houseLayout } from './houseMesh';
+import { TURNED_HAZE_GLSL } from '../deskCamera';
 
 export const HOUSE_STRIDE = 9;
 
@@ -85,6 +86,8 @@ const vec2 AO_DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(
   vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
 uniform highp sampler2DShadow uShadow;
 uniform float uShadowOn;
+
+${TURNED_HAZE_GLSL}
 
 // Interleaved gradient noise (Jimenez): a per-pixel turn that reads as an
 // even fine texture, not speckle.
@@ -215,7 +218,7 @@ float noise2(vec2 p) {
 }
 void main() {
   // (Where the lawn frays into the meadow, as the shading pass leaves it.)
-  if (vPart == ${HOUSE_PART.lawn} && vWorld.y < 0.25 * noise2(vWorld.xz * 0.9) + 0.04 * hash2(floor(gl_FragCoord.xy))) discard;
+  if (vPart == ${HOUSE_PART.lawn} && vWorld.y < 1.0 * pow(hash2(floor(gl_FragCoord.xy)), 0.7)) discard;
   vec3 q = viewOf(vWorld - uCam);
   outColor = vec4(-q.y * uPitch.y + q.z * uPitch.x, 0.0, 0.0, 1.0);
 }
@@ -231,6 +234,7 @@ uniform vec3 uEnvTop;
 uniform vec3 uEnvLow;
 uniform vec3 uWood;     // what a surface mirrors below the horizon: the lawn
 uniform vec3 uLawn;     // the lawn: the grass's colour from afar
+uniform vec3 uLawnNear; // (0.4.12) and near, between the blades (the meadow's)
 uniform vec3 uHaze;     // what the meadow hazes into with distance
 uniform vec2 uHazeAt;   // over these distances (metres)
 uniform float uNight;
@@ -330,11 +334,16 @@ void main() {
   vec3 emit = vec3(0.0);
   if (vPart == ${P.lawn}) {
     // At its foot the mound frays into the meadow (which shows where it's
-    // left out), so there's no line round it.
-    if (vWorld.y < 0.25 * noise2(vWorld.xz * 0.9) + 0.04 * hash2(floor(gl_FragCoord.xy))) discard;
-    float stripe = smoothstep(0.35, 0.65, abs(fract(st.x / 3.0) - 0.5) * 2.0);
+    // left out), so there's no line round it. (0.4.12) Over its first metre
+    // of height, finely dithered, so the meadow gives way to it over metres
+    // of ground rather than at a ragged edge.
+    if (vWorld.y < 1.0 * pow(hash2(floor(gl_FragCoord.xy)), 0.7)) discard;
+    // (0.4.12) The meadow's own colour, as the ground under the camera
+    // takes it (mistShader.js): between the blades near, the grass from
+    // afar farther; unmown, so no stripes.
     float mott = noise2(st * 0.6) * 0.6 + noise2(st * 3.1) * 0.4;
-    alb = uLawn * (0.95 + 0.04 * stripe + 0.08 * mott);
+    // (×1.15: the meadow pass's tint over the ground, on average.)
+    alb = mix(uLawnNear, uLawn, smoothstep(4.0, 24.0, length(uCam - vWorld))) * (0.94 + 0.12 * mott) * 1.15;
     rough = 1.0;
   } else if (vPart == ${P.stone}) {
     // Coursed stone, blocks each a little their own, raked joints; the
@@ -742,7 +751,8 @@ void main() {
     // lamps' spill on top.
     float relief = mix(0.85, 1.08, smoothstep(-0.2, 0.6, dot(N, L) - L.y));
     vec3 c = alb * mix(vec3(1.0), uSky, 0.25) * relief * mix(0.55, 1.0, shade);
-    col = mix(c, uHaze, 0.35 * smoothstep(uHazeAt.x, uHazeAt.y, length(uCam - vWorld))) + alb * lamps;
+    // (0.4.12) Hazed as the meadow round it is (TURNED_HAZE).
+    col = mix(c, uHaze, turnedHaze(length(uCam - vWorld))) + alb * lamps;
   } else {
     vec3 F0 = mix(vec3(f0), alb, metal);
     vec3 H = normalize(L + V);

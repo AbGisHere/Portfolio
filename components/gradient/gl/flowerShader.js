@@ -129,6 +129,12 @@ void main() {
   ivec2 at = ivec2(floor(uCam.xz / c)) - ${FLOWERS.side / 2} + ivec2(cell % ${FLOWERS.side}, cell / ${FLOWERS.side});
   uint s = pcg(uint(at.x) * 7919u ^ pcg(uint(at.y) * 104729u ^ pcg(uint(ring * 8 + fi) + 51u)));
   vec2 pos = (vec2(at) + vec2(rnd(s), rnd(s))) * c;
+  // (0.4.12) Up the hill too (it's meadow), none under the house's stone.
+  if (underHouse(pos)) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+  float gy = moundY(pos);
 
   // Which ring owns this spot (a crossfade at each edge), and how many grow
   // here: the drifts, the strays between, fading out with distance.
@@ -137,13 +143,12 @@ void main() {
   float inner = ring == 0 ? 0.0 : edge * 0.5;
   float own = (ring == 0 ? 1.0 : smoothstep(inner * 0.9, inner, m)) - smoothstep(edge * 0.9, edge, m);
   vec2 rel = pos - uCam.xz;
-  float d = length(vec3(rel.x, uCam.y, rel.y));
+  float d = length(vec3(rel.x, uCam.y - gy, rel.y));
   float drift = smoothstep(0.45, 0.7, textureLod(uMeadow, pos / ${f(FLOWERS.driftScale)}, 0.0).a);
-  // (None on the house's mown lawn.)
-  float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d)) * (1.0 - smoothstep(0.02, 0.15, moundY(pos)));
+  float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d));
   float p = own * want * c * c / ${f(FLOWERS.slots)};
   float grow = clamp((p - rnd(s)) / 0.1, 0.0, 1.0);
-  vec3 q0 = viewOf(vec3(rel.x, -uCam.y, rel.y));
+  vec3 q0 = viewOf(vec3(rel.x, gy - uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   float fz = uPitch.w * uPitch.z;
   // A device pixel at the root, in metres.
@@ -200,7 +205,7 @@ ${PUSH_SUM}
     float y = phi < 1e-3 ? hgt * t : hgt * sin(ang) / phi;
     vec2 toCam = normalize(-rel + vec2(1e-5));
     vec2 across = vec2(toCam.y, -toCam.x);
-    w = vec3(pos.x + bd.x * off + across.x * sd * sw, y, pos.y + bd.y * off + across.y * sd * sw);
+    w = vec3(pos.x + bd.x * off + across.x * sd * sw, y + gy, pos.y + bd.y * off + across.y * sd * sw);
     vUV = vec2(sd * 2.0, t);
     vKind = 0.0;
   } else {
@@ -209,7 +214,7 @@ ${PUSH_SUM}
     // The stem's tip and the way it points there.
     float off = phi < 1e-3 ? hgt * phi * 0.5 : hgt * (1.0 - cos(phi)) / phi;
     float y = phi < 1e-3 ? hgt : hgt * sin(phi) / phi;
-    vec3 tip = vec3(pos.x + bd.x * off, y, pos.y + bd.y * off);
+    vec3 tip = vec3(pos.x + bd.x * off, y + gy, pos.y + bd.y * off);
     vec3 tang = vec3(bd.x * sin(phi), cos(phi), bd.y * sin(phi));
     // Never under a pixel and a half across.
     float R = max(rad, pxM * 1.5);
