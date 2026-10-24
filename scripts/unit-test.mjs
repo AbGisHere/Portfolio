@@ -15,14 +15,13 @@ import { descentAt, scrollPalette } from '../components/gradient/camera.js';
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
-import { cameraMetres, contactCameraAt, deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
+import { contactCameraAt, deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
 import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
 import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
 import { MEADOW_SIZE, meadowTexels } from '../components/gradient/gl/meadowTexture.js';
 import { TREE_STRIDE, treeLayout } from '../components/gradient/gl/treeShader.js';
 import { DESK_STRIDE, deskLayout } from '../components/gradient/gl/deskShader.js';
 import { DESK_BOX } from '../components/gradient/deskCamera.js';
-import { moundY } from '../components/gradient/gl/houseShape.js';
 import { PROGRAMS } from './lib/programs.mjs';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, makeFlicker, poseFree, poseToward, screenToWorld } from '../components/gradient/gl/lampShape.js';
 import { LAMP_STRIDE, lampMesh } from '../components/gradient/gl/lampShader.js';
@@ -283,15 +282,18 @@ test('the 0.3 camera: the stops sit in holds, and it reaches the desk', () => {
   }
 });
 
-test('the 0.4 camera: from the reading position, on foot up to the house and through it, onto the pool', () => {
+test('the 0.4 camera: from the reading position, over the desk, turned round looking down, to the house and onto the pool', () => {
   const read = deskCameraAt(1, duskEmber);
   const start = contactCameraAt(0, duskEmber);
   for (const k of ['back', 'rise', 'pitch', 'zoom', 'centre', 'ahead']) assert.ok(Math.abs(start[k] - read[k]) < 1e-9, `no cut at the desk's end (${k})`);
   assert.equal(start.yaw, 0);
-  // (0.4.10) Walking up the path: facing the house, at eye height.
-  const path = contactCameraAt(0.3, duskEmber);
-  assert.ok(Math.abs(path.yaw - Math.PI) < 1e-6 && path.ahead > 0.5 && Math.abs(path.x) < 1e-6, 'facing the house on the path, past the desk');
-  for (let c = 0.16; c < 0.4; c += 0.02) assert.ok(Math.abs(cameraMetres(contactCameraAt(c, duskEmber)).y - 1.65 - moundY(0, cameraMetres(contactCameraAt(c, duskEmber)).z)) < 0.05, `eye height on the path at ${c}`);
+  // (0.4.10) It turns only while looking straight down, then faces the house.
+  for (let c = 0.03; c < 0.5; c += 0.005) {
+    const k = contactCameraAt(c, duskEmber);
+    if (k.yaw > 1e-6 && k.yaw < Math.PI - 1e-6) assert.ok(Math.abs(k.pitch - Math.PI / 2) < 1e-9, `turning only looking straight down (${c})`);
+  }
+  const house = contactCameraAt(0.62, duskEmber);
+  assert.ok(Math.abs(house.yaw - Math.PI) < 1e-9 && house.ahead > 0.5, 'facing the house, past the desk');
   const pool = contactCameraAt(0.96, duskEmber);
   assert.ok(Math.abs(pool.pitch - Math.PI / 2) < 1e-9, 'straight down over the pool');
   for (let c = 0; c <= 1; c += 0.01) assert.ok(contactCameraAt(c, duskEmber).eye > 0, `a camera above the ground at ${c}`);

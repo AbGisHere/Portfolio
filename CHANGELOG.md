@@ -6,6 +6,23 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.11 — 2026-10-25
+
+- **The camera turns while looking down** (the owner: not the walker's
+  eyes, and no turn that sweeps the sides): 0.4.10's first-person walk is
+  gone. The camera rises back over the desk to look straight down at it,
+  and only then turns, slowly: the ground turns 180° under it as it
+  drifts back and up, the desk staying in the frame. Facing the house, it
+  tilts up to it along the path, comes up to it, and goes up and over onto
+  the pool as before (the hold's top toward the house again). The path is
+  where the person from the desk will walk, in a later version.
+- **Kept from 0.4.10:** the landing's open panel, its bench on the bedroom
+  wall, the curtains by both open panels tied by night (the person's way
+  in), and the house and pool drawn whenever the camera is up at the house.
+- **`contact` is 500 lvh** (was 800).
+- **Measured:** unit tests 28/28 (the 0.4 camera test checks it turns only
+  while looking straight down). No QA run.
+
 ## 0.4.10 — 2026-10-25
 
 - **The camera walks to the house** (the owner: "follow a man leaving the
