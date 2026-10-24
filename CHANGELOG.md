@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.9 — 2026-10-25
+
+- **Limestone** (`paver`): the forecourt paved in honed 90 × 60 slabs in
+  stretcher bond, each its own tone, pitting and bedding, sunk dirty
+  joints, a slight lippage and eased arrises; the steps' treads 4 cm
+  slabs of it overhanging their set-back risers by 3 cm, the nose rounded.
+- **A creeping fig** (`trailing`) over the planters' fronts: stems over the
+  lip and down, thick with small rounded leaves in two ranks, turned out
+  to the light (it replaces the rosemary's bare stems).
+- **Daylight indoors:** a room with a wall of glass is lit by its bounce
+  everywhere, not only near the glass (`open` 0.55 at least; the indoor
+  sky light ×1.6).
+- **Tied curtains:** seven deep folds in the gathered column, a soft blouse
+  over the tie, pinched at it, flaring to the hem; the tassel a wrapped head
+  and 26 threads.
+- **The stair's handrail:** walnut, sloped with the stair, on a steel post
+  clamped to each glass panel's top (the panels a little lower), turning
+  flat at the landing.
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.8 — 2026-10-25
 
 - **Fix:** a lamp fitting floated 6.85 m up over the path: the porch's

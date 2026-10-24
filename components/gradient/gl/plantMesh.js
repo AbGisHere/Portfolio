@@ -204,23 +204,42 @@ export function lavender(out, c, r, seed) {
   }
 }
 
-/** (0.4.8) Rosemary trailing over a planter's edge at `edge` (x, y, z),
- * falling along `out` (unit, away from the planter). */
+/**
+ * (0.4.9) A creeping fig trailing over a planter's edge at `edge`, falling
+ * along `dir` (unit, away from the planter): wiry stems curving over the
+ * lip and hanging, clothed thick with small rounded leaves on short stalks
+ * in two ranks along them, each turned out to the light, the youngest
+ * smallest at the tips.
+ */
 export function trailing(out, edge, dir, len, seed) {
   const rnd = seeded(seed);
-  for (let i = 0; i < 7; i++) {
-    const off = (rnd() - 0.5) * 0.5;
-    const side = unit([dir[2], 0, -dir[0]]);
+  const side = unit([dir[2], 0, -dir[0]]);
+  for (let i = 0; i < 9; i++) {
+    const off = (rnd() - 0.5) * 0.55;
+    const drop = len * (0.45 + 0.55 * rnd());
     const pts = [];
-    for (let k = 0; k <= 6; k++) {
-      const t = k / 6;
-      pts.push(add(add(edge, side, off + 0.03 * Math.sin(k + i)), add(scale(dir, 0.12 * Math.sin(t * 1.6) + 0.02), [0, 0.04 - t * t * len * (0.6 + 0.4 * rnd()), 0])));
+    for (let k = 0; k <= 10; k++) {
+      const t = k / 10;
+      // Over the lip, then down the face, a little away from it.
+      const out1 = 0.05 * Math.sin(Math.min(1, t * 3) * Math.PI * 0.5) + 0.015 * t;
+      const down = t < 0.25 ? -0.02 + 0.06 * Math.sin(t * 4 * Math.PI * 0.5) * (1 - t * 4) : -(t - 0.25) / 0.75 * drop;
+      pts.push(add(add(edge, side, off + 0.04 * Math.sin(k * 0.9 + i)), add(scale(dir, out1), [0, down + 0.02, 0])));
     }
-    sweep(out, pts, 0.003, BARK + 0.5, { seg: 4 });
+    sweep(out, pts, 0.0018, BARK + 0.5, { seg: 4 });
     for (let k = 1; k < pts.length; k++) {
-      for (let j = 0; j < 6; j++) {
-        const a = (j / 6) * Math.PI * 2;
-        leaf(out, pts[k], unit([Math.cos(a), -0.3, Math.sin(a)]), [0, 1, 0], 0.025, 0.004, lance, 0.1, 0.05, 0.3);
+      const a = pts[k - 1];
+      const b = pts[k];
+      const along = unit(add(b, a, -1));
+      for (let j = 0; j < 4; j++) {
+        const t = (j + rnd() * 0.5) / 4;
+        const at = add(a, add(b, a, -1).map(x => x * t));
+        const rank = (k * 4 + j) % 2 ? 1 : -1;
+        // Out to the light: off the stem sideways and away from the wall.
+        const ld = unit(add(add(scale(side, rank * 0.8), dir, 0.9), [0, 0.35, 0]));
+        const face = unit(add(dir, [0, 0.4, 0]));
+        const size = 0.022 + 0.014 * (1 - k / pts.length) + 0.006 * rnd();
+        const stalk = add(at, ld, 0.006);
+        leaf(out, stalk, ld, face, size, size * 0.78, oval, 0.15, 0.08, 0.45);
       }
     }
   }

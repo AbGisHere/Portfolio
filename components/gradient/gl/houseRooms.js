@@ -89,24 +89,23 @@ export function curtainMesh() {
         const amp = 0.045 * deepJ * (1 + 0.25 * w * w);
         return [x0 + width * u + Math.sin(ph) * amp * 0.15 * head, y, z + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
       }
-      // Tied: the whole width gathered into a narrow column at the end
-      // it's tied to, cinched hard at the tie-back (two thirds down), the
-      // cloth blousing out a little over the tie and falling free below it
-      // to the floor, its folds packed tight.
-      const tie = tieW;
-      const aboveT = Math.min(1, w / tie);
-      const belowT = Math.max(0, w - tie) / (1 - tie);
+      // Tied: the whole width gathered into a column of deep folds at the
+      // end it's tied to, cinched at the tie-back two thirds down, the cloth
+      // blousing softly out over the tie and falling free below it to the
+      // floor, wider at its hem.
+      const aboveT = Math.min(1, w / tieW);
+      const belowT = Math.max(0, w - tieW) / (1 - tieW);
       const waist = 0.12 + 0.02 * Math.min(1, width / 3);
-      const span = w < tie
-        ? waist + (0.34 - waist) * Math.pow(1 - aboveT, 1.4) + 0.1 * Math.exp(-((aboveT - 0.86) ** 2) / 0.005)
-        : waist + (0.4 - waist) * Math.pow(belowT, 0.65);
-      // The blouse over the tie bows the cloth out into the room.
-      const bow = w < tie ? 0.07 * Math.exp(-((aboveT - 0.88) ** 2) / 0.008) : 0.0;
-      // (Gathered, its folds are fewer and rounder than it has flat.)
-      const tph = u * 9 * Math.PI * 2 + deepJ;
-      const amp = Math.min(0.045, span * 0.16) * (0.8 + 0.4 * deepJ);
+      const span = w < tieW
+        ? waist + (0.3 - waist) * (1 - aboveT) * (1 - aboveT) + 0.07 * Math.exp(-((aboveT - 0.82) ** 2) / 0.02)
+        : waist + (0.36 - waist) * Math.sqrt(belowT);
+      const bow = w < tieW ? 0.05 * Math.exp(-((aboveT - 0.82) ** 2) / 0.02) : 0.02 * Math.sin(belowT * Math.PI);
+      // Seven deep folds across it, their depth the column's own, pinched at
+      // the tie.
+      const tph = u * 7 * Math.PI * 2 + deepJ;
+      const amp = (w < tieW ? 0.04 + 0.02 * (1 - aboveT) : 0.035 + 0.035 * belowT) * (0.85 + 0.3 * deepJ) * (1 - 0.5 * Math.exp(-((w - tieW) ** 2) / 0.0008));
       const offX = to < 0 ? end + span * u : end - span * (1 - u);
-      return [offX + Math.sin(tph) * amp * 0.25, y, z - bow - span * 0.25 + Math.cos(tph) * amp * (0.45 + 0.55 * head)];
+      return [offX + Math.sin(tph) * amp * 0.35, y, z - 0.065 - bow + Math.cos(tph) * amp * (0.45 + 0.55 * head)];
     };
     const grid2 = [];
     for (let j = 0; j <= nv; j++) {
@@ -169,24 +168,32 @@ export function curtainMesh() {
         tri(p, r2, t);
       }
     }
-    // The tassel: from the knot at the ring's front, a head, a skirt of
-    // threads flaring to 15 cm below.
+    // The tassel: a wrapped head at the knot, then threads hanging from it,
+    // each its own length, swaying apart a little toward their ends.
     const knot = [cx + (to < 0 ? 0.03 : -0.03), yT - 0.012, cz - 0.062];
-    const nT = 18;
-    for (let i = 0; i < nT; i++) {
-      const vtx = (ii, kk) => {
-        const a = (ii / nT) * Math.PI * 2;
-        const t = kk;
-        const r = t < 0.25 ? 0.008 + 0.03 * t : 0.018 + 0.04 * (t - 0.25);
-        const y = knot[1] - 0.02 - t * 0.16;
-        const p = [knot[0] + Math.cos(a) * r, y, knot[2] + Math.sin(a) * r];
-        return push(p, [Math.cos(a), 0.15, Math.sin(a)], ii / nT * 30, t);
-      };
-      for (const [k0, k1] of [[0, 0.25], [0.25, 1]]) {
-        const [p, q, r2, t] = [vtx(i, k0), vtx(i + 1, k0), vtx(i + 1, k1), vtx(i, k1)];
-        tri(p, q, r2);
+    const tube3 = (a, b, r, s2) => {
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const ux = Math.abs(d[1]) > 0.5 ? [1, 0, 0] : [0, 1, 0];
+      const n0 = [d[1] * ux[2] - d[2] * ux[1], d[2] * ux[0] - d[0] * ux[2], d[0] * ux[1] - d[1] * ux[0]];
+      const l0 = Math.hypot(...n0);
+      const e1 = n0.map(x => x / l0);
+      const ld = Math.hypot(...d);
+      const e2 = [(d[1] * e1[2] - d[2] * e1[1]) / ld, (d[2] * e1[0] - d[0] * e1[2]) / ld, (d[0] * e1[1] - d[1] * e1[0]) / ld];
+      for (let q = 0; q < 5; q++) {
+        const [a0, a1] = [(q / 5) * Math.PI * 2, ((q + 1) / 5) * Math.PI * 2];
+        const rim = (c0, ang) => c0.map((v, k2) => v + (e1[k2] * Math.cos(ang) + e2[k2] * Math.sin(ang)) * r);
+        const nrm = ang => e1.map((v, k2) => v * Math.cos(ang) + e2[k2] * Math.sin(ang));
+        const [p, q2, r2, t] = [push(rim(a, a0), nrm(a0), s2, 0), push(rim(a, a1), nrm(a1), s2, 0), push(rim(b, a1), nrm(a1), s2, 1), push(rim(b, a0), nrm(a0), s2, 1)];
+        tri(p, q2, r2);
         tri(p, r2, t);
       }
+    };
+    tube3(knot, [knot[0], knot[1] - 0.035, knot[2]], 0.012, 0);
+    for (let n = 0; n < 26; n++) {
+      const a = (n / 26) * Math.PI * 2;
+      const top = [knot[0] + Math.cos(a) * 0.009, knot[1] - 0.035, knot[2] + Math.sin(a) * 0.009];
+      const len = 0.13 + 0.03 * Math.sin(n * 2.7);
+      tube3(top, [top[0] + Math.cos(a) * 0.012, top[1] - len, top[2] + Math.sin(a) * 0.012], 0.0018, n * 1.3);
     }
   }
   const data = new Float32Array(out);
@@ -302,8 +309,19 @@ export function groundRooms(out, ix, iz, glass) {
   for (let i = 1; i <= 17; i++) {
     const z = z0 - (i - 1) * run;
     const y = B + i * rise;
-    glass.push([[ox - 0.006, y - 0.065, z - run + 0.003], [ox + 0.006, y + 1.0, z - 0.003], true]);
+    glass.push([[ox - 0.006, y - 0.065, z - run + 0.003], [ox + 0.006, y + 0.92, z - 0.003], true]);
     for (const cz of [z - 0.06, z - run + 0.06]) box(out, [ox - 0.018, y - 0.06, cz - 0.02], [ox + 0.018, y - 0.015, cz + 0.02], v(P.steel, 0.5));
+  }
+  // A walnut handrail over the glass, sloped with the stair, on a short
+  // steel post clamped to each panel's top; it turns flat at the landing.
+  const railY = i => B + i * rise + 1.08;
+  const railZ = i => z0 - (i - 1) * run - run / 2;
+  tube(out, [ox, railY(1) - 0.06, railZ(1) + 0.3], [ox, railY(17), railZ(17)], 0.024, v(P.walnut, 0), 12);
+  tube(out, [ox, railY(17), railZ(17)], [ox, railY(17), railZ(17) - 0.35], 0.024, v(P.walnut, 0), 12);
+  for (let i = 1; i <= 17; i++) {
+    const gy = B + i * rise + 0.92;
+    box(out, [ox - 0.014, gy - 0.03, railZ(i) - 0.025], [ox + 0.014, gy + 0.005, railZ(i) + 0.025], v(P.steel, 0.5));
+    tube(out, [ox, gy, railZ(i)], [ox, railY(i) - 0.02, railZ(i)], 0.007, v(P.steel, 0.5), 6);
   }
   // The wall's rail, on brackets.
   const wr = t => [ix[0] + 0.07, B + 0.9 + t * (17 * rise), z0 + 0.1 - t * (17 * run + 0.3)];

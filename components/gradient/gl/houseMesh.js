@@ -154,7 +154,17 @@ export function houseLayout() {
   const front = moundY(0, -57.5);
   const steps = 5;
   const rise = (B - front) / steps;
-  for (let i = 0; i < steps; i++) box(out, [-1.4, front - 0.3, -57.5 + i * 0.34], [1.4, B - (i + 1) * rise, -57.5 + (i + 1) * 0.34], v(P.stone, 0.3));
+  // (0.4.9) Each step a block of the base's stone, its riser set back
+  // under a limestone tread 4 cm thick whose nose overhangs it by 3 cm,
+  // its edge eased; the forecourt paved in the same limestone.
+  for (let i = 0; i < steps; i++) {
+    const [z0, z1] = [-57.5 + i * 0.34, -57.5 + (i + 1) * 0.34];
+    const yT = B - (i + 1) * rise;
+    box(out, [-1.4, front - 0.3, z0], [1.4, yT - 0.04, z1], v(P.stone, 0.3));
+    box(out, [-1.4, yT - 0.04, z0], [1.4, yT, z1 + 0.03], P.paver);
+    tube(out, [-1.4, yT - 0.02, z1 + 0.03], [1.4, yT - 0.02, z1 + 0.03], 0.02, P.paver, 8);
+  }
+  box(out, [-9.5, B, -81], [9.5, B + 0.015, -57.5], P.paver, { bottom: false });
   for (const x of [-1.7, 1.4]) box(out, [x, front - 0.3, -57.5], [x + 0.3, B + 0.1, -57.5 + steps * 0.34], P.stone);
   // (0.4.8) A recessed step light in each cheek wall, at every other step.
   for (let i = 0; i < steps; i += 2) {

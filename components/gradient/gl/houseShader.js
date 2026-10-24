@@ -353,6 +353,31 @@ void main() {
     }
     alb = c * (1.0 - 0.45 * joint);
     rough = vVar > 0.75 ? 0.55 : 0.85;
+  } else if (vPart == ${P.paver}) {
+    // Honed limestone, laid in a stretcher bond of 90 × 60 cm slabs with
+    // 3 mm joints, each slab cut from its own part of the bed: a warm grey
+    // beige, its tone, its fossil pitting and its faint bedding lines its
+    // own; joints a little sunk and dark with the dirt in them; the slabs
+    // not quite level with each other; a sheen where the light grazes.
+    vec2 q = abs(N.y) > 0.5 ? vWorld.xz : vec2(vWorld.x + vWorld.z, vWorld.y);
+    float row = floor(q.y / 0.6);
+    vec2 g = vec2(q.x / 0.9 + 0.5 * mod(row, 2.0), q.y / 0.6);
+    vec2 cell = floor(g);
+    vec2 e = (0.5 - abs(fract(g) - 0.5)) * vec2(0.9, 0.6);
+    float px = length(fwidth(q));
+    float joint = 1.0 - smoothstep(0.0015, 0.0035 + px, min(e.x, e.y));
+    float tone = hash2(cell);
+    vec3 base = mix(vec3(0.7, 0.66, 0.58), vec3(0.6, 0.58, 0.53), tone) * (0.94 + 0.08 * hash2(cell + 9.0));
+    float bed = 0.5 + 0.5 * sin((q.y * 0.4 + q.x * 0.1 + noise2(q * 1.3 + cell) * 0.6) * 40.0);
+    float mott = noise2(q * 3.0 + cell * 5.0) * 0.6 + noise2(q * 11.0) * 0.4;
+    float pits = step(0.92, noise2(q * 55.0 + cell)) * detail(0.004, q);
+    alb = base * (0.93 + 0.07 * mott) * (0.97 + 0.04 * bed * detail(0.01, q)) * (1.0 - 0.35 * pits);
+    alb = mix(alb, vec3(0.28, 0.26, 0.23), joint * detail(0.008, q));
+    // Each slab's own tilt, and its arrises eased at the joint.
+    vec2 tilt = (vec2(hash2(cell + 3.0), hash2(cell + 7.0)) - 0.5) * 0.012;
+    if (abs(N.y) > 0.5) N = normalize(N + vec3(tilt.x, 0.0, tilt.y) + vec3(sign(fract(g.x) - 0.5) * (1.0 - smoothstep(0.0, 0.01, e.x)), 0.0, sign(fract(g.y) - 0.5) * (1.0 - smoothstep(0.0, 0.01, e.y))) * 0.25);
+    rough = 0.55 + 0.25 * mott;
+    f0 = 0.04;
   } else if (vPart == ${P.render}) {
     alb = vec3(0.9, 0.87, 0.82) * (0.95 + 0.07 * noise2(st * 3.0) + 0.03 * noise2(st * 40.0));
     rough = 0.92;
@@ -694,13 +719,18 @@ void main() {
   if (room != 0) {
     float fz = vWorld.y < ${f(TERRACE - 0.1)} ? ${f(G.z[1])} : ${f(U.z[1])};
     float bz = ${f(G.z[0])};
-    open = fronts(room) ? 0.28 + 0.7 * exp(-(fz - vWorld.z) * 0.13) * (0.6 + 0.4 * max(N.z, 0.0))
-      : backs(room) ? 0.2 + 0.55 * exp(-(vWorld.z - bz) * 0.3) * (0.6 + 0.4 * max(-N.z, 0.0)) : 0.2;
+    // (0.4.9) A room with a wall of glass is full of daylight: what comes
+    // straight in near the glass, and the light bounced round it everywhere
+    // else (walls, floor and ceiling all pale), so even its back is bright.
+    open = fronts(room) ? 0.75 + 0.75 * exp(-(fz - vWorld.z) * 0.12) * (0.6 + 0.4 * max(N.z, 0.0))
+      : backs(room) ? 0.6 + 0.6 * exp(-(vWorld.z - bz) * 0.25) * (0.6 + 0.4 * max(-N.z, 0.0)) : 0.5;
+    // The rooms off the stair and the hall borrow it too.
+    open = max(open, 0.55);
   }
   vec3 skyLight = mix(uEnvLow * 0.75 + uWood * 0.25, uEnvTop, 0.5 + 0.5 * N.y) * mix(vec3(1.0), uSky, 0.3);
   // Inside, the daylight has bounced off the floor, the walls and the
   // ceiling first: it comes in warmer and less coloured by the sky.
-  if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.25;
+  if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.6;
   float dim = mix(1.0, 0.3, uNight);
   vec3 lamps = uNight > 0.0 ? lampsAt(vWorld, N, V, rough, room) * uNight : vec3(0.0);
   float ao = ambientAt(room);
