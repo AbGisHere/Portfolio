@@ -6,6 +6,28 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.14 — 2026-10-25
+
+- **No flicker on the kitchen and the pictures** (the owner: the same
+  glitch as the door frames): surfaces a millimetre or less apart, which
+  the depth buffer can't tell apart from across the garden, are now built
+  as the real things are. Cabinet and drawer fronts (the kitchen run, its
+  wall units, the island, the tall unit, the console, the nightstands, the
+  bedside table, the dresser) are 19 mm doors standing 2 mm off their
+  carcasses (`DOOR`, `HINGE`), their pulls on their faces; the sink's rim
+  and the hob stand 5–8 mm proud of the marble; a picture is a 3 cm
+  walnut moulding round a back board, its mount laid in it and the print
+  5 mm proud of the mount; a mirror's glass sits in its frame's rebate;
+  the TV's glass sits in its bezel, 6 mm clear of its body.
+- **The upstairs glass opens in the middle** (the owner): its middle
+  panel slid over the one on its left, like the ground floor's.
+- **The curtains untie by night instead of closing** (the owner): the
+  tie-back comes off and the stack hangs straight from the head in deep
+  folds at the same end, a little fuller at the hem; tied again by day.
+- **The house appears as soon as it's built:** a frame at rest redraws
+  when the worker's mesh arrives (0.4.13 left a still frame without it).
+- **Measured:** unit tests 28/28.
+
 ## 0.4.13 — 2026-10-25
 
 - **No stall on the first turn to the house** (the owner: "crazy lag when

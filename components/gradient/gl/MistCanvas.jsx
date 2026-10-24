@@ -418,6 +418,8 @@ export default function MistCanvas({ recipe, onFail }) {
           houseBuilt = e.data;
           houseWorker.terminate();
           warmHouse();
+          // (Redrawn with it, even at rest.)
+          dirty = true;
           kickRef.current();
         };
         houseWorker.onerror = () => {

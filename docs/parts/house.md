@@ -63,7 +63,7 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
 ```
 
 - **Landing** (x −7.72 … −4.5): the stair's top, a glass balustrade round
-  its void, a bench at the glass.
+  its void, a bench on the bedroom's wall facing it.
 - **Main bedroom** (x −4.5 … 2.6, z −71.28 … −76.5): the bed facing the
   glass and the terrace, bedside tables and lamps, an armchair, a dresser.
 - **Wardrobe** (x −4.5 … 2.6, z −76.5 … −78.72): a walk-in, rails and
@@ -74,3 +74,44 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
 
 Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
 0.9 × 2.2 m in walnut, on frames, each open at its own angle.
+
+## Glass, curtains and finish
+
+- **Sliding glass** (`sliders()`): each front is panels on two tracks.
+  One stands open on each floor, in the middle: the ground floor's third
+  panel slid over the second (open x −1.0 … 1.6), the upper floor's middle
+  panel over the first (open in the bedroom, x −3.2 … −0.7).
+- **Curtains** (`curtainMesh()`): linen on ceiling tracks before the front
+  glass, two shapes in one buffer, morphed by the switch (`uMorph`). By day
+  each is tied back at its end with a jute rope and tassel; by night it's
+  untied, hanging straight from the head in a stack of folds at the same
+  end (none close).
+- **No coplanar skins:** surfaces under a few millimetres apart flicker
+  from the garden, so things are built as they're made. Cabinet and drawer
+  fronts are 19 mm doors 2 mm off their carcasses (`DOOR`, `HINGE` in
+  `furniture.js`); pictures are a moulding round a back board with the
+  mount laid in and the print proud of it; a mirror's glass and the TV's
+  sit in their frames' rebates; frames clear their openings by 2 mm.
+
+## Outside
+
+- **The hill** (`MOUND`, `moundY`) is the meadow's: its lawn mesh takes the
+  ground's colours and the meadow pass paints over it (atmosphere.md, "The
+  camera (0.4)"); grass and flowers grow up to the stone base and its
+  steps (`underHouse`). Stepping stones run down it toward the desk,
+  between bollards.
+- **The forecourt and steps:** honed limestone (`paver`); board-formed
+  concrete planters of grass, lavender, box and creeping fig
+  (`plantMesh.js`).
+- **The terrace:** the pool in its cantilever (its basin the porch's
+  roof), frameless glass round the open sides, loungers, an olive in a
+  pot.
+
+## Building it
+
+The mesh is about 3 million vertices and takes about 2 s, so it's built in
+a worker (`houseWorker.js`) as the page loads, and its programs, the
+shadow map, the water, the birds and the bloom are made one to an idle
+moment while the reader is still at the desk (`warmHouse` in
+`MistCanvas.jsx`). Small leaves (under 8 cm) are 3 × 2 grids. The passes
+run only while the house is in the frame (`boxSeen`).

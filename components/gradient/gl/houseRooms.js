@@ -57,17 +57,19 @@ export const CURTAIN_STRIDE = 15;
 
 /**
  * The curtains: lined linen on ceiling tracks before the front glass, each
- * from x0 to x1 (closed), tied back toward `to` (−1 its left end, 1 its
- * right) by day. Pinch-pleated at the head; tied, the cloth gathers into a
- * tight stack, pinched at the tie-back a little below the middle, swagging
- * out below to the hem; closed, it hangs in even folds across its glass.
+ * from x0 to x1, drawn back toward `to` (−1 its left end, 1 its right).
+ * Pinch-pleated at the head; tied by day, the cloth gathers into a tight
+ * stack, pinched at the tie-back a little below the middle, swagging out
+ * below to the hem; (0.4.14) untied by night (the owner: "don't close the
+ * curtains, just untie them"), it hangs straight from the head in a stack
+ * of deep folds at the same end, a little fuller at the hem.
  */
 const CURTAINS = [];
 
 /** The curtains' mesh: `{ data, count }` (CURTAIN_STRIDE floats a vertex). */
 export function curtainMesh() {
   const out = [];
-  for (const [x0, x1, z, y0, y1, to, seed, keep] of CURTAINS) {
+  for (const [x0, x1, z, y0, y1, to, seed] of CURTAINS) {
     let sd = seed;
     const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
     const width = x1 - x0;
@@ -86,8 +88,14 @@ export function curtainMesh() {
       const head = Math.min(1, w / 0.05);
       const y = y0 - H * w;
       if (!tied) {
-        const amp = 0.045 * deepJ * (1 + 0.25 * w * w);
-        return [x0 + width * u + Math.sin(ph) * amp * 0.15 * head, y, z + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
+        // Untied: the stack hanging free, its folds as deep as the tied
+        // column's, falling plumb and easing out toward the hem.
+        const stack = 0.32 + 0.05 * Math.min(1, width / 3);
+        const span = stack * (1 + 0.12 * w * w);
+        const tph = u * 7 * Math.PI * 2 + deepJ;
+        const amp = (0.05 + 0.012 * w) * (0.85 + 0.3 * deepJ);
+        const offX = to < 0 ? end + span * u : end - span * (1 - u);
+        return [offX + Math.sin(tph) * amp * 0.3, y, z - 0.05 + Math.cos(tph) * amp * (0.45 + 0.55 * head)];
       }
       // Tied: the whole width gathered into a column of deep folds at the
       // end it's tied to, cinched at the tie-back two thirds down, the cloth
@@ -112,7 +120,7 @@ export function curtainMesh() {
       for (let i = 0; i <= nu; i++) {
         const u = i / nu;
         const w = j / nv;
-        grid2.push({ a: at(u, w, true), b: at(u, w, !!keep), s: u * width, t: w * H });
+        grid2.push({ a: at(u, w, true), b: at(u, w, false), s: u * width, t: w * H });
       }
     }
     const G = (i, j) => grid2[Math.max(0, Math.min(nv, j)) * (nu + 1) + Math.max(0, Math.min(nu, i))];
@@ -138,8 +146,8 @@ export function curtainMesh() {
   }
   // The tie-backs: a twisted rope round each waist, its two ends looped
   // and knotted, a long tassel hanging from the knot; there by day. By
-  // night each lies shrunk to nothing at the hook, in the closed fold.
-  for (const [x0, x1, z, y0, y1, to, , keep] of CURTAINS) {
+  // night each lies shrunk to nothing at the hook, in the hanging stack.
+  for (const [x0, x1, z, y0, y1, to] of CURTAINS) {
     const H = y0 - y1;
     const yT = y0 - H * 0.62;
     const end = to < 0 ? x0 : x1;
@@ -147,7 +155,7 @@ export function curtainMesh() {
     const cx = end + (to < 0 ? 1 : -1) * waist / 2;
     const cz = z - waist * 0.25;
     const hook = [end, yT, z + 0.02];
-    const push = (p, n, s2, t2) => [...p, ...n, HOUSE_PART.rope, s2, t2, ...(keep ? p : hook), ...n];
+    const push = (p, n, s2, t2) => [...p, ...n, HOUSE_PART.rope, s2, t2, ...hook, ...n];
     const tri = (a, b, c) => out.push(...a, ...b, ...c);
     // The rope: a ring round the waist, its strands twisting.
     const ringAt = (a, r, dy) => [cx + Math.cos(a) * (waist / 2 + 0.014 + r), yT + dy, cz + Math.sin(a) * (0.05 + r)];
@@ -333,9 +341,7 @@ export function groundRooms(out, ix, iz, glass) {
 
   // ---- Curtains at the glass: stacked at the ends and between the rooms.
   const cz = -63.42;
-  // (0.4.10) The one by the open panel stays tied back by night too (the
-  // walk comes in there).
-  for (const [x0, x1, to, keep] of [[-7.35, -4.4, -1], [-4.4, -1.45, 1], [-1.35, 1.6, -1, true], [1.6, 4.55, 1]]) CURTAINS.push([x0, x1, cz, CEIL_G - 0.02, B + 0.01, to, 3 + CURTAINS.length * 7, !!keep]);
+  for (const [x0, x1, to] of [[-7.35, -4.4, -1], [-4.4, -1.45, 1], [-1.35, 1.6, -1], [1.6, 4.55, 1]]) CURTAINS.push([x0, x1, cz, CEIL_G - 0.02, B + 0.01, to, 3 + CURTAINS.length * 7]);
   track(out, -7.35, 4.55, cz, CEIL_G - 0.03);
 }
 
@@ -399,6 +405,6 @@ export function upperRooms(out, glass, jx, jz) {
 
   // ---- Curtains at the glass.
   const cz = -71.42;
-  for (const [x0, x1, to, keep] of [[-7.1, -2.35, -1, true], [-2.35, 2.5, 1]]) CURTAINS.push([x0, x1, cz, CEIL_U - 0.02, T + 0.08, to, 11 + CURTAINS.length * 7, !!keep]);
+  for (const [x0, x1, to] of [[-7.1, -2.35, -1], [-2.35, 2.5, 1]]) CURTAINS.push([x0, x1, cz, CEIL_U - 0.02, T + 0.08, to, 11 + CURTAINS.length * 7]);
   track(out, -7.1, 2.5, cz, CEIL_U - 0.03);
 }

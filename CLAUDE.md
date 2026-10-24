@@ -218,7 +218,8 @@ npm run devices        # every shader on 31 real phones and tablets (BrowserStac
 app/
   layout.jsx       — metadata, JSON-LD, theme script, ThemeProvider; mounts the atmosphere and
                      the scroll layer once, so they persist across routes
-  page.jsx         — home: server-rendered h1/intro (visually hidden), the `about` scroll track
+  page.jsx         — home: server-rendered h1/intro (visually hidden), the `about`, `desk` and `contact` scroll tracks
+  house/page.jsx   — dev only (404 in production): a free camera through the house (components/HouseExplorer.jsx)
   not-found.jsx, error.jsx — render components/ErrorScreen
   global-error.jsx — root-layout failure: own <html>, static sky, no renderer
   fonts.js         — next/font instances (layout and global-error)
@@ -233,7 +234,7 @@ components/
   SunToggle.jsx        — hit target on the painted sun or moon (follows sunSpot.js)
   LampToggle.jsx       — the desk lamp as a control: click to switch day/night, drag its top half (0.3.11)
   SmoothScroll.jsx     — the scroll layer: Lenis (desktop), publishes the descent's progress
-  scroll/descent.js    — the progress store (`about`, `desk`), outside React; `?scroll=`, `?desk=` pin it
+  scroll/descent.js    — the progress store (`about`, `desk`, `contact`), outside React; `?scroll=`, `?desk=`, `?contact=` pin it
   scroll/DescentTrack.jsx — an empty block giving a stretch its scroll length (TRACK_LVH)
   scroll/stops.js      — where the scroll comes to rest (the snap targets, inside the camera's holds)
   ErrorScreen.jsx      — shared 404/error layout, palette-tinted scrim
@@ -246,7 +247,7 @@ components/
     layers/LayeredScene.jsx, ridgeMasks.js — fallback renderer: CSS layers, ridge alpha masks
     scene.js    — `sceneAt`: one frame of the scene, pure, for both renderers
     camera.js   — the descent (0.2): ridges, sky, ranges, meadow, palette, bodies, `ridgeLightAt`
-    deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light
+    deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light; the 0.4 one (CONTACT_PATH, the yaw, TURNED_HAZE, boxSeen)
     gl/grassShader.js, gl/footsteps.js — the meadow's instanced grass; the footprints (0.3.1)
     gl/bootPrint.js — the boot each print is, drawn fresh per load (0.3.2)
     gl/flowerShader.js, gl/treeShader.js — the wildflowers in the grass; the lone tree and copses, their shadows (0.3.5)
@@ -257,7 +258,12 @@ components/
     lampSpot.js, lampPose.js — the lamp's outline on screen and its dragged pose, outside React (0.3.11)
     treeSeed.js — the copses' seed: kept per browser, new on a hard refresh (0.3.11)
     gl/propsShader.js, gl/propsShape.js — the things on the desk: notebook and pen, mug and steam, sticky notes, glasses; their places, shadows and the lamp's keep-out (0.3.12)
-    gl/meshKit.js — the primitives the lamp and the things on the desk are built from (0.3.12)
+    gl/meshKit.js — the primitives the lamp, the things on the desk and the house are built from (0.3.12)
+    gl/houseShape.js, houseMesh.js, houseRooms.js, furniture.js, plantMesh.js — the house on its hill (0.4): its plan, lights and zones; its shell; its rooms and curtains; its furniture; its plants
+    gl/houseShader.js, houseShadow.js, houseGlass.js, poolWater.js, bloom.js — its surfaces and lamps; the sun's shadow map; the glass and the water; the pool's waves and caustics; the night's bloom
+    gl/houseWorker.js — builds the house's mesh off the main thread from the load (0.4.13)
+    gl/birdShape.js, birdFlight.js, birdShader.js — the birds in 3D: swallows, kites, geese (0.4.4)
+    freeCam.js — the /house route's free camera
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)
     orbit.js    — a switch: the sky's turn, the bodies' arc, palette keys
     colour.js   — hex/RGB, gamma-encoded `mixRgb`, oklab `mix`
@@ -270,7 +276,7 @@ components/
     themes.js   — theme id -> { recipe, next }
     recipes/dusk-ember.js, moonlit.js — the day and night scenes
   (each component's styles sit beside it as Component.module.css)
-docs/parts/       — one doc per part's internals (atmosphere.md); see "Parts"
+docs/parts/       — one doc per part's internals (atmosphere.md, house.md); see "Parts"
 .github/workflows/ci.yml — test:adaptive, test:unit, build, hygiene (no GPU checks)
 scripts/          — qa (runs the rest), parity, perf, switch, sharp, devices, adaptive-test, unit-test, hygiene;
                     lib/: console (shared console check), dropout (tile dropout), programs (every shader, for devices), resolve-js
@@ -285,7 +291,8 @@ being changed (`ROADMAP.md`, "Testing: only what a change touches"):
 
 | Part | Doc | Covers |
 |---|---|---|
-| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2` and `0.3` cameras, the meadow and grass, the URL and `data-` hooks |
+| The atmosphere | [`docs/parts/atmosphere.md`](docs/parts/atmosphere.md) | Recipes, both renderers, parity, the switch, the `0.2`, `0.3` and `0.4` cameras, the meadow and grass, the URL and `data-` hooks |
+| The house | [`docs/parts/house.md`](docs/parts/house.md) | The house on the hill and its pool: the plan room by room, glass, curtains, finishes, outside, how it's built |
 
 The invariants any change must keep, whatever part it touches:
 
@@ -312,7 +319,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); `0.4.0` the camera over grey boxes |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.14`), next the person walking up to it and the contact form over the pool |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

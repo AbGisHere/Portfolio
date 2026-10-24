@@ -356,19 +356,35 @@ export function pendant(out, c, ceil, r = 0.13) {
   lathe(out, add(c, [0, -r * 1.5, 0]), [0, 1, 0], [[r * 0.96, 0], [r * 0.35, r * 1.2]], P.lamp, 28);
 }
 
+/** (0.4.14) A cabinet door's thickness, and how far it stands off the
+ * carcass on its hinges (metres): real ones, not a skin on it, so the two
+ * never share a plane (which flickers from across the garden). */
+const DOOR = 0.019;
+const HINGE = 0.002;
+/** The middle (z) of a door on a carcass whose front is at `z`. */
+const doorZ = z => z + HINGE + DOOR / 2;
+
 /** A TV on a wall at c (its screen's middle), facing yaw: a thin black
  * body, a glass screen. */
 export function tv(out, c, yaw, { w = 1.72, h = 0.98 } = {}) {
   const f = frame(c, yaw);
-  obox(out, f.at(0, 0, -0.02), [w / 2, h / 2, 0.02], P.steel, f.ax);
-  obox(out, f.at(0, 0, 0.0005), [w / 2 - 0.006, h / 2 - 0.006, 0.0005], P.screen, f.ax);
+  // (0.4.14) The glass set in the bezel, 2 mm behind its lip and 6 mm
+  // clear of the body (they shared a plane within a millimetre, which
+  // flickers from across the garden).
+  const bz = 0.006;
+  obox(out, f.at(0, 0, -0.023), [w / 2, h / 2, 0.017], P.steel, f.ax);
+  for (const s of [-1, 1]) {
+    obox(out, f.at(s * (w / 2 - bz / 2), 0, -0.002), [bz / 2, h / 2, 0.004], P.steel, f.ax);
+    obox(out, f.at(0, s * (h / 2 - bz / 2), -0.002), [w / 2 - bz, bz / 2, 0.004], P.steel, f.ax);
+  }
+  obox(out, f.at(0, 0, -0.003), [w / 2 - bz - 0.0005, h / 2 - bz - 0.0005, 0.003], P.screen, f.ax);
 }
 
 /** A low media console against a wall: walnut, three fronts, a plinth. */
 export function console_(out, c, yaw, w = 2.2) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.27, 0), [w / 2, 0.2, 0.22], v(P.walnut, 0), f.ax);
-  for (let k = 0; k < 3; k++) obox(out, f.at(-w / 2 + (w / 3) * (k + 0.5), 0.27, 0.222), [w / 6 - 0.006, 0.19, 0.002], v(P.walnut, 0.5), f.ax);
+  for (let k = 0; k < 3; k++) obox(out, f.at(-w / 2 + (w / 3) * (k + 0.5), 0.27, doorZ(0.22)), [w / 6 - 0.006, 0.19, DOOR / 2], v(P.walnut, 0.5), f.ax);
   obox(out, f.at(0, 0.035, -0.02), [w / 2 - 0.05, 0.035, 0.18], P.steel, f.ax);
 }
 
@@ -449,8 +465,8 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
     const x = sx * (hw + 0.36);
     if (stands[k]) {
       obox(out, f.at(x, 0.48, 0.3), [0.25, 0.09, 0.2], v(P.walnut, 0), f.ax);
-      obox(out, f.at(x, 0.48, 0.502), [0.235, 0.075, 0.002], v(P.walnut, 0.5), f.ax);
-      obox(out, f.at(x, 0.48, 0.51), [0.07, 0.006, 0.008], P.brass, f.ax);
+      obox(out, f.at(x, 0.48, doorZ(0.5)), [0.235, 0.075, DOOR / 2], v(P.walnut, 0.5), f.ax);
+      obox(out, f.at(x, 0.48, doorZ(0.5) + DOOR / 2 + 0.008), [0.07, 0.006, 0.008], P.brass, f.ax);
       lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
     }
     const g = f.at(x, 1.22, 0.3);
@@ -464,8 +480,8 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
 export function bedside(out, c, yaw) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.34, 0), [0.25, 0.16, 0.21], v(P.walnut, 0), f.ax);
-  obox(out, f.at(0, 0.34, 0.212), [0.235, 0.145, 0.002], v(P.walnut, 0.5), f.ax);
-  obox(out, f.at(0, 0.38, 0.22), [0.06, 0.006, 0.008], P.brass, f.ax);
+  obox(out, f.at(0, 0.34, doorZ(0.21)), [0.235, 0.145, DOOR / 2], v(P.walnut, 0.5), f.ax);
+  obox(out, f.at(0, 0.38, doorZ(0.21) + DOOR / 2 + 0.008), [0.06, 0.006, 0.008], P.brass, f.ax);
   for (const sx of [-0.21, 0.21]) for (const sz of [-0.17, 0.17]) tube(out, f.at(sx, 0, sz), f.at(sx, 0.18, sz), 0.01, P.steel, 6);
 }
 
@@ -477,8 +493,8 @@ export function dresser(out, c, yaw, w = 1.4) {
     for (let k = 0; k < 2; k++) {
       const x = -w / 4 + (k * w) / 2;
       const y = 0.2 + r * 0.25;
-      obox(out, f.at(x, y, 0.242), [w / 4 - 0.008, 0.118, 0.002], v(P.walnut, 0.5), f.ax);
-      obox(out, f.at(x, y + 0.06, 0.25), [0.07, 0.007, 0.008], P.brass, f.ax);
+      obox(out, f.at(x, y, doorZ(0.24)), [w / 4 - 0.008, 0.118, DOOR / 2], v(P.walnut, 0.5), f.ax);
+      obox(out, f.at(x, y + 0.06, doorZ(0.24) + DOOR / 2 + 0.008), [0.07, 0.007, 0.008], P.brass, f.ax);
     }
   }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) tube(out, f.at(sx * (w / 2 - 0.05), 0, sz * 0.19), f.at(sx * (w / 2 - 0.05), 0.07, sz * 0.19), 0.015, v(P.walnut, 0), 8);
@@ -540,23 +556,24 @@ export function kitchenRun(out, c, yaw, w) {
   obox(out, f.at(0, 0.48, 0.3), [w / 2, 0.38, 0.3], v(P.walnut, 0), f.ax);
   for (let k = 0; k < n; k++) {
     const x = -w / 2 + (w / n) * (k + 0.5);
-    obox(out, f.at(x, 0.48, 0.602), [w / n / 2 - 0.004, 0.375, 0.002], v(P.walnut, 0.5), f.ax);
-    obox(out, f.at(x, 0.83, 0.61), [w / n / 2 - 0.05, 0.004, 0.006], P.brass, f.ax);
+    obox(out, f.at(x, 0.48, doorZ(0.6)), [w / n / 2 - 0.004, 0.375, DOOR / 2], v(P.walnut, 0.5), f.ax);
+    obox(out, f.at(x, 0.83, doorZ(0.6) + DOOR / 2 + 0.006), [w / n / 2 - 0.05, 0.004, 0.006], P.brass, f.ax);
   }
   soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.marble, 0), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
   // The sink, sunk in the top, and its tap.
-  obox(out, f.at(-w / 4, 0.8, 0.31), [0.38, 0.1, 0.2], v(P.steel, 0.5), f.ax);
-  obox(out, f.at(-w / 4, 0.901, 0.31), [0.36, 0.0012, 0.18], v(P.steel, 0.6), f.ax);
+  // (0.4.14) Its rim 5 mm proud of the stone, the basin's top under it.
+  obox(out, f.at(-w / 4, 0.78, 0.31), [0.38, 0.1, 0.2], v(P.steel, 0.5), f.ax);
+  obox(out, f.at(-w / 4, 0.9025, 0.31), [0.36, 0.0025, 0.18], v(P.steel, 0.6), f.ax);
   sweep(out, [f.at(-w / 4, 0.9, 0.05), f.at(-w / 4, 1.2, 0.05), f.at(-w / 4, 1.26, 0.15), f.at(-w / 4, 1.2, 0.24)], 0.012, v(P.steel, 0.5), { seg: 8 });
   // The hob, and the extractor over it.
-  obox(out, f.at(w / 4, 0.902, 0.3), [0.38, 0.002, 0.26], P.screen, f.ax);
+  obox(out, f.at(w / 4, 0.904, 0.3), [0.38, 0.004, 0.26], P.screen, f.ax);
   for (const [hx, hz, r] of [[-0.18, -0.08, 0.1], [0.18, -0.08, 0.08], [-0.18, 0.12, 0.08], [0.18, 0.12, 0.1]]) {
-    sweep(out, Array.from({ length: 21 }, (_, i) => f.at(w / 4 + hx + Math.cos((i / 20) * Math.PI * 2) * r, 0.905, 0.3 + hz + Math.sin((i / 20) * Math.PI * 2) * r)), 0.002, v(P.steel, 0.6), { closed: true, seg: 4 });
+    sweep(out, Array.from({ length: 21 }, (_, i) => f.at(w / 4 + hx + Math.cos((i / 20) * Math.PI * 2) * r, 0.911, 0.3 + hz + Math.sin((i / 20) * Math.PI * 2) * r)), 0.002, v(P.steel, 0.6), { closed: true, seg: 4 });
   }
   obox(out, f.at(w / 4, 1.9, 0.25), [0.45, 0.04, 0.25], v(P.steel, 0.5), f.ax);
   // Wall units over the sink's side.
   obox(out, f.at(-w / 4, 1.85, 0.18), [w / 4 - 0.05, 0.4, 0.18], v(P.walnut, 0), f.ax);
-  for (let k = 0; k < 3; k++) obox(out, f.at(-w / 2 + 0.05 + (w / 2 - 0.1) * ((k + 0.5) / 3), 1.85, 0.362), [(w / 2 - 0.1) / 6 - 0.004, 0.39, 0.002], v(P.walnut, 0.5), f.ax);
+  for (let k = 0; k < 3; k++) obox(out, f.at(-w / 2 + 0.05 + (w / 2 - 0.1) * ((k + 0.5) / 3), 1.85, doorZ(0.36)), [(w / 2 - 0.1) / 6 - 0.004, 0.39, DOOR / 2], v(P.walnut, 0.5), f.ax);
   // On the counter: a board, a bowl of lemons, a kettle, a bottle.
   obox(out, f.at(w / 4 - 0.65, 0.915, 0.35), [0.2, 0.012, 0.14], v(P.walnut, 0.5), axes(0, yaw + 0.3));
   lathe(out, f.at(-w / 4 - 0.7, 0.9, 0.3), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.13, 0.07], [0.135, 0.09], [0.125, 0.09], [0.08, 0.04], [0, 0.03]], P.ceramic, 22);
@@ -569,7 +586,7 @@ export function kitchenRun(out, c, yaw, w) {
 export function island(out, c, yaw, w = 2.8, d = 1.0) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.45, 0), [w / 2 - 0.04, 0.45, d / 2 - 0.08], v(P.walnut, 0), f.ax);
-  for (let k = 0; k < 4; k++) obox(out, f.at(-w / 2 + 0.04 + ((w - 0.08) * (k + 0.5)) / 4, 0.48, d / 2 - 0.078), [(w - 0.08) / 8 - 0.004, 0.37, 0.002], v(P.walnut, 0.5), f.ax);
+  for (let k = 0; k < 4; k++) obox(out, f.at(-w / 2 + 0.04 + ((w - 0.08) * (k + 0.5)) / 4, 0.48, doorZ(d / 2 - 0.08)), [(w - 0.08) / 8 - 0.004, 0.37, DOOR / 2], v(P.walnut, 0.5), f.ax);
   obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.marble, 0), f.ax);
   for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.marble, 0), f.ax);
   // A bowl, a vase of stems.
@@ -583,8 +600,8 @@ export function tallUnit(out, c, yaw, w, h) {
   obox(out, f.at(0, h / 2, 0.3), [w / 2, h / 2, 0.3], v(P.walnut, 0), f.ax);
   const n = Math.round(w / 0.6);
   for (let k = 0; k < n; k++) {
-    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5), h / 2, 0.602), [w / n / 2 - 0.004, h / 2 - 0.01, 0.002], v(P.walnut, 0.5), f.ax);
-    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5) + (k % 2 ? -1 : 1) * (w / n / 2 - 0.05), h * 0.48, 0.615), [0.006, 0.3, 0.008], P.brass, f.ax);
+    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5), h / 2, doorZ(0.6)), [w / n / 2 - 0.004, h / 2 - 0.01, DOOR / 2], v(P.walnut, 0.5), f.ax);
+    obox(out, f.at(-w / 2 + (w / n) * (k + 0.5) + (k % 2 ? -1 : 1) * (w / n / 2 - 0.05), h * 0.48, doorZ(0.6) + DOOR / 2 + 0.008), [0.006, 0.3, 0.008], P.brass, f.ax);
   }
 }
 
@@ -679,16 +696,31 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
 /** A picture on a wall at c, facing yaw: a walnut frame, a mount, a print. */
 export function picture(out, c, yaw, w, h, variant = 0) {
   const f = frame(c, yaw);
-  obox(out, f.at(0, 0, 0.015), [w / 2, h / 2, 0.015], v(P.walnut, 0), f.ax);
-  obox(out, f.at(0, 0, 0.0305), [w / 2 - 0.03, h / 2 - 0.03, 0.0005], P.paper, f.ax);
-  obox(out, f.at(0, 0, 0.031), [w / 2 - 0.1, h / 2 - 0.1, 0.0005], v(P.art, variant), f.ax);
+  // (0.4.14) Built as a frame is: a walnut moulding 3 cm deep round a
+  // back board, the mount laid in it and the print on the mount, each
+  // clear of the next by millimetres (not half of one, which flickers from
+  // across the garden).
+  const m = 0.03;
+  obox(out, f.at(0, 0, 0.004), [w / 2 - 0.002, h / 2 - 0.002, 0.004], v(P.walnut, 0), f.ax);
+  for (const s of [-1, 1]) {
+    obox(out, f.at(s * (w / 2 - m / 2), 0, 0.015), [m / 2, h / 2, 0.015], v(P.walnut, 0), f.ax);
+    obox(out, f.at(0, s * (h / 2 - m / 2), 0.015), [w / 2 - m, m / 2, 0.015], v(P.walnut, 0), f.ax);
+  }
+  obox(out, f.at(0, 0, 0.012), [w / 2 - m - 0.001, h / 2 - m - 0.001, 0.004], P.paper, f.ax);
+  obox(out, f.at(0, 0, 0.0195), [w / 2 - 0.1, h / 2 - 0.1, 0.0015], v(P.art, variant), f.ax);
 }
 
 /** A mirror on a wall at c, facing yaw, in a thin brass frame. */
 export function mirror(out, c, yaw, w, h) {
   const f = frame(c, yaw);
-  obox(out, f.at(0, 0, 0.012), [w / 2, h / 2, 0.012], P.brass, f.ax);
-  obox(out, f.at(0, 0, 0.0245), [w / 2 - 0.015, h / 2 - 0.015, 0.0005], P.mirror, f.ax);
+  // (0.4.14) The glass set in the frame's rebate, behind its lip.
+  const m = 0.015;
+  obox(out, f.at(0, 0, 0.004), [w / 2 - 0.002, h / 2 - 0.002, 0.004], P.brass, f.ax);
+  for (const s of [-1, 1]) {
+    obox(out, f.at(s * (w / 2 - m / 2), 0, 0.012), [m / 2, h / 2, 0.012], P.brass, f.ax);
+    obox(out, f.at(0, s * (h / 2 - m / 2), 0.012), [w / 2 - m, m / 2, 0.012], P.brass, f.ax);
+  }
+  obox(out, f.at(0, 0, 0.014), [w / 2 - m - 0.001, h / 2 - m - 0.001, 0.003], P.mirror, f.ax);
 }
 
 /** A WC on the floor at c against a wall behind it: a wall-hung bowl, a

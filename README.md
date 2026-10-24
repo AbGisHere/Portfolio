@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.13](https://img.shields.io/badge/version-0.4.13-informational)
+![Version 0.4.14](https://img.shields.io/badge/version-0.4.14-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -74,6 +74,29 @@ contact come in later lines (see [Versioning](#versioning)).
   follows the painted body, and a switch mid-scroll blends with the camera.
 - The WebGL renderer skips ridges hidden behind nearer ones and adapts its
   resolution under load, so large high-DPI laptops hold full frame rate.
+
+**The desk** (`0.3`)
+
+- The camera carries on down out of the sky onto a meadow, to a trestle
+  desk with an open laptop on it (a tablet, leaning on books, on portrait
+  screens), the mountains behind it. Everything is built in 3D in code:
+  the grass blade by blade, wildflowers, trees, the desk, the device, an
+  anglepoise lamp, a notebook and pen, a mug (tea by day, coffee by night),
+  sticky notes, glasses.
+- The lamp is a control: click it to switch day and night, drag its head to
+  move its light. Your pointer leaves boot prints in the grass.
+
+**The house** (`0.4`, in progress)
+
+- Past the desk the camera rises to look straight down, turns round as the
+  ground turns under it, and tilts up to a house on a hill looking back at
+  the mountains, then goes over onto the pool on its terrace, where the
+  contact form will sit.
+- The house is built room by room in 3D, furnished and lit: real glass
+  (refraction, dispersion, Fresnel), a pool with simulated water and
+  caustics, sun shadows and ambient occlusion, curtains tied by day and
+  untied by night, lamps and LED strips by night, swallows, kites and
+  geese in 3D. The mesh is built in a worker as the page loads.
 
 ## Tech stack
 
@@ -157,7 +180,8 @@ required locally. To set one, copy [`.env.example`](./.env.example) to
 
 The scene honours query parameters for the harness and screenshots, such as
 `?renderer=gl|layers` to force a renderer, `?freeze=1` to hold the haze still
-and `?scroll=0.5` to pin scroll progress, and exposes `data-*` attributes
+and `?scroll=0.5`, `?desk=0.5` or `?contact=0.5` to pin scroll progress, and
+exposes `data-*` attributes
 for tests (which renderer painted, where the sun is, whether a switch is
 running). The full list is the hook table in
 [`docs/parts/atmosphere.md`](./docs/parts/atmosphere.md#renderers).
@@ -168,6 +192,7 @@ running). The full list is the hook table in
 app/                 routes, metadata, JSON-LD, robots/sitemap/llms.txt, icons, share image
   layout.jsx         root layout: mounts the atmosphere and the scroll layer once
   page.jsx           home
+  house/             dev only: a free camera through the house
   site.js            shared site facts (URL, name, role, links)
 components/
   AtmosphereField.jsx  the scene behind every page; picks a renderer
@@ -267,8 +292,10 @@ page uses native scrolling; Lenis smooth scrolling is desktop only.
 ## Versioning
 
 The site is rebuilt layer by layer, and the version line tracks which layer:
-`0.1.x` the atmosphere (done), `0.2.x` the camera pull-back (current),
-then projects, contact, navigation and real content, and `1.0.0` to ship.
+`0.1.x` the atmosphere (done), `0.2.x` the camera pull-back (done),
+`0.3.x` the desk (projects), `0.4.x` the house and pool (contact, current),
+`0.5.x` the device screen, `0.6.x` header navigation, `0.7.x` real content,
+and `1.0.0` to ship.
 The lines and the plan past the current one (which will change) are in
 [`ROADMAP.md`](./ROADMAP.md#version-lines); what each release changed is in
 [`CHANGELOG.md`](./CHANGELOG.md).

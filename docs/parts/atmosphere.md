@@ -172,6 +172,7 @@ blanked every ridge fill.
 | `?freeze=1` | Veils at rest phase (drift 0, full opacity); GL: no idle drift, no wind over the meadow |
 | `?scroll=0.5` | Pin the descent's `about` (`components/scroll/descent.js`); the scroll layer then publishes nothing |
 | `?grain=0` | No grain layer (grain is random per load) |
+| `?desk=0.5` / `?contact=0.5` | Pin the descent's `desk` or `contact` stretch (the `0.3` and `0.4` cameras), as `?scroll` pins `about` |
 | `data-sun-cx` / `data-sun-cy` | Painted sun centre, CSS px |
 | `data-sun-toggle` on the sun button | Stable selector for the harness (not `aria-pressed`: the button has none; its accessible name matches `/switch to/i`) |
 | `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
@@ -702,6 +703,38 @@ it while there's grass, so `0.2` frames are untouched).
 - **Budget** (M4, `perf --query desk=…`): 118–120 fps at 1728×1117@2 from
   the top-down shot to the closing one; at 3008×1692@2, 116–120 at rest,
   a day/night switch on the low shots 107–108.
+
+## The camera (0.4)
+
+Past the desk, `contact` (0 … 1, its own scroll track, 500 lvh) carries
+the camera to the house on the hill (`docs/parts/house.md`) and over its
+pool: `CONTACT_PATH` in `deskCamera.js`, keyed like the `0.3` path plus
+`yaw` (degrees from facing the mountains, toward +x first; 180 faces the
+house) and `x` (metres across).
+
+- **The turn happens looking straight down** (the owner, `0.4.11`): it
+  rises back over the desk to its top-down view and only then turns, the
+  ground turning 180° under it as it drifts back and up, so the meadow's
+  sides never sweep past. Facing the house it tilts up along the path,
+  comes up to the house, and goes up and over onto the pool: the contact
+  hold (`CONTACT_STOPS` .96). A unit test checks it turns only at a pitch
+  of 90°.
+- **Turned off the mountains' plane** the painted far scene (ridges,
+  bodies, veils) fades out by `face` (`YAW_OFF`), and the ground runs on to
+  the horizon, hazing into the air as distance thickens
+  (`TURNED_HAZE_GLSL`: from 60 m, 1 − e^(−d/350)); facing the plane,
+  nothing changes.
+- **The hill is meadow:** its lawn (`houseMesh.js`, drawn after the grass
+  and the ground) takes the ground's colours, and the meadow pass marches
+  each ray over the hill's foot onto it (`groundHit`) and writes the
+  hill's depth there, so the paint, prints and painted flowers go up it.
+  The blades and flowers grow on it at its height (`MOUND_GLSL`), and stop
+  only at the stone base and its steps (`underHouse`).
+- **The house's passes run only when it's in the frame** (`boxSeen`, by
+  its box, the pool's and the hill's), not merely turned toward.
+- **Flags:** `?house=0` leaves the house and pool out; `?hao=0`,
+  `?glass=0`, `?mirror=0`, `?caustics=0`, `?bloom=0` their passes (profiling).
+  `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene
 

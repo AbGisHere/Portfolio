@@ -38,7 +38,7 @@ layout(location = 5) in vec3 aNorm2;
 ${CAMERA_GLSL}
 uniform mat4 uLightVP;
 uniform vec2 uMirror;   // (0.4.2) on, and the water's height: drawn mirrored in it
-uniform float uMorph;   // (0.4.4) how far toward the other shape (the curtains closed)
+uniform float uMorph;   // (0.4.4) how far toward the other shape (the curtains untied, 0.4.14)
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
