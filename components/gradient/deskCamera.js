@@ -490,6 +490,34 @@ export function grassOf(recipe, { prev = null, e = 1 } = {}) {
 
 /** The camera in metres, the desk's centre on the ground at the origin: y
  * up, z forward (toward the mountains). */
+/**
+ * (0.4.13) Whether any of a box (lo, hi: metres) can be in the frame: the
+ * camera at `cm` (metres) looking as `P` (pitchOf) has it, the frame w × h
+ * (CSS px). False only when all eight corners are outside one side of the
+ * view (or behind it), so it never drops what shows; it lets the house's
+ * passes rest while the camera looks away from it (straight down at the
+ * desk, turning).
+ */
+export function boxSeen(P, cm, w, h, lo, hi) {
+  const F = [P.ys * P.cos, -P.sin, P.yc * P.cos];
+  const R = [P.yc, 0, -P.ys];
+  const U = [P.sin * P.ys, P.cos, P.sin * P.yc];
+  const f = P.f * P.zoom;
+  const out = [0, 0, 0, 0, 0];
+  for (let k = 0; k < 8; k++) {
+    const v = [(k & 1 ? hi : lo)[0] - cm.x, (k & 2 ? hi : lo)[1] - cm.y, (k & 4 ? hi : lo)[2] - cm.z];
+    const x = v[0] * R[0] + v[2] * R[2];
+    const y = v[0] * U[0] + v[1] * U[1] + v[2] * U[2];
+    const z = v[0] * F[0] + v[1] * F[1] + v[2] * F[2];
+    if (z < 0.05) out[0]++;
+    if (x * f + P.sx * z < 0) out[1]++;
+    if ((w - P.sx) * z - x * f < 0) out[2]++;
+    if (P.sy * z - y * f < 0) out[3]++;
+    if ((h - P.sy) * z + y * f < 0) out[4]++;
+  }
+  return out.every(n => n < 8);
+}
+
 export const cameraMetres = cam => ({ x: cam.x ?? 0, y: cam.eye * WORLD_M, z: -cam.ahead * WORLD_M });
 
 /** The near and far planes for depth (world units): the grass, the desk's

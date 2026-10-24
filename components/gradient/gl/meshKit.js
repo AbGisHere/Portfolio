@@ -110,11 +110,11 @@ export function sweep(out, path, r, part, { closed = false, seg = 10 } = {}) {
   }
 }
 
-/** A small ball (a rod's or a tube's end). */
-export function ball(out, c, r, part, seg = 10) {
+/** A small ball (a rod's or a tube's end), `seg` round and `rings` from pole to pole. */
+export function ball(out, c, r, part, seg = 10, rings = 6) {
   const prof = [];
-  for (let i = 0; i <= 6; i++) {
-    const t = (i / 6) * Math.PI;
+  for (let i = 0; i <= rings; i++) {
+    const t = (i / rings) * Math.PI;
     prof.push([r * Math.sin(t), -r * Math.cos(t)]);
   }
   lathe(out, c, [0, 1, 0], prof, part, seg);

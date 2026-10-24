@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.13 — 2026-10-25
+
+- **No stall on the first turn to the house** (the owner: "crazy lag when
+  the camera spins", after a hard refresh): the house's mesh took 6 s of
+  main-thread JavaScript the first time it was needed, mid-turn. It's now
+  built in a worker (`houseWorker.js`) as the page loads, and its programs,
+  the shadow map, the water, the birds and the bloom are made one to an
+  idle moment while the reader is still at the desk. A fresh load scrolled
+  through the turn: worst frame 508 ms before, 58–67 ms after (dev server,
+  1440 × 900).
+- **The house's passes run only when it's in the frame** (`boxSeen`): they
+  ran from the moment the camera had turned 50° toward it, so the top-down
+  turn over the desk paid for the house's shadow, depth, glass and lawn
+  unseen. GPU ms over the turn (contact 0.25, 1728 × 1117 @2): 32.1 → 14.6.
+- **Small leaves in fewer pieces:** a leaf under 8 cm (the lavender's, the
+  creeping fig's) is a 3 × 2 grid, not 6 × 4, and a lavender floret 3
+  rings, not 6; their outline and curve the same, the planter close up
+  unchanged. The house's mesh: 5.10 → 2.97 million vertices, 6.0 → 2.0 s.
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.12 — 2026-10-25
 
 - **The meadow goes on behind the house** (the owner: the house looked

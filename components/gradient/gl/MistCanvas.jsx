@@ -27,7 +27,7 @@ import { hexToRgb, mix, rgb01, rgbToHex } from '../colour';
 import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
-import { DEPTH, cameraMetres, deskWidest, groundAt, pitchSpan, planeAt, toVirtual } from '../deskCamera';
+import { DEPTH, boxSeen, cameraMetres, deskWidest, groundAt, pitchSpan, planeAt, toVirtual } from '../deskCamera';
 import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
@@ -43,7 +43,12 @@ import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader'
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
 import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
-import { HOUSE_BOUNDS, POOL } from './houseShape';
+import { HOUSE_BOUNDS, MOUND, POOL } from './houseShape';
+
+// (0.4.13) The pool's and the hill's boxes (metres), for whether they're in
+// the frame.
+const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, POOL.at[2] - POOL.d / 2 - 0.5], [POOL.at[0] + POOL.w / 2 + 0.5, POOL.at[1] + 0.3, POOL.at[2] + POOL.d / 2 + 0.5]];
+const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
 import { makeWater } from './poolWater';
 import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
@@ -398,13 +403,39 @@ export default function MistCanvas({ recipe, onFail }) {
       return props;
     };
     // (0.4.0) The house on the hill and its pool (houseShader.js; in 3D
-    // from 0.4.1): one mesh, built once.
+    // from 0.4.1): one mesh, built once. (0.4.13) Built in a worker
+    // (houseWorker.js) from the page's load, as it takes seconds; null
+    // until it's back, then the program and buffers on first use.
     let house = null;
+    let houseBuilt = null;
+    let houseWorker = null;
+    const buildHouse = () => {
+      if (houseWorker || houseBuilt) return;
+      const here = () => (houseBuilt = { house: houseMesh(), curtains: curtainMesh() });
+      try {
+        houseWorker = new Worker(new URL('./houseWorker.js', import.meta.url));
+        houseWorker.onmessage = e => {
+          houseBuilt = e.data;
+          houseWorker.terminate();
+          warmHouse();
+          kickRef.current();
+        };
+        houseWorker.onerror = () => {
+          houseWorker.terminate();
+          here();
+        };
+        houseWorker.postMessage(0);
+      } catch {
+        here();
+      }
+    };
     const houseProgram = () => {
       if (house !== null) return house;
+      buildHouse();
+      if (!houseBuilt) return null;
       const hp = passProgram(gl, 'house', HOUSE_VERTEX, HOUSE_FRAGMENT);
       if (!hp) return (house = false);
-      const { data, count, lawn, glass: panes } = houseMesh();
+      const { data, count, lawn, glass: panes } = houseBuilt.house;
       const hb = gl.createBuffer();
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
@@ -418,7 +449,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       const HU = {};
       // (0.4.4) The curtains: their own buffer, both their shapes.
-      const cm = curtainMesh();
+      const cm = houseBuilt.curtains;
       const cb = gl.createBuffer();
       const cvao = gl.createVertexArray();
       gl.bindVertexArray(cvao);
@@ -443,6 +474,8 @@ export default function MistCanvas({ recipe, onFail }) {
     let causticsReady = false;
     // And whether the house can (turned at least 50° toward it).
     let houseSeen = false;
+    // (0.4.13) And the hill's lawn (wider than the house).
+    let lawnSeen = false;
     // (0.4.2) The sun's shadow over the house (houseShadow.js): its depth
     // map on texture unit 9 and the program that draws it (null: none here).
     let shadow;
@@ -459,6 +492,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const glassProgram = () => {
       if (glass !== null) return glass;
       const hp = houseProgram();
+      if (hp === null) return null;
       const gp = hp ? passProgram(gl, 'house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null;
       if (!gp) return (glass = false);
       const mesh = glassMesh(hp.panes);
@@ -762,6 +796,34 @@ export default function MistCanvas({ recipe, onFail }) {
     };
     const idle = window.requestIdleCallback ?? (cb => setTimeout(cb, 1500));
     const meadowIdle = idle(() => meadowTexture(), { timeout: 8000 });
+    // (0.4.13) The house: built from the load, then its programs compiled
+    // one to an idle moment, so the first turn to it doesn't stall.
+    const warmIdles = [];
+    const warmHouse = () => {
+      if (noHouse) return;
+      // (Last, the shadow map under the light as it is: unless the light
+      // moves first, the house's first frame finds it drawn.)
+      const shadowNow = () => {
+        const g = houseProgram();
+        const sh = houseShadow();
+        if (g && sh && meadowAt) houseShadowMap(g, sh, meadowAt.colours);
+      };
+      const steps = [houseProgram, houseShadow, glassProgram, aoTarget, birdProgram, waterSim, () => (bloom ??= makeBloom(gl, 14) || false), shadowNow];
+      const next = () => {
+        const step = steps.shift();
+        if (!step) return;
+        step();
+        // (Leaving the state as the frame loop expects it.)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.useProgram(prog);
+        warmIdles.push(idle(next, { timeout: 4000 }));
+      };
+      warmIdles.push(idle(next, { timeout: 4000 }));
+    };
     gl.uniform1i(uniform('uMoon'), 4);
     gl.uniform1i(uniform('uSky'), 0);
     gl.uniform1i(uniform('uCrest'), 1);
@@ -851,6 +913,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noCaustics = params.get('caustics') === '0';
     const noBloom = params.get('bloom') === '0';
     let bloom;
+    // (0.4.13) Start the house's build (above) once the page is idle.
+    if (!noHouse) warmIdles.push(idle(buildHouse, { timeout: 3000 }));
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -1308,6 +1372,7 @@ export default function MistCanvas({ recipe, onFail }) {
         meadowAt = null;
         poolSeen = false;
         houseSeen = false;
+        lawnSeen = false;
       }
       if (pitch) {
         gl.uniform4f(uniform('uPitch'), pitch.cos, pitch.sin, pitch.f, pitch.zoom);
@@ -1342,12 +1407,14 @@ export default function MistCanvas({ recipe, onFail }) {
           }
           return lo;
         };
-        // (0.4.2) Turned to the house, the pool's in view.
-        // (Its water seen from above it only.) (0.4.10) Or up at the house,
-        // whichever way the walk faces.
-        const atHouse = cm.z < -45;
-        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free || atHouse) && cm.y > POOL.at[1] + 0.05;
-        houseSeen = !!frame.grass && (pitch.yc < 0.6 || !!free || atHouse);
+        // (0.4.2) The house and the pool, where they're seen (the water from
+        // above it only). (0.4.13) Seen means in the frame, not only turned
+        // toward: looking straight down at the desk as the camera turns,
+        // none of their passes run.
+        const seen = (lo, hi) => boxSeen(pitch, cm, w, h, lo, hi);
+        poolSeen = !!frame.grass && cm.y > POOL.at[1] + 0.05 && seen(POOL_BOX[0], POOL_BOX[1]);
+        houseSeen = !!frame.grass && seen(HOUSE_BOUNDS.lo, HOUSE_BOUNDS.hi);
+        lawnSeen = !!frame.grass && seen(MOUND_BOX[0], MOUND_BOX[1]);
         meadowAt = frame.grass
           ? {
               pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid, device: frame.device,
@@ -1792,6 +1859,19 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(null);
     }
 
+    // (0.4.2) The sun's shadow map of the house, redrawn when the light
+    // moves (houseShadow.js).
+    function houseShadowMap(g, sh, colours) {
+      sh.map.render(m => {
+        gl.useProgram(sh.prog);
+        gl.uniformMatrix4fv(sh.u, false, m);
+        gl.bindVertexArray(g.vao);
+        gl.drawArrays(gl.TRIANGLES, g.lawn, g.count - g.lawn);
+      }, lightDir(colours.dir));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      sh.map.bind();
+    }
+
     // (0.4.0) The house and its pool, writing their depth. (0.4.12) Or,
     // `lawn`, only the hill's lawn: after the grass and the ground (the
     // blades stand over it), and the meadow's paint goes on over it as over
@@ -1801,18 +1881,8 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
-      const L = lightDir(colours.dir);
       const sh = houseShadow();
-      if (sh && !mirror && !lawn) {
-        sh.map.render(m => {
-          gl.useProgram(sh.prog);
-          gl.uniformMatrix4fv(sh.u, false, m);
-          gl.bindVertexArray(g.vao);
-          gl.drawArrays(gl.TRIANGLES, g.lawn, g.count - g.lawn);
-        }, L);
-        gl.viewport(0, 0, canvas.width, canvas.height);
-        sh.map.bind();
-      }
+      if (sh && !mirror && !lawn) houseShadowMap(g, sh, colours);
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
@@ -2153,7 +2223,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.depthFunc(gl.LESS);
       if (deskOn) drawDesk(true);
       if (treesOn) drawTrees(true);
-      if (deskOn && !noHouse && houseSeen) drawHouse(false, true);
+      if (deskOn && !noHouse && lawnSeen) drawHouse(false, true);
       // Then the meadow over the ground the blades leave uncovered (the
       // depth test skips the rest), writing no depth.
       gl.depthMask(false);
@@ -2382,6 +2452,8 @@ export default function MistCanvas({ recipe, onFail }) {
     return () => {
       cancelAnimationFrame(raf);
       (window.cancelIdleCallback ?? clearTimeout)(meadowIdle);
+      for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
+      houseWorker?.terminate();
       kickRef.current = () => {};
       ro.disconnect();
       io?.disconnect();

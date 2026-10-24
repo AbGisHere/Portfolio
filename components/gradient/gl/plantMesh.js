@@ -38,7 +38,10 @@ function seeded(seed) {
 function leaf(out, p, dir, up, len, wid, shape, cup, droop, variant) {
   const side = unit(cross(dir, up));
   const face = unit(cross(side, dir));
-  grid(out, 6, 4, (u, w) => {
+  // (0.4.13) A small leaf (a lavender's, a creeping fig's) in fewer
+  // pieces: its curve the same, a quarter of the vertices.
+  const small = len < 0.08;
+  grid(out, small ? 3 : 6, small ? 2 : 4, (u, w) => {
     const v = w * 2 - 1;
     const half = wid * 0.5 * shape(u);
     let q = add(p, dir, len * u);
@@ -199,7 +202,7 @@ export function lavender(out, c, r, seed) {
     // The spike: whorls of flowers up its last 7 cm.
     for (let w = 0; w < 7; w++) {
       const at = add(foot, add(top, foot, -1).map(x => x * (0.82 + 0.18 * (w / 6))));
-      ball(out, at, 0.008 - 0.0005 * w, LEAF + 0.85, 5);
+      ball(out, at, 0.008 - 0.0005 * w, LEAF + 0.85, 5, 3);
     }
   }
 }
