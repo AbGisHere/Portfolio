@@ -148,3 +148,80 @@ export function boxwood(out, c, r, seed) {
     leaf(out, p, d, unit(n), 0.03 + 0.01 * rnd(), 0.016, oval, 0.2, 0.05, 0.7);
   }
 }
+
+/**
+ * (0.4.8) An ornamental grass (feather reed): a clump of long narrow blades
+ * from a tight base, arching out and over, and upright flowering stems
+ * with a feathered plume each. Its leaves the leaf part's .3 variant (a
+ * blue-green grass), the plumes .6 (straw, catching the light).
+ */
+export function grassClump(out, c, h, seed) {
+  const rnd = seeded(seed);
+  for (let i = 0; i < 90; i++) {
+    const a = rnd() * Math.PI * 2;
+    const lean = 0.25 + 0.6 * rnd();
+    const len = h * (0.55 + 0.45 * rnd());
+    const d = unit([Math.cos(a) * Math.sin(lean), Math.cos(lean), Math.sin(a) * Math.sin(lean)]);
+    const base = add(c, [Math.cos(a) * 0.03 * rnd(), 0, Math.sin(a) * 0.03 * rnd()]);
+    leaf(out, base, d, unit(add([0, 1, 0], d, -0.9)), len, 0.016 + 0.008 * rnd(), lance, 0.6, 0.35 + 0.3 * rnd(), 0.3);
+  }
+  for (let i = 0; i < 9; i++) {
+    const a = rnd() * Math.PI * 2;
+    const top = add(c, [Math.cos(a) * 0.08, h * (1.3 + 0.3 * rnd()), Math.sin(a) * 0.08]);
+    tube(out, c, top, 0.0025, LEAF + 0.6, 4);
+    for (let k = 0; k < 10; k++) {
+      const at = add(c, add(top, c, -1).map(x => x * (0.78 + 0.22 * (k / 9))));
+      const sd = unit([Math.cos(a + k * 2.4), 1.6, Math.sin(a + k * 2.4)]);
+      leaf(out, at, sd, unit([Math.cos(a + k * 2.4 + 1.5), 0, Math.sin(a + k * 2.4 + 1.5)]), 0.05, 0.008, oval, 0.1, 0.05, 0.6);
+    }
+  }
+}
+
+/**
+ * (0.4.8) Lavender: a mound of grey-green needle leaves, and slender stems
+ * above it, each with its spike of violet flowers.
+ */
+export function lavender(out, c, r, seed) {
+  const rnd = seeded(seed);
+  for (let i = 0; i < 360; i++) {
+    const a = rnd() * Math.PI * 2;
+    const e = Math.asin(rnd() * 0.9);
+    const n = unit([Math.cos(e) * Math.cos(a), Math.sin(e) + 0.2, Math.cos(e) * Math.sin(a)]);
+    const p = add(c, [n[0] * r * 0.8, n[1] * r * 0.55, n[2] * r * 0.8]);
+    leaf(out, p, unit(add(n, [0, 0.6, 0])), unit(add([0, 1, 0], n, -0.5)), 0.055 + 0.02 * rnd(), 0.007, lance, 0.2, 0.1, 0.3);
+  }
+  for (let i = 0; i < 70; i++) {
+    const a = rnd() * Math.PI * 2;
+    const k = Math.sqrt(rnd());
+    const foot = add(c, [Math.cos(a) * r * 0.6 * k, r * 0.35, Math.sin(a) * r * 0.6 * k]);
+    const top = add(foot, [Math.cos(a) * 0.08 * k, 0.28 + 0.12 * rnd(), Math.sin(a) * 0.08 * k]);
+    tube(out, foot, top, 0.0018, LEAF + 0.3, 4);
+    // The spike: whorls of flowers up its last 7 cm.
+    for (let w = 0; w < 7; w++) {
+      const at = add(foot, add(top, foot, -1).map(x => x * (0.82 + 0.18 * (w / 6))));
+      ball(out, at, 0.008 - 0.0005 * w, LEAF + 0.85, 5);
+    }
+  }
+}
+
+/** (0.4.8) Rosemary trailing over a planter's edge at `edge` (x, y, z),
+ * falling along `out` (unit, away from the planter). */
+export function trailing(out, edge, dir, len, seed) {
+  const rnd = seeded(seed);
+  for (let i = 0; i < 7; i++) {
+    const off = (rnd() - 0.5) * 0.5;
+    const side = unit([dir[2], 0, -dir[0]]);
+    const pts = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      pts.push(add(add(edge, side, off + 0.03 * Math.sin(k + i)), add(scale(dir, 0.12 * Math.sin(t * 1.6) + 0.02), [0, 0.04 - t * t * len * (0.6 + 0.4 * rnd()), 0])));
+    }
+    sweep(out, pts, 0.003, BARK + 0.5, { seg: 4 });
+    for (let k = 1; k < pts.length; k++) {
+      for (let j = 0; j < 6; j++) {
+        const a = (j / 6) * Math.PI * 2;
+        leaf(out, pts[k], unit([Math.cos(a), -0.3, Math.sin(a)]), [0, 1, 0], 0.025, 0.004, lance, 0.1, 0.05, 0.3);
+      }
+    }
+  }
+}

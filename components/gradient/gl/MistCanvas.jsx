@@ -668,7 +668,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
       gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
       gl.uniform3fv(g.u('uHaze'), rgb01(meadowAt.mist ?? colours.env[1]));
-      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1f(g.u('uNight'), houseNight());
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
@@ -1654,6 +1654,15 @@ export default function MistCanvas({ recipe, onFail }) {
       const p = getLampPose();
       return lampClear(p, meadowAt?.device ?? 'laptop') ? p : LAMP_POSE;
     }
+    // (0.4.8) The house's night: the scene's own day or night (its recipe's
+    // lamp), turned with the switch, not the sky's brightness (a dusk sky
+    // is half dark by day).
+    function houseNight() {
+      if (!orbit) return recipeRef.current.lamp ? 1 : 0;
+      const t = Math.min(1, Math.max(0, orbit.e));
+      const e = t * t * (3 - 2 * t);
+      return orbit.next.lamp ? (orbit.prev.lamp ? 1 : e) : orbit.prev.lamp ? 1 - e : 0;
+    }
     function lampLight() {
       if (noLamp) return [0, 0, 0];
       let k = recipeRef.current.lamp ? 1 : 0;
@@ -1769,7 +1778,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
-      gl.uniform1f(u('uMorph'), laptopLight().night);
+      gl.uniform1f(u('uMorph'), houseNight());
       gl.bindVertexArray(g.curtains.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.curtains.count);
       gl.bindVertexArray(null);
@@ -1808,7 +1817,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uLawn'), rgb01(colours.far));
       gl.uniform3fv(g.u('uHaze'), rgb01(colours.env[1]));
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
-      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1f(g.u('uNight'), houseNight());
       gl.uniformMatrix4fv(g.u('uLightVP'), false, sh ? sh.map.matrix : IDENTITY);
       gl.uniform1i(g.u('uShadow'), 9);
       gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
@@ -1879,7 +1888,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
       gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
       gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
-      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.uniform1f(g.u('uNight'), houseNight());
       gl.uniform1i(g.u('uScene'), 11);
       const sim = poolSeen ? waterSim() : null;
       sim?.bind();
@@ -2139,7 +2148,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.depthMask(true);
       if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
       // (0.4.6) By night round the house, the bright spills a glow.
-      const night = laptopLight().night;
+      const night = houseNight();
       if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
         bloom ??= makeBloom(gl, 14) || false;
         if (bloom) {

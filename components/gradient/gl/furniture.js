@@ -36,6 +36,73 @@ function piping(out, f, y, hw, hd, r, part, round = 0.05) {
   sweep(out, pts, r, part, { closed: true, seg: 5 });
 }
 
+/**
+ * A pillow round c, half-sizes `half` along `ax` (its thickness along
+ * ax[1]): two faces of cloth sewn at their edges, so it's full in the middle
+ * and thins to its seam; its sides drawn in a little between the corners,
+ * which stand out as ears; the cloth creased in soft folds running in from
+ * the edges toward the middle; a welt round the seam.
+ */
+export function pillow(out, c, half, part, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) {
+  const [hw, hh, hd] = half;
+  const at = (u, w, sgn) => {
+    // The plan: drawn in along each side, most at its middle.
+    const x = hw * u * (1 - 0.07 * (1 - w * w));
+    const z = hd * w * (1 - 0.07 * (1 - u * u));
+    const fill = Math.pow(Math.max(0, 1 - u * u), 0.42) * Math.pow(Math.max(0, 1 - w * w), 0.42);
+    // Creases from the edge in, strongest near it.
+    const edge = Math.max(Math.abs(u), Math.abs(w));
+    const crease = 0.12 * Math.sin(Math.atan2(w, u) * 11 + u * 3) * smooth01((edge - 0.45) / 0.5) * (1 - smooth01((edge - 0.97) / 0.03));
+    const y = sgn * hh * (fill * (1 + 0.08 * Math.sin(u * 4.1 + w * 2.3)) + crease * fill * 0.6) + sgn * 0.0015;
+    return add(add(add(c, ax[0], x), ax[1], y), ax[2], z);
+  };
+  for (const sgn of [1, -1]) {
+    grid(out, 26, 26, (a, b) => ({ p: at(a * 2 - 1, b * 2 - 1, sgn), part, s: a, t: b }), sgn > 0 ? ax[1] : scale(ax[1], -1));
+  }
+  // The welt round its seam.
+  const ring = [];
+  const n = 64;
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * 4;
+    const k = Math.floor(t);
+    const f = t - k;
+    const [u, w] = [[-1 + 2 * f, -1], [1, -1 + 2 * f], [1 - 2 * f, 1], [-1, 1 - 2 * f]][k];
+    ring.push(at(u * 0.995, w * 0.995, 0));
+  }
+  sweep(out, ring, Math.min(hh * 0.12, 0.006), part, { closed: true, seg: 5 });
+}
+
+const smooth01 = x => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * A hardback standing on a shelf: its page block (paper, its edges the
+ * fine lines of its leaves), the boards a few millimetres proud of it top,
+ * bottom and fore-edge, the spine rounded over its back (toward +ax[2]),
+ * its own cloth colour and a title band. c its middle; t, h, d its half
+ * thickness, height and depth along ax.
+ */
+export function book(out, c, ax, t, h, d, part) {
+  const at = (x, y, z) => add(add(add(c, ax[0], x), ax[1], y), ax[2], z);
+  const board = Math.min(0.0018, t * 0.15);
+  // The page block, set in from the boards' edges.
+  obox(out, at(0, 0, -0.0035), [t - board, h - 0.003, d - 0.004], P.pages, ax);
+  // The boards, either side.
+  for (const sx of [-1, 1]) obox(out, at(sx * (t - board / 2), 0, -0.0015), [board / 2, h, d - 0.0015], part, ax);
+  // The spine: rounded over the back, a little proud of the boards (t runs
+  // up it 0 … 1, s across it, for its gilt and title, houseShader.js), and
+  // the headcaps over its ends.
+  const sp = (u, w) => at((t + 0.0004) * Math.sin((u - 0.5) * Math.PI), h * (w * 2 - 1), d - 0.004 + 0.006 * Math.cos((u - 0.5) * Math.PI));
+  // (The spine is its own part, the book's colour: P.spine + its variant.)
+  const spine = P.spine + (part - P.book);
+  grid(out, 10, 1, (u, w) => ({ p: sp(u, w), part: spine, s: u, t: w }), ax[2]);
+  for (const w of [0, 1]) {
+    grid(out, 10, 1, (u, k) => ({ p: k ? at(0, h * (w * 2 - 1), d - 0.004) : sp(u, w), part, s: -1, t: -1 }), w ? ax[1] : scale(ax[1], -1));
+  }
+}
+
 /** A stuffed cushion: soft, piped round its top and bottom seams. */
 function cushion(out, f, x, y, z, hw, hh, hd, part, { tilt = 0, yaw = 0, pinch = 0.12, pipe = true, e1 = 0.3, e2 = 0.12 } = {}) {
   const ax = axes(tilt, yaw);
@@ -44,9 +111,10 @@ function cushion(out, f, x, y, z, hw, hh, hd, part, { tilt = 0, yaw = 0, pinch =
   const turnTo = d => add(add(scale(w[0], d[0]), w[1], d[1]), w[2], d[2]);
   const cax = ax.map(turnTo);
   const c = f.at(x, y, z);
+  // (A pillow, pinched to its corners, is sewn as one: pillow().)
+  if (pinch > 0.3) return void pillow(out, c, [hw, hh, hd], part, cax);
   soft(out, c, [hw, hh, hd], part, { e1, e2, pinch, ax: cax });
-  // (A pillow, pinched to its corners, has no welt.)
-  if (!pipe || pinch > 0.3) return;
+  if (!pipe) return;
   const cf = { ax: cax, at: (px, py, pz) => add(add(add(c, cax[0], px), cax[1], py), cax[2], pz) };
   for (const sy of [hh * 0.62, -hh * 0.62]) piping(out, cf, sy, hw * 0.97, hd * 0.95, 0.007, part, Math.min(hw, hd) * 0.35);
 }
@@ -246,8 +314,10 @@ export function coffeeTable(out, c, yaw) {
   for (const sx of [-1, 1]) obox(out, f.at(sx * 0.5, 0.165, 0), [0.025, 0.165, 0.36], v(P.walnut, 0), f.ax);
   obox(out, f.at(0, 0.09, 0), [0.475, 0.012, 0.32], v(P.walnut, 0), f.ax);
   // On it: books, a bowl, a candle.
-  obox(out, f.at(-0.3, 0.405, 0.05), [0.17, 0.014, 0.12], v(P.book, 0.1), axes(0, yaw + 0.1));
-  obox(out, f.at(-0.3, 0.432, 0.05), [0.14, 0.012, 0.1], v(P.book, 0.6), axes(0, yaw - 0.05));
+  for (const [y, hw, hd, k, ty] of [[0.405, 0.17, 0.12, 0.1, 0.1], [0.432, 0.14, 0.1, 0.6, -0.05]]) {
+    const a = axes(0, yaw + ty);
+    book(out, f.at(-0.3, y, 0.05), [a[1], a[2], a[0]], 0.013, hd, hw, v(P.book, k));
+  }
   lathe(out, f.at(0.25, 0.39, -0.05), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.12, 0.05], [0.13, 0.075], [0.122, 0.075], [0.11, 0.05], [0.05, 0.015], [0, 0.015]], P.ceramic, 24);
   lathe(out, f.at(0.0, 0.39, 0.22), [0, 1, 0], [[0, 0], [0.035, 0], [0.035, 0.09], [0, 0.09]], v(P.ceramic, 0.5), 16);
 }
@@ -473,7 +543,7 @@ export function kitchenRun(out, c, yaw, w) {
     obox(out, f.at(x, 0.48, 0.602), [w / n / 2 - 0.004, 0.375, 0.002], v(P.walnut, 0.5), f.ax);
     obox(out, f.at(x, 0.83, 0.61), [w / n / 2 - 0.05, 0.004, 0.006], P.brass, f.ax);
   }
-  soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.slab, 0.6), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
+  soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.marble, 0), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
   // The sink, sunk in the top, and its tap.
   obox(out, f.at(-w / 4, 0.8, 0.31), [0.38, 0.1, 0.2], v(P.steel, 0.5), f.ax);
   obox(out, f.at(-w / 4, 0.901, 0.31), [0.36, 0.0012, 0.18], v(P.steel, 0.6), f.ax);
@@ -500,8 +570,8 @@ export function island(out, c, yaw, w = 2.8, d = 1.0) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.45, 0), [w / 2 - 0.04, 0.45, d / 2 - 0.08], v(P.walnut, 0), f.ax);
   for (let k = 0; k < 4; k++) obox(out, f.at(-w / 2 + 0.04 + ((w - 0.08) * (k + 0.5)) / 4, 0.48, d / 2 - 0.078), [(w - 0.08) / 8 - 0.004, 0.37, 0.002], v(P.walnut, 0.5), f.ax);
-  obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.slab, 0.6), f.ax);
-  for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.slab, 0.6), f.ax);
+  obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.marble, 0), f.ax);
+  for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.marble, 0), f.ax);
   // A bowl, a vase of stems.
   lathe(out, f.at(0.5, 0.935, 0), [0, 1, 0], [[0, 0], [0.08, 0], [0.16, 0.08], [0.17, 0.1], [0.16, 0.1], [0.07, 0.03], [0, 0.03]], v(P.ceramic, 0.5), 24);
   lathe(out, f.at(-0.6, 0.935, 0.1), [0, 1, 0], [[0, 0], [0.06, 0], [0.07, 0.1], [0.04, 0.25], [0.03, 0.3], [0, 0.3]], v(P.ceramic, 0.8), 18);
@@ -570,7 +640,8 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
         const sx = x0 + 0.08 + rnd() * (x1 - x0 - 0.4);
         for (let b = 0; b < 4 + Math.floor(rnd() * 4); b++) {
           const th = 0.025 + 0.02 * rnd();
-          obox(out, f.at(sx + 0.13 + (rnd() - 0.5) * 0.02, sy + th / 2, 0.19), [0.12 + 0.04 * rnd(), th / 2, 0.1 + 0.03 * rnd()], v(P.book, rnd()), axes(0, yaw + (rnd() - 0.5) * 0.12));
+          const fa = axes(0, yaw + (rnd() - 0.5) * 0.12);
+          book(out, f.at(sx + 0.13 + (rnd() - 0.5) * 0.02, sy + th / 2, 0.19), [fa[1], fa[0], fa[2]], th / 2, 0.12 + 0.04 * rnd(), 0.1 + 0.03 * rnd(), v(P.book, rnd()));
           sy += th;
         }
         // And standing books beside it.
@@ -578,7 +649,7 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
         while (x < x1 - 0.04) {
           const bwid = 0.02 + 0.03 * rnd();
           const bh = Math.min(room - 0.02, 0.2 + 0.1 * rnd());
-          obox(out, f.at(x + bwid / 2, y + bh / 2, 0.19), [bwid / 2, bh / 2, 0.1 + 0.04 * rnd()], v(P.book, rnd()), f.ax);
+          book(out, f.at(x + bwid / 2, y + bh / 2, 0.19), f.ax, bwid / 2, bh / 2, 0.1 + 0.04 * rnd(), v(P.book, rnd()));
           x += bwid + 0.002;
         }
         continue;
@@ -590,7 +661,7 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
       while (x < stop) {
         const bwid = 0.018 + 0.032 * rnd();
         const bh = Math.min(room - 0.02, 0.19 + 0.13 * rnd());
-        obox(out, f.at(x + bwid / 2, y + bh / 2, 0.19), [bwid / 2, bh / 2, 0.1 + 0.04 * rnd()], v(P.book, rnd()), f.ax);
+        book(out, f.at(x + bwid / 2, y + bh / 2, 0.19), f.ax, bwid / 2, bh / 2, 0.1 + 0.04 * rnd(), v(P.book, rnd()));
         x += bwid + 0.0015;
       }
       if (roll < 0.5) {
@@ -598,7 +669,7 @@ export function bookcase(out, c, yaw, w, h, seed = 1) {
           const bh = Math.min(room - 0.04, 0.22 + 0.06 * rnd());
           const lean = 0.22 + 0.06 * b;
           const cx = x + 0.05 + b * 0.03 + Math.sin(lean) * bh / 2;
-          obox(out, f.at(cx, y + (Math.cos(lean) * bh) / 2, 0.19), [0.014, bh / 2, 0.11], v(P.book, rnd()), [f.ax[0].map((q, i) => q * Math.cos(lean) - f.ax[1][i] * Math.sin(lean)), f.ax[1].map((q, i) => q * Math.cos(lean) + f.ax[0][i] * Math.sin(lean)), f.ax[2]]);
+          book(out, f.at(cx, y + (Math.cos(lean) * bh) / 2, 0.19), [f.ax[0].map((q, i) => q * Math.cos(lean) - f.ax[1][i] * Math.sin(lean)), f.ax[1].map((q, i) => q * Math.cos(lean) + f.ax[0][i] * Math.sin(lean)), f.ax[2]], 0.014, bh / 2, 0.11, v(P.book, rnd()));
         }
       }
     }

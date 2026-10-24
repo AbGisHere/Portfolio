@@ -470,9 +470,52 @@ void main() {
     alb = vVar > 0.3 ? vec3(0.62, 0.62, 0.6) : vec3(0.05, 0.05, 0.055);
     rough = vVar > 0.3 ? 0.28 : 0.4;
     metal = 1.0;
-  } else if (vPart == ${P.book}) {
-    alb = BOOKS[int(k + 0.5) % 10] * (0.9 + 0.15 * hash2(vWorld.xy * 13.0));
-    rough = 0.75;
+  } else if (vPart == ${P.book} || vPart == ${P.spine}) {
+    // Book cloth: its own colour, a fine weave; on the spine (soft's t runs
+    // up it) gilt rules near the head and the tail and a title block, a
+    // shade off the cloth, between.
+    alb = BOOKS[int(k + 0.5) % 10] * (0.9 + 0.15 * hash2(floor(vVar * 977.0) + vec2(3.0)));
+    float wv = mix(0.5, 0.5 + 0.5 * sin(vWorld.x * 2200.0) * sin(vWorld.y * 2200.0 + vWorld.z * 2200.0), detail(0.002, vWorld.xy + vWorld.zz));
+    alb *= 0.93 + 0.08 * wv;
+    rough = 0.7;
+    float sp = st.y;
+    if (vPart == ${P.spine}) {
+      // Each spine its own design: a dark label with gilt title, a pale
+      // paper label, or bare cloth; gilt rules at the head and tail; the
+      // title a run of gilt letters across the spine's middle, the author
+      // below, the publisher's mark at the tail.
+      float id = floor(vVar * 977.0);
+      float kind = hash2(vec2(id, 7.0));
+      float across = abs(st.x - 0.5);
+      float rules = step(abs(sp - 0.06), 0.006) + step(abs(sp - 0.085), 0.003) + step(abs(sp - 0.94), 0.006) + step(abs(sp - 0.915), 0.003);
+      vec3 gold = vec3(0.86, 0.69, 0.35);
+      float cy = 0.55 + 0.1 * (hash2(vec2(id, 2.0)) - 0.5);
+      float lh = 0.18 + 0.1 * hash2(vec2(id, 3.0));
+      float inLabel = step(abs(sp - cy), lh * 0.5) * step(across, 0.42);
+      vec3 ink = gold;
+      if (kind < 0.35) alb = mix(alb, alb * 0.35, inLabel);
+      else if (kind < 0.6) { alb = mix(alb, vec3(0.86, 0.82, 0.72), inLabel); ink = vec3(0.12, 0.1, 0.08); }
+      // Letters: short strokes in lines down the label, set across.
+      float row = (sp - (cy - lh * 0.4)) / (lh * 0.8);
+      float letters = step(0.35, fract(sp * 110.0)) * step(hash2(vec2(id, floor(sp * 110.0))), 0.8);
+      float title = letters * step(0.0, row) * step(row, 1.0) * step(across, 0.22) * (kind < 0.6 ? 1.0 : 0.0);
+      float author = step(0.4, fract(sp * 140.0)) * step(abs(sp - 0.3), 0.06) * step(across, 0.16);
+      float mark = step(length(vec2(across * 3.0, (sp - 0.82) * 12.0)), 0.25);
+      float detailSeen = detail(0.003, st * vec2(0.03, 0.25));
+      alb = mix(alb, ink, (title + author * 0.8 + mark) * detailSeen);
+      alb = mix(alb, gold, rules * detailSeen);
+      float shiny = (title + rules + mark) * detailSeen * (ink == gold ? 1.0 : 0.0);
+      rough = mix(rough, 0.28, shiny);
+      f0 = mix(0.04, 0.6, shiny);
+      // The spine's round darkens toward its edges.
+      alb *= 0.8 + 0.2 * sin(st.x * 3.14159);
+    }
+  } else if (vPart == ${P.pages}) {
+    // The page block's edges: the leaves' fine lines, cream, a little
+    // uneven, darker toward the boards.
+    float lines = mix(0.6, 0.5 + 0.5 * sin((vWorld.x + vWorld.z) * 4200.0 + vWorld.y * 300.0), detail(0.0015, vWorld.xz));
+    alb = vec3(0.9, 0.86, 0.76) * (0.88 + 0.12 * lines) * (0.95 + 0.06 * noise2(vWorld.xy * 90.0));
+    rough = 0.9;
   } else if (vPart == ${P.leaf}) {
     // Leaves: both sides theirs (the underside's own colour); a midrib
     // and, on the fig, veins off it; the olive grey-green over silver, the
@@ -488,13 +531,25 @@ void main() {
       // through it.
       alb = vec3(0.3, 0.35, 0.25) * (0.7 + 0.5 * noise2(vWorld.xz * 20.0 + vWorld.y * 14.0));
       rough = 0.7;
-    } else if (vVar < 0.55) {
+    } else if (vVar > 0.35 && vVar < 0.55) {
       float vein = 1.0 - smoothstep(0.0, 0.05, abs(fract(st.x * 7.0 - abs(st.y) * 1.6) - 0.5) * 0.6 - 0.27);
       alb = (top ? vec3(0.09, 0.2, 0.07) : vec3(0.2, 0.3, 0.15)) * (1.0 + 0.5 * rib + 0.25 * vein * smoothstep(0.1, 0.4, abs(st.y)));
       rough = top ? 0.28 : 0.6;
       f0 = 0.05;
+    } else if (vVar < 0.35) {
+      // Grass, lavender's and rosemary's leaves: a blue-green, paler beneath.
+      alb = (top ? vec3(0.27, 0.36, 0.26) : vec3(0.42, 0.48, 0.4)) * (0.85 + 0.25 * hash2(floor(vWorld.xz * 40.0)));
+      rough = 0.6;
+    } else if (vVar > 0.55 && vVar < 0.65) {
+      // The grass's plumes: straw.
+      alb = vec3(0.78, 0.68, 0.48) * (0.85 + 0.2 * hash2(floor(vWorld.xy * 80.0)));
+      rough = 0.8;
+    } else if (vVar > 0.8) {
+      // Lavender's flowers.
+      alb = vec3(0.42, 0.32, 0.62) * (0.85 + 0.25 * hash2(floor(vWorld.xz * 90.0)));
+      rough = 0.7;
     } else if (vVar < 0.72) {
-      alb = vec3(0.12, 0.26, 0.08) * (0.8 + 0.4 * hash2(floor(vWorld.xz * 60.0)));
+      alb = vec3(0.14, 0.3, 0.1) * (0.8 + 0.4 * hash2(floor(vWorld.xz * 60.0)));
       rough = 0.45;
     } else {
       alb = vec3(0.04, 0.08, 0.03);
@@ -545,6 +600,12 @@ void main() {
     alb = vec3(0.76, 0.66, 0.48) * (0.6 + 0.4 * rope) * (0.88 + 0.12 * over) * (0.95 + 0.08 * noise2(vWorld.xz * 90.0));
     alb *= 1.0 - 0.45 * (1.0 - smoothstep(0.42, 0.5, max(abs(q.x), abs(q.y))) * 0.0);
     rough = 0.85;
+  } else if (vPart == ${P.rope}) {
+    // Jute rope and its tassel: twisted strands (s along, t round), the
+    // threads' fine lines down the tassel.
+    float strand = 0.5 + 0.5 * sin(st.x * 6.2832 * 6.0 + st.y * 6.2832);
+    alb = vec3(0.72, 0.6, 0.42) * (0.75 + 0.3 * strand) * (0.9 + 0.12 * noise2(vWorld.xy * 300.0));
+    rough = 0.9;
   } else if (vPart == ${P.ceramic}) {
     // Glazed ceramic: white, or (by its variant) a stoneware glaze.
     alb = vVar < 0.2 ? vec3(0.93, 0.92, 0.89) : vVar < 0.4 ? vec3(0.86, 0.85, 0.83) : vVar < 0.7 ? vec3(0.55, 0.42, 0.33) : vec3(0.28, 0.36, 0.34);
@@ -580,7 +641,19 @@ void main() {
     alb = mix(vec3(0.86, 0.82, 0.74), mix(vec3(0.72, 0.45, 0.32), vec3(0.32, 0.4, 0.46), smoothstep(-0.2, 0.2, sin(q.x * 3.0 + q.y * 1.5 + noise2(q * 2.0) * 2.0))), 0.7 * smoothstep(0.02, 0.06, min(fract(q.x * 0.0 + st.x), 1.0)));
     rough = 0.9;
   } else if (vPart == ${P.planter}) {
-    alb = vVar > 0.3 ? vec3(0.6, 0.35, 0.23) : vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
+    if (vVar > 0.3) {
+      alb = vec3(0.6, 0.35, 0.23);
+    } else if (vVar > 0.1) {
+      // Board-formed concrete: the planks' marks across it (15 cm), each
+      // board's grain printed faintly, a tie hole now and then, warm grey.
+      vec2 q = abs(N.y) > 0.5 ? vWorld.xz : st;
+      float plank = floor(q.y / 0.15);
+      float seam = 1.0 - smoothstep(0.0, 0.004, abs(fract(q.y / 0.15) - 0.5) * 0.15 - 0.071);
+      float grainB = noise2(vec2(q.x * 3.0, q.y * 60.0 + plank * 5.0));
+      alb = vec3(0.52, 0.5, 0.47) * (0.88 + 0.1 * hash2(vec2(plank, 3.0)) + 0.08 * grainB) * (1.0 - 0.25 * seam * detail(0.02, q));
+      float tie = step(length(vec2(fract(q.x / 0.6) - 0.5, fract(q.y / 0.45) - 0.5) * vec2(0.6, 0.45)), 0.012);
+      alb *= 1.0 - 0.5 * tie * detail(0.02, q);
+    } else alb = vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
     rough = 0.85;
   } else if (vPart == ${P.soil}) {
     alb = vec3(0.16, 0.11, 0.08) * (0.8 + 0.4 * noise2(vWorld.xz * 30.0));

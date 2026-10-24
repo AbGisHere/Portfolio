@@ -89,18 +89,24 @@ export function curtainMesh() {
         const amp = 0.045 * deepJ * (1 + 0.25 * w * w);
         return [x0 + width * u + Math.sin(ph) * amp * 0.15 * head, y, z + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
       }
-      // Tied: the cloth's width at this height, gathered to the end it's
-      // tied to: a stack at the head, the waist at the tie, swagged out
-      // below it.
-      const below = Math.max(0, w - tieW) / (1 - tieW);
-      const above = Math.min(1, w / tieW);
-      const span = w < tieW ? 0.34 - 0.2 * Math.sin(above * Math.PI * 0.5) ** 2 : 0.14 + 0.32 * Math.sin(below * Math.PI * 0.5);
-      // Above the tie it swags toward the room's side a little, so the
-      // middle of the stack bows away from the glass.
-      const bow = w < tieW ? 0.05 * Math.sin(above * Math.PI) : 0.04 * Math.sin(below * Math.PI);
-      const amp = 0.075 * deepJ * (w < tieW ? 1 - 0.55 * Math.sin(above * Math.PI * 0.5) ** 2 : 0.5 + 0.6 * below);
+      // Tied: the whole width gathered into a narrow column at the end
+      // it's tied to, cinched hard at the tie-back (two thirds down), the
+      // cloth blousing out a little over the tie and falling free below it
+      // to the floor, its folds packed tight.
+      const tie = tieW;
+      const aboveT = Math.min(1, w / tie);
+      const belowT = Math.max(0, w - tie) / (1 - tie);
+      const waist = 0.12 + 0.02 * Math.min(1, width / 3);
+      const span = w < tie
+        ? waist + (0.34 - waist) * Math.pow(1 - aboveT, 1.4) + 0.1 * Math.exp(-((aboveT - 0.86) ** 2) / 0.005)
+        : waist + (0.4 - waist) * Math.pow(belowT, 0.65);
+      // The blouse over the tie bows the cloth out into the room.
+      const bow = w < tie ? 0.07 * Math.exp(-((aboveT - 0.88) ** 2) / 0.008) : 0.0;
+      // (Gathered, its folds are fewer and rounder than it has flat.)
+      const tph = u * 9 * Math.PI * 2 + deepJ;
+      const amp = Math.min(0.045, span * 0.16) * (0.8 + 0.4 * deepJ);
       const offX = to < 0 ? end + span * u : end - span * (1 - u);
-      return [offX + Math.sin(ph) * amp * 0.2, y + (w > 0.98 ? (w - 0.98) * 0.4 : 0), z - bow + Math.cos(ph) * amp * (0.35 + 0.65 * head)];
+      return [offX + Math.sin(tph) * amp * 0.25, y, z - bow - span * 0.25 + Math.cos(tph) * amp * (0.45 + 0.55 * head)];
     };
     const grid2 = [];
     for (let j = 0; j <= nv; j++) {
@@ -131,22 +137,56 @@ export function curtainMesh() {
       }
     }
   }
-  // The tie-backs: a band of the same cloth round each waist, there by day;
-  // by night each lies shrunk to nothing inside the closed curtain's fold.
+  // The tie-backs: a twisted rope round each waist, its two ends looped
+  // and knotted, a long tassel hanging from the knot; there by day. By
+  // night each lies shrunk to nothing at the hook, in the closed fold.
   for (const [x0, x1, z, y0, y1, to] of CURTAINS) {
     const H = y0 - y1;
-    const c = [to < 0 ? x0 + 0.075 : x1 - 0.075, y0 - H * 0.62, z];
-    const ring = (a, k) => [c[0] + Math.cos(a) * 0.095 * k, c[1], c[2] + Math.sin(a) * 0.075 * k];
-    const n = 24;
-    for (let i = 0; i < n; i++) {
-      const [a0, a1] = [(i / n) * Math.PI * 2, ((i + 1) / n) * Math.PI * 2];
-      const corner = (a, dy) => {
-        const p = ring(a, 1);
-        const nn = [Math.cos(a), 0, Math.sin(a)];
-        return [p[0], p[1] + dy, p[2], ...nn, HOUSE_PART.curtain, a, dy, ...c, ...nn];
+    const yT = y0 - H * 0.62;
+    const end = to < 0 ? x0 : x1;
+    const waist = 0.12 + 0.02 * Math.min(1, (x1 - x0) / 3);
+    const cx = end + (to < 0 ? 1 : -1) * waist / 2;
+    const cz = z - waist * 0.25;
+    const hook = [end, yT, z + 0.02];
+    const push = (p, n, s2, t2) => [...p, ...n, HOUSE_PART.rope, s2, t2, ...hook, ...n];
+    const tri = (a, b, c) => out.push(...a, ...b, ...c);
+    // The rope: a ring round the waist, its strands twisting.
+    const ringAt = (a, r, dy) => [cx + Math.cos(a) * (waist / 2 + 0.014 + r), yT + dy, cz + Math.sin(a) * (0.05 + r)];
+    const nA = 40;
+    const nB = 6;
+    for (let i = 0; i < nA; i++) {
+      for (let k = 0; k < nB; k++) {
+        const vtx = (ii, kk) => {
+          const a = (ii / nA) * Math.PI * 2;
+          const b = (kk / nB) * Math.PI * 2 + a * 6;
+          const rr = 0.009 * (1 + 0.15 * Math.sin(b * 2 + a * 12));
+          const p = ringAt(a, Math.cos(b) * rr, Math.sin(b) * rr);
+          const n = [Math.cos(a) * Math.cos(b), Math.sin(b), Math.sin(a) * Math.cos(b)];
+          return push(p, n, ii / nA * 8, kk / nB);
+        };
+        const [p, q, r2, t] = [vtx(i, k), vtx(i + 1, k), vtx(i + 1, k + 1), vtx(i, k + 1)];
+        tri(p, q, r2);
+        tri(p, r2, t);
+      }
+    }
+    // The tassel: from the knot at the ring's front, a head, a skirt of
+    // threads flaring to 15 cm below.
+    const knot = [cx + (to < 0 ? 0.03 : -0.03), yT - 0.012, cz - 0.062];
+    const nT = 18;
+    for (let i = 0; i < nT; i++) {
+      const vtx = (ii, kk) => {
+        const a = (ii / nT) * Math.PI * 2;
+        const t = kk;
+        const r = t < 0.25 ? 0.008 + 0.03 * t : 0.018 + 0.04 * (t - 0.25);
+        const y = knot[1] - 0.02 - t * 0.16;
+        const p = [knot[0] + Math.cos(a) * r, y, knot[2] + Math.sin(a) * r];
+        return push(p, [Math.cos(a), 0.15, Math.sin(a)], ii / nT * 30, t);
       };
-      const [p, q, r, t] = [corner(a0, -0.03), corner(a1, -0.03), corner(a1, 0.03), corner(a0, 0.03)];
-      out.push(...p, ...q, ...r, ...p, ...r, ...t);
+      for (const [k0, k1] of [[0, 0.25], [0.25, 1]]) {
+        const [p, q, r2, t] = [vtx(i, k0), vtx(i + 1, k0), vtx(i + 1, k1), vtx(i, k1)];
+        tri(p, q, r2);
+        tri(p, r2, t);
+      }
     }
   }
   const data = new Float32Array(out);
@@ -158,8 +198,9 @@ function track(out, x0, x1, z, y) {
   box(out, [x0 - 0.05, y, z - 0.03], [x1 + 0.05, y + 0.03, z + 0.03], v(P.steel, 0.5));
 }
 
-/** The ground floor's rooms. `ix`, `iz`: its inside's x and z. */
-export function groundRooms(out, ix, iz) {
+/** The ground floor's rooms. `ix`, `iz`: its inside's x and z; `glass`
+ * takes their panes (the stair's balustrade). */
+export function groundRooms(out, ix, iz, glass) {
   const y = B + 0.02;
   CURTAINS.length = 0;
   // ---- Partitions (docs/parts/house.md).
@@ -231,8 +272,8 @@ export function groundRooms(out, ix, iz) {
 
   // ---- The stair: solid walnut treads cantilevered from a walnut
   // stringer on the wall (the steel that carries them hidden inside it),
-  // each with its LED under the nosing; slim black balusters up its open
-  // side carrying a handrail, and a rail on the wall on brackets.
+  // each with its LED under the nosing; frameless glass up its open side,
+  // and a rail on the wall on brackets.
   const run = 0.28;
   const rise = 0.2;
   const z0 = -72.2;
@@ -254,11 +295,16 @@ export function groundRooms(out, ix, iz) {
     const up = [0, Math.cos(pitch), Math.sin(pitch)];
     obox(out, mid, [0.0225, 0.2, len / 2], v(P.walnut, 0.2), [[1, 0, 0], up, along]);
   }
-  // The open side: a baluster from each tread to the handrail.
-  const ox = ix[0] + 1.17;
-  const railAt = i => [ox, B + i * rise + 0.92, z0 - (i - 1) * run - 0.15];
-  for (let i = 1; i <= 17; i++) tube(out, [ox, B + i * rise, z0 - (i - 1) * run - 0.15], railAt(i), 0.007, P.steel, 6);
-  tube(out, add(railAt(1), [0, -0.12, 0.25]), railAt(17), 0.022, v(P.walnut, 0), 10);
+  // The open side: frameless laminated glass, a panel to a tread, each held
+  // to its tread's edge by two small steel clamps, its top a metre over
+  // the tread's nose.
+  const ox = ix[0] + 1.215;
+  for (let i = 1; i <= 17; i++) {
+    const z = z0 - (i - 1) * run;
+    const y = B + i * rise;
+    glass.push([[ox - 0.006, y - 0.065, z - run + 0.003], [ox + 0.006, y + 1.0, z - 0.003], true]);
+    for (const cz of [z - 0.06, z - run + 0.06]) box(out, [ox - 0.018, y - 0.06, cz - 0.02], [ox + 0.018, y - 0.015, cz + 0.02], v(P.steel, 0.5));
+  }
   // The wall's rail, on brackets.
   const wr = t => [ix[0] + 0.07, B + 0.9 + t * (17 * rise), z0 + 0.1 - t * (17 * run + 0.3)];
   tube(out, wr(0), wr(1), 0.02, P.steel, 8);
@@ -291,7 +337,8 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The landing: the stair's void and its glass, a bench at the glass,
   // a picture.
   for (const [lo, hi] of [[[-6.2, y, -77.0], [-6.188, y + 1.0, -72.0]], [[jx[0], y, -72.012], [-6.2, y + 1.0, -72.0]]]) glass.push([lo, hi, true]);
-  bench(out, [-6.0, T, -71.85], 0, { w: 1.6, padded: true });
+  // (Clear of the void's glass, between it and the bedroom's wall.)
+  bench(out, [-5.3, T, -71.8], 0, { w: 1.3, padded: true });
   picture(out, [jx[0] + 0.01, T + 1.6, -78.0], Math.PI / 2, 0.8, 1.0, 0.8);
 
   // ---- The main bedroom: the bed facing the glass, its tables and lamps,

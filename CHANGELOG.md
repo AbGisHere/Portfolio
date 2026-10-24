@@ -6,6 +6,34 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.8 — 2026-10-25
+
+- **Fix:** a lamp fitting floated 6.85 m up over the path: the porch's
+  ceiling fittings were drawn for every kind-1 light, and the bollards are
+  kind 1; now only those under the cantilever.
+- **Books** (`book`): a page block (`pages`, its leaves' lines), boards
+  proud of it, a rounded spine with headcaps (`spine`): each its own
+  design (a dark or paper label, gilt or ink title and author, a
+  publisher's mark, head and tail rules); stacks and leaners too.
+- **Pillows** (`pillow`): two faces sewn at a welt, full in the middle and
+  thinning to the seam, the sides drawn in to ears, creased from the edge;
+  every pinched cushion (the sofa's, the beds', the chairs') is one.
+- **Marble** on the kitchen's run and the island (and its waterfall ends).
+- **The stair's open side:** frameless laminated glass, a panel a tread,
+  two steel clamps each (the balusters and the walnut rail gone).
+- **The landing's bench** moved clear of the void's glass.
+- **Forecourt planters:** board-formed concrete (plank marks, tie holes),
+  a steel coping, mulch; a mixed bed (`grassClump` feather reed with
+  plumes, `lavender`, a clipped box at each end, `trailing` rosemary over
+  the front); step lights in the cheek walls.
+- **Curtains tied back** like a real tie-back: the width gathered to a
+  column, cinched at two thirds down by a twisted jute rope (`rope`) with
+  a tassel, bloused over it, flaring to the floor in rounder folds.
+- **Day and night in the house** (`houseNight`) follow the scene's own
+  switch, not the sky's brightness (a dusk sky read half dark by day, so
+  the curtains half closed and the lamps half lit).
+- **Measured:** unit tests 28/28. No QA run.
+
 ## 0.4.7 — 2026-10-25
 
 - **The stair:** 7 cm walnut treads cantilevered from a 4.5 cm walnut

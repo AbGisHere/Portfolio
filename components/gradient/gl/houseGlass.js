@@ -269,7 +269,7 @@ void main() {
     vec3 refl = mirrored(reflect(I, Ng), 0.002);
     col = through + refl * Rs;
     // A little dust on it, catching the light, more toward its foot.
-    col += (uEnvTop * 0.5 + uSun * 0.3) * (0.008 + 0.012 * envNoise(vWorld.xy * 9.0 + vWorld.z * 7.0)) * (rail ? 1.0 + 1.5 * exp(-(vWorld.y - ${f(POOL.at[1])}) * 6.0) : 1.0) * mix(1.0, 0.3, uNight);
+    col += (uEnvTop * 0.5 + uSun * 0.3) * (0.008 + 0.012 * envNoise(vWorld.xy * 9.0 + vWorld.z * 7.0)) * (rail ? 1.0 + 1.5 * exp(-max(vWorld.y - ${f(POOL.at[1])}, 0.0) * 6.0) * step(${f(POOL.at[1] - 0.1)}, vWorld.y) : 1.0) * mix(1.0, 0.3, uNight);
     // Laminated: two sheets on an interlayer, a faint grey-green through it.
     col *= vec3(0.93, 0.965, 0.95);
     // Its edges, drawn to the millimetre (whatever the pixels): the

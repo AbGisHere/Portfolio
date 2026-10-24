@@ -11,7 +11,7 @@ import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_P
 import { box, grid, lathe, tube } from './meshKit';
 import { lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
-import { boxwood, fig, olive } from './plantMesh';
+import { boxwood, fig, grassClump, lavender, olive, trailing } from './plantMesh';
 
 const B = FLOOR;
 const T = TERRACE;
@@ -156,11 +156,32 @@ export function houseLayout() {
   const rise = (B - front) / steps;
   for (let i = 0; i < steps; i++) box(out, [-1.4, front - 0.3, -57.5 + i * 0.34], [1.4, B - (i + 1) * rise, -57.5 + (i + 1) * 0.34], v(P.stone, 0.3));
   for (const x of [-1.7, 1.4]) box(out, [x, front - 0.3, -57.5], [x + 0.3, B + 0.1, -57.5 + steps * 0.34], P.stone);
-  // Planters along the forecourt, boxwood clipped round in them.
+  // (0.4.8) A recessed step light in each cheek wall, at every other step.
+  for (let i = 0; i < steps; i += 2) {
+    const y = B - (i + 1) * rise + 0.12;
+    const z = -57.5 + (i + 0.5) * 0.34;
+    box(out, [-1.401, y, z - 0.05], [-1.399, y + 0.035, z + 0.05], P.lamp);
+    box(out, [1.399, y, z - 0.05], [1.401, y + 0.035, z + 0.05], P.lamp);
+  }
+  // (0.4.8) The forecourt's planters: board-formed concrete (the planks'
+  // marks across them), a thin steel coping, dark mulch, and a mixed bed:
+  // feather-reed grass arching over, lavender in drifts, a clipped box at
+  // each end, rosemary trailing over the front.
   for (const [x0, x1] of [[-9.2, -3.2], [3.2, 9.2]]) {
-    box(out, [x0, B, -58.4], [x1, B + 0.55, -57.7], P.planter);
-    box(out, [x0 + 0.06, B + 0.5, -58.34], [x1 - 0.06, B + 0.52, -57.76], P.soil);
-    for (let k = 0; k < 5; k++) boxwood(out, [x0 + 0.6 + k * ((x1 - x0 - 1.2) / 4), B + 0.78, -58.05], 0.3 + 0.03 * (k % 2), 31 + k * 7 + (x0 < 0 ? 0 : 3));
+    box(out, [x0, B, -58.5], [x1, B + 0.6, -57.7], v(P.planter, 0.15));
+    box(out, [x0 - 0.008, B + 0.6, -58.508], [x1 + 0.008, B + 0.612, -57.692], v(P.steel, 0.2));
+    box(out, [x0 + 0.04, B + 0.55, -58.46], [x1 - 0.04, B + 0.57, -57.74], P.soil);
+    const n = Math.round((x1 - x0) / 0.42);
+    const step = (x1 - x0 - 0.5) / (n - 1);
+    for (let k = 0; k < n; k++) {
+      const x = x0 + 0.25 + k * step;
+      const seed = 31 + k * 7 + (x0 < 0 ? 0 : 3);
+      const end = k === 0 || k === n - 1;
+      if (end) boxwood(out, [x, B + 0.82, -58.1], 0.26, seed);
+      else if (k % 3 === 1) grassClump(out, [x, B + 0.57, -58.2], 0.7, seed);
+      else lavender(out, [x, B + 0.57, k % 2 ? -58.22 : -57.98], 0.3, seed);
+      if (!end && k % 2 === 0) trailing(out, [x + 0.1, B + 0.61, -57.72], [0, 0, 1], 0.45, seed + 1);
+    }
   }
 
   // ---- The ground floor.
@@ -200,7 +221,7 @@ export function houseLayout() {
   const iz = [G.z[0] + WALL, G.z[1] - WALL];
   box(out, [ix[0], B, iz[0]], [ix[1], B + 0.02, iz[1]], P.oak, { bottom: false });
   holed(out, [ix[0], top - 0.02, iz[0]], [ix[1], top, iz[1]], VOID, P.ceiling);
-  groundRooms(out, ix, iz);
+  groundRooms(out, ix, iz, glass);
   // (0.4.6) The LED strips, each a thin bright line where it's fitted.
   for (const [a, b, , , , , hidden] of HOUSE_STRIPS) if (!hidden) tube(out, a, b, 0.005, P.lamp, 6);
   // The recessed lights in both ceilings (HOUSE_LIGHTS kind 3).
@@ -222,7 +243,8 @@ export function houseLayout() {
   box(out, [px0, fl0 - 0.05, pz0 - 0.3], [px1, top, pz0], v(P.slab, 0.3));
   box(out, [px0, fl0 - 0.05, pz1], [px1, top, bz1], v(P.slab, 0.3));
   for (const x of [-8.1, 8.1]) box(out, [x - 0.09, B, EDGE - 0.28], [x + 0.09, top, EDGE - 0.1], P.steel);
-  for (const [x, , z, , , kind] of HOUSE_LIGHTS) if (kind === 1 && z > G.z[1]) box(out, [x - 0.07, top - 0.012, z - 0.07], [x + 0.07, top, z + 0.07], P.lamp);
+  // (Only the porch's, under the cantilever: the bollards are kind 1 too.)
+  for (const [x, , z, , , kind] of HOUSE_LIGHTS) if (kind === 1 && z > G.z[1] && z < EDGE) box(out, [x - 0.07, top - 0.012, z - 0.07], [x + 0.07, top, z + 0.07], P.lamp);
   box(out, [-8.4, sy[0], pz0], [px0, sy[1], pz1], P.slab);
   box(out, [px1, sy[0], pz0], [8.4, sy[1], pz1], P.slab);
   // The basin: tiled floor and walls, and steps down at one end.
