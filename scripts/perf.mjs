@@ -7,7 +7,7 @@
  *
  *   node scripts/perf.mjs [--base URL] [--renderers layers,gl]
  *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window ms]
- *        [--idle 3000] [--scroll 1] [--headed] [--query k=v&k=v]
+ *        [--idle 3000] [--scroll 1] [--house] [--headed] [--query k=v&k=v]
  *        [--gate [--min-fps 118] [--max-long 3] [--retries 1] [--dropout 0]]
  *        [--quiet]
  *
@@ -28,6 +28,12 @@
  *
  * `--quiet` (as `npm run qa` runs it) prints only failing cases, then one
  * summary line.
+ *
+ * (0.4.15) `--house` also sweeps the contact stretch alone (the turn, the
+ * house, the pool), GL only, and reports it apart: the whole-page sweep
+ * averages the house's frames in with the sky's and the desk's. For
+ * information, never gated, and not run by `npm run qa` for now (the
+ * owner, 2026-10-25: the house is still over budget).
  * Absolute numbers depend on the machine and on headless GPU support; compare
  * renderers within one run, not across machines. See scripts/README.md.
  */
@@ -62,6 +68,7 @@ const WINDOW = Number(args.window ?? 0);
 const IDLE = Number(args.idle ?? (GATE ? 1000 : 3000));
 // Scroll sweeps (down the descent track and back up); 0 skips them.
 const SCROLLS = Number(args.scroll ?? 1);
+const HOUSE = Boolean(args.house);
 // Extra query params for every page, e.g. `--query crest=cpu`.
 const QUERY = Object.fromEntries(new URLSearchParams(typeof args.query === 'string' ? args.query : ''));
 const VIEWPORTS = viewportsFrom(args.viewports, [
@@ -252,8 +259,51 @@ async function measure(browser, vp, renderer) {
     };
   }
 
+  // (0.4.15) The contact stretch alone: from its top, wheeled down to its
+  // end and back.
+  let house = null;
+  if (HOUSE && renderer === 'gl') {
+    const span = await page.evaluate(() => {
+      const el = document.querySelector('[data-descent=contact]');
+      if (!el) return null;
+      const top = el.getBoundingClientRect().top + scrollY;
+      window.scrollTo(0, top);
+      return el.offsetHeight;
+    });
+    if (span) {
+      await sleep(2500);
+      await page.evaluate(() => {
+        const rec = (window.__houseRec = { ts: [], long: [], on: true });
+        try {
+          rec.po = new PerformanceObserver(l => l.getEntries().forEach(e => rec.long.push(e.duration)));
+          rec.po.observe({ type: 'longtask' });
+        } catch {}
+        const tick = t => {
+          rec.ts.push(t);
+          if (rec.on) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const steps = Math.max(20, Math.ceil(span / 60));
+      for (const dir of [1, -1]) {
+        for (let i = 0; i < steps; i++) {
+          await page.mouse.wheel(0, dir * 60);
+          await sleep(16);
+        }
+        await sleep(900);
+      }
+      const rec = await page.evaluate(() => {
+        const r = window.__houseRec;
+        r.on = false;
+        r.po?.disconnect();
+        return { intervals: r.ts.slice(1).map((t, i) => t - r.ts[i]), long: r.long, ms: r.ts.at(-1) - r.ts[0] };
+      });
+      house = summarise(rec.intervals, rec.long, rec.ms);
+    }
+  }
+
   await context.close();
-  return { renderer, painted, viewport: vp.name, switching, idle, scroll, errors };
+  return { renderer, painted, viewport: vp.name, switching, idle, scroll, house, errors };
 }
 
 /** The gate's verdict on one measured case: a list of problems. */
@@ -395,6 +445,15 @@ async function main() {
 
   for (const r of results) {
     if (r.errors.length && !GATE) console.log(`console ${r.viewport} ${r.renderer}: ${r.errors.join(' | ')}`);
+  }
+  // (0.4.15) The house's stretch, for information.
+  const houses = results.filter(r => r.house);
+  if (houses.length) {
+    console.log('\nhouse (info, not gated): the contact stretch alone, GL');
+    for (const r of houses) {
+      const s = r.house;
+      console.log(`${r.viewport.padEnd(12)} ${n1(s.fps).padStart(6)} fps  p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)} ms  ${s.over20} > 20 ms`);
+    }
   }
 
   let failed = 0;

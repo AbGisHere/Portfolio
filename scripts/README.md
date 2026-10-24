@@ -132,6 +132,12 @@ This measures, per renderer and viewport:
   the top, the bottom and back at the top, which confirms `about` moved the
   camera (and came back to rest). Known gap: the headless sweep doesn't
   quite reach the bottom of the track, so `about` stops a little short of 1.
+- **House** (`--house`, GL only; `0.4.15`): the contact stretch alone, from
+  its top down to the pool and back, reported apart, since the whole-page
+  sweep averages the house's frames in with the sky's and the desk's. For
+  information: never gated, and `qa` doesn't run it for now (the owner,
+  2026-10-25). `npm run perf -- --renderers gl --viewports 1728x1117@2
+  --house`.
 - **Main-thread time:** CDP `Performance.getMetrics` deltas (`TaskDuration`,
   `ScriptDuration`, `LayoutDuration`, `RecalcStyleDuration`) for each phase.
 

@@ -83,8 +83,10 @@ const walk = dir => {
     else if (name.endsWith('.map')) maps.push(p);
   }
 };
-walk('.next/static');
-check(maps.length === 0, `no .map files in .next/static (${maps.length})`);
+// (0.4.15) The build the server runs: the harness builds into NEXT_DIST_DIR.
+const staticDir = join(process.env.NEXT_DIST_DIR || '.next', 'static');
+walk(staticDir);
+check(maps.length === 0, `no .map files in ${staticDir} (${maps.length})`);
 
 console.log(
   QUIET

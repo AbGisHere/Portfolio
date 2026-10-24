@@ -6,6 +6,23 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.15 — 2026-10-25
+
+- **CI's hygiene passes again:** Turbopack writes an empty source map (no
+  sources) for a web worker's chunk group, the house's, even with browser
+  source maps off (`experimental.turbopackSourceMaps: false` doesn't stop
+  it), and hygiene fails on any `.map` under `.next/static`. A `postbuild`
+  step (`scripts/strip-empty-maps.mjs`) deletes only maps with no sources,
+  so a real one would still fail.
+- **Hygiene reads the build the server runs** (`NEXT_DIST_DIR`): locally it
+  read `.next/static`, a stale build, while QA served `.next-qa`, which is
+  how the 0.4.14 push passed `qa` and failed CI.
+- **perf `--house`:** the contact stretch swept alone and reported apart
+  (info, not gated, not in `qa` for now: the owner). At 1728 × 1117 @2:
+  65.4 fps, p95 25.2 ms, 200 frames over 20 ms; the whole-page sweep in the
+  same run 94.3 fps.
+- **Measured:** unit tests 28/28; hygiene 21/21 on the production build.
+
 ## 0.4.14 — 2026-10-25
 
 - **No flicker on the kitchen and the pictures** (the owner: the same
