@@ -170,11 +170,11 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- Partitions.
   partition(out, [-4.5, -71.28], [-4.5, -77.5], T, CEIL_U, [[-74.6, -73.6]]);
   partition(out, [-4.5, -77.5], [2.6, -77.5], T, CEIL_U);
-  partition(out, [-4.5, -75.8], [2.6, -75.8], T, CEIL_U, [[-1.0, -0.1]]);
+  partition(out, [-4.5, -75.8], [2.6, -75.8], T, CEIL_U, [[1.35, 2.25]]);
   partition(out, [2.6, -71.28], [2.6, jz[0]], T, CEIL_U, [[-74.6, -73.7], [-78.5, -77.6]]);
   partition(out, [2.6, -75.0], [jx[1], -75.0], T, CEIL_U);
   door(out, [-4.5, -73.6], [0, -1], y, { open: -1.2 });
-  door(out, [-1.0, -75.8], [1, 0], y, { open: 1.3 });
+  door(out, [1.35, -75.8], [1, 0], y, { open: 1.3 });
   door(out, [2.6, -73.7], [0, -1], y, { open: 1.2 });
   door(out, [2.6, -77.6], [0, -1], y, { open: 1.0 });
 
@@ -209,9 +209,10 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The en-suite: stone-clad walls, a freestanding bath at the glass
   // side, a walk-in shower behind glass, a double vanity.
   const tileH = y + 2.4;
-  box(out, [2.66, y, -74.94], [2.68, tileH, -71.3], v(P.tile, 0.5));
-  box(out, [2.66, y, -74.96], [jx[1], tileH, -74.94], v(P.tile, 0.5));
-  box(out, [jx[1] - 0.02, y, -74.94], [jx[1], tileH, -71.3], v(P.tile, 0.5));
+  // (Each a few millimetres proud of its wall, never in its plane.)
+  box(out, [2.664, y, -74.93], [2.684, tileH, -71.3], v(P.tile, 0.5));
+  box(out, [2.664, y, -74.936], [jx[1] - 0.004, tileH, -74.916], v(P.tile, 0.5));
+  box(out, [jx[1] - 0.024, y, -74.93], [jx[1] - 0.004, tileH, -71.3], v(P.tile, 0.5));
   box(out, [2.66, y, -74.94], [jx[1], y + 0.005, -71.3], v(P.tile, 0.5));
   bath(out, [4.9, y, -72.2], 0);
   shower(out, [6.85, y, -74.3], 0, 1.6, 1.2);

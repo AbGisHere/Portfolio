@@ -21,7 +21,7 @@
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { GLASS_THICK, POOL } from './houseShape';
-import { WATER } from './poolWater';
+import { WATER, WAVES_GLSL } from './poolWater';
 import { box, grid } from './meshKit';
 
 const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
@@ -146,6 +146,7 @@ out vec4 outColor;
 
 ${METAL_GLSL}
 ${PROJECT_GLSL}
+${WAVES_GLSL}
 
 // Where a world point lands on the frame (0 … 1).
 vec2 screenOf(vec3 w) {
@@ -195,8 +196,10 @@ void main() {
     vec2 e = vec2(1.0 / ${WATER.nx}.0, 1.0 / ${WATER.nz}.0);
     vec2 slope = vec2(texture(uWater, uv + vec2(e.x, 0.0)).r - texture(uWater, uv - vec2(e.x, 0.0)).r,
       texture(uWater, uv + vec2(0.0, e.y)).r - texture(uWater, uv - vec2(0.0, e.y)).r) / (2.0 * e * ${v2([POOL.w, POOL.d])}) * uWaterOn;
-    vec2 w = vWorld.xz * 2.3 + uWaterT * vec2(0.06, 0.04);
-    slope += (vec2(noise2(w), noise2(w + 17.0)) - 0.5) * 0.035 + (vec2(noise2(w * 3.1 + 5.0), noise2(w * 3.1 - 9.0)) - 0.5) * 0.015;
+    // The wind's ripples on it (poolWater.js), and a finer stir still.
+    slope += waveSlope(vWorld.xz - ${v2(PMIN)}, uWaterT);
+    vec2 w = vWorld.xz * 6.0 + uWaterT * vec2(0.3, 0.2);
+    slope += (vec2(noise2(w), noise2(w + 17.0)) - 0.5) * 0.012;
     N = normalize(vec3(-slope.x, 1.0, -slope.y));
     float ci = max(dot(N, V), 1e-3);
     // Each colour down its own path to the basin's floor or walls.

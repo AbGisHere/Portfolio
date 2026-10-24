@@ -28,6 +28,7 @@ import { MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 import { TREE_SHADE_GLSL } from './treeShader';
 import { DESK_SHADE_GLSL } from './deskShader';
+import { MOUND_GLSL } from './houseShape';
 
 const f = v => v.toFixed(6);
 
@@ -145,6 +146,7 @@ float vnoise(vec2 x) {
 
 ${PRINTS_GLSL}
 ${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
+${MOUND_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
   int ring = gl_InstanceID / per;
@@ -155,6 +157,13 @@ void main() {
   ivec2 at = ivec2(floor(uCam.xz / c)) - ${GRASS.side / 2} + ivec2(cell % ${GRASS.side}, cell / ${GRASS.side});
   uint s = pcg(uint(at.x) * 9781u ^ pcg(uint(at.y) * 6271u ^ pcg(uint(ring * 16 + bi))));
   vec2 pos = (vec2(at) + vec2(rnd(s), rnd(s))) * c;
+  // (0.4.2) The ground rises under the house's lawn (none grows under its
+  // stone base).
+  if (underHouse(pos)) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+  float gy = moundY(pos);
 
   // Which ring owns this spot (a crossfade at each edge), and the density.
   float m = max(abs(pos.x - uCam.x), abs(pos.y - uCam.z));
@@ -162,7 +171,7 @@ void main() {
   float inner = ring == 0 ? 0.0 : edge * 0.5;
   float own = (ring == 0 ? 1.0 : smoothstep(inner * 0.9, inner, m)) - smoothstep(edge * 0.9, edge, m);
   vec2 rel = pos - uCam.xz;
-  float d = length(vec3(rel.x, uCam.y, rel.y));
+  float d = length(vec3(rel.x, uCam.y - gy, rel.y));
   // Looking down, a blade shows only its curl, not its height: the meadow
   // grows thicker under a steeper camera (×3 straight down), so the ground
   // doesn't show through from above.
@@ -177,7 +186,7 @@ void main() {
   float widen = clamp(sqrt(${f(GRASS.cap)} / max(want, 1.0)), 1.0, 3.0);
   // A blade under about a pixel tall on screen is left out: it would only
   // shimmer, and the ground's far colour already reads as grass there.
-  vec3 q0 = viewOf(vec3(rel.x, -uCam.y, rel.y));
+  vec3 q0 = viewOf(vec3(rel.x, gy - uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   if (z0 > 0.0 && 0.16 * uPitch.w * uPitch.z / z0 < uPxCss) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -194,7 +203,8 @@ void main() {
   float tall = kind > 0.92 ? 1.6 : kind < 0.1 ? 0.7 : 1.0;
   float broad = kind > 0.92 ? 0.6 : kind < 0.1 ? 1.7 : 1.0;
   float r1 = rnd(s);
-  float h = (0.07 + 0.17 * r1 * r1) * tall * swell * grow;
+  // (The house's lawn is mown: shorter, more even.)
+  float h = (0.07 + 0.17 * r1 * r1) * tall * swell * grow * mix(1.0, 0.45, smoothstep(0.05, 0.6, gy));
   float yaw = rnd(s) * 6.2831853;
   vec2 face = vec2(sin(yaw), cos(yaw));
   vec2 bend = face * (0.1 + 0.5 * rnd(s));
@@ -240,7 +250,7 @@ ${PUSH_SUM}
   float wdt = 0.022 * widen * wide * pow(1.0 - t, taper);
   // The tip leans off the centre line (skew), so no two points match.
   float lean = skew * 0.022 * widen * wide * t * t;
-  vec3 w = vec3(pos.x + bd.x * off + across.x * (side * wdt + lean), y, pos.y + bd.y * off + across.y * (side * wdt + lean));
+  vec3 w = vec3(pos.x + bd.x * off + across.x * (side * wdt + lean), gy + y, pos.y + bd.y * off + across.y * (side * wdt + lean));
 
   // Projected as the scene's pitched camera sees it (deskCamera.js toScreen).
   vec3 q = viewOf(w - uCam);

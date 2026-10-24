@@ -6,6 +6,41 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.3 — 2026-10-24
+
+The house, carried further (the owner: perfect the house before any
+cuts; no QA until the push).
+
+- **Caustics** (`poolWater.js`): the sun through the surface onto the
+  floor, Evan Wallace's area method on a 420 × 178 grid, once per colour
+  at water's index for it (so the net splits at its edges), from the
+  field plus the wind's ripples (`WAVES_GLSL`: six trains, 11 – 47 cm, at
+  deep water's speeds) and a constant chop of small drops.
+- **The pool mirrors the house**: the house drawn again reflected in the
+  water's plane (quarter-free: half the canvas), shown by Fresnel and
+  rippled by the surface.
+- **Grass on the mound**: the blades rise with it (`MOUND_GLSL`), mown
+  shorter, none under the stone base; no flowers on the lawn.
+- **Ambient occlusion**: a full-size depth pass of the house each frame;
+  the house's shader darkens its ambient and bounced light where
+  neighbours stand within 30 cm in front (corners, seams, under things).
+  The same pass is a depth pre-pass: each pixel of the house shaded once.
+- **Fixes:** the en-suite's cladding z-fighting its walls; the bath an
+  open bowl with a rolled rim (`soft`'s `lower`); the stair's downlight off
+  the void; the wardrobe's door off the bed's wall; pillows without welts;
+  shadow taps turned by interleaved gradient noise and offset more where
+  the light grazes.
+- **Furniture:** dining chairs in solid walnut (tapered splayed legs, raked
+  back legs into the posts, apron, stretchers, a welted crowned seat, a
+  bowed upholstered back); tops as true slabs (flat, a bullnose edge).
+- **The sky turned away:** past the plane the ridges and bodies aren't
+  computed at all (20 → 8.9 GPU ms at the house hold, 1728×1117@2, no
+  house). Profiling switches `?hao=0`, `?glass=0`, `?mirror=0`,
+  `?caustics=0`.
+- **Measured:** unit tests 28/28; GPU at 1728×1117@2 with the house, 20 ms
+  at the house hold and 31 ms over the pool (over budget: the owner chose
+  to perfect first). No QA run.
+
 ## 0.4.2 — 2026-10-24
 
 The house rebuilt (the owner, 2026-10-24: 0.4.1 was "2/10"; every surface

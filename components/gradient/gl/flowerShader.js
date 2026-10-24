@@ -26,6 +26,7 @@
 import { PRINTS_GLSL, PUSH_SUM } from './grassShader';
 import { TREE_SHADE_GLSL } from './treeShader';
 import { DESK_SHADE_GLSL } from './deskShader';
+import { MOUND_GLSL } from './houseShape';
 
 const f = v => v.toFixed(6);
 
@@ -117,6 +118,7 @@ vec4 project(vec3 w) {
     zp);
 }
 
+${MOUND_GLSL}
 void main() {
   int per = ${FLOWERS.side * FLOWERS.side * FLOWERS.slots};
   int ring = gl_InstanceID / per;
@@ -137,7 +139,8 @@ void main() {
   vec2 rel = pos - uCam.xz;
   float d = length(vec3(rel.x, uCam.y, rel.y));
   float drift = smoothstep(0.45, 0.7, textureLod(uMeadow, pos / ${f(FLOWERS.driftScale)}, 0.0).a);
-  float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d));
+  // (None on the house's mown lawn.)
+  float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d)) * (1.0 - smoothstep(0.02, 0.15, moundY(pos)));
   float p = own * want * c * c / ${f(FLOWERS.slots)};
   float grow = clamp((p - rnd(s)) / 0.1, 0.0, 1.0);
   vec3 q0 = viewOf(vec3(rel.x, -uCam.y, rel.y));

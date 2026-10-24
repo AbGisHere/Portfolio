@@ -19,7 +19,7 @@
  */
 
 import { HOUSE_PART } from './houseShape';
-import { add, ball, cross, grid, scale, sweep, tube, unit } from './meshKit';
+import { add, ball, cross, grid, scale, soft, sweep, tube, unit } from './meshKit';
 
 const LEAF = HOUSE_PART.leaf;
 const BARK = HOUSE_PART.bark;
@@ -93,6 +93,9 @@ export function olive(out, base, h, seed) {
       const tl = 0.22 + 0.22 * rnd();
       const tend = add(from, td, tl);
       tube(out, from, tend, 0.006, BARK + 0.1, 5);
+      // The twig's leaves seen as a mass from afar: a loose clump of them
+      // round it, dark inside, so the crown reads whole at any distance.
+      soft(out, add(from, td, tl * 0.6), [tl * 0.45, tl * 0.3, tl * 0.45], LEAF + 0.15, { e1: 0.9, e2: 0.9, nu: 10, nv: 6, ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] });
       for (let j = 0; j < 12; j++) {
         const at = add(from, td, tl * (0.12 + 0.88 * (j / 11)));
         for (const s of [-1, 1]) {

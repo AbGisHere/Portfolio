@@ -34,6 +34,7 @@ layout(location = 3) in vec2 aST;
 
 ${CAMERA_GLSL}
 uniform mat4 uLightVP;
+uniform vec2 uMirror;   // (0.4.2) on, and the water's height: drawn mirrored in it
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
@@ -48,9 +49,15 @@ void main() {
   vST = aST;
   vPart = int(floor(aPart + 0.001));
   vVar = aPart - float(vPart);
-  // Looked up a little off the surface, so it never shades itself.
-  vLight = uLightVP * vec4(aPos + aNorm * 0.03, 1.0);
-  gl_Position = project(aPos);
+  // Looked up a little off the surface, so it never shades itself; further
+  // off where the light grazes it, where the map's texels stretch.
+  vec3 Lv = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
+  vLight = uLightVP * vec4(aPos + aNorm * mix(0.03, 0.14, 1.0 - abs(dot(aNorm, Lv))), 1.0);
+  // Mirrored in the water, it's lit where it really is but seen where its
+  // reflection is.
+  vec3 at = aPos;
+  if (uMirror.x > 0.5) at.y = 2.0 * uMirror.y - at.y;
+  gl_Position = project(at);
 }
 `;
 
@@ -69,8 +76,16 @@ const opening = i => `vec4(${ROOMS[i][2].slice(0, 4).map(f).join(', ')})`;
 /** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
  * the lamps by night. Needs METAL_GLSL's ggx. */
 export const HOUSE_LIGHT_GLSL = `
+const vec2 AO_DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621), vec2(0.962, -0.195), vec2(0.473, -0.48),
+  vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
 uniform highp sampler2DShadow uShadow;
 uniform float uShadowOn;
+
+// Interleaved gradient noise (Jimenez): a per-pixel turn that reads as an
+// even fine texture, not speckle.
+float ign(vec2 p) {
+  return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
 
 bool inBox(vec3 p, vec3 lo, vec3 hi) {
   return all(greaterThanEqual(p, lo)) && all(lessThanEqual(p, hi));
@@ -81,15 +96,15 @@ float sunShadow(vec4 lp) {
   if (uShadowOn < 0.5) return 1.0;
   vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
   if (any(lessThan(q, vec3(0.0))) || any(greaterThan(q, vec3(1.0)))) return 1.0;
-  // 12 taps on a rotated disc (a Poisson set), turned per pixel so the
+  // 8 taps on a rotated disc (a Poisson set), turned per pixel so the
   // map's texels don't show as steps.
   const vec2 DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621), vec2(0.962, -0.195), vec2(0.473, -0.48),
     vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
-  float a = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;
+  float a = ign(gl_FragCoord.xy) * 6.2832;
   mat2 rot = mat2(cos(a), sin(a), -sin(a), cos(a));
   float s = 0.0;
-  for (int i = 0; i < 12; i++) s += texture(uShadow, vec3(q.xy + rot * DISC[i] * ${f(2.2 / 2048)}, q.z));
-  return s / 12.0;
+  for (int i = 0; i < 8; i++) s += texture(uShadow, vec3(q.xy + rot * DISC[i] * ${f(1.6 / 2048)}, q.z));
+  return s / 8.0;
 }
 
 // Which room a point is in (houseShape.js ZONES): 0 outside.
@@ -155,6 +170,30 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
 }
 `;
 
+/** (0.4.2) The house's depth along the view, for the ambient occlusion
+ * (houseShader's own vertex stage; R16F). */
+export const HOUSE_DEPTH_FRAGMENT = `#version 300 es
+precision highp float;
+${CAMERA_GLSL}
+uniform vec2 uMirror;
+in vec3 vWorld;
+flat in int vPart;
+out vec4 outColor;
+float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void main() {
+  // (Where the lawn frays into the meadow, as the shading pass leaves it.)
+  if (vPart == ${HOUSE_PART.lawn} && vWorld.y < 0.25 * noise2(vWorld.xz * 0.9) + 0.04 * hash2(floor(gl_FragCoord.xy))) discard;
+  vec3 q = viewOf(vWorld - uCam);
+  outColor = vec4(-q.y * uPitch.y + q.z * uPitch.x, 0.0, 0.0, 1.0);
+}
+`;
+
 export const HOUSE_FRAGMENT = `#version 300 es
 precision highp float;
 
@@ -170,6 +209,10 @@ uniform vec2 uHazeAt;   // over these distances (metres)
 uniform float uNight;
 uniform sampler2D uCaustics; // the sun on the pool's floor (houseGlass.js)
 uniform float uCausticsOn;
+uniform vec2 uMirror;
+uniform sampler2D uAO;   // (0.4.2) the house's depth along the view
+uniform float uAOOn;
+uniform vec2 uAORes;     // the frame in device pixels
 uniform sampler2D uGrain;
 uniform float uGrainA;
 uniform float uCssPerPx;
@@ -205,6 +248,31 @@ float detail(float p, vec2 q) {
   return 1.0 - smoothstep(p * 0.15, p * 0.45, length(fwidth(q)));
 }
 
+// (0.4.2) Ambient occlusion: how much of the open sky and the room's
+// bounced light reaches here, from the depths round this pixel (a disc of
+// ~22 cm in the world, turned per pixel): neighbours standing just in front
+// of it (within 30 cm: in contact, not merely nearer) are what shade a
+// corner, a seam, the floor under a sofa.
+float ambientAt(int room) {
+  if (uAOOn < 0.5) return 1.0;
+  vec3 q = viewOf(vWorld - uCam);
+  float z = -q.y * uPitch.y + q.z * uPitch.x;
+  // (Out of doors and far off, contact shadows are too small to see.)
+  if (room == 0 && z > 14.0) return 1.0;
+  vec2 uv = gl_FragCoord.xy / uAORes;
+  float r = 0.22 * uPitch.w * uPitch.z / max(z, 0.05) / uScreen.z;
+  float a = ign(gl_FragCoord.xy + 17.0) * 6.2832;
+  mat2 rot = mat2(cos(a), sin(a), -sin(a), cos(a));
+  vec2 asp = vec2(1.0, uScreen.z / uScreen.w);
+  float occ = 0.0;
+  for (int i = 0; i < 8; i++) {
+    vec2 o = rot * AO_DISC[i] * r * (0.25 + 0.75 * fract(float(i) * 0.618)) * asp;
+    float dz = z - texture(uAO, uv + o).r;
+    occ += smoothstep(0.015, 0.05, dz) * (1.0 - smoothstep(0.12, 0.3, dz));
+  }
+  return 1.0 - 0.75 * occ / 8.0;
+}
+
 // The pool's tiles (25 cm, pale aqua, white grout).
 vec3 poolTile(vec2 q) {
   vec2 g = abs(fract(q / 0.25) - 0.5) * 0.25;
@@ -217,8 +285,12 @@ const vec3 BOOKS[10] = vec3[](vec3(0.55, 0.16, 0.12), vec3(0.15, 0.24, 0.38), ve
   vec3(0.1, 0.1, 0.11), vec3(0.7, 0.45, 0.18), vec3(0.85, 0.82, 0.76), vec3(0.42, 0.22, 0.3), vec3(0.3, 0.42, 0.48), vec3(0.6, 0.3, 0.2));
 
 void main() {
+  // (Only what stands above the water is mirrored in it, and never the
+  // rooms behind the glass: too dim to show in it.)
+  if (uMirror.x > 0.5 && (vWorld.y < uMirror.y || roomOf(vWorld) != 0)) discard;
   vec3 N = normalize(vNorm);
   vec3 V = normalize(uCam - vWorld);
+  if (uMirror.x > 0.5) V = normalize(vec3(uCam.x, 2.0 * uMirror.y - uCam.y, uCam.z) - vWorld);
   vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
   vec2 st = vST;
   float k = vVar * 10.0;
@@ -367,9 +439,14 @@ void main() {
     bool top = gl_FrontFacing;
     if (!top) N = -N;
     float rib = 1.0 - smoothstep(0.0, 0.08, abs(st.y));
-    if (vVar < 0.25) {
+    if (vVar < 0.12) {
       alb = top ? vec3(0.26, 0.31, 0.2) : vec3(0.55, 0.58, 0.52);
       rough = top ? 0.55 : 0.8;
+    } else if (vVar < 0.25) {
+      // The olive's crown as a mass: grey-green, broken by the light
+      // through it.
+      alb = vec3(0.3, 0.35, 0.25) * (0.7 + 0.5 * noise2(vWorld.xz * 20.0 + vWorld.y * 14.0));
+      rough = 0.7;
     } else if (vVar < 0.55) {
       float vein = 1.0 - smoothstep(0.0, 0.05, abs(fract(st.x * 7.0 - abs(st.y) * 1.6) - 0.5) * 0.6 - 0.27);
       alb = (top ? vec3(0.09, 0.2, 0.07) : vec3(0.2, 0.3, 0.15)) * (1.0 + 0.5 * rib + 0.25 * vein * smoothstep(0.1, 0.4, abs(st.y)));
@@ -484,6 +561,9 @@ void main() {
   if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.25;
   float dim = mix(1.0, 0.3, uNight);
   vec3 lamps = uNight > 0.0 ? lampsAt(vWorld, N, V, rough, room) * uNight : vec3(0.0);
+  float ao = ambientAt(room);
+  open *= ao;
+  lamps *= mix(1.0, ao, 0.7);
   vec3 col;
   if (vPart == ${P.lawn}) {
     // The lawn lit like the meadow round it, the house's shadow and the

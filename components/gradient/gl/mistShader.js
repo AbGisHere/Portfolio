@@ -384,6 +384,9 @@ void main() {
   if (uLifeA > 0.0 && first < 0) col = skyLife(col, p);
   // (0.4.0) The sky alone, for where the plane fades out.
   vec3 bare = col;
+  float cover[MAX_RIDGES] = float[MAX_RIDGES](${Array(MAX_RIDGES).fill('0.0').join(', ')});
+  // (0.4.0) Turned right off the plane there's nothing on it to paint.
+  if (face > 0.001) {
 
   // A setting sun's wash (sunLook.js SET_WASH): a very wide, faint Gaussian
   // hugging the horizon that tints the sky here, then lights the ridge rims
@@ -442,7 +445,6 @@ void main() {
 #endif
 
   // (0.3.5) How much each ridge covers this pixel, for the birds behind them.
-  float cover[MAX_RIDGES] = float[MAX_RIDGES](${Array(MAX_RIDGES).fill('0.0').join(', ')});
 #ifndef OFF_RIDGES
   for (int i = 0; i < MAX_RIDGES; i++) {
     if (i >= uCount) break;
@@ -524,6 +526,8 @@ void main() {
 
   // A setting sun's light spilling over the crests along the horizon.
   if (washA > 0.0) col = over(col, washCol, washA * ${f(SET_WASH.spill)});
+
+  }
 
   // (0.4.0) Turned off the plane, only the sky.
   if (face < 1.0) col = mix(bare, col, face);

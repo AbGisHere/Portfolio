@@ -10,7 +10,7 @@ import { DESK_FRAGMENT, DESK_VERTEX } from '../../components/gradient/gl/deskSha
 import { LAPTOP_FRAGMENT, LAPTOP_VERTEX } from '../../components/gradient/gl/laptopShader.js';
 import { TABLET_FRAGMENT, TABLET_VERTEX } from '../../components/gradient/gl/tabletShader.js';
 import { LAMP_FRAGMENT, LAMP_VERTEX } from '../../components/gradient/gl/lampShader.js';
-import { HOUSE_FRAGMENT, HOUSE_VERTEX } from '../../components/gradient/gl/houseShader.js';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_VERTEX } from '../../components/gradient/gl/houseShader.js';
 import { WATER_PROGRAMS } from '../../components/gradient/gl/poolWater.js';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX } from '../../components/gradient/gl/houseShadow.js';
 import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/houseGlass.js';
@@ -29,6 +29,7 @@ export const PROGRAMS = [
   ['lamp', LAMP_VERTEX, LAMP_FRAGMENT],
   ['props', PROPS_VERTEX, PROPS_FRAGMENT],
   ['house', HOUSE_VERTEX, HOUSE_FRAGMENT],
+  ['house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT],
   ['house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT],
   ['house-glass', GLASS_VERTEX, GLASS_FRAGMENT],
   ...WATER_PROGRAMS,

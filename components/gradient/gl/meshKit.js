@@ -194,13 +194,14 @@ export function place(out, from, at, yaw = 0) {
  * own y (0.1 nearly a box, 1 round), `e2` round it (in x and z). `pinch`
  * thins it toward its corners, as a stuffed cushion or a pillow sits.
  * Outward smooth normals (inward, `inside`: its hollow seen from within);
+ * `lower`: only its lower half, open at the top (a bowl);
  * `s`, `t` round and up it (0 … 1).
  */
-export function soft(out, c, half, part, { e1 = 0.3, e2 = 0.2, pinch = 0, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], nu = 28, nv = 14, inside = false } = {}) {
+export function soft(out, c, half, part, { e1 = 0.3, e2 = 0.2, pinch = 0, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], nu = 28, nv = 14, inside = false, lower = false } = {}) {
   const sp = (x, e) => Math.sign(x) * Math.abs(x) ** e;
   const pts = [];
   for (let j = 0; j <= nv; j++) {
-    const phi = -Math.PI / 2 + (Math.PI * j) / nv;
+    const phi = -Math.PI / 2 + ((lower ? Math.PI / 2 : Math.PI) * j) / nv;
     for (let i = 0; i <= nu; i++) {
       const th = -Math.PI + (2 * Math.PI * i) / nu;
       const cp = sp(Math.cos(phi), e1);

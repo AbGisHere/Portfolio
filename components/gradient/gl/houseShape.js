@@ -32,6 +32,17 @@ export function moundY(x, z) {
   return s < 1 ? MOUND.h * (1 - s * s) ** 2 : 0;
 }
 
+/** (0.4.2) The same in GLSL, for the grass that grows on it, and whether a
+ * point of ground is under the house's stone base (where none grows). */
+export const MOUND_GLSL = `float moundY(vec2 p) {
+  float s = length((p - vec2(${MOUND.at[0].toFixed(2)}, ${MOUND.at[1].toFixed(2)})) / vec2(${MOUND.r[0].toFixed(2)}, ${MOUND.r[1].toFixed(2)}));
+  return s < 1.0 ? ${MOUND.h.toFixed(3)} * (1.0 - s * s) * (1.0 - s * s) : 0.0;
+}
+bool underHouse(vec2 p) {
+  return p.x > -9.6 && p.x < 9.6 && p.y > -81.1 && p.y < -55.7;
+}
+`;
+
 /** The ground floor (the stone base's top), the floor-to-floor heights, the
  * terrace (the upper floor). */
 export const FLOOR = 3.6;
@@ -90,7 +101,7 @@ export const ZONES = [
  */
 const down = (zone, ceil, pts, r = 5, k = 0.45) => pts.map(([x, z]) => [x, ceil - 0.05, z, r, k, 3, zone]);
 export const HOUSE_LIGHTS = [
-  ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3], [2.5, -65.5], [2.5, -70.3], [3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6], [6.2, -65.0], [-6.6, -74.5], [0, -67.5]]),
+  ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3], [2.5, -65.5], [2.5, -70.3], [3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6], [6.2, -65.0], [-5.8, -74.5], [0, -67.5]]),
   [2.55, FLOOR + 1.8, -67.9, 5, 0.7, 0, 3],
   [4.4, FLOOR + 2.1, -74.9, 5, 0.7, 0, 3],
   [-7.2, FLOOR + 1.55, -70.3, 3.5, 0.7, 0, 3],

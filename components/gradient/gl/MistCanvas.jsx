@@ -41,8 +41,8 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
-import { POOL } from './houseShape';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
+import { HOUSE_BOUNDS, POOL } from './houseShape';
 import { makeWater } from './poolWater';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
@@ -421,6 +421,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const waterSim = () => (water === undefined ? (water = makeWater(gl, 8)) : water);
     // Whether the pool can be seen: the camera turned to the house.
     let poolSeen = false;
+    // Whether the caustics' map has been drawn (texture unit 10).
+    let causticsReady = false;
     // And whether the house can (turned at least 50° toward it).
     let houseSeen = false;
     // (0.4.2) The sun's shadow over the house (houseShadow.js): its depth
@@ -457,7 +459,134 @@ export default function MistCanvas({ recipe, onFail }) {
       glass = { prog: gp, vao, buf: gb, mesh, tex: gl.createTexture(), size: [0, 0], u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
       return glass;
     };
-    // The frame so far, into the glass's copy.
+    // (0.4.2) The house's depth along the view, at the canvas's size, for its
+    // ambient occlusion (texture unit 13): its program and target (null:
+    // none here).
+    let aoPass;
+    const aoTarget = () => {
+      if (aoPass === undefined) {
+        const dp = gl.getExtension('EXT_color_buffer_float') ? passProgram(gl, 'house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT) : null;
+        const AU = {};
+        aoPass = dp ? { prog: dp, u: name => (AU[name] ??= gl.getUniformLocation(dp, name)), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] } : null;
+      }
+      if (!aoPass) return null;
+      const size = [canvas.width, canvas.height];
+      if (aoPass.size[0] !== size[0] || aoPass.size[1] !== size[1]) {
+        aoPass.size = size;
+        gl.activeTexture(gl.TEXTURE13);
+        gl.bindTexture(gl.TEXTURE_2D, aoPass.tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, size[0], size[1], 0, gl.RED, gl.HALF_FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, aoPass.depth);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, size[0], size[1]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aoPass.tex, 0);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
+        const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.activeTexture(gl.TEXTURE0);
+        if (!ok) return (aoPass = null);
+      }
+      return aoPass;
+    };
+    // The house's depth into it, before the frame.
+    function drawHouseDepth() {
+      const g = houseProgram();
+      const a = g && aoTarget();
+      if (!a) return false;
+      const { pitch: P, cm: c } = meadowAt;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, a.fbo);
+      gl.viewport(0, 0, a.size[0], a.size[1]);
+      gl.clearColor(1e4, 0, 0, 1);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.depthFunc(gl.LESS);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(a.prog);
+      gl.uniform4f(a.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(a.u('uYaw'), P.yc, P.ys);
+      gl.uniform4f(a.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(a.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
+      gl.uniform2f(a.u('uMirror'), 0, 0);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      gl.bindVertexArray(null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.activeTexture(gl.TEXTURE13);
+      gl.bindTexture(gl.TEXTURE_2D, a.tex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.useProgram(prog);
+      return true;
+    }
+    let aoReady = false;
+    // (0.4.2) The pool's mirror image's target: a quarter of the canvas (the
+    // water's ripples blur it anyway), its depth.
+    let reflect = null;
+    const reflectTarget = () => {
+      const size = [Math.max(1, canvas.width >> 2), Math.max(1, canvas.height >> 2)];
+      if (reflect && reflect.size[0] === size[0] && reflect.size[1] === size[1]) return reflect;
+      if (reflect === false) return null;
+      if (!reflect) reflect = { tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
+      reflect.size = size;
+      gl.activeTexture(gl.TEXTURE12);
+      gl.bindTexture(gl.TEXTURE_2D, reflect.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size[0], size[1], 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, reflect.depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, size[0], size[1]);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, reflect.fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, reflect.tex, 0);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, reflect.depth);
+      const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.activeTexture(gl.TEXTURE0);
+      if (!ok) {
+        reflect = false;
+        return null;
+      }
+      return reflect;
+    };
+    // The frame so far, into the glass's copy: only where the house is on
+    // the screen (its bounds' corners projected; the whole frame if any
+    // corner is behind the camera).
+    const houseRect = () => {
+      const { pitch: P, cm: c } = meadowAt;
+      const { lo, hi } = HOUSE_BOUNDS;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        const p = [i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]];
+        const dx = p[0] - c.x;
+        const dz = p[2] - c.z;
+        const q = [dx * P.yc - dz * P.ys, p[1] - c.y, dx * P.ys + dz * P.yc];
+        const zp = -q[1] * P.sin + q[2] * P.cos;
+        if (zp <= 0.05) return [0, 0, canvas.width, canvas.height];
+        const vp = -q[1] * P.cos - q[2] * P.sin;
+        const sx = P.sx + (P.zoom * P.f * q[0]) / zp;
+        const sy = P.sy + (P.zoom * P.f * vp) / zp;
+        x0 = Math.min(x0, sx);
+        x1 = Math.max(x1, sx);
+        y0 = Math.min(y0, sy);
+        y1 = Math.max(y1, sy);
+      }
+      const k = canvas.width / w;
+      const X0 = Math.max(0, Math.floor(x0 * k) - 4);
+      const X1 = Math.min(canvas.width, Math.ceil(x1 * k) + 4);
+      const Y0 = Math.max(0, canvas.height - Math.ceil(y1 * k) - 4);
+      const Y1 = Math.min(canvas.height, canvas.height - Math.floor(y0 * k) + 4);
+      return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : null;
+    };
     const copyFrame = g => {
       gl.activeTexture(gl.TEXTURE11);
       gl.bindTexture(gl.TEXTURE_2D, g.tex);
@@ -470,7 +599,8 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
-      gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, canvas.width, canvas.height);
+      const r = houseRect();
+      if (r) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, r[0], r[1], r[0], r[1], r[2], r[3]);
       gl.activeTexture(gl.TEXTURE0);
     };
     const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -628,6 +758,12 @@ export default function MistCanvas({ recipe, onFail }) {
     const noProps = params.get('props') === '0';
     // `?house=0` leaves the house and its pool out (profiling).
     const noHouse = params.get('house') === '0';
+    // (0.4.2) `?hao=0`, `?glass=0`, `?mirror=0`, `?caustics=0` leave those
+    // passes of the house out (profiling).
+    const noAO = params.get('hao') === '0';
+    const noGlass = params.get('glass') === '0';
+    const noMirror = params.get('mirror') === '0';
+    const noCaustics = params.get('caustics') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -1120,7 +1256,8 @@ export default function MistCanvas({ recipe, onFail }) {
           return lo;
         };
         // (0.4.2) Turned to the house, the pool's in view.
-        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free);
+        // (Its water seen from above it only.)
+        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free) && cm.y > POOL.at[1] + 0.05;
         houseSeen = !!frame.grass && (pitch.yc < 0.6 || !!free);
         meadowAt = frame.grass
           ? {
@@ -1536,14 +1673,14 @@ export default function MistCanvas({ recipe, onFail }) {
     }
 
     // (0.4.0) The house and its pool, writing their depth.
-    function drawHouse() {
+    function drawHouse(mirror = false) {
       const g = houseProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const L = lightDir(colours.dir);
       const sh = houseShadow();
-      if (sh) {
+      if (sh && !mirror) {
         sh.map.render(m => {
           gl.useProgram(sh.prog);
           gl.uniformMatrix4fv(sh.u, false, m);
@@ -1573,13 +1710,29 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(g.u('uShadow'), 9);
       gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
       gl.uniform1i(g.u('uCaustics'), 10);
-      gl.uniform1f(g.u('uCausticsOn'), 0);
+      gl.uniform1f(g.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);
+      gl.uniform2f(g.u('uMirror'), mirror ? 1 : 0, POOL.at[1]);
+      gl.uniform1i(g.u('uAO'), 13);
+      gl.uniform1f(g.u('uAOOn'), aoReady && !mirror ? 1 : 0);
+      gl.uniform2f(g.u('uAORes'), canvas.width, canvas.height);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
       gl.bindVertexArray(g.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      if (!mirror && aoReady) {
+        // (0.4.2) Its depth first, colour off (the depth pass's program,
+        // which shades nothing), then each pixel shaded once.
+        const a = aoPass;
+        gl.useProgram(a.prog);
+        gl.colorMask(false, false, false, false);
+        gl.drawArrays(gl.TRIANGLES, 0, g.count);
+        gl.colorMask(true, true, true, true);
+        gl.useProgram(g.prog);
+        gl.depthFunc(gl.LEQUAL);
+        gl.drawArrays(gl.TRIANGLES, 0, g.count);
+        gl.depthFunc(gl.LESS);
+      } else gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -1593,6 +1746,26 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
       gl.depthMask(false);
+      // (0.4.2) The house mirrored in the pool, at a quarter of the frame, for
+      // the water to show (texture unit 12; clear where nothing stands).
+      const mirrored = poolSeen && !noMirror && !!reflectTarget();
+      if (mirrored) {
+        const rt = reflectTarget();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
+        gl.viewport(0, 0, rt.size[0], rt.size[1]);
+        gl.clearColor(0, 0, 0, 0);
+        gl.depthMask(true);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.depthFunc(gl.LESS);
+        drawHouse(true);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.activeTexture(gl.TEXTURE12);
+        gl.bindTexture(gl.TEXTURE_2D, rt.tex);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
+      }
       copyFrame(g);
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
@@ -1613,7 +1786,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uWaterOn'), sim ? 1 : 0);
       gl.uniform1f(g.u('uWaterT'), skyT);
       gl.uniform1i(g.u('uReflect'), 12);
-      gl.uniform1f(g.u('uReflectOn'), 0);
+      gl.uniform1f(g.u('uReflectOn'), mirrored ? 1 : 0);
       gl.uniform3fv(g.u('uSky'), colours.sky);
       gl.uniformMatrix4fv(g.u('uLightVP'), false, shadow ? shadow.map.matrix : IDENTITY);
       gl.uniform1i(g.u('uShadow'), 9);
@@ -1622,7 +1795,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const { windows, rails, water: pool } = g.mesh;
       gl.drawArrays(gl.TRIANGLES, windows[0], windows[1]);
       gl.drawArrays(gl.TRIANGLES, pool[0], pool[1]);
-      copyFrame(g);
+      // (The terrace's glass bends the same copy: what's behind it there is
+      // mostly the sky and the meadow, drawn before.)
       gl.drawArrays(gl.TRIANGLES, rails[0], rails[1]);
       gl.bindVertexArray(null);
       gl.depthMask(true);
@@ -1812,6 +1986,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(uniform('uVeilA'), alpha);
       const prints = printsNow();
       gl.viewport(0, 0, canvas.width, canvas.height);
+      // (0.4.2) The house's depth first, for its ambient occlusion.
+      aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
       const grassOn = !!grassAt && !!grassProgram();
       // (0.3.5) The trees show as soon as the meadow's paint does.
       const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees;
@@ -1859,7 +2035,7 @@ export default function MistCanvas({ recipe, onFail }) {
       drawMeadow(prints);
       if (deskOn && !noProps) drawSteam();
       gl.depthMask(true);
-      if (deskOn && !noHouse && houseSeen) drawGlass();
+      if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
       gl.disable(gl.DEPTH_TEST);
       lastDrawn = vs;
     }
@@ -1963,6 +2139,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.4.2) The pool's water steps while it's in view.
       if (poolSeen && !motion.matches && !frozen && waterSim()) {
         water.step(dt);
+        // (0.4.2) And the sun's caustics on its floor from the new surface.
+        if (meadowAt && !noCaustics) causticsReady = water.caustics(lightDir(meadowAt.colours.dir), 10, skyT);
         gl.useProgram(prog);
       }
       if (busy || crestMoved || windMoved || living || (tick && changed(vs))) draw(vs);
@@ -2091,6 +2269,17 @@ export default function MistCanvas({ recipe, onFail }) {
       water?.dispose();
       shadow?.map.dispose();
       if (glass) gl.deleteTexture(glass.tex);
+      if (aoPass) {
+        gl.deleteTexture(aoPass.tex);
+        gl.deleteRenderbuffer(aoPass.depth);
+        gl.deleteFramebuffer(aoPass.fbo);
+        gl.deleteProgram(aoPass.prog);
+      }
+      if (reflect) {
+        gl.deleteTexture(reflect.tex);
+        gl.deleteRenderbuffer(reflect.depth);
+        gl.deleteFramebuffer(reflect.fbo);
+      }
       if (shadow) gl.deleteProgram(shadow.prog);
       for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, house, glass, steam]) {
         if (!p) continue;

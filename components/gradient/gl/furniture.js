@@ -45,7 +45,8 @@ function cushion(out, f, x, y, z, hw, hh, hd, part, { tilt = 0, yaw = 0, pinch =
   const cax = ax.map(turnTo);
   const c = f.at(x, y, z);
   soft(out, c, [hw, hh, hd], part, { e1, e2, pinch, ax: cax });
-  if (!pipe) return;
+  // (A pillow, pinched to its corners, has no welt.)
+  if (!pipe || pinch > 0.3) return;
   const cf = { ax: cax, at: (px, py, pz) => add(add(add(c, cax[0], px), cax[1], py), cax[2], pz) };
   for (const sy of [hh * 0.62, -hh * 0.62]) piping(out, cf, sy, hw * 0.97, hd * 0.95, 0.007, part, Math.min(hw, hd) * 0.35);
 }
@@ -102,16 +103,77 @@ export function loungeChair(out, c, yaw, fabric = v(P.fabric, 0.3)) {
   cushion(out, f, 0.06, 0.6, -0.12, 0.2, 0.05, 0.19, v(P.cushion, 0.15), { tilt: 1.2, yaw: 0.25, pinch: 0.55, e1: 0.75, e2: 0.32 });
 }
 
-/** A dining chair at c, facing yaw: a padded seat and back on a bent steel
- * frame, its feet capped. */
+/**
+ * A solid top: flat faces and a rounded (bullnose) edge all round, as a
+ * slab of wood or stone is eased. Its middle at the frame's (x, y, z),
+ * half-sizes hw × hh × hd.
+ */
+function slab(out, f, x, y, z, hw, hh, hd, part) {
+  // The flat top and bottom inside the edge's round; the edge a rod of the
+  // slab's half-thickness run round it (its corners turned tight). (For a
+  // top wider and deeper than it's thick.)
+  const rc = Math.max(0.001, Math.min(0.006, hw - hh, hd - hh));
+  obox(out, f.at(x, y, z), [hw - hh, hh, hd - hh - rc], part, f.ax);
+  obox(out, f.at(x, y, z), [hw - hh - rc, hh, hd - hh], part, f.ax);
+  const g = { ax: f.ax, at: (px, py, pz) => f.at(px + x, py, pz + z) };
+  piping(out, g, y, hw - hh, hd - hh, hh, part, rc);
+}
+
+/** A curved panel between heights y0 and y1, bowed round the frame's
+ * middle at radius r (its front toward +z) over `span` radians, `thick`
+ * thick, at depth z: a chair's back. */
+function curvedPanel(out, f, y0, y1, z, r, span, thick, part) {
+  const face = (rad, flip) => grid(out, 16, 3, (u, w) => {
+    const a = (u - 0.5) * span;
+    return { p: f.at(Math.sin(a) * rad, y0 + (y1 - y0) * w, z - r + Math.cos(a) * rad), part, s: u, t: w };
+  }, flip ? scale(f.ax[2], -1) : f.ax[2]);
+  face(r, false);
+  face(r - thick, true);
+  for (const [y, up] of [[y1, f.ax[1]], [y0, scale(f.ax[1], -1)]]) {
+    grid(out, 16, 1, (u, w) => {
+      const a = (u - 0.5) * span;
+      const rad = r - thick * w;
+      return { p: f.at(Math.sin(a) * rad, y, z - r + Math.cos(a) * rad), part, s: u, t: w };
+    }, up);
+  }
+}
+
+/**
+ * A dining chair at c, facing yaw: solid walnut, the front legs turned and
+ * tapering, splayed a little; the back legs rising into the back's posts
+ * with a rake; an apron round the seat and stretchers low between the
+ * legs; a crowned seat cushion, welted; a back bowed round the sitter, its
+ * front upholstered.
+ */
 export function chair(out, c, yaw, fabric = v(P.fabric, 0.6)) {
   const f = frame(c, yaw);
-  cushion(out, f, 0, 0.46, 0, 0.22, 0.035, 0.21, fabric, { e1: 0.35, e2: 0.2, pinch: 0.08 });
-  cushion(out, f, 0, 0.78, -0.21, 0.21, 0.16, 0.025, fabric, { tilt: -0.12, e1: 0.4, e2: 0.25, pipe: false });
-  for (const sx of [-0.19, 0.19]) {
-    sweep(out, [f.at(sx, 0, 0.2), f.at(sx, 0.42, 0.19), f.at(sx, 0.43, -0.18), f.at(sx, 0.9, -0.24)], 0.009, P.steel, { seg: 6 });
-    tube(out, f.at(sx, 0, -0.18), f.at(sx, 0.42, -0.18), 0.009, P.steel, 6);
+  const W = v(P.walnut, 0);
+  const seatY = 0.44;
+  // The front legs: tapered rounds, splayed out and forward.
+  for (const sx of [-1, 1]) {
+    const foot = f.at(sx * 0.215, 0, 0.215);
+    const top = f.at(sx * 0.2, seatY - 0.02, 0.19);
+    const ax = [top[0] - foot[0], top[1] - foot[1], top[2] - foot[2]];
+    const len = Math.hypot(...ax);
+    lathe(out, foot, ax.map(x => x / len), [[0, 0], [0.013, 0], [0.019, len * 0.85], [0.02, len], [0, len]], W, 12);
   }
+  // The back legs: from the floor, raked back, up through the seat into the
+  // posts of the back.
+  for (const sx of [-1, 1]) {
+    sweep(out, [f.at(sx * 0.21, 0, -0.24), f.at(sx * 0.2, 0.22, -0.2), f.at(sx * 0.2, seatY, -0.18), f.at(sx * 0.195, 0.62, -0.2), f.at(sx * 0.19, 0.8, -0.24)], 0.016, W, { seg: 8 });
+  }
+  // The apron under the seat, and the stretchers.
+  obox(out, f.at(0, seatY - 0.05, 0.19), [0.2, 0.03, 0.012], W, f.ax);
+  obox(out, f.at(0, seatY - 0.05, -0.18), [0.2, 0.03, 0.012], W, f.ax);
+  for (const sx of [-1, 1]) obox(out, f.at(sx * 0.2, seatY - 0.05, 0.005), [0.012, 0.03, 0.18], W, f.ax);
+  for (const sx of [-1, 1]) tube(out, f.at(sx * 0.208, 0.16, 0.2), f.at(sx * 0.205, 0.16, -0.21), 0.009, W, 8);
+  tube(out, f.at(-0.205, 0.2, 0.0), f.at(0.205, 0.2, 0.0), 0.009, W, 8);
+  // The seat: a walnut pan, the cushion crowned on it and welted.
+  obox(out, f.at(0, seatY - 0.012, 0.005), [0.215, 0.012, 0.205], W, f.ax);
+  cushion(out, f, 0, seatY + 0.03, 0.01, 0.215, 0.035, 0.205, fabric, { e1: 0.3, e2: 0.14, pinch: 0.06 });
+  // The back: a bowed walnut shell between the posts, padded in front.
+  curvedPanel(out, f, 0.6, 0.82, -0.2, 0.55, 0.78, 0.014, W);
+  curvedPanel(out, f, 0.62, 0.8, -0.186, 0.536, 0.72, 0.02, fabric);
 }
 
 /** A bar stool at c: a round padded seat, a steel ring and four legs. */
@@ -129,7 +191,7 @@ export function stool(out, c) {
  * (or `legs`: four turned legs). */
 export function table(out, c, yaw, { w = 2.4, d = 1.0, h = 0.75, top = v(P.walnut, 0), legs = false, thick = 0.045 } = {}) {
   const f = frame(c, yaw);
-  soft(out, f.at(0, h - thick / 2, 0), [w / 2, thick / 2, d / 2], top, { e1: 0.12, e2: 0.04, ax: f.ax, nu: 40, nv: 8 });
+  slab(out, f, 0, h - thick / 2, 0, w / 2, thick / 2, d / 2, top);
   if (legs) {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) lathe(out, f.at(sx * (w / 2 - 0.08), 0, sz * (d / 2 - 0.08)), [0, 1, 0], [[0, 0], [0.018, 0], [0.026, h - thick]], v(P.walnut, 0), 10);
     return;
@@ -144,7 +206,7 @@ export function table(out, c, yaw, { w = 2.4, d = 1.0, h = 0.75, top = v(P.walnu
 /** A low coffee table: a thick walnut slab on two panel ends. */
 export function coffeeTable(out, c, yaw) {
   const f = frame(c, yaw);
-  soft(out, f.at(0, 0.36, 0), [0.65, 0.03, 0.4], v(P.walnut, 0), { e1: 0.15, e2: 0.05, ax: f.ax, nu: 36, nv: 8 });
+  slab(out, f, 0, 0.36, 0, 0.65, 0.03, 0.4, v(P.walnut, 0));
   for (const sx of [-1, 1]) obox(out, f.at(sx * 0.5, 0.165, 0), [0.025, 0.165, 0.36], v(P.walnut, 0), f.ax);
   obox(out, f.at(0, 0.09, 0), [0.475, 0.012, 0.32], v(P.walnut, 0), f.ax);
   // On it: books, a bowl, a candle.
@@ -267,7 +329,7 @@ export function dresser(out, c, yaw, w = 1.4) {
 export function bench(out, c, yaw, { w = 1.4, padded = false } = {}) {
   const f = frame(c, yaw);
   if (padded) cushion(out, f, 0, 0.42, 0, w / 2, 0.06, 0.2, v(P.fabric, 0.4));
-  else soft(out, f.at(0, 0.43, 0), [w / 2, 0.025, 0.2], v(P.walnut, 0), { e1: 0.15, e2: 0.04, ax: f.ax });
+  else slab(out, f, 0, 0.43, 0, w / 2, 0.025, 0.2, v(P.walnut, 0));
   for (const sx of [-1, 1]) {
     sweep(out, [f.at(sx * (w / 2 - 0.1), 0, -0.17), f.at(sx * (w / 2 - 0.1), 0.38, -0.17), f.at(sx * (w / 2 - 0.1), 0.38, 0.17), f.at(sx * (w / 2 - 0.1), 0, 0.17)], 0.012, P.steel, { seg: 6 });
   }
@@ -277,7 +339,7 @@ export function bench(out, c, yaw, { w = 1.4, padded = false } = {}) {
  * a closed laptop, a mug, papers; an office chair. */
 export function desk(out, c, yaw, w = 1.6) {
   const f = frame(c, yaw);
-  soft(out, f.at(0, 0.735, 0), [w / 2, 0.018, 0.36], v(P.walnut, 0), { e1: 0.15, e2: 0.04, ax: f.ax, nu: 36, nv: 8 });
+  slab(out, f, 0, 0.735, 0, w / 2, 0.018, 0.36, v(P.walnut, 0));
   for (const sx of [-1, 1]) {
     sweep(out, [f.at(sx * (w / 2 - 0.06), 0, -0.3), f.at(sx * (w / 2 - 0.06), 0.715, -0.3), f.at(sx * (w / 2 - 0.06), 0.715, 0.3), f.at(sx * (w / 2 - 0.06), 0, 0.3)], 0.014, P.steel, { seg: 6 });
   }
@@ -436,8 +498,17 @@ export function vanity(out, c, yaw, w = 1.4, basins = 1) {
 /** A freestanding bath at c: a deep oval tub, its hollow, a floor tap. */
 export function bath(out, c, yaw) {
   const f = frame(c, yaw);
-  soft(out, f.at(0, 0.3, 0), [0.85, 0.3, 0.42], P.ceramic, { e1: 0.35, e2: 0.6, ax: f.ax, nu: 40, nv: 16 });
-  soft(out, f.at(0, 0.6, 0), [0.77, 0.42, 0.34], v(P.ceramic, 0.3), { e1: 0.6, e2: 0.6, ax: f.ax, nu: 40, nv: 16, inside: true });
+  const rim = 0.6;
+  soft(out, f.at(0, rim, 0), [0.85, rim, 0.42], P.ceramic, { e1: 0.3, e2: 0.6, ax: f.ax, nu: 48, nv: 12, lower: true });
+  soft(out, f.at(0, rim, 0), [0.79, 0.5, 0.36], v(P.ceramic, 0.3), { e1: 0.55, e2: 0.6, ax: f.ax, nu: 48, nv: 12, lower: true, inside: true });
+  // The rolled rim between them.
+  const ring = [];
+  for (let i = 0; i <= 48; i++) {
+    const a = (i / 48) * Math.PI * 2;
+    const sp = (x, e) => Math.sign(x) * Math.abs(x) ** e;
+    ring.push(f.at(0.82 * sp(Math.cos(a), 0.6), rim, 0.39 * sp(Math.sin(a), 0.6)));
+  }
+  sweep(out, ring, 0.03, P.ceramic, { closed: true, seg: 8 });
   sweep(out, [f.at(0.95, 0, 0.0), f.at(0.95, 0.85, 0), f.at(0.85, 0.92, 0), f.at(0.75, 0.86, 0)], 0.016, P.brass, { seg: 8 });
 }
 
