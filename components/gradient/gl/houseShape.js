@@ -165,6 +165,9 @@ export const HOUSE_STRIPS = [
   [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
   [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3, true],
   [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3, true],
+  // (0.4.21) The wardrobe's, under the shelf over each rail, down its run.
+  [[-4.3, TERRACE + 2.07, -76.9], [2.4, TERRACE + 2.07, -76.9], [0, -1, -0.5], 1.3, 0.7, 5, true],
+  [[-4.3, TERRACE + 1.11, -76.9], [2.4, TERRACE + 1.11, -76.9], [0, -1, -0.5], 1.0, 0.45, 5, true],
 ];
 
 /** The bounds the sun's shadow map covers (houseShadow.js): everything the

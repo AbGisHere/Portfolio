@@ -35,7 +35,8 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
   console, a floor lamp, the fig by the glass.
 - **Dining** (x 0.5 … 4.6): a table for eight under a pendant.
 - **Foyer** (x 4.6 … 7.72, z −63.28 … −67.5): the front door in the timber
-  panel, a bench, a mirror, coats.
+  panel, a bench, a mirror, a walnut hook rail with two coats on hangers
+  and a scarf over the middle hook (`0.4.21`).
 - **WC** (x 4.6 … 7.72, z −67.5 … −71.5): a basin, a WC, a mirror, its door
   off the foyer.
 - **Kitchen** (x 1.6 … 7.72, z −71.5 … −78.72): counters along the back
@@ -68,8 +69,11 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
   its void capped in brass, a bench on the bedroom's wall facing it.
 - **Main bedroom** (x −4.5 … 2.6, z −71.28 … −76.5): the bed facing the
   glass and the terrace, bedside tables and lamps, an armchair, a dresser.
-- **Wardrobe** (x −4.5 … 2.6, z −76.5 … −78.72): a walk-in, rails and
-  shelves.
+- **Wardrobe** (x −4.5 … 2.6, z −76.5 … −78.72): a walk-in, a run of
+  walnut cabinetry along the back wall (`wardrobeRun`, `0.4.21`): bays of
+  long hanging, double hanging and shelves over drawers, brass rails, a
+  light strip under each shelf over a rail; garments of every kind on
+  hangers and folded knitwear (`garments.js`).
 - **En-suite** (x 2.6 … 7.72, z −71.28 … −75.5): a freestanding tub, a glass
   shower, a double vanity and mirror; a slot window at the side.
 - **Guest bedroom** (x 2.6 … 7.72, z −75.5 … −78.72): a bed, a desk.

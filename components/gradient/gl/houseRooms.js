@@ -6,9 +6,10 @@
  */
 
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
-import { add, ball, box, grid, lathe, obox, tube } from './meshKit';
+import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from './meshKit';
+import { foldedStack, garment, scarf } from './garments';
 import {
-  bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island, placeSetting, vase,
+  bath, bed, bench, bookcase, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
 } from './furniture';
 
@@ -256,11 +257,17 @@ export function groundRooms(out, ix, iz, glass) {
   // bench, a mirror over it, hooks with coats.
   bench(out, [7.3, B, -65.4], -Math.PI / 2, { w: 1.3, padded: true });
   mirror(out, [ix[1], B + 1.5, -65.4], -Math.PI / 2, 0.8, 1.1);
-  for (let k = 0; k < 4; k++) {
-    const z = -63.9 - k * 0.32;
-    tube(out, [ix[1], B + 1.75, z], [ix[1] - 0.08, B + 1.78, z], 0.008, P.brass, 6);
+  // (0.4.21) A walnut hook rail on the wall, three brass hooks; two coats
+  // on hangers and a scarf over the middle hook, clear of the mirror (they
+  // were a row of rounded shapes on a rail, merging into one mass).
+  box(out, [ix[1] - 0.022, B + 1.7, -64.95], [ix[1], B + 1.82, -63.55], v(P.walnut, 0.25));
+  for (const z of [-63.85, -64.25, -64.65]) {
+    sweep(out, [[ix[1] - 0.022, B + 1.76, z], [ix[1] - 0.07, B + 1.755, z], [ix[1] - 0.085, B + 1.78, z]], 0.005, P.brass, { seg: 6 });
+    ball(out, [ix[1] - 0.085, B + 1.78, z], 0.007, P.brass, 8, 4);
   }
-  clothesRail(out, [ix[1] - 0.25, -63.6], [ix[1] - 0.25, -64.9], B + 1.8, 11);
+  garment(out, [ix[1] - 0.1, B + 1.68, -63.85], -Math.PI / 2, 'coat', 0.05, 3);
+  garment(out, [ix[1] - 0.1, B + 1.68, -64.65], -Math.PI / 2, 'coat', 0.45, 7);
+  scarf(out, [ix[1] - 0.075, B + 1.775, -64.25], -Math.PI / 2, 0.62, 2);
   rug(out, [5.0, -66.6], [7.5, -63.6], y, 0.5);
 
   // ---- The living room: the sofa facing the glass and the view, two
@@ -423,14 +430,12 @@ export function upperRooms(out, glass, jx, jz) {
   mirror(out, [-4.43, y + 1.55, -72.6], Math.PI / 2, 0.9, 1.0);
   picture(out, [-0.95, y + 1.95, -75.72], 0, 1.4, 0.6, 0.4);
 
-  // ---- The walk-in wardrobe: rails of clothes, shelves of folded ones.
-  clothesRail(out, [-4.3, -77.3], [0.0, -77.3], y + 1.9, 21);
-  clothesRail(out, [-4.3, -77.3], [0.0, -77.3], y + 0.95, 23);
-  for (let k = 0; k < 4; k++) {
-    const sy = y + 0.3 + k * 0.42;
-    box(out, [0.6, sy, -77.44], [2.5, sy + 0.02, -77.0], v(P.walnut, 0));
-    for (let j = 0; j < 4; j++) folded(out, [0.85 + j * 0.45, sy + 0.02, -77.2], 3 + ((j + k) % 3), 31 + j * 3 + k);
-  }
+  // ---- The walk-in wardrobe (0.4.21): a run of walnut cabinetry along
+  // its back wall, bays of long hanging, double hanging, and shelves over
+  // drawers; brass rails, each lit by a strip under the shelf over it;
+  // garments of every kind on hangers, spaced as they're kept; folded
+  // knitwear on the shelves. (It was two bare rails of soft shapes.)
+  wardrobeRun(out, y, -77.44, [-4.42, 2.52]);
 
   // ---- The en-suite: stone-clad walls, a freestanding bath at the glass
   // side, a walk-in shower behind glass, a double vanity.
@@ -453,4 +458,79 @@ export function upperRooms(out, glass, jx, jz) {
   const cz = -71.42;
   for (const [x0, x1, to] of [[-7.1, -2.35, -1], [-2.35, 2.5, 1]]) CURTAINS.push([x0, x1, cz, CEIL_U - 0.02, T + 0.08, to, 11 + CURTAINS.length * 7]);
   track(out, -7.1, 2.5, cz, CEIL_U - 0.03);
+}
+
+/**
+ * (0.4.21) The walk-in wardrobe's run, along its back wall at z `back`
+ * from x0 to x1 on the floor at y: bays between walnut uprights, 60 cm
+ * deep, 2.4 m tall, on a recessed plinth, a top over them; each bay long
+ * hanging (coats, dresses), double hanging (shirts and knits over
+ * trousers), or shelves of folded things over a bank of drawers.
+ */
+function wardrobeRun(out, y, back, [x0, x1]) {
+  const D = 0.6;
+  const H = 2.4;
+  const t = 0.025;
+  const W = v(P.walnut, 0.25);
+  const front = back + D;
+  const kinds = ['long', 'double', 'shelves', 'double', 'long', 'shelves', 'double', 'long'];
+  const widths = [0.9, 0.9, 0.7, 0.9, 0.9, 0.7, 0.9, x1 - x0 - 5.9];
+  box(out, [x0, y, back], [x1, y + H, back + 0.012], W);
+  box(out, [x0, y, back + 0.05], [x1, y + 0.08, front - 0.05], v(P.walnut, 0));
+  box(out, [x0 - 0.01, y + H - t, back], [x1 + 0.01, y + H, front + 0.01], W);
+  let x = x0;
+  let seed = 41;
+  const rail = (a, b, ry) => {
+    tube(out, [a + 0.01, ry, back + D / 2], [b - 0.01, ry, back + D / 2], 0.012, P.brass, 10);
+    for (const e of [a + 0.01, b - 0.01]) box(out, [e - 0.004, ry - 0.02, back + D / 2 - 0.02], [e + (e < (a + b) / 2 ? 0.01 : -0.004) + 0.004, ry + 0.02, back + D / 2 + 0.02], P.brass);
+  };
+  // A light strip under a shelf's front edge, an opal diffuser.
+  const strip = (a, b, sy) => box(out, [a + 0.02, sy - 0.012, front - 0.06], [b - 0.02, sy, front - 0.035], P.lamp);
+  const shelf = (a, b, sy) => box(out, [a, sy, back + 0.012], [b, sy + t, front - 0.01], W);
+  const hangRow = (a, b, ry, pick) => {
+    rail(a, b, ry);
+    let gx = a + 0.07;
+    let i = 0;
+    while (gx < b - 0.06) {
+      const [kind, col] = pick(i, seed);
+      garment(out, [gx, ry - 0.085, back + D / 2], Math.PI / 2 + (((seed * 7) % 10) - 5) * 0.01, kind, col, seed);
+      seed += 3;
+      gx += kind === 'coat' ? 0.11 : kind === 'knit' ? 0.09 : 0.075;
+      gx += ((seed * 13) % 10) * 0.003;
+      i++;
+    }
+  };
+  kinds.forEach((kind, bay) => {
+    const a = x;
+    const b = x + widths[bay];
+    box(out, [a, y, back], [a + t, y + H, front], W);
+    if (kind === 'long') {
+      shelf(a + t, b, y + 2.02);
+      strip(a + t, b, y + 2.02);
+      hangRow(a + t, b, y + 1.9, i => [i % 3 === 1 ? 'dress' : 'coat', [0.05, 0.45, 0.9, 0.62, 0.2][(i + bay) % 5]]);
+    } else if (kind === 'double') {
+      shelf(a + t, b, y + 2.02);
+      strip(a + t, b, y + 2.02);
+      hangRow(a + t, b, y + 1.9, i => [i % 4 === 3 ? 'knit' : 'shirt', [0.3, 0.95, 0.35, 0.78, 0.0, 0.5][(i + bay) % 6]]);
+      shelf(a + t, b, y + 1.06);
+      strip(a + t, b, y + 1.06);
+      hangRow(a + t, b, y + 0.95, i => ['trousers', [0.05, 0.85, 0.45, 0.15][(i + bay) % 4]]);
+    } else {
+      // Drawers, three, then shelves of folded things, lit.
+      for (let d = 0; d < 3; d++) {
+        const dy = y + 0.1 + d * 0.24;
+        box(out, [a + t + 0.002, dy, front - 0.02], [b - 0.002, dy + 0.232, front], v(P.walnut, 0.5));
+        barPull(out, [(a + b) / 2 - 0.09, dy + 0.17, front], [(a + b) / 2 + 0.09, dy + 0.17, front], [0, 0, 1], P.brass);
+      }
+      for (let r = 0; r < 4; r++) {
+        const sy = y + 0.82 + r * 0.37;
+        shelf(a + t, b, sy);
+        if (r > 0) strip(a + t, b, sy);
+        const mid = (a + b) / 2;
+        for (const [dx, n] of [[-0.17, 3 + ((r + bay) % 3)], [0.17, 2 + ((r * 2 + bay) % 3)]]) foldedStack(out, [mid + dx, sy + t, back + 0.32], 0, n, 60 + bay * 7 + r * 3 + dx * 10);
+      }
+    }
+    x = b;
+  });
+  box(out, [x1 - t, y, back], [x1, y + H, front], W);
 }

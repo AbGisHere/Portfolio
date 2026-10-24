@@ -6,6 +6,34 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.21 — 2026-10-25
+
+The entrance's coats and the walk-in wardrobe.
+
+- **Garments made as garments** (`garments.js`; they were soft rounded
+  slabs, one shape for everything): each is cut to its kind (a shirt, a
+  knit, a coat, a dress, trousers), a front and a back round a fullness
+  that thins to the seams, shoulders following the hanger's slope, soft
+  folds running down and deepening toward the hem, sleeves hanging at the
+  sides and tapering to the cuff, a collar, a coat's buttons, trousers
+  folded over the bar. Each hangs on a hanger: a walnut bar shaped to the
+  shoulders, a brass hook over the rail.
+- **The entrance:** a walnut hook rail on the wall with three brass
+  hooks; two coats (navy, camel) on hangers and a knit scarf over the
+  middle hook, its ends falling either side, fringed. Clear of the mirror
+  and the bench (they crowded them as one mass on a rail).
+- **The walk-in wardrobe:** a run of walnut cabinetry along its back wall,
+  60 cm deep and 2.4 m tall on a recessed plinth: bays of long hanging
+  (coats, dresses), double hanging (shirts and knits over trousers), and
+  shelves of folded knitwear (each piece with its rolled fold at the
+  front) over three drawers with brass pulls. Brass rails; a light strip
+  under the shelf over each rail and under each shelf, lighting the
+  clothes by night (two new `HOUSE_STRIPS`). Garments spaced as they're
+  kept, each a touch off the line.
+- **Open:** the garments, colours and finishes are a pick (the plan left
+  them to discuss).
+- **Measured:** unit tests 28/28.
+
 ## 0.4.20 — 2026-10-25
 
 Shelves, frames and the dining table.

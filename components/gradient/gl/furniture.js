@@ -949,34 +949,6 @@ export function shower(out, c, yaw, w = 1.4, d = 1.1, ceil = 3.2) {
   void ceil;
 }
 
-/** Clothes on a rail, from a to b at height y: hangers, and garments of
- * their own lengths and colours. */
-export function clothesRail(out, a, b, y, seed = 3) {
-  let s = seed;
-  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  tube(out, [a[0], y, a[1]], [b[0], y, b[1]], 0.012, v(P.steel, 0.5), 8);
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
-  for (let t = 0.08; t < len - 0.05; t += 0.06 + rnd() * 0.05) {
-    const p = [a[0] + dir[0] * t, a[1] + dir[1] * t];
-    const long = 0.6 + rnd() * 0.6;
-    const yaw = Math.atan2(dir[0], dir[1]) + Math.PI / 2 + (rnd() - 0.5) * 0.2;
-    soft(out, [p[0], y - 0.05 - long / 2, p[1]], [0.24, long / 2, 0.025 + 0.02 * rnd()], v(P.clothes, rnd()), { e1: 0.4, e2: 0.5, pinch: 0.2, ax: axes(0, yaw) });
-  }
-}
-
-/** Folded clothes on a shelf: a stack of soft slabs at c. */
-export function folded(out, c, n, seed = 5) {
-  let s = seed;
-  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  let y = c[1];
-  for (let k = 0; k < n; k++) {
-    const hh = 0.02 + 0.015 * rnd();
-    soft(out, [c[0] + (rnd() - 0.5) * 0.02, y + hh, c[2]], [0.16, hh, 0.13], v(P.clothes, rnd()), { e1: 0.35, e2: 0.15, ax: axes(0, (rnd() - 0.5) * 0.1) });
-    y += hh * 2;
-  }
-}
-
 /** A sun lounger: its teak frame and slats from z0 toward +z at x, the
  * back raised, a stuffed piped cushion over the seat and the back, a
  * rolled towel. */
