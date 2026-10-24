@@ -8,7 +8,7 @@
  */
 
 import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, STOREY, TERRACE, WALL, moundY } from './houseShape';
-import { box, grid, lathe, tube } from './meshKit';
+import { ball, box, grid, lathe, tube } from './meshKit';
 import { lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
@@ -338,13 +338,22 @@ export function houseLayout() {
       if (alongX) pane([lo[0] + s0, gy + 0.04, a[1] - 0.006], [lo[0] + s1, gy + 1.05, a[1] + 0.006], true);
       else pane([a[0] - 0.006, gy + 0.04, lo[1] + s0], [a[0] + 0.006, gy + 1.05, lo[1] + s1], true);
     }
+    // (0.4.17) A brushed-brass handrail capping the glass, the panes
+    // seated in its slot; a knuckle at each corner, a rounded end at the
+    // wall.
+    tube(out, [a[0], gy + 1.062, a[1]], [b[0], gy + 1.062, b[1]], 0.021, P.brass, 14);
   }
+  for (const [x, z, r] of [[-8.25, EDGE - 0.15, 0.024], [8.25, EDGE - 0.15, 0.024], [-8.25, -70.9, 0.021], [8.25, -70.9, 0.021]]) ball(out, [x, gy + 1.062, z], r, P.brass, 14, 8);
   // Two loungers by the pool, a side table between, an olive in a pot.
   for (const x of [5.65, 7.25]) lounger(out, x, -63.85, gy);
   box(out, [6.08, gy, -62.50], [6.62, gy + 0.42, -61.96], P.walnut);
-  box(out, [-7.6, gy, -59.80], [-6.8, gy + 0.75, -59.00], P.planter);
-  box(out, [-7.54, gy + 0.7, -59.74], [-6.86, gy + 0.72, -59.06], P.soil);
-  olive(out, [-7.2, gy + 0.71, -59.4], 2.6, 7);
+  // (0.4.17) The olive's pot: thrown stoneware in a dark glaze, wide at
+  // the shoulder, a rolled lip, tapering to a foot that lifts it off the
+  // deck; the soil 6 cm down inside the lip (it was a plain box).
+  const potAt = [-7.2, gy, -59.4];
+  lathe(out, potAt, [0, 1, 0], [[0, 0.012], [0.25, 0.012], [0.26, 0], [0.29, 0.03], [0.34, 0.2], [0.4, 0.5], [0.42, 0.66], [0.445, 0.69], [0.45, 0.72], [0.435, 0.745], [0.4, 0.75], [0.385, 0.73], [0.38, 0.69]], v(P.ceramic, 0.8), 40);
+  lathe(out, potAt, [0, 1, 0], [[0.385, 0.69], [0.2, 0.7], [0, 0.71]], P.soil, 40);
+  olive(out, [-7.2, gy + 0.7, -59.4], 2.6, 7);
 
   // ---- The upper floor, set back off the terrace.
   const U = PLAN.upper;
@@ -380,10 +389,60 @@ export function houseLayout() {
 
   // ---- The roof: a slab reaching out over the terrace, a deep fascia, a
   // soffit with its downlights.
+  // (0.4.17) Built up as a roof is (it was one plain slab): the slab; a
+  // fascia all round in two layers, a deep band of smooth render under a
+  // bronzed metal coping standing up as a low parapet, a shadow gap
+  // between; under the overhang a soffit of timber boards, recessed;
+  // inside the parapet a sedum roof with a margin of pale gravel; and at
+  // the back two scuppers through the parapet into downpipes.
   const R = PLAN.roof;
-  box(out, [R.x[0], utop, R.z[0]], [R.x[1], utop + SLAB + 0.05, R.z[1]], P.slab);
-  box(out, [R.x[0] - 0.02, utop - 0.12, R.z[1] - 0.04], [R.x[1] + 0.02, utop + SLAB + 0.1, R.z[1] + 0.02], v(P.slab, 0.3));
-  for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, utop - 0.012, -69.87], [x + 0.07, utop, -69.73], P.lamp);
+  const rt = utop + SLAB + 0.05;
+  box(out, [R.x[0], utop, R.z[0]], [R.x[1], rt, R.z[1]], P.slab);
+  const ring = (x0, z0, x1, z1, y0, y1, part, t) => {
+    box(out, [x0, y0, z1 - t], [x1, y1, z1], part);
+    box(out, [x0, y0, z0], [x1, y1, z0 + t], part);
+    box(out, [x0, y0, z0 + t], [x0 + t, y1, z1 - t], part);
+    box(out, [x1 - t, y0, z0 + t], [x1, y1, z1 - t], part);
+  };
+  const o = 0.03;
+  ring(R.x[0] - o, R.z[0] - o, R.x[1] + o, R.z[1] + o, utop - 0.16, rt - 0.02, v(P.slab, 0.3), 0.06);
+  ring(R.x[0] - o + 0.012, R.z[0] - o + 0.012, R.x[1] + o - 0.012, R.z[1] + o - 0.012, rt - 0.02, rt + 0.01, P.frame, 0.05);
+  ring(R.x[0] - o - 0.01, R.z[0] - o - 0.01, R.x[1] + o + 0.01, R.z[1] + o + 0.01, rt + 0.01, rt + 0.2, v(P.steel, 0.15), 0.07);
+  box(out, [R.x[0] - o - 0.01, rt + 0.2, R.z[0] - o - 0.01], [R.x[1] + o + 0.01, rt + 0.212, R.z[0] - o + 0.07], v(P.steel, 0.15));
+  box(out, [R.x[0] - o - 0.01, rt + 0.2, R.z[1] + o - 0.07], [R.x[1] + o + 0.01, rt + 0.212, R.z[1] + o + 0.01], v(P.steel, 0.15));
+  box(out, [R.x[0] - o - 0.01, rt + 0.2, R.z[0] - o + 0.07], [R.x[0] - o + 0.07, rt + 0.212, R.z[1] + o - 0.07], v(P.steel, 0.15));
+  box(out, [R.x[1] + o - 0.07, rt + 0.2, R.z[0] - o + 0.07], [R.x[1] + o + 0.01, rt + 0.212, R.z[1] + o - 0.07], v(P.steel, 0.15));
+  // The soffit: boards 3 cm up into the overhang, held off the fascia by a
+  // shadow gap, over the terrace and round the sides.
+  const sf = utop - 0.03;
+  const inner = 0.07;
+  box(out, [R.x[0] + inner, sf, U.z[1] + 0.04], [R.x[1] - inner, sf + 0.025, R.z[1] - inner], P.timber);
+  for (const [x0, x1] of [[R.x[0] + inner, U.x[0]], [U.x[1], R.x[1] - inner]]) box(out, [x0, sf, R.z[0] + inner], [x1, sf + 0.025, U.z[1] + 0.04], P.timber);
+  box(out, [U.x[0], sf, R.z[0] + inner], [U.x[1], sf + 0.025, U.z[0]], P.timber);
+  for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, sf - 0.012, -69.87], [x + 0.07, sf, -69.73], P.lamp);
+  // The roof's top: sedum, a gravel margin 30 cm wide inside the parapet.
+  const gx0 = R.x[0] - o + 0.07;
+  const gx1 = R.x[1] + o - 0.07;
+  const gz0 = R.z[0] - o + 0.07;
+  const gz1 = R.z[1] + o - 0.07;
+  box(out, [gx0, rt, gz0], [gx1, rt + 0.06, gz1], v(P.roof, 0.8), { bottom: false });
+  grid(out, 60, 36, (u, w) => {
+    const x = gx0 + 0.3 + u * (gx1 - gx0 - 0.6);
+    const z = gz0 + 0.3 + w * (gz1 - gz0 - 0.6);
+    return { p: [x, rt + 0.075 + 0.012 * Math.sin(x * 3.1 + z * 1.7) * Math.sin(z * 2.3 - x * 0.9), z], part: v(P.roof, 0.2), s: x, t: z };
+  });
+  for (const x of [R.x[0] + 0.9, R.x[1] - 0.9]) {
+    box(out, [x - 0.09, rt + 0.03, R.z[0] - o - 0.06], [x + 0.09, rt + 0.13, R.z[0] - o + 0.07], P.frame);
+    box(out, [x - 0.11, rt - 0.12, R.z[0] - o - 0.2], [x + 0.11, rt + 0.03, R.z[0] - o - 0.04], v(P.steel, 0.15));
+    // Down from the hopper to under the soffit, back to the wall, and down
+    // it to a grating in the paving.
+    const zw = U.z[0] - 0.08;
+    const pipe = [[x, rt - 0.12, R.z[0] - o - 0.12], [x, sf - 0.12, R.z[0] - o - 0.12], [x, sf - 0.12, zw], [x, B + 0.02, zw]];
+    for (let k = 0; k < 3; k++) tube(out, pipe[k], pipe[k + 1], 0.045, v(P.steel, 0.15), 12);
+    for (const p of pipe.slice(1, 3)) ball(out, p, 0.047, v(P.steel, 0.15), 12, 6);
+    for (const y of [B + 0.8, B + 2.4, B + 4.2, B + 5.8]) box(out, [x - 0.06, y, zw - 0.01], [x + 0.06, y + 0.04, U.z[0]], v(P.steel, 0.15));
+    box(out, [x - 0.12, B, zw - 0.12], [x + 0.12, B + 0.012, zw + 0.06], P.frame);
+  }
 
   const data = new Float32Array(out);
   return { data, count: data.length / 9, lawn, glass };

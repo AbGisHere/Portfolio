@@ -19,7 +19,7 @@
  */
 export const HOUSE_PART = {
   lawn: 0, stone: 1, render: 2, timber: 3, frame: 4, slab: 5, deck: 6, tile: 7, plaster: 8, ceiling: 9,
-  oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30, marble: 31, cord: 32, pages: 33, spine: 34, rope: 35, paver: 36,
+  oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30, marble: 31, cord: 32, pages: 33, spine: 34, rope: 35, paver: 36, roof: 37,
 };
 
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */
@@ -63,7 +63,9 @@ export const PLAN = {
 
 /** The pool in the terrace: its water's middle, its size (x, z), depth, and
  * how far the water lies under the coping. */
-export const POOL = { at: [0, TERRACE - 0.08, -60.7], w: 9, d: 3.8, deep: 1.1 };
+// (0.4.17) 3.1 m front to back, its far side where it was: at 3.8 its
+// coping ran 15 cm past the terrace's edge and through the glass.
+export const POOL = { at: [0, TERRACE - 0.08, -61.05], w: 9, d: 3.1, deep: 1.1 };
 
 /** The terrace's front edge: it reaches out past the ground floor's glass,
  * the pool in that cantilever, its basin the porch's roof. */
@@ -134,7 +136,9 @@ export const HOUSE_LIGHTS = [
   [7.4, FLOOR + 0.05, -62.75, 4, 0.6, 4, 0],
   ...[3.4, 5.4, 7.4].map(x => [x, TERRACE + 0.08, -70.75, 3.6, 0.55, 4, 0]),
   ...[-6, -3, 3, 6].map(x => [x, moundY(x, -56.9) + 0.05, -56.9, 3.5, 0.6, 4, 0]),
-  [-7.2, TERRACE + 0.78, -59.0, 3, 0.6, 4, 0],
+  // (0.4.17) The olive's on the deck beside its pot, aimed into the tree
+  // (it sat on the old box's rim).
+  [-6.52, TERRACE + 0.09, -59.05, 3, 0.6, 4, 0],
   ...BOLLARDS.map(([x, z]) => [x, moundY(x, z) + 0.55, z, 3.2, 0.55, 1, 0]),
 ];
 
@@ -152,7 +156,9 @@ export const HOUSE_STRIPS = [
   [[2.6, FLOOR + 0.03, -78.15], [7.3, FLOOR + 0.03, -78.15], [0, -0.4, 1], 1.0, 0.4, 3],
   [[3.1, FLOOR + 0.03, -74.46], [5.7, FLOOR + 0.03, -74.46], [0, -0.4, 1], 1.0, 0.4, 3],
   [[3.1, FLOOR + 0.03, -75.34], [5.7, FLOOR + 0.03, -75.34], [0, -0.4, -1], 1.0, 0.4, 3],
-  [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.2, 0.45, 3, true],
+  // (0.4.17) The stair's, under every tread: brighter and wider (they
+  // barely showed by night).
+  [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.7, 1.0, 3, true],
   [[-2.65, TERRACE + 1.38, -75.73], [0.75, TERRACE + 1.38, -75.73], [0, 1, 0.15], 1.4, 0.55, 4],
   [[3.65, TERRACE + 1.38, -78.71], [6.65, TERRACE + 1.38, -78.71], [0, 1, 0.15], 1.4, 0.5, 7],
   [[-2.5, TERRACE + 0.46, -75.44], [-2.0, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],

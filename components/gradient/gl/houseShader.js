@@ -697,6 +697,20 @@ void main() {
       alb *= 1.0 - 0.5 * tie * detail(0.02, q);
     } else alb = vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
     rough = 0.85;
+  } else if (vPart == ${P.roof}) {
+    // (0.4.17) The roof: sedum in drifts of its own greens, olive and rust,
+    // tiny rosettes; or the margin's pale gravel, speckled.
+    if (vVar < 0.5) {
+      float drift = noise2(vWorld.xz * 0.7) * 0.6 + noise2(vWorld.xz * 2.3) * 0.4;
+      vec3 a = mix(vec3(0.2, 0.3, 0.12), vec3(0.36, 0.38, 0.14), smoothstep(0.35, 0.65, drift));
+      a = mix(a, vec3(0.42, 0.2, 0.12), smoothstep(0.72, 0.85, noise2(vWorld.xz * 1.4 + 9.0)));
+      float ros = noise2(vWorld.xz * 60.0);
+      alb = a * (0.65 + 0.6 * ros) * (0.9 + 0.2 * hash2(floor(vWorld.xz * 140.0)));
+      rough = 0.85;
+    } else {
+      alb = vec3(0.68, 0.66, 0.62) * (0.75 + 0.35 * hash2(floor(vWorld.xz * 90.0)) + 0.1 * noise2(vWorld.xz * 8.0));
+      rough = 0.95;
+    }
   } else if (vPart == ${P.soil}) {
     // (0.4.16) Dark mulch, its bark chips catching the light.
     float chip = noise2(vWorld.xz * 70.0);

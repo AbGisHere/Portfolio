@@ -44,7 +44,9 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
 - **Study** (x −5.4 … 1.6, z −73 … −78.72): a desk at the wall, a chair,
   shelves; a glass door.
 - **Stair** (x −7.6 … −5.6): floating walnut treads up the left wall from
-  z −72 to −76.8, 18 risers of 0.2 m.
+  z −72 to −76.8, 18 risers of 0.2 m, an opal LED under every nosing;
+  frameless glass up the open side under a brushed-brass rail laid through
+  its posts' tops (`0.4.17`), a black steel rail on the wall.
 
 ## Upper floor (floor at 7.2 m, ceiling 10.45 m)
 
@@ -63,7 +65,7 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
 ```
 
 - **Landing** (x −7.72 … −4.5): the stair's top, a glass balustrade round
-  its void, a bench on the bedroom's wall facing it.
+  its void capped in brass, a bench on the bedroom's wall facing it.
 - **Main bedroom** (x −4.5 … 2.6, z −71.28 … −76.5): the bed facing the
   glass and the terrace, bedside tables and lamps, an armchair, a dresser.
 - **Wardrobe** (x −4.5 … 2.6, z −76.5 … −78.72): a walk-in, rails and
@@ -112,9 +114,17 @@ Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
   from the mountains haze as the ground there does (`TURNED_HAZE`), not
   toward the mist at the mountains' foot. Every twig tapers to a point and
   forks into fine twiglets that carry the leaves.
-- **The terrace:** the pool in its cantilever (its basin the porch's
-  roof), frameless glass round the open sides, loungers, an olive in a
-  pot.
+- **The terrace:** the pool (9 × 3.1 m from `0.4.17`, a deck strip
+  between its coping and the glass) in its cantilever (its basin the
+  porch's roof), frameless glass round the open sides capped by a
+  brushed-brass rail, loungers, an olive in a thrown stoneware pot (dark
+  glaze, rolled lip, soil inside it), its uplight on the deck beside it.
+- **The roof** (`0.4.17`): the slab, then a fascia in two layers (a deep
+  band of render, a shadow gap, a bronzed coping standing up as a low
+  parapet); a recessed soffit of timber boards over the terrace and round
+  the sides, its downlights in it; sedum inside the parapet (`roof` part)
+  with a gravel margin; two scuppers at the back into downpipes that run
+  back under the soffit and down the wall.
 
 ## Building it
 

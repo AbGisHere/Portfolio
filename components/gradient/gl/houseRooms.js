@@ -6,7 +6,7 @@
  */
 
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
-import { add, box, grid, lathe, obox, tube } from './meshKit';
+import { add, ball, box, grid, lathe, obox, tube } from './meshKit';
 import {
   bath, bed, bench, bookcase, chair, clothesRail, coffeeTable, console_, desk, door, dresser, floorLamp, folded, island,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
@@ -297,8 +297,9 @@ export function groundRooms(out, ix, iz, glass) {
     const z = z0 - (i - 1) * run;
     const y = B + i * rise;
     box(out, [sx, y - 0.07, z - 0.3], [ix[0] + 1.22, y, z], v(P.walnut, 0));
-    // The LED tucked under its nosing.
-    box(out, [sx + 0.04, y - 0.075, z - 0.04], [ix[0] + 1.16, y - 0.07, z - 0.025], P.lamp);
+    // The LED tucked under its nosing, in an opal diffuser (0.4.17: 1.2 cm,
+    // it was a 5 mm sliver that barely showed).
+    box(out, [sx + 0.04, y - 0.082, z - 0.05], [ix[0] + 1.16, y - 0.07, z - 0.02], P.lamp);
   }
   // The stringer: a plate 4.5 cm thick against the wall, its top and bottom
   // edges parallel to the stair's pitch.
@@ -320,16 +321,23 @@ export function groundRooms(out, ix, iz, glass) {
     glass.push([[ox - 0.006, y - 0.065, z - run + 0.003], [ox + 0.006, y + 0.92, z - 0.003], true]);
     for (const cz of [z - 0.06, z - run + 0.06]) box(out, [ox - 0.018, y - 0.06, cz - 0.02], [ox + 0.018, y - 0.015, cz + 0.02], v(P.steel, 0.5));
   }
-  // A walnut handrail over the glass, sloped with the stair, on a short
-  // steel post clamped to each panel's top; it turns flat at the landing.
+  // A brushed-brass handrail over the glass (0.4.17, as the terrace's;
+  // walnut before), sloped with the stair, on a short steel post clamped
+  // to each panel's top, each post running into the rail (the rail ran on
+  // its own line before, a slope off the posts', and floated 14 cm over the
+  // lowest); it turns flat at the landing at a knuckle, a rounded end at
+  // the foot.
   const railY = i => B + i * rise + 1.08;
   const railZ = i => z0 - (i - 1) * run - run / 2;
-  tube(out, [ox, railY(1) - 0.06, railZ(1) + 0.3], [ox, railY(17), railZ(17)], 0.024, v(P.walnut, 0), 12);
-  tube(out, [ox, railY(17), railZ(17)], [ox, railY(17), railZ(17) - 0.35], 0.024, v(P.walnut, 0), 12);
+  const rail = i => [ox, railY(i), railZ(i)];
+  tube(out, rail(-0.1), rail(17), 0.024, P.brass, 14);
+  tube(out, rail(17), [ox, railY(17), railZ(17) - 0.35], 0.024, P.brass, 14);
+  ball(out, rail(-0.1), 0.024, P.brass, 14, 8);
+  ball(out, rail(17), 0.025, P.brass, 14, 8);
   for (let i = 1; i <= 17; i++) {
     const gy = B + i * rise + 0.92;
     box(out, [ox - 0.014, gy - 0.03, railZ(i) - 0.025], [ox + 0.014, gy + 0.005, railZ(i) + 0.025], v(P.steel, 0.5));
-    tube(out, [ox, gy, railZ(i)], [ox, railY(i) - 0.02, railZ(i)], 0.007, v(P.steel, 0.5), 6);
+    tube(out, [ox, gy, railZ(i)], [ox, railY(i), railZ(i)], 0.007, v(P.steel, 0.5), 6);
   }
   // The wall's rail, on brackets.
   const wr = t => [ix[0] + 0.07, B + 0.9 + t * (17 * rise), z0 + 0.1 - t * (17 * run + 0.3)];
@@ -363,6 +371,13 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The landing: the stair's void and its glass, a bench at the glass,
   // a picture.
   for (const [lo, hi] of [[[-6.2, y, -77.0], [-6.188, y + 1.0, -72.0]], [[jx[0], y, -72.012], [-6.2, y + 1.0, -72.0]]]) glass.push([lo, hi, true]);
+  // (0.4.17) Capped in brass like the stair's rail and the terrace's: a
+  // knuckle at the corner, a rounded end at each wall.
+  const ry = y + 1.012;
+  tube(out, [-6.194, ry, -77.0], [-6.194, ry, -72.006], 0.021, P.brass, 14);
+  tube(out, [jx[0], ry, -72.006], [-6.194, ry, -72.006], 0.021, P.brass, 14);
+  ball(out, [-6.194, ry, -72.006], 0.024, P.brass, 14, 8);
+  ball(out, [-6.194, ry, -77.0], 0.021, P.brass, 14, 8);
   // (0.4.10) Against the bedroom's wall, facing the void, clear of the way
   // out to the terrace.
   bench(out, [-4.8, T, -76.3], Math.PI / 2, { w: 1.3, padded: true });

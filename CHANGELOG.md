@@ -6,6 +6,43 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.17 — 2026-10-25
+
+Exterior architecture, the pool and the railings.
+
+- **A roof built up as one is** (it was a plain slab): the slab; a fascia
+  all round in two layers, a deep band of render under a bronzed metal
+  coping that stands up as a low parapet, with a dark shadow gap between;
+  a soffit of timber boards recessed into the overhang over the terrace
+  and round the sides, the downlights in it; inside the parapet a sedum
+  roof in drifts (greens, olive, rust) with a margin of pale gravel (a new
+  `roof` part); two scuppers at the back into downpipes that run back
+  under the soffit and down the wall, on brackets, to gratings.
+- **The olive's pot:** a thrown stoneware pot in a dark glaze, wide at the
+  shoulder, a rolled lip and a foot, soil 6 cm down inside it (it was a
+  plain block). Its uplight sat on the old block's rim; it's on the deck
+  beside the pot now, throwing up into the tree.
+- **The pool inside the glass:** at 3.8 m front to back its coping ran
+  15 cm past the terrace's edge and through the glass. It's 9 × 3.1 m, its
+  far side where it was, so a strip of deck runs between its coping and
+  the glass. (Moving it back instead would have put its basin into the
+  living room's ceiling.)
+- **Gold rails:** a brushed-brass handrail caps the terrace's glass (the
+  panes seated in its slot), with a knuckle at each corner and a rounded
+  end at the walls, and the landing's glass round the stair's void the
+  same. The stair's sloped rail over its glass is brass too (walnut
+  before), to meet them.
+- **The stair's rail meets its posts:** it ran on its own line, a slope
+  off the posts', so it floated 14 cm over the lowest. It's laid through
+  every post's top now, with a rounded end at the foot and a knuckle where
+  it turns flat at the landing.
+- **The stair's lights by night:** each tread's LED, a 5 mm sliver, is an
+  opal diffuser 1.2 cm deep, and the light it throws is brighter and wider
+  (1.0 strength, 1.7 m, from 0.45 and 1.2 m), so the treads glow.
+- **Open:** the roof's profile stays flat (the plan left it to discuss);
+  the sedum and gravel are a pick. The stair's wall rail stays black steel.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.16 — 2026-10-25
 
 Landscape and planting, the first of the owner's feedback batch
