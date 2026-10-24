@@ -6,6 +6,27 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.10 — 2026-10-25
+
+- **The camera walks to the house** (the owner: "follow a man leaving the
+  desk and entering the house"): from the reading position it stands up
+  looking down at the desk, turns round looking at the grass at its feet
+  (so the meadow's sides never sweep past), lifts its eyes to the house
+  and walks the path at eye height (1.65 m over the ground under it), up
+  the steps, in through the open glass, behind the sofa to the stair, up
+  it, round on the landing, out onto the terrace with the mountains ahead,
+  to the pool's edge, then rises off it to look straight down at the pool
+  (the hold, its top now toward the mountains). The walk is a spline
+  through waypoints (`WALK`, `deskCamera.js`), paced evenly, looking a
+  stride ahead; the camera gains an `x` channel.
+- **The way through:** the landing's glass panel is the one open now (onto
+  the terrace), its bench moved to the bedroom wall; the curtains by both
+  open panels stay tied back by night. The house and the pool draw
+  whenever the camera is up at the house, whichever way it faces.
+- **`contact` is 800 lvh** (was 400): the walk's length.
+- **Measured:** unit tests 28/28 (the 0.4 camera test now checks the walk's
+  heading and eye height). No QA run.
+
 ## 0.4.9 — 2026-10-25
 
 - **Limestone** (`paver`): the forecourt paved in honed 90 × 60 slabs in

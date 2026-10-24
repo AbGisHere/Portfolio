@@ -1343,9 +1343,11 @@ export default function MistCanvas({ recipe, onFail }) {
           return lo;
         };
         // (0.4.2) Turned to the house, the pool's in view.
-        // (Its water seen from above it only.)
-        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free) && cm.y > POOL.at[1] + 0.05;
-        houseSeen = !!frame.grass && (pitch.yc < 0.6 || !!free);
+        // (Its water seen from above it only.) (0.4.10) Or up at the house,
+        // whichever way the walk faces.
+        const atHouse = cm.z < -45;
+        poolSeen = !!frame.grass && (pitch.yc < -0.3 || !!free || atHouse) && cm.y > POOL.at[1] + 0.05;
+        houseSeen = !!frame.grass && (pitch.yc < 0.6 || !!free || atHouse);
         meadowAt = frame.grass
           ? {
               pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid, device: frame.device,

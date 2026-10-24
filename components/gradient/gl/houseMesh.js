@@ -308,7 +308,8 @@ export function houseLayout() {
   const uz = U.z[1] - 0.12;
   const ux = [-7.2, -3.93, -0.67, 2.6];
   frameX(out, uOpen[0], uOpen[1], uOpen[2], uOpen[3], uz, []);
-  sliders(out, pane, ux, uOpen[2] + 0.05, uOpen[3] - 0.06, uz, { 1: -2.5 });
+  // (0.4.10) The landing's panel open, onto the terrace (the walk's way).
+  sliders(out, pane, ux, uOpen[2] + 0.05, uOpen[3] - 0.06, uz, { 0: 2.5 });
   // The sides: blind on the landing's; on the far side a slot for the
   // en-suite and one for the guest room.
   wall(out, { alongZ: true, face: U.x[0], a: U.z[0] + WALL, b: U.z[1] - WALL, y0: T + 0.05, y1: utop });

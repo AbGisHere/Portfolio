@@ -23,7 +23,7 @@
 import { depthOf, descentAt, frameAt, skyUnder } from './camera';
 import { mix } from './colour';
 import { CONTACT_STOPS, DESK_STOPS } from '../scroll/stops';
-import { POOL } from './gl/houseShape';
+import { FLOOR, POOL, TERRACE, moundY } from './gl/houseShape';
 
 /** Metres per world unit (the rest camera's eye height). */
 export const WORLD_M = 40;
@@ -90,33 +90,151 @@ export const DESK_PATH = {
 /**
  * (0.4.0) The contact path, over `contact` (0 … 1, the stretch after the
  * desk), keyed like DESK_PATH (`d` is the camera's z, metres: negative is
- * toward the house). Arc 3 rises back over the desk to look straight down
- * at it, then sweeps round, facing outward, turning 180° as it draws back
- * to face the house on the hill (gl/houseShape.js); arc 4 goes up and over
- * onto the pool on its balcony and holds looking straight down at it: the
- * contact hold (../scroll/stops.js CONTACT_STOPS).
+ * toward the house; `x` across).
+ *
+ * (0.4.10) Through the eyes of whoever sat at the desk (the owner: "follow
+ * a man leaving the desk and entering the house"): they stand up, looking
+ * down at the desk, and turn round looking at the grass at their feet (so
+ * the turn never sweeps the meadow's sides past), then lift their eyes to
+ * the house and walk up the path to it, up the steps, in through the open
+ * glass, across to the stair and up it, round on the landing, out onto the
+ * terrace, and to the pool, where the camera rises off them to look
+ * straight down at it: the contact hold (../scroll/stops.js
+ * CONTACT_STOPS). The walk is WALK's waypoints, eased through, at eye
+ * height over the floor under them, looking where they're going.
  */
 const POOL_HIGH = { y: POOL.at[1] + 15 };
+
+/** Eye height over the floor, metres. */
+const EYE = 1.65;
+
+/**
+ * The walk: waypoints [x, z, floor, pitch]: the floor's height there (null:
+ * the hill's, moundY), how far down they look (degrees). Between two, the
+ * floor goes linearly (the steps, the stair), the pitch too.
+ */
+const B = FLOOR;
+const T = TERRACE;
+const WALK = [
+  [0, -1.4, null, 8],
+  [0, -28, null, 6],
+  [0, -50, null, 7],
+  // The foot of the steps, looking down at them; the porch.
+  [0, -55.5, null, 14],
+  [0.15, -57.6, B, 8],
+  [0.3, -60.6, B, 4],
+  // In through the open slider (x −1 … 1.6), between the living room and
+  // the dining table.
+  [0.3, -63.3, B, 4],
+  [0.3, -66.5, B, 5],
+  [0.1, -70.5, B, 5],
+  // Along behind the sofa to the stair's foot.
+  [-1.2, -71.75, B, 5],
+  [-5.2, -71.8, B, 5],
+  [-6.6, -71.9, B, 4],
+  [-7.08, -72.25, B, 2],
+  // Up the stair (its treads from z −72.2, 0.2 m a riser), onto the landing.
+  [-7.08, -77.0, T, 2],
+  // Round on the landing, out past the void's glass.
+  [-6.85, -77.85, T, 4],
+  [-6.0, -78.1, T, 4],
+  [-5.35, -77.2, T, 4],
+  [-5.35, -75.0, T, 4],
+  // Out through the open glass onto the terrace, the mountains ahead, and
+  // to the pool's back edge.
+  [-5.35, -71.3, T, 5],
+  [-4.6, -68.0, T, 8],
+  [-2.6, -65.0, T, 18],
+  [-1.2, -63.7, T, 28],
+];
+
+/** Catmull–Rom through the waypoints' (x, z), sampled every `step` metres
+ * of arc: [{ x, z, floor, pitch, s }], s the distance walked. */
+function walkSamples(step = 0.05) {
+  const P = WALK;
+  const n = P.length;
+  const pt = i => P[Math.max(0, Math.min(n - 1, i))];
+  const cr = (a, b, c, d, t) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  const raw = [];
+  for (let i = 0; i < n - 1; i++) {
+    const [a, b, c, d] = [pt(i - 1), pt(i), pt(i + 1), pt(i + 2)];
+    const m = 60;
+    for (let k = 0; k < m; k++) {
+      const t = k / m;
+      const x = cr(a[0], b[0], c[0], d[0], t);
+      const z = cr(a[1], b[1], c[1], d[1], t);
+      const fl = b[2] == null && c[2] == null ? moundY(x, z) : (b[2] ?? moundY(b[0], b[1])) * (1 - t) + (c[2] ?? moundY(c[0], c[1])) * t;
+      raw.push({ x, z, floor: fl, pitch: b[3] * (1 - t) + c[3] * t });
+    }
+  }
+  const last = P[n - 1];
+  raw.push({ x: last[0], z: last[1], floor: last[2] ?? moundY(last[0], last[1]), pitch: last[3] });
+  let s = 0;
+  raw[0].s = 0;
+  for (let i = 1; i < raw.length; i++) raw[i].s = s += Math.hypot(raw[i].x - raw[i - 1].x, raw[i].z - raw[i - 1].z);
+  const out = [];
+  let j = 0;
+  for (let u = 0; u <= s; u += step) {
+    while (j < raw.length - 2 && raw[j + 1].s < u) j++;
+    const [a, b] = [raw[j], raw[j + 1]];
+    const f = (u - a.s) / (b.s - a.s || 1);
+    out.push({ s: u, x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, floor: a.floor + (b.floor - a.floor) * f, pitch: a.pitch + (b.pitch - a.pitch) * f });
+  }
+  return out;
+}
+
+/**
+ * The walk as keys from `at0` to `at1` (its pace even, metres per scroll),
+ * one every `every` metres: each where they are and looking where they'll
+ * be a stride or so on (yaw unwrapped, from 180: facing the house).
+ */
+function walkKeys(at0, at1, every = 0.5) {
+  const w = walkSamples();
+  const L = w[w.length - 1].s;
+  const ahead = 1.2;
+  const near = s => w[Math.min(w.length - 1, Math.round(s / 0.05))];
+  const keys = [];
+  let prev = 180;
+  for (let s = 0; s <= L + 1e-6; s += every) {
+    const p = near(s);
+    // Looking ahead along the path; at its end, along its last stretch.
+    const q = s + ahead <= L ? near(s + ahead) : near(L);
+    const o = s + ahead <= L ? p : near(L - ahead);
+    let yaw = (Math.atan2(q.x - o.x, q.z - o.z) * 180) / Math.PI;
+    while (yaw - prev > 180) yaw -= 360;
+    while (yaw - prev < -180) yaw += 360;
+    prev = yaw;
+    keys.push({ at: at0 + ((at1 - at0) * s) / L, x: p.x, d: p.z, y: p.floor + EYE, pitch: p.pitch, centre: 1, zoom: 1, yaw });
+  }
+  return keys;
+}
+
+const WALK_FROM = 0.15;
+const WALK_TO = 0.84;
+const POOL_HOLD = { d: POOL.at[2], x: 0, y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, tablet: POOL_HIGH };
+
+const walked = walkKeys(WALK_FROM, WALK_TO);
+const lastYaw = walked[walked.length - 1].yaw;
+// The hold's yaw: the nearest turn to the walk's end that faces the
+// mountains (the pool's top view with them at the frame's top).
+const holdYaw = Math.round(lastYaw / 360) * 360;
 
 export const CONTACT_PATH = {
   keys: [
     // Where the desk's path ends, held.
     { at: 0, ...READ },
-    { at: 0.04, ...READ },
-    // Back up over the desk, straight down at it.
-    { at: 0.18, d: 0, y: 2.6, pitch: 90, centre: 1, zoom: 1 },
-    { at: 0.24, d: 0, y: 2.6, pitch: 90, centre: 1, zoom: 1 },
-    // Round, facing outward, drawing back toward the house as it turns.
-    { at: 0.34, d: -2, y: 4, pitch: 62, centre: 1, zoom: 1, yaw: 20 },
-    { at: 0.46, d: -8, y: 7, pitch: 30, centre: 1, zoom: 1, yaw: 120 },
-    // The house on the hill, faced.
-    { at: 0.58, d: -34, y: 5, pitch: 5, centre: 1, zoom: 1, yaw: 180 },
-    { at: 0.64, d: -37, y: 5, pitch: 5, centre: 1, zoom: 1, yaw: 180 },
-    // Up and over, onto the pool: the contact hold.
-    { at: 0.8, d: -52, y: 15, pitch: 50, centre: 1, zoom: 1, yaw: 180 },
-    // (A portrait frame from higher up, so the pool fits its width.)
-    { at: 0.92, d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, tablet: POOL_HIGH },
-    { at: 1, d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, tablet: POOL_HIGH },
+    { at: 0.03, ...READ },
+    // Up out of the seat, looking down at the desk.
+    { at: 0.065, d: -0.75, y: 1.6, pitch: 52, centre: 1, zoom: 1 },
+    // Round, looking down at the grass.
+    { at: 0.1, d: -1.05, y: EYE, pitch: 74, centre: 1, zoom: 1, yaw: 90 },
+    { at: 0.13, d: -1.3, y: EYE, pitch: 74, centre: 1, zoom: 1, yaw: 180 },
+    // Eyes up to the house, and away.
+    ...walked.map((k, i) => (i === 0 ? { ...k, at: WALK_FROM } : k)),
+    // Off them, up over the pool, turning to face the mountains.
+    { at: 0.9, d: -62.0, x: -0.4, y: T + 3.6, pitch: 66, centre: 1, zoom: 1, yaw: (lastYaw + holdYaw) / 2 },
+    { at: 0.95, ...POOL_HOLD, yaw: holdYaw },
+    { at: 1, ...POOL_HOLD, yaw: holdYaw },
   ],
 };
 
@@ -160,7 +278,7 @@ function monotone(xs, ys, x) {
  * the camera. */
 function keysFrom(path, end, device) {
   const y = (1 + end.rise) * WORLD_M;
-  return path.keys.map(k => ({ fit: 0, yaw: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
+  return path.keys.map(k => ({ fit: 0, yaw: 0, x: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
 }
 
 /** The camera at `x` along a path (deskCameraAt's fields). */
@@ -183,6 +301,8 @@ function cameraOn(path, x, end, device) {
     eye: y / WORLD_M,
     // How far ahead of the camera the desk is (toward the mountains).
     ahead: -d / WORLD_M,
+    // (0.4.10) Across, metres (the walk's).
+    x: at('x'),
     end,
   };
 }
@@ -385,7 +505,7 @@ export const deskHolds = () =>
     ...CONTACT_STOPS.map(at => [CONTACT_PATH.keys, at]),
   ].map(([ks, at]) => {
     const i = ks.findIndex((k, j) => j + 1 < ks.length && k.at <= at && ks[j + 1].at >= at);
-    return i >= 0 && ['d', 'y', 'pitch', 'centre', 'zoom', 'yaw'].every(c => ks[i][c] === ks[i + 1][c]);
+    return i >= 0 && ['d', 'x', 'y', 'pitch', 'centre', 'zoom', 'yaw'].every(c => ks[i][c] === ks[i + 1][c]);
   });
 
 /**
