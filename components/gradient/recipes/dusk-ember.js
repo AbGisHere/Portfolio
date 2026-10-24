@@ -52,6 +52,8 @@ const duskEmber = {
   // value on a `period`-second sine, so the ridges slowly shift. GL only; the
   // layered fallback stays still. 0 turns it off.
   idle: { seedDrift: 0.5, period: 60 },
+  // (0.4.0) The mug on the desk holds tea by day, coffee by night.
+  tea: true,
 
   // How this scene animates when it becomes the active theme.
   transition: {

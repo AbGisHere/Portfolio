@@ -107,13 +107,20 @@ export const DESK_SHADE_GLSL = `float deskShade(vec2 p) {
 export const CAMERA_GLSL = `uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform vec2 uYaw;      // (0.4.0) cos, sin of the camera's yaw
 uniform vec2 uDepthAB;
 uniform vec2 uSunDir;
+
+// (0.4.0) A world offset in the camera's frame before its pitch: turned
+// back by the yaw (uYaw: cos, sin; 0 faces the mountains, +z).
+vec3 viewOf(vec3 q) {
+  return vec3(q.x * uYaw.x - q.z * uYaw.y, q.y, q.x * uYaw.y + q.z * uYaw.x);
+}
 `;
 
 /** Projected as the scene's camera sees it (treeShader.js). */
 export const PROJECT_GLSL = `vec4 project(vec3 w) {
-  vec3 q = w - uCam;
+  vec3 q = viewOf(w - uCam);
   float zp = -q.y * uPitch.y + q.z * uPitch.x;
   float vp = -q.y * uPitch.x - q.z * uPitch.y;
   float fz = uPitch.w * uPitch.z;

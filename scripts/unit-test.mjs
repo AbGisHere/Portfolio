@@ -15,7 +15,7 @@ import { descentAt, scrollPalette } from '../components/gradient/camera.js';
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
-import { deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
+import { contactCameraAt, deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
 import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
 import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
 import { MEADOW_SIZE, meadowTexels } from '../components/gradient/gl/meadowTexture.js';
@@ -282,6 +282,18 @@ test('the 0.3 camera: the stops sit in holds, and it reaches the desk', () => {
   }
 });
 
+test('the 0.4 camera: from the reading position round to the house and onto the pool', () => {
+  const read = deskCameraAt(1, duskEmber);
+  const start = contactCameraAt(0, duskEmber);
+  for (const k of ['back', 'rise', 'pitch', 'zoom', 'centre', 'ahead']) assert.ok(Math.abs(start[k] - read[k]) < 1e-9, `no cut at the desk's end (${k})`);
+  assert.equal(start.yaw, 0);
+  const house = contactCameraAt(0.62, duskEmber);
+  assert.ok(Math.abs(house.yaw - Math.PI) < 1e-9 && house.ahead > 0.5, 'facing the house, past the desk');
+  const pool = contactCameraAt(0.96, duskEmber);
+  assert.ok(Math.abs(pool.pitch - Math.PI / 2) < 1e-9, 'straight down over the pool');
+  for (let c = 0; c <= 1; c += 0.01) assert.ok(contactCameraAt(c, duskEmber).eye > 0, `a camera above the ground at ${c}`);
+});
+
 test('the 0.3 pitch: screen and virtual plane map both ways', () => {
   const f = frame(duskEmber, { about: 1, desk: 0.3 }).f;
   const P = f.pitch;
@@ -524,7 +536,7 @@ test('the things on the desk: on its top, clear of the device, the lamp and each
   for (const w of [[0.33, 0.8, -0.17], [0.27, 0.77, 0.04], [-0.3, 0.78, -0.08]]) {
     assert.ok(lampClear(poseFree(LAMP_POSE, w, 'laptop'), 'laptop'), 'a drag stops at them');
   }
-  assert.ok(moonlit.tea && !duskEmber.tea, 'tea by night, coffee by day');
+  assert.ok(duskEmber.tea && !moonlit.tea, 'tea by day, coffee by night');
 });
 
 function geoArgs(r) {

@@ -25,8 +25,9 @@ not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
 The rebuild goes layer by layer, and the version line tracks which layer:
 `0.1.x` the atmosphere (done), `0.2.x` about me (the camera pull-back,
-done), `0.3.x` projects (the desk, current), `0.4.x` contact, `0.5.x` header
-navigation, `0.6.x` real content, `1.0.0` ship. The table, with where the
+done), `0.3.x` projects (the desk), `0.4.x` contact (current), `0.5.x` the
+device screen, `0.6.x` header navigation, `0.7.x` real content, `1.0.0`
+ship. The table, with where the
 current line stands, is "Version lines" in `ROADMAP.md`; it's the user's
 current thinking and will change.
 
@@ -311,7 +312,8 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.3.15`+: the device screen (`ROADMAP.md`, "0.3") |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); `0.4.0` the camera over grey boxes |
+| `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

@@ -7,7 +7,7 @@ import { SITE } from './site';
 // layer gives them a place in the scene. The scene itself is in the root
 // layout (app/layout.jsx), so it persists across routes. The tracks give the
 // page its scroll length: scrolling through them draws the camera back, then
-// down onto the desk.
+// down onto the desk, then round to the house and onto its pool.
 export default function Home() {
   return (
     <Stage>
@@ -17,6 +17,7 @@ export default function Home() {
       </div>
       <DescentTrack name="about" />
       <DescentTrack name="desk" />
+      <DescentTrack name="contact" />
     </Stage>
   );
 }

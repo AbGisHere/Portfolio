@@ -22,7 +22,7 @@
  * averages out with distance instead of shimmering.
  */
 
-import { WORLD_M } from '../deskCamera';
+import { WORLD_M, YAW_OFF } from '../deskCamera';
 import { LIFE, MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 
@@ -49,6 +49,7 @@ precision highp int;
 uniform vec2 uRes;           // canvas, device px
 uniform vec2 uSize;          // frame, CSS px
 uniform vec4 uPitch;         // cos, sin of the pitch, focal length (CSS px), zoom
+uniform vec2 uYaw;           // (0.4.0) cos, sin of the camera's yaw
 uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual plane (zw)
 uniform float uFront;        // the meadow's top on the virtual plane
 uniform vec2 uEye;           // the camera's height and back, world units
@@ -78,14 +79,20 @@ uint pcg(uint v) {
 
 // This pixel's ray (world units, y up) and its point on the virtual plane
 // (CSS px; y 1e7 where the ray leaves the plane behind), as mistShader.js
-// casts them.
+// casts them, turned by the yaw (0.4.0); face: how much the plane is
+// there at all (0 turned off it, where the ground runs to the horizon).
+float face = 1.0;
 vec3 rayOf(out vec2 v) {
   vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) * uSize / uRes;
   vec2 uv = (p - uPrin.xy) / uPitch.w;
   float yv = uv.y * uPitch.x + uPitch.z * uPitch.y;
-  float zv = uPitch.z * uPitch.x - uv.y * uPitch.y;
-  v = zv <= 1e-3 * uPitch.z ? vec2(uPrin.z, 1e7) : uPrin.zw + uPitch.z * vec2(uv.x, yv) / zv;
-  return vec3(uv.x, -yv, zv);
+  float zr = uPitch.z * uPitch.x - uv.y * uPitch.y;
+  vec3 r = vec3(uv.x * uYaw.x + zr * uYaw.y, yv, zr * uYaw.x - uv.x * uYaw.y);
+  float across = length(r.xz);
+  float zv = r.z + (across - r.z) * (0.5 - 0.5 * uYaw.x);
+  face = mix(1.0, smoothstep(0.08, 0.4, r.z / max(across, 1e-6)), smoothstep(0.0, ${f(YAW_OFF)}, 1.0 - uYaw.x));
+  v = zv <= 1e-3 * uPitch.z ? vec2(uPrin.z, 1e7) : uPrin.zw + uPitch.z * r.xy / zv;
+  return vec3(r.x, -yv, r.z);
 }
 
 // How far toward the mountains' foot a virtual-plane row is: the ground's
@@ -103,7 +110,7 @@ bool groundHit(out vec2 gm, out float dist) {
   float t = uEye.x / max(-dir.y, 1e-4);
   gm = uCamM.xz + dir.xz * t * ${f(WORLD_M)};
   dist = t * length(dir) * ${f(WORLD_M)};
-  if (!(dir.y < 0.0 && v.y > uFront)) return false;
+  if (!(dir.y < 0.0 && (v.y > uFront || face < 0.5))) return false;
   return true;
 }
 
@@ -254,7 +261,7 @@ void main() {
     float q = footQ(v.y);
     a = pow(smoothstep(${f(FOOT_MIST.plain)}, 1.0, q), 2.0) * (0.6 + 0.4 * textureLod(uMeadow, vec2(x * 0.7 - t, q * 3.0), 0.0).r);
   }
-  a *= ${f(FOOT_MIST.a)} * uMeadowA;
+  a *= ${f(FOOT_MIST.a)} * uMeadowA * face;
   if (a <= 0.002) discard;
   outColor = vec4(uFootMist * a, a);
 }

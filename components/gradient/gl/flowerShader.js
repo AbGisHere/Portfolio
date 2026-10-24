@@ -57,6 +57,7 @@ precision highp int;
 uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform vec2 uYaw;      // (0.4.0) cos, sin of the camera's yaw
 uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
 uniform float uT;       // the wind's clock, seconds
 uniform float uWindA;   // the wind's strength (0: still)
@@ -64,6 +65,12 @@ uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
 uniform float uPxCss;   // one device pixel, CSS px
 uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
 uniform sampler2D uMeadow;
+
+// (0.4.0) A world offset in the camera's frame before its pitch: turned
+// back by the yaw (uYaw: cos, sin; 0 faces the mountains, +z).
+vec3 viewOf(vec3 q) {
+  return vec3(q.x * uYaw.x - q.z * uYaw.y, q.y, q.x * uYaw.y + q.z * uYaw.x);
+}
 
 out vec2 vUV;          // across the head (-1 … 1); the stem: (side, t)
 flat out float vKind;  // 0 stem, 1 daisy, 2 buttercup, 3 pom-pom
@@ -99,7 +106,7 @@ ${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
 // Projected as the scene's pitched camera sees it (grassShader.js): clip
 // space linear in the camera's coordinates, no divide.
 vec4 project(vec3 w) {
-  vec3 q = w - uCam;
+  vec3 q = viewOf(w - uCam);
   float zp = -q.y * uPitch.y + q.z * uPitch.x;
   float vp = -q.y * uPitch.x - q.z * uPitch.y;
   float fz = uPitch.w * uPitch.z;
@@ -133,7 +140,7 @@ void main() {
   float want = (${f(FLOWERS.stray)} + ${f(FLOWERS.drift)} * drift) * (1.0 - smoothstep(${f(FLOWERS.fade[0])}, ${f(FLOWERS.fade[1])}, d));
   float p = own * want * c * c / ${f(FLOWERS.slots)};
   float grow = clamp((p - rnd(s)) / 0.1, 0.0, 1.0);
-  vec3 q0 = vec3(rel.x, -uCam.y, rel.y);
+  vec3 q0 = viewOf(vec3(rel.x, -uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   float fz = uPitch.w * uPitch.z;
   // A device pixel at the root, in metres.
@@ -208,9 +215,9 @@ ${PUSH_SUM}
     vec3 n;
     if (kind == 3.0) {
       // The pom-pom faces the camera.
-      a1 = vec3(1.0, 0.0, 0.0);
-      a2 = vec3(0.0, uPitch.x, uPitch.y);
-      n = vec3(0.0, uPitch.y, -uPitch.x);
+      a1 = vec3(uYaw.x, 0.0, -uYaw.y);
+      a2 = vec3(uPitch.y * uYaw.y, uPitch.x, uPitch.y * uYaw.x);
+      n = vec3(-uPitch.x * uYaw.y, uPitch.y, -uPitch.x * uYaw.x);
       tip += tang * R * 0.7;
     } else {
       // The disc faces up along the stem, turned partly toward the eye (as

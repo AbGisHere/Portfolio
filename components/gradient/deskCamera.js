@@ -22,7 +22,8 @@
 
 import { depthOf, descentAt, frameAt, skyUnder } from './camera';
 import { mix } from './colour';
-import { DESK_STOPS } from '../scroll/stops';
+import { CONTACT_STOPS, DESK_STOPS } from '../scroll/stops';
+import { POOL } from './gl/houseShape';
 
 /** Metres per world unit (the rest camera's eye height). */
 export const WORLD_M = 40;
@@ -46,12 +47,17 @@ export const DESK_BOX = { w: 1.2, h: 0.75, d: 0.7 };
  *   screen into a narrow frame (`pitchOf`, 0.3.8).
  * - `tablet`: (0.3.10) the key's channels where the path ends on the
  *   tablet (a portrait frame, `deviceFor`), in its place.
+ * - `yaw` (0 unless given): (0.4.0) degrees the camera has turned from
+ *   facing the mountains (+z), toward +x first; 180 faces the house.
  * Keys without `d` and `y` are where 0.2 ends (filled in from the descent:
  * `d0` is how far the desk is behind that camera). The two holds are the
  * scroll's stops (../scroll/stops.js): the end of the pull-back, the sun half
  * set, and the top-down shot.
  */
 const TABLET_END = { y: 1.07, pitch: 19, centre: 0.95, zoom: 1.5 };
+
+/** The reading position (DESK_PATH's last key, held), where 0.4 starts. */
+const READ = { d: -0.3, y: 1.0, pitch: 10.5, centre: 0.85, zoom: 2.2, fit: 1, tablet: TABLET_END };
 
 export const DESK_PATH = {
   d0: 60,
@@ -76,8 +82,41 @@ export const DESK_PATH = {
     // mountains stay over the lid.
     // (0.3.10) A portrait frame looks down onto the tablet's screen, its
     // middle at the frame's, the mountains over its top.
-    { at: 0.92, d: -0.3, y: 1.0, pitch: 10.5, centre: 0.85, zoom: 2.2, fit: 1, tablet: TABLET_END },
-    { at: 1, d: -0.3, y: 1.0, pitch: 10.5, centre: 0.85, zoom: 2.2, fit: 1, tablet: TABLET_END },
+    { at: 0.92, ...READ },
+    { at: 1, ...READ },
+  ],
+};
+
+/**
+ * (0.4.0) The contact path, over `contact` (0 … 1, the stretch after the
+ * desk), keyed like DESK_PATH (`d` is the camera's z, metres: negative is
+ * toward the house). Arc 3 rises back over the desk to look straight down
+ * at it, then sweeps round, facing outward, turning 180° as it draws back
+ * to face the house on the hill (gl/houseShape.js); arc 4 goes up and over
+ * onto the pool on its balcony and holds looking straight down at it: the
+ * contact hold (../scroll/stops.js CONTACT_STOPS).
+ */
+const POOL_HIGH = { y: POOL.at[1] + 15 };
+
+export const CONTACT_PATH = {
+  keys: [
+    // Where the desk's path ends, held.
+    { at: 0, ...READ },
+    { at: 0.04, ...READ },
+    // Back up over the desk, straight down at it.
+    { at: 0.18, d: 0, y: 2.6, pitch: 90, centre: 1, zoom: 1 },
+    { at: 0.24, d: 0, y: 2.6, pitch: 90, centre: 1, zoom: 1 },
+    // Round, facing outward, drawing back toward the house as it turns.
+    { at: 0.34, d: -2, y: 4, pitch: 62, centre: 1, zoom: 1, yaw: 20 },
+    { at: 0.46, d: -8, y: 7, pitch: 30, centre: 1, zoom: 1, yaw: 120 },
+    // The house on the hill, faced.
+    { at: 0.58, d: -34, y: 5, pitch: 5, centre: 1, zoom: 1, yaw: 180 },
+    { at: 0.64, d: -37, y: 5, pitch: 5, centre: 1, zoom: 1, yaw: 180 },
+    // Up and over, onto the pool: the contact hold.
+    { at: 0.8, d: -52, y: 15, pitch: 50, centre: 1, zoom: 1, yaw: 180 },
+    // (A portrait frame from higher up, so the pool fits its width.)
+    { at: 0.92, d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, tablet: POOL_HIGH },
+    { at: 1, d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, tablet: POOL_HIGH },
   ],
 };
 
@@ -117,32 +156,27 @@ function monotone(xs, ys, x) {
   );
 }
 
-/** The keys with the first one filled in from where 0.2 leaves the camera. */
-function keysFrom(end, device) {
+/** A path's keys, any without `d` and `y` filled in from where 0.2 leaves
+ * the camera. */
+function keysFrom(path, end, device) {
   const y = (1 + end.rise) * WORLD_M;
-  return DESK_PATH.keys.map(k => ({ fit: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
+  return path.keys.map(k => ({ fit: 0, yaw: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
 }
 
-/**
- * The camera at `desk` (> 0): the 0.2 camera's fields (`back`, `rise`,
- * `tilt`, `k`, `ranges`, for frameAt and the rest of sceneAt) plus `pitch`
- * (radians), `centre`, `zoom`, `eye` (height) and `ahead` (the desk's
- * distance in front of the camera), both in world units. `opts.device`:
- * the tablet's end in place of the laptop's (0.3.10).
- */
-export function deskCameraAt(desk, recipe, opts = {}) {
-  const end = descentAt(1, recipe, opts);
-  const keys = keysFrom(end, opts.device);
+/** The camera at `x` along a path (deskCameraAt's fields). */
+function cameraOn(path, x, end, device) {
+  const keys = keysFrom(path, end, device);
   const xs = keys.map(k => k.at);
-  const at = key => monotone(xs, keys.map(k => k[key]), desk);
+  const at = key => monotone(xs, keys.map(k => k[key]), x);
   const d = at('d');
-  const y = Math.exp(monotone(xs, keys.map(k => Math.log(k.y)), desk));
+  const y = Math.exp(monotone(xs, keys.map(k => Math.log(k.y)), x));
   const deskBack = end.back + DESK_PATH.d0 / WORLD_M;
   return {
     ...end,
     back: deskBack - d / WORLD_M,
     rise: y / WORLD_M - 1,
     pitch: (at('pitch') * Math.PI) / 180,
+    yaw: (at('yaw') * Math.PI) / 180,
     centre: at('centre'),
     zoom: at('zoom'),
     fit: at('fit'),
@@ -151,6 +185,22 @@ export function deskCameraAt(desk, recipe, opts = {}) {
     ahead: -d / WORLD_M,
     end,
   };
+}
+
+/**
+ * The camera at `desk` (> 0): the 0.2 camera's fields (`back`, `rise`,
+ * `tilt`, `k`, `ranges`, for frameAt and the rest of sceneAt) plus `pitch`
+ * and `yaw` (radians), `centre`, `zoom`, `eye` (height) and `ahead` (the
+ * desk's distance in front of the camera), both in world units.
+ * `opts.device`: the tablet's end in place of the laptop's (0.3.10).
+ */
+export function deskCameraAt(desk, recipe, opts = {}) {
+  return cameraOn(DESK_PATH, desk, descentAt(1, recipe, opts), opts.device);
+}
+
+/** (0.4.0) The camera at `contact` (> 0), past the desk: CONTACT_PATH. */
+export function contactCameraAt(contact, recipe, opts = {}) {
+  return cameraOn(CONTACT_PATH, contact, descentAt(1, recipe, opts), opts.device);
 }
 
 /**
@@ -208,26 +258,64 @@ export function pitchOf(cam, view, w, h) {
     zoom,
     cos: Math.cos(cam.pitch),
     sin: Math.sin(cam.pitch),
+    // (0.4.0) The yaw's cos and sin.
+    yc: Math.cos(cam.yaw ?? 0),
+    ys: Math.sin(cam.yaw ?? 0),
   };
 }
 
-/** A screen point on the virtual plane (null: the ray leaves it behind). */
-export function toVirtual(P, x, y) {
+/**
+ * (0.4.0) A screen point's ray in the world (y down, z toward the
+ * mountains): the pitch, then the yaw.
+ */
+function worldRay(P, x, y) {
   const u = (x - P.sx) / P.zoom;
   const v = (y - P.sy) / P.zoom;
   const yv = v * P.cos + P.f * P.sin;
   const zv = P.f * P.cos - v * P.sin;
-  if (zv <= 1e-3 * P.f) return null;
-  return { x: P.vx + (P.f * u) / zv, y: P.vy + (P.f * yv) / zv };
+  const yc = P.yc ?? 1;
+  const ys = P.ys ?? 0;
+  return { x: u * yc + zv * ys, y: yv, z: zv * yc - u * ys };
 }
 
-/** A virtual-plane point on screen (null: behind the camera), and how much
- * a length there is scaled on screen (`k`). */
+/**
+ * (0.4.0) The depth a ray is divided by to land on the virtual plane:
+ * its z facing the mountains, its length across the ground facing away,
+ * blended on the yaw. The far scene is painted on a plane only the
+ * mountains' side has; turned away, the sky there is the sky at the same
+ * height (a function of how high the ray points), so nothing behind the
+ * camera tears. Ridges and bodies fade out off the plane (mistShader.js).
+ */
+export function planeDepth(P, r) {
+  const k = 0.5 - 0.5 * (P.yc ?? 1);
+  return r.z + (Math.hypot(r.x, r.z) - r.z) * k;
+}
+
+/** (0.4.0) How far the camera may turn (1 − cos of the yaw) before the
+ * body is off the plane's painting and its hit target goes: the shaders
+ * fade the plane over the same turn. */
+export const YAW_OFF = 0.02;
+
+/** A screen point on the virtual plane (null: the ray leaves it behind). */
+export function toVirtual(P, x, y) {
+  const r = worldRay(P, x, y);
+  const zv = planeDepth(P, r);
+  if (zv <= 1e-3 * P.f) return null;
+  return { x: P.vx + (P.f * r.x) / zv, y: P.vy + (P.f * r.y) / zv };
+}
+
+/** A virtual-plane point on screen (null: behind the camera, or the camera
+ * turned off the plane, 0.4.0), and how much a length there is scaled on
+ * screen (`k`). */
 export function toScreen(P, x, y) {
-  const u = x - P.vx;
+  if (1 - (P.yc ?? 1) > YAW_OFF) return null;
+  const yc = P.yc ?? 1;
+  const ys = P.ys ?? 0;
+  const u = (x - P.vx) * yc - P.f * ys;
+  const fz = (x - P.vx) * ys + P.f * yc;
   const yv = y - P.vy;
-  const v = yv * P.cos - P.f * P.sin;
-  const z = yv * P.sin + P.f * P.cos;
+  const v = yv * P.cos - fz * P.sin;
+  const z = yv * P.sin + fz * P.cos;
   if (z <= 1e-3 * P.f) return null;
   const k = (P.zoom * P.f) / z;
   return { x: P.sx + k * u, y: P.sy + k * v, k };
@@ -268,10 +356,12 @@ export function deskWidest(scene, h, recipe) {
 /** Where the scroll comes to rest (../scroll/stops.js), checked against the
  * path's holds: each must sit inside one. */
 export const deskHolds = () =>
-  DESK_STOPS.map(at => {
-    const ks = DESK_PATH.keys;
+  [
+    ...DESK_STOPS.map(at => [DESK_PATH.keys, at]),
+    ...CONTACT_STOPS.map(at => [CONTACT_PATH.keys, at]),
+  ].map(([ks, at]) => {
     const i = ks.findIndex((k, j) => j + 1 < ks.length && k.at <= at && ks[j + 1].at >= at);
-    return i >= 0 && ['d', 'y', 'pitch', 'centre', 'zoom'].every(c => ks[i][c] === ks[i + 1][c]);
+    return i >= 0 && ['d', 'y', 'pitch', 'centre', 'zoom', 'yaw'].every(c => ks[i][c] === ks[i + 1][c]);
   });
 
 /**
@@ -370,16 +460,13 @@ export const DEPTH = { near: 0.04 / WORLD_M, far: 400 / WORLD_M };
  */
 export function groundAt(P, cam, x, y) {
   if (!P) return null;
-  const u = (x - P.sx) / P.zoom;
-  const v = (y - P.sy) / P.zoom;
-  // The ray before the pitch (y down, z forward), then y up.
-  const ry = v * P.cos + P.f * P.sin;
-  const rz = P.f * P.cos - v * P.sin;
-  if (ry <= 1e-6) return null;
+  // The ray (y down), then y up.
+  const r = worldRay(P, x, y);
+  if (r.y <= 1e-6) return null;
   const c = cameraMetres(cam);
-  const t = c.y / ry;
-  const dx = u * t;
-  const dz = rz * t;
+  const t = c.y / r.y;
+  const dx = r.x * t;
+  const dz = r.z * t;
   return { x: c.x + dx, z: c.z + dz, d: Math.hypot(dx, dz) };
 }
 

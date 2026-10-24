@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { isPinned, setDescent } from './scroll/descent';
-import { DESK_STOPS, STOP_REACH } from './scroll/stops';
+import { CONTACT_STOPS, DESK_STOPS, STOP_REACH } from './scroll/stops';
 import styles from './SmoothScroll.module.css';
 
 /**
@@ -13,11 +13,11 @@ import styles from './SmoothScroll.module.css';
  * - Publishes the descent's progress. Each `[data-descent]` track
  *   (DescentTrack) publishes its name's progress, 0 → 1, to the descent
  *   store: the first (`about`) across its scrollable span, each later one
- *   (`desk`) from where the one before ends across its whole height. It's a
- *   pure function of scroll position: no easing beyond Lenis's own
- *   smoothing, so scrolling back retraces exactly. A page without tracks
- *   publishes 0. `?scroll=` and `?desk=` pin the store and nothing is
- *   published.
+ *   (`desk`, `contact`) from where the one before ends across its whole
+ *   height. It's a pure function of scroll position: no easing beyond
+ *   Lenis's own smoothing, so scrolling back retraces exactly. A page without tracks
+ *   publishes 0. `?scroll=`, `?desk=` and `?contact=` pin the store and
+ *   nothing is published.
  * - Rests the scroll on the descent's stops (./scroll/stops.js): when
  *   scrolling comes to rest within STOP_REACH of one, it glides onto it
  *   (Lenis, or a smooth native scroll). A fast scroll passes straight
@@ -59,7 +59,7 @@ export default function SmoothScroll() {
 
     const publish = (y = window.scrollY) => {
       if (pinned) return;
-      const next = { about: 0, desk: 0 };
+      const next = { about: 0, desk: 0, contact: 0 };
       for (const t of tracks) next[t.name] = (y - t.start) / t.span;
       setDescent(next);
     };
@@ -87,13 +87,14 @@ export default function SmoothScroll() {
       if (lenis?.isScrolling) return void schedule();
       const y = lenis ? lenis.animatedScroll : window.scrollY;
       const vh = probe.current?.offsetHeight || window.innerHeight;
-      const desk = tracks.find(t => t.name === 'desk');
-      if (!desk) return;
       let best = null;
-      for (const at of DESK_STOPS) {
-        const s = desk.start + at * desk.span;
-        const d = Math.abs(s - y);
-        if (d > 1 && d < STOP_REACH * vh && (best == null || d < Math.abs(best - y))) best = s;
+      for (const [name, stops] of [['desk', DESK_STOPS], ['contact', CONTACT_STOPS]]) {
+        const t = tracks.find(k => k.name === name);
+        for (const at of t ? stops : []) {
+          const s = t.start + at * t.span;
+          const d = Math.abs(s - y);
+          if (d > 1 && d < STOP_REACH * vh && (best == null || d < Math.abs(best - y))) best = s;
+        }
       }
       if (best == null) return;
       if (lenis) lenis.scrollTo(best, { duration: 0.9 });

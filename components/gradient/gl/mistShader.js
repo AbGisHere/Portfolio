@@ -23,7 +23,7 @@
 
 import { DISC_ALPHA, DISC_LIFT, DISC_WHITE, LIMB_EDGE, LIMB_POWER, SET_BLOOM, SET_CORE, SET_LIFT, SET_WASH, SUN_GLOW } from '../sunLook';
 import { hexToRgb } from '../colour';
-import { WORLD_M } from '../deskCamera';
+import { WORLD_M, YAW_OFF } from '../deskCamera';
 
 /** Shader features `?off=` can compile out, to profile what a frame costs
  * (harness only: without the flag, no define and no cost). */
@@ -102,6 +102,7 @@ uniform vec3 uWind;          // amplitude, bands per unit depth ratio, phase (cy
 // (0.3) The desk camera (../deskCamera.js pitchOf).
 uniform int uPitched;        // 1 under its pitch
 uniform vec4 uPitch;         // cos, sin of the pitch, focal length (CSS px), zoom
+uniform vec2 uYaw;           // (0.4.0) cos, sin of the camera's yaw
 uniform vec4 uPrin;          // optical centre on screen (xy) and on the virtual plane (zw)
 uniform float uCm;           // the crest texture spans uCm × the frame, centred
 uniform vec2 uEye;           // the camera's height and back, world units
@@ -324,15 +325,25 @@ void main() {
   // (0.3) Under the desk camera's pitch: the ray (y down, z forward, before
   // the pitch), and this pixel on the 0.2 camera's plane. A ray that leaves
   // the plane behind only meets the ground: it goes far below everything.
+  //
+  // (0.4.0) Then turned by the yaw. The plane is only on the mountains'
+  // side: a turned camera divides by a depth that blends from the ray's z
+  // to its length across the ground (deskCamera.js planeDepth), so the sky
+  // goes on round behind it by height alone, and face fades the plane's
+  // painting (ridges, bodies, veils) out where the ray turns off it.
   vec3 ray = vec3(0.0);
+  float face = 1.0;
   if (uPitched == 1) {
     vec2 uv = (p - uPrin.xy) / uPitch.w;
     float yv = uv.y * uPitch.x + uPitch.z * uPitch.y;
-    float zv = uPitch.z * uPitch.x - uv.y * uPitch.y;
-    ray = vec3(uv.x, yv, zv);
+    float zr = uPitch.z * uPitch.x - uv.y * uPitch.y;
+    ray = vec3(uv.x * uYaw.x + zr * uYaw.y, yv, zr * uYaw.x - uv.x * uYaw.y);
+    float across = length(ray.xz);
+    float zv = ray.z + (across - ray.z) * (0.5 - 0.5 * uYaw.x);
+    face = mix(1.0, smoothstep(0.08, 0.4, ray.z / max(across, 1e-6)), smoothstep(0.0, ${f(YAW_OFF)}, 1.0 - uYaw.x));
     if (zv <= 1e-3 * uPitch.z) p = vec2(uPrin.z, 1e7);
     else {
-      p = uPrin.zw + uPitch.z * vec2(uv.x, yv) / zv;
+      p = uPrin.zw + uPitch.z * ray.xy / zv;
       aa *= uPitch.z / (uPitch.w * zv);
     }
     cm = uCm;
@@ -353,8 +364,8 @@ void main() {
   // one crest read per ridge.
   int first = -1;
 #ifndef OFF_SKIP
-  if (uCount > 0 && p.y > uFront) first = uCount - 1;
-  for (int i = MAX_RIDGES - 1; i >= 0 && first < 0; i--) {
+  if (uCount > 0 && p.y > uFront && face >= 1.0) first = uCount - 1;
+  for (int i = MAX_RIDGES - 1; i >= 0 && first < 0 && face >= 1.0; i--) {
     if (i >= uCount || uFade[i] < 1.0) continue;
     int row = uCrestRow[i];
     float bl = uBlur[i] * uScale[i];
@@ -371,6 +382,8 @@ void main() {
   // Sky: the gradient spans the full frame height.
   vec3 col = first < 0 ? texture(uSky, vec2((p.y * uSkyScale + uSkyShift) / uSize.y, 0.5)).rgb : vec3(0.0);
   if (uLifeA > 0.0 && first < 0) col = skyLife(col, p);
+  // (0.4.0) The sky alone, for where the plane fades out.
+  vec3 bare = col;
 
   // A setting sun's wash (sunLook.js SET_WASH): a very wide, faint Gaussian
   // hugging the horizon that tints the sky here, then lights the ridge rims
@@ -512,6 +525,9 @@ void main() {
   // A setting sun's light spilling over the crests along the horizon.
   if (washA > 0.0) col = over(col, washCol, washA * ${f(SET_WASH.spill)});
 
+  // (0.4.0) Turned off the plane, only the sky.
+  if (face < 1.0) col = mix(bare, col, face);
+
   // Air: the mist colour rising from 0 to uAirA over the 14% of the height
   // above the front foot (the frame's foot at rest), then thinning out over
   // the meadow (the layered air band traces the same).
@@ -532,13 +548,15 @@ void main() {
   // (deskShader.js, 0.3.6).
   if (uPitched == 1) {
     vec3 dir = vec3(ray.x, -ray.y, ray.z);
-    if (dir.y < 0.0 && p.y > uFront) {
+    // (Turned off the plane, the ground runs to the horizon all round.)
+    float gw = p.y > uFront ? 1.0 : 1.0 - face;
+    if (dir.y < 0.0 && gw > 0.0) {
       float t = uEye.x / -dir.y;
       float dist = t * length(dir) * ${f(WORLD_M)};
       // Near, the ground between the blades; farther, where the blades are
       // too small to see, the colour the grass reads as from afar.
       vec3 near = mix(uGrassGround, uGrassFar, smoothstep(4.0, 24.0, dist)) * mix(vec3(1.0), uGrassSky, 0.25);
-      col = mix(near, col, smoothstep(uHazeAt.x, uHazeAt.y, dist));
+      col = mix(col, mix(near, col, smoothstep(uHazeAt.x, uHazeAt.y, dist)), gw);
     }
   }
 

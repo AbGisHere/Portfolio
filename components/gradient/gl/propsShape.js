@@ -27,7 +27,7 @@ export const PROPS = {
   // Across the right page, a fountain pen, black with a brass clip.
   pen: { len: 0.142, r: 0.0046, body: '#1C1B1E', brass: '#B8925A' },
   // Front right of the device: stoneware, glazed a deep sea green outside
-  // and cream inside, its handle to the right. Coffee by day, tea by night
+  // and cream inside, its handle to the right. Tea by day, coffee by night
   // (a recipe's `tea`), the tea's tag over the rim.
   mug: { at: [0.33, H, -0.17], yaw: 0.5, r: 0.041, h: 0.096, fill: 0.077, glaze: '#3E6B6B', inside: '#E8DFCC', coffee: '#2B170C', crema: '#8C5C35', tea: '#8E3E10', tag: '#EADCBE' },
   // Left of the device, behind: a pad of sticky notes and one torn off.

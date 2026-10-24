@@ -5,8 +5,8 @@
  *
  * - **The notebook:** a cloth-bound board, its pages rising from the gutter,
  *   ruled, the left page written on; a fountain pen across the right.
- * - **The mug:** glazed stoneware, its drink a mirror of the sky: coffee by
- *   day, tea by night (`uTea`), the tea's tag dissolving in and out with the
+ * - **The mug:** glazed stoneware, its drink a mirror of the sky: tea by
+ *   day, coffee by night (`uTea`), the tea's tag dissolving in and out with the
  *   switch; and its steam (`STEAM_*`), on the frame loop's clock.
  * - **The sticky notes:** a pad, its top sheet's corner lifting, and one
  *   torn off, each with a few lines on it.

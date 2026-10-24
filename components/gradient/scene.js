@@ -16,7 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
-import { deskCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
+import { contactCameraAt, deskCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -48,6 +48,7 @@ export function sceneAt({
   haze,
   about,
   desk = 0,
+  contact = 0,
   reduced = false,
   w,
   h,
@@ -62,10 +63,14 @@ export function sceneAt({
   // descent's time of day over the palette.
   // Past the pull-back (`desk` > 0) the 0.3 camera takes over from where
   // it left off (deskCamera.js).
-  const onDesk = desk > 0;
-  const cam = onDesk
-    ? deskCameraAt(desk, r, { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h) })
-    : descentAt(about, r, { reduced, from: orbit?.prev, e: p });
+  // (0.4.0) Past the desk (`contact` > 0) the contact path does.
+  const onDesk = desk > 0 || contact > 0;
+  const camOpts = { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h) };
+  const cam = contact > 0
+    ? contactCameraAt(contact, r, camOpts)
+    : onDesk
+      ? deskCameraAt(desk, r, camOpts)
+      : descentAt(about, r, { reduced, from: orbit?.prev, e: p });
   const stops = turning ? scrollPaletteSwitch(base, orbit.prev, orbit.next, about, e) : scrollPalette(base, r, about);
   // Past the top the world ranges join the layout (under the frame, or sunk
   // behind the far ridge), and the camera brings them in by geometry alone.

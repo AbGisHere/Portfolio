@@ -13,9 +13,10 @@ as the site takes shape.
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | Current line: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. Projects: the descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, where a laptop (a tablet on portrait viewports) opens onto the projects. |
-| `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). |
-| `0.5.x` | A header on top of the site to navigate between the sections. |
-| `0.6.x` | Populating the site with the real content. |
+| `0.4.x` | Contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form sits (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes. |
+| `0.5.x` | The device screen: the projects inside the laptop and the tablet (see "The device screen"; moved here from `0.3.15`+, the owner, 2026-10-24). |
+| `0.6.x` | A header on top of the site to navigate between the sections. |
+| `0.7.x` | Populating the site with the real content. |
 | `1.0.0` | Ship, once "Before 1.0.0" below is clear. |
 
 ## Before 1.0.0 — ship hygiene
@@ -412,7 +413,7 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.12` | **Shipped.** The stationery and accessories (the owner, 2026-10-08): an open notebook with a fountain pen, a mug with coffee by day and tea by night (its tag dissolving with the switch) and steam off it, a pad of sticky notes with one torn off, and folded tortoiseshell glasses in the lamp's pool; built in code, lit by the sky and the lamp, with their shadows on the desk, and the lamp's drag stopping at them. |
 | `0.3.13` | **Shipped.** A brighter lamp (the owner, 2026-10-14): its light 1.6× (`LAMP.power`). |
 | `0.3.14` | **Shipped.** A closer final shot (the owner, 2026-10-23, after the home-page critique: more of the laptop's screen, since it will hold the projects): the screen about 57% of a 16:10 frame's width (was 41%), from an eye 1.0 m up (was 1.07) and 10.5° of pitch, so the mountains stay over the lid; the tablet unchanged. |
-| `0.3.15`+ | The device screen. |
+| `0.3.15`+ | The device screen, moved to `0.5.x` (the owner, 2026-10-24): `0.3` closes with the desk. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -767,7 +768,10 @@ Known catches:
 
 ## 0.4 — contact: the house and the pool
 
-**Status:** idea, 2026-09-30 (user). Not started; `0.3` comes first. The
+**Status:** idea, 2026-09-30 (user); started 2026-10-24, the camera's
+arcs 3 and 4 over grey boxes first (`0.4.0`, like `0.3.0`). Everything
+here is built in proper 3D, like the desk and the trees (the owner,
+2026-10-24): the house and the hill are modelled, not painted. The
 camera carries on from the desk, turns round to a house on the hill that
 looks out at the mountains, and comes down over a pool on its balcony. The
 person from the desk walks up to the house as the camera turns, and is
@@ -853,9 +857,9 @@ above: the mountains are at −Z and the camera never rolls.
 
 ### Assets and cost
 
-- **The house** is only ever seen from a distance, facing the camera. It can
-  be painted like the ridges (a lit silhouette, with windows lit at night)
-  rather than modelled, which is nearly free.
+- **The house** is built in code in 3D, like the desk (the owner,
+  2026-10-24: not a painted silhouette), with windows lit at night. The
+  camera comes close enough over the balcony that it must hold up.
 - **The character** is the one heavy asset: a low-poly, rigged, stylised
   figure with a walk, a robe, the entry into the water and the swim moods.
   Mixamo (free rigs and animations) and Spline or Blender for the look,

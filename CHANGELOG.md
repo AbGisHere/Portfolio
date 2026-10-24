@@ -6,6 +6,36 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.0 — 2026-10-24
+
+The contact line opens, ahead of the device screen (the owner,
+2026-10-24: the lines are now `0.4` contact, `0.5` the device screen,
+`0.6` the header, `0.7` content). Like `0.3.0`, the camera first, over
+grey boxes.
+
+- **The camera turns.** It gains a yaw (`pitchOf`'s `yc`, `ys`; every
+  desk-camera shader's `viewOf`, the lamp's hit outline). The far scene is
+  painted on a plane only the mountains' side has: turned away, rays
+  divide by a depth blended from their z to their length across the
+  ground (`planeDepth`), so the sky goes on round by height, and the
+  ridges, bodies and foot mist fade off the plane (`face`; the sun's hit
+  target goes past `YAW_OFF`). At no yaw every pass is as before.
+- **The contact stretch** (`CONTACT_PATH`, a third `DescentTrack` of 400
+  lvh, `?contact=` pins it): from the reading position back up to look
+  straight down at the desk, round 180° drawing back to face the house on
+  the hill, then up and over onto the pool on its balcony, held looking
+  straight down (higher on portrait frames, so the pool fits). The scroll
+  rests on the reading position and the pool (`CONTACT_STOPS`).
+- **The house and the pool** as grey boxes (`houseShape.js`,
+  `houseShader.js`): a hill, two floors, a roof, the balcony's deck and the
+  water, lit by the sky, no shadows. The real house is built in 3D like the
+  desk (the owner, 2026-10-24; the roadmap's painted silhouette dropped).
+- **The mug** holds tea by day and coffee by night (the owner), the other
+  way round from `0.3.12`.
+- **Measured:** unit tests 28/28, adaptive 9/9; stills along the path at
+  1440×900 day and night and 393×852. No QA run (the owner: QA before the
+  push).
+
 ## 0.3.14 — 2026-10-23
 
 A closer final shot (the owner, 2026-10-23, after the home-page critique:

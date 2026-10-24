@@ -189,9 +189,12 @@ export function poseFree(from, w, device = 'laptop') {
  * lampHitOn. */
 export function screenToWorld(P, cm, w, px, py) {
   const fz = P.zoom * P.f;
-  const F = [0, -P.sin, P.cos];
-  const D = [0, -P.cos, -P.sin];
-  const dir = add(add(F, [1, 0, 0], (px - P.sx) / fz), D, (py - P.sy) / fz);
+  // The view's forward, down and right in the world (turned by the yaw, 0.4.0).
+  const yc = P.yc ?? 1;
+  const ys = P.ys ?? 0;
+  const F = [P.cos * ys, -P.sin, P.cos * yc];
+  const D = [-P.sin * ys, -P.cos, -P.sin * yc];
+  const dir = add(add(F, [yc, 0, -ys], (px - P.sx) / fz), D, (py - P.sy) / fz);
   const c = [cm.x, cm.y, cm.z];
   const t = (w[0] - c[0]) * F[0] + (w[1] - c[1]) * F[1] + (w[2] - c[2]) * F[2];
   return add(c, dir, t);
@@ -343,7 +346,12 @@ export function makeFlicker(seed = Math.random()) {
  * desk camera (deskShader.js PROJECT_GLSL): `P` the pitch ({ cos, sin, f,
  * zoom, sx, sy }), `cm` the camera in metres. */
 function project(P, cm, w) {
-  const q = [w[0] - cm.x, w[1] - cm.y, w[2] - cm.z];
+  const yc = P.yc ?? 1;
+  const ys = P.ys ?? 0;
+  const dx = w[0] - cm.x;
+  const dz = w[2] - cm.z;
+  // (0.4.0) Turned back by the yaw (deskShader.js viewOf).
+  const q = [dx * yc - dz * ys, w[1] - cm.y, dx * ys + dz * yc];
   const zp = -q[1] * P.sin + q[2] * P.cos;
   const vp = -q[1] * P.cos - q[2] * P.sin;
   const fz = P.zoom * P.f;

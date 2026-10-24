@@ -41,6 +41,7 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
+import { HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -386,6 +387,29 @@ export default function MistCanvas({ recipe, onFail }) {
       props = { prog: pp, vao, buf: pb, count, u: name => (PU[name] ??= gl.getUniformLocation(pp, name)) };
       return props;
     };
+    // (0.4.0) The house on the hill and its pool, grey boxes for now
+    // (houseShader.js): one mesh, built once.
+    let house = null;
+    const houseProgram = () => {
+      if (house !== null) return house;
+      const hp = passProgram(gl, 'house', HOUSE_VERTEX, HOUSE_FRAGMENT);
+      if (!hp) return (house = false);
+      const { data, count } = houseMesh();
+      const hb = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, hb);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, HOUSE_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const HU = {};
+      house = { prog: hp, vao, buf: hb, count, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
+      return house;
+    };
     let steam = null;
     const steamProgram = () => {
       if (steam !== null) return steam;
@@ -538,6 +562,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noLamp = params.get('lamp') === '0';
     // `?props=0` leaves the things on the desk out (profiling).
     const noProps = params.get('props') === '0';
+    // `?house=0` leaves the house and its pool out (profiling).
+    const noHouse = params.get('house') === '0';
     const frozen = params.get('freeze') === '1';
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
@@ -844,7 +870,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // and the descent's progress.
     function rebuild() {
       const r = recipeRef.current;
-      const { about, desk } = getDescent();
+      const { about, desk, contact = 0 } = getDescent();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
       // rest it's the spring's, as ever. The descent's time of day goes on
@@ -868,6 +894,7 @@ export default function MistCanvas({ recipe, onFail }) {
         haze: value[2],
         about,
         desk,
+        contact,
         reduced: motion.matches,
         w,
         h,
@@ -993,6 +1020,7 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       if (pitch) {
         gl.uniform4f(uniform('uPitch'), pitch.cos, pitch.sin, pitch.f, pitch.zoom);
+        gl.uniform2f(uniform('uYaw'), pitch.yc, pitch.ys);
         gl.uniform4f(uniform('uPrin'), pitch.sx, pitch.sy, pitch.vx, pitch.vy);
         gl.uniform1f(uniform('uCm'), view.m);
         gl.uniform2f(uniform('uEye'), cam.eye, cam.back);
@@ -1130,6 +1158,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindVertexArray(g.vao);
       gl.depthFunc(gl.LESS);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1167,6 +1196,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(g.prog);
       gl.bindVertexArray(g.vao);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1221,6 +1251,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours, a, mist, farM } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1265,6 +1296,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1363,6 +1395,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1385,7 +1418,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
-    // (0.3.12) What's in the mug: 0 coffee (day), 1 tea (night, the recipe's
+    // (0.3.12) What's in the mug: 0 coffee (night), 1 tea (day, the recipe's
     // `tea`). Mid-switch it turns with the sky, as the lamp does.
     function teaNow() {
       let k = recipeRef.current.tea ? 1 : 0;
@@ -1404,6 +1437,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1429,6 +1463,26 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
+    // (0.4.0) The house and its pool, writing their depth.
+    function drawHouse() {
+      const g = houseProgram();
+      if (!g) return;
+      const { pitch: P, cm: c, colours } = meadowAt;
+      gl.useProgram(g.prog);
+      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
+      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
+      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
+      gl.uniform2fv(g.u('uSunDir'), colours.dir);
+      gl.uniform3fv(g.u('uSky'), colours.sky);
+      gl.uniform1f(g.u('uNight'), laptopLight().night);
+      gl.bindVertexArray(g.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, g.count);
+      gl.bindVertexArray(null);
+      gl.useProgram(prog);
+    }
+
     // (0.3.12) The steam off the mug, over everything drawn, behind what
     // stands in front of it (depth tested, writing none). Its clock is the
     // closing sky's (still under reduced motion and `?freeze=1`).
@@ -1438,6 +1492,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1464,6 +1519,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const lid = (deg * Math.PI) / 180;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1504,6 +1560,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const { pitch: P, cm: c, colours } = meadowAt;
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
@@ -1569,6 +1626,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform2f(g.u('uRes'), canvas.width, canvas.height);
         gl.uniform2f(g.u('uSize'), w, h);
         gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+        gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
         gl.uniform4f(g.u('uPrin'), P.sx, P.sy, P.vx, P.vy);
         gl.uniform1f(g.u('uFront'), front);
         gl.uniform2f(g.u('uEye'), c.eye, c.back);
@@ -1632,6 +1690,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
       if (deskOn && !noLamp) drawLamp();
       if (deskOn && !noProps) drawProps();
+      if (deskOn && !noHouse) drawHouse();
       if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);
@@ -1864,7 +1923,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (laptop) gl.deleteTexture(laptop.tex);
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
-      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, steam]) {
+      for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, house, steam]) {
         if (!p) continue;
         gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);

@@ -102,12 +102,19 @@ precision highp int;
 uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform vec2 uYaw;      // (0.4.0) cos, sin of the camera's yaw
 uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
 uniform float uT;       // the wind's clock, seconds
 uniform float uWindA;   // the wind's strength (0: still)
 uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
 uniform float uPxCss;   // one device pixel, CSS px
 uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
+
+// (0.4.0) A world offset in the camera's frame before its pitch: turned
+// back by the yaw (uYaw: cos, sin; 0 faces the mountains, +z).
+vec3 viewOf(vec3 q) {
+  return vec3(q.x * uYaw.x - q.z * uYaw.y, q.y, q.x * uYaw.y + q.z * uYaw.x);
+}
 
 out float vT;
 out float vVar;
@@ -170,7 +177,7 @@ void main() {
   float widen = clamp(sqrt(${f(GRASS.cap)} / max(want, 1.0)), 1.0, 3.0);
   // A blade under about a pixel tall on screen is left out: it would only
   // shimmer, and the ground's far colour already reads as grass there.
-  vec3 q0 = vec3(rel.x, -uCam.y, rel.y);
+  vec3 q0 = viewOf(vec3(rel.x, -uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   if (z0 > 0.0 && 0.16 * uPitch.w * uPitch.z / z0 < uPxCss) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -236,7 +243,7 @@ ${PUSH_SUM}
   vec3 w = vec3(pos.x + bd.x * off + across.x * (side * wdt + lean), y, pos.y + bd.y * off + across.y * (side * wdt + lean));
 
   // Projected as the scene's pitched camera sees it (deskCamera.js toScreen).
-  vec3 q = w - uCam;
+  vec3 q = viewOf(w - uCam);
   float yd = -q.y;
   float zp = yd * uPitch.y + q.z * uPitch.x;
   float vp = yd * uPitch.x - q.z * uPitch.y;

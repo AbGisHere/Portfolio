@@ -10,6 +10,7 @@ import { DESK_FRAGMENT, DESK_VERTEX } from '../../components/gradient/gl/deskSha
 import { LAPTOP_FRAGMENT, LAPTOP_VERTEX } from '../../components/gradient/gl/laptopShader.js';
 import { TABLET_FRAGMENT, TABLET_VERTEX } from '../../components/gradient/gl/tabletShader.js';
 import { LAMP_FRAGMENT, LAMP_VERTEX } from '../../components/gradient/gl/lampShader.js';
+import { HOUSE_FRAGMENT, HOUSE_VERTEX } from '../../components/gradient/gl/houseShader.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
 import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
@@ -24,6 +25,7 @@ export const PROGRAMS = [
   ['tablet', TABLET_VERTEX, TABLET_FRAGMENT],
   ['lamp', LAMP_VERTEX, LAMP_FRAGMENT],
   ['props', PROPS_VERTEX, PROPS_FRAGMENT],
+  ['house', HOUSE_VERTEX, HOUSE_FRAGMENT],
   ['steam', STEAM_VERTEX, STEAM_FRAGMENT],
   ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
   ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],

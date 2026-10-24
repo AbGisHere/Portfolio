@@ -10,6 +10,8 @@ export const TRACK_LVH = {
   // A track after the first starts where the one before ends, so it scrolls
   // its whole length: at 400, four screens carry `desk` from 0 to 1.
   desk: 400,
+  // (0.4.0) Round to the house and down onto its pool.
+  contact: 400,
 };
 
 /**
