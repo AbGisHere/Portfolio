@@ -87,7 +87,9 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   panel over the first (open in the bedroom, x −3.2 … −0.7).
 - **Curtains** (`curtainMesh()`): linen on ceiling tracks before the front
   glass, two shapes in one buffer, morphed by the switch (`uMorph`). By day
-  each is tied back at its end with a jute rope and tassel; by night it's
+  each is tied back at its end by a slim braided jute cord wrapped snug
+  round its gathered waist from the hook, a small tassel at the knot
+  (`0.4.19`; a thick rope ring before); by night it's
   untied, hanging straight from the head in a stack of folds at the same
   end (none close).
 - **No coplanar skins:** surfaces under a few millimetres apart flicker
@@ -96,6 +98,13 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   `furniture.js`); pictures are a moulding round a back board with the
   mount laid in and the print proud of it; a mirror's glass and the TV's
   sit in their frames' rebates; frames clear their openings by 2 mm.
+- **Soft things rest where they're held** (`0.4.19`): each pillow and
+  cushion stands with its foot on what's under it and leans back
+  (tilt π/2 + its lean) against what's behind it: the bed's euros on the
+  panel, the sleeping pillows on them, the accent cushion on those; the
+  sofa's and the lounge chair's scatter cushions on the seat, against the
+  back. The sofa's throw follows the arm's section with a centimetre's
+  clearance, two faces 8 mm apart, its hems rolled.
 - **Hardware** (`0.4.18`): brass bar pulls on posts with feet
   (`barPull()`, `pullOn()` in `furniture.js`) on every drawer and cabinet
   door, a long one each side of the front door, black slim ones on the

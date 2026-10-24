@@ -6,6 +6,36 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.19 — 2026-10-25
+
+Upholstery and the curtains' ties.
+
+- **Pillows and cushions rest where they're held** (the owner: the same
+  downward shift and flattening on the beds and the sofa): every one of
+  them was tilted the wrong way, its top toward the foot of the bed or the
+  front of the seat, so its lower edge sank into the mattress or the seat
+  and it seemed to slide forward. Each now stands with its foot on the
+  surface under it and leans back against what's behind it: the beds'
+  euro pillows on the panel, the sleeping pillows on the euros, the accent
+  cushion on those (each a hair off square), the sofa's and the lounge
+  chair's scatter cushions on the seat against the back cushions.
+- **The sofa's throw clears the arm:** it lay on the arm's own face, so
+  the grey upholstery broke through the brown. It follows the arm's section
+  now (its faces, rounded corners and top) a centimetre off, as thick as a
+  folded wool throw (two faces 8 mm apart, the hems rolled), down to rest
+  on the seat inside. Built in five pieces, each faced out from the arm,
+  so its shading never turns inside out (a single grid flipped normals
+  block by block).
+- **The curtains' ties:** a thick rigid ring of rope (18 mm, a perfect
+  ellipse standing off the cloth) is now a slim braided cord (9 mm, its
+  three strands plaited) wrapped round the gathered waist from the hook
+  on the wall's side, sagging a little at the front, knotted at the hook
+  with a few turns, a small tassel (a wrapped head, thirty fine threads)
+  hanging from it. By night it still shrinks into the hanging stack.
+- **Open:** the beds' duvets already lie on their mattresses; nothing
+  moves, so the shift was the poses alone.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.18 — 2026-10-25
 
 Doors, hardware and reflections.

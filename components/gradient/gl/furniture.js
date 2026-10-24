@@ -139,22 +139,79 @@ export function sofa(out, c, yaw, { width = 2.9, fabric = v(P.fabric, 0.1) } = {
     cushion(out, f, x, 0.44, 0.57, seat / 2 - 0.008, 0.08, 0.37, fabric);
     cushion(out, f, x, 0.72, 0.27, seat / 2 - 0.008, 0.25, 0.1, fabric, { tilt: 0.18, pinch: 0.2 });
   }
-  [[-hw + 0.42, 0.3, v(P.cushion, 0.15), 0.25], [-hw + 0.78, -0.2, v(P.cushion, 0.6), 0.22], [hw - 0.5, 0.25, v(P.cushion, 0.35), 0.24]].forEach(([x, ty, part, s]) =>
-    cushion(out, f, x, 0.74, 0.42, s, 0.06, s * 0.95, part, { tilt: 1.15, yaw: ty, pinch: 0.55, e1: 0.75, e2: 0.32 }),
+  // The scatter cushions: (0.4.19) each standing on the seat (0.52), its
+  // top leaning back into the back cushions (they leaned forward, sunk
+  // into the seat).
+  [[-hw + 0.42, 0.3, v(P.cushion, 0.15), 0.25, 0.3], [-hw + 0.78, -0.2, v(P.cushion, 0.6), 0.22, 0.36], [hw - 0.5, 0.25, v(P.cushion, 0.35), 0.24, 0.26]].forEach(([x, ty, part, s, lean]) =>
+    cushion(out, f, x, 0.52 + s * 0.95 * Math.cos(lean) - 0.015, 0.43 + 0.03 * (lean - 0.3), s, 0.06, s * 0.95, part, { tilt: Math.PI / 2 + lean, yaw: ty, pinch: 0.55, e1: 0.75, e2: 0.32 }),
   );
-  // The throw: a folded blanket hanging over the right arm.
+  // The throw: a folded blanket hanging over the right arm. (0.4.19)
+  // Shaped round the arm's own section (its faces at tx ± 0.1, its top
+  // 0.66, corners rounded) with a centimetre's clearance, and as thick as
+  // a wool throw folded (two faces 8 mm apart, the hems rolled): it lay on
+  // the arm's face, which broke through it.
   const tx = hw - 0.1;
-  grid(out, 10, 20, (u, w) => {
-    const z = 0.25 + u * 0.5;
-    let p;
-    if (w < 0.35) p = [tx + 0.12 - (w / 0.35) * 0.02, 0.2 + (w / 0.35) * 0.47, z];
-    else if (w < 0.65) {
-      const a = ((w - 0.35) / 0.3) * Math.PI;
-      p = [tx + Math.cos(a) * 0.115, 0.67 + Math.sin(a) * 0.04, z];
-    } else p = [tx - 0.115 - ((w - 0.65) / 0.35) * 0.02, 0.67 - ((w - 0.65) / 0.35) * 0.28, z];
-    p[0] += 0.006 * Math.sin(u * 19 + w * 7);
-    return { p: f.at(...p), part: v(P.fabric, 0.45), s: u, t: w };
-  }, f.ax[0]);
+  const cl = 0.012;
+  const R = 0.05;
+  const legs = [[tx + 0.1 + cl, 0.2], [tx + 0.1 + cl, 0.66 - R], [tx - 0.1 - cl, 0.66 - R], [tx - 0.1 - cl, 0.53]];
+  // Along the section: down the outer leg, over two rounded corners and the
+  // top, down the inner side to rest on the seat.
+  const L1 = legs[1][1] - legs[0][1];
+  const arc = (Math.PI / 2) * (R + cl);
+  const flat = 0.2 - 2 * R;
+  const L3 = legs[2][1] - legs[3][1];
+  const total = L1 + 2 * arc + flat + L3;
+  const section = t => {
+    let d = t * total;
+    if (d < L1) return [[tx + 0.1 + cl, 0.2 + d], [1, 0]];
+    d -= L1;
+    if (d < arc) {
+      const a = (d / arc) * (Math.PI / 2);
+      return [[tx + 0.1 - R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+    }
+    d -= arc;
+    if (d < flat) return [[tx + 0.1 - R - d, 0.66 + cl], [0, 1]];
+    d -= flat;
+    if (d < arc) {
+      const a = Math.PI / 2 + (d / arc) * (Math.PI / 2);
+      return [[tx - 0.1 + R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+    }
+    d -= arc;
+    return [[tx - 0.1 - cl, 0.66 - R - d], [-1, 0]];
+  };
+  const TH = 0.008;
+  // In five pieces (the sides, the corners, the top), each faced its own
+  // way out from the arm, so no normal turns inside out.
+  const cuts = [0, L1, L1 + arc, L1 + arc + flat, L1 + 2 * arc + flat, total].map(d => d / total);
+  for (const face of [1, -1]) {
+    for (let k = 0; k < 5; k++) {
+      const [w0, w1] = [cuts[k], cuts[k + 1]];
+      const [, [mx, my]] = section((w0 + w1) / 2);
+      const outward = add(scale(f.ax[0], mx), f.ax[1], my);
+      grid(out, 12, Math.max(2, Math.round((w1 - w0) * 40)), (u, ww) => {
+        const w = w0 + (w1 - w0) * ww;
+        const z = 0.25 + u * 0.5;
+        const [[x, y], [nx, ny]] = section(w);
+        // Its folds: soft ripples down its fall, more toward the hems.
+        const ripple = 0.006 * Math.sin(u * 19 + w * 7) * (0.4 + 0.6 * Math.abs(w * 2 - 1));
+        const o = (face > 0 ? TH : 0) + ripple;
+        return { p: f.at(x + nx * o, y + ny * o, z), part: v(P.fabric, 0.45), s: u, t: w };
+      }, face > 0 ? outward : scale(outward, -1));
+    }
+  }
+  // The hems, rolled.
+  for (const w of [0, 1]) {
+    const [[x, y], [nx, ny]] = section(w);
+    tube(out, f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25), f.at(x + nx * TH / 2, y + ny * TH / 2, 0.75), TH / 2 + 0.001, v(P.fabric, 0.45), 6);
+  }
+  for (const u of [0, 1]) {
+    const pts = [];
+    for (let k = 0; k <= 24; k++) {
+      const [[x, y], [nx, ny]] = section(k / 24);
+      pts.push(f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25 + u * 0.5));
+    }
+    sweep(out, pts, TH / 2 + 0.001, v(P.fabric, 0.45), { seg: 6 });
+  }
   for (const sx of [-1, 1]) for (const sz of [0.06, d - 0.06]) lathe(out, f.at(sx * (hw - 0.08), 0, sz), [0, 1, 0], [[0, 0], [0.018, 0], [0.024, 0.06]], v(P.walnut, 0), 10);
 }
 
@@ -168,7 +225,8 @@ export function loungeChair(out, c, yaw, fabric = v(P.fabric, 0.3)) {
   }
   cushion(out, f, 0, 0.36, 0.04, 0.32, 0.09, 0.32, fabric);
   cushion(out, f, 0, 0.66, -0.3, 0.31, 0.27, 0.08, fabric, { tilt: 0.32, pinch: 0.2 });
-  cushion(out, f, 0.06, 0.6, -0.12, 0.2, 0.05, 0.19, v(P.cushion, 0.15), { tilt: 1.2, yaw: 0.25, pinch: 0.55, e1: 0.75, e2: 0.32 });
+  // (0.4.19) Standing on the seat, leaning back into the back cushion.
+  cushion(out, f, 0.06, 0.45 + 0.19 * Math.cos(0.35) - 0.01, -0.19, 0.2, 0.05, 0.19, v(P.cushion, 0.15), { tilt: Math.PI / 2 + 0.35, yaw: 0.25, pinch: 0.55, e1: 0.75, e2: 0.32 });
 }
 
 /**
@@ -457,12 +515,22 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
     return { p: f.at(x, y, z), part: v(P.fabric, 0.45), s: u, t: w2 };
   });
   // The pillows: euro squares upright, sleeping pillows before them, a
-  // cushion.
+  // cushion. (0.4.19) Each rests where it's held: its foot on the mattress
+  // (0.585), its top leaning back against what's behind it, the euros the
+  // panel, the sleeping pillows the euros, the cushion the sleeping
+  // pillows. (They leaned forward, tops toward the foot, their lower edges
+  // sunk into the mattress: the owner's "downward shift".) `lean`: off
+  // upright toward the panel; tilt π/2 + lean stands a pillow so.
+  const bedTop = 0.585;
+  const rest = (lean, half, sink) => [bedTop + half * Math.cos(lean) - sink, Math.PI / 2 + lean];
   for (const px of [-hw / 2, hw / 2]) {
-    cushion(out, f, px, top + 0.25, 0.19, hw / 2 - 0.04, 0.07, 0.3, v(P.cushion, 0.45), { tilt: 1.3, pinch: 0.45, e1: 0.72, e2: 0.28 });
-    cushion(out, f, px, top + 0.1, 0.38, hw / 2 - 0.06, 0.075, 0.2, v(P.cushion, 0.0), { tilt: 0.95, pinch: 0.5, e1: 0.75, e2: 0.3 });
+    const [ey, et] = rest(0.28, 0.3, 0.02);
+    cushion(out, f, px, ey, 0.19, hw / 2 - 0.04, 0.07, 0.3, v(P.cushion, 0.45), { tilt: et, pinch: 0.45, e1: 0.72, e2: 0.28 });
+    const [sy, st] = rest(0.96, 0.2, -0.035);
+    cushion(out, f, px * 0.98, sy, 0.43, hw / 2 - 0.06, 0.075, 0.2, v(P.cushion, 0.0), { tilt: st, yaw: px > 0 ? -0.03 : 0.03, pinch: 0.5, e1: 0.75, e2: 0.3 });
   }
-  cushion(out, f, 0, top + 0.09, 0.56, 0.28, 0.06, 0.11, v(P.cushion, 0.15), { tilt: 0.55, pinch: 0.5, e1: 0.8, e2: 0.35 });
+  const [cy, ct] = rest(0.62, 0.11, -0.02);
+  cushion(out, f, 0.02, cy, 0.56, 0.24, 0.06, 0.11, v(P.cushion, 0.15), { tilt: ct, yaw: 0.06, pinch: 0.5, e1: 0.8, e2: 0.35 });
   // The nightstands, floating on the panel, a drawer each; the pendants.
   [-1, 1].forEach((sx, k) => {
     const x = sx * (hw + 0.36);

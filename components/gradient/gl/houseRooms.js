@@ -144,9 +144,12 @@ export function curtainMesh() {
       }
     }
   }
-  // The tie-backs: a twisted rope round each waist, its two ends looped
-  // and knotted, a long tassel hanging from the knot; there by day. By
-  // night each lies shrunk to nothing at the hook, in the hanging stack.
+  // The tie-backs: (0.4.19) a slim braided cord (it was a thick rope ring,
+  // round and rigid, standing off the cloth), wrapped snug round the
+  // gathered waist from the hook on the wall's side and back to it, sagging
+  // a little at the front under its own weight; knotted at the hook, a
+  // small tassel hanging from the knot; there by day. By night each lies
+  // shrunk to nothing at the hook, in the hanging stack.
   for (const [x0, x1, z, y0, y1, to] of CURTAINS) {
     const H = y0 - y1;
     const yT = y0 - H * 0.62;
@@ -154,22 +157,33 @@ export function curtainMesh() {
     const waist = 0.12 + 0.02 * Math.min(1, (x1 - x0) / 3);
     const cx = end + (to < 0 ? 1 : -1) * waist / 2;
     const cz = z - waist * 0.25;
+    const side = to < 0 ? -1 : 1;
     const hook = [end, yT, z + 0.02];
     const push = (p, n, s2, t2) => [...p, ...n, HOUSE_PART.rope, s2, t2, ...hook, ...n];
     const tri = (a, b, c) => out.push(...a, ...b, ...c);
-    // The rope: a ring round the waist, its strands twisting.
-    const ringAt = (a, r, dy) => [cx + Math.cos(a) * (waist / 2 + 0.014 + r), yT + dy, cz + Math.sin(a) * (0.05 + r)];
-    const nA = 40;
+    // The cord: from the hook (a = 0, the wall's side of the waist) round
+    // the cloth and back, drawn in where the gathered cloth is narrow, its
+    // three strands plaited (s along, t round, houseShader.js).
+    const rx = waist / 2 + 0.016;
+    const rz = 0.056;
+    const ringAt = (a, r, dy) => {
+      const at = a + (side < 0 ? Math.PI : 0);
+      const sag = 0.018 * Math.pow(Math.max(0, Math.sin(a / 2)), 2) * (Math.sin(at) > 0 ? 1 : 0.4);
+      const snug = 1 - 0.04 * Math.pow(Math.sin(a), 2);
+      return [cx + Math.cos(at) * (rx * snug + r), yT + dy - sag, cz + Math.sin(at) * (rz * snug + r)];
+    };
+    const nA = 64;
     const nB = 6;
     for (let i = 0; i < nA; i++) {
       for (let k = 0; k < nB; k++) {
         const vtx = (ii, kk) => {
           const a = (ii / nA) * Math.PI * 2;
-          const b = (kk / nB) * Math.PI * 2 + a * 6;
-          const rr = 0.009 * (1 + 0.15 * Math.sin(b * 2 + a * 12));
+          const b = (kk / nB) * Math.PI * 2 + a * 9;
+          const rr = 0.0045 * (1 + 0.18 * Math.abs(Math.sin(b * 1.5 + a * 27)));
+          const at = a + (side < 0 ? Math.PI : 0);
           const p = ringAt(a, Math.cos(b) * rr, Math.sin(b) * rr);
-          const n = [Math.cos(a) * Math.cos(b), Math.sin(b), Math.sin(a) * Math.cos(b)];
-          return push(p, n, ii / nA * 8, kk / nB);
+          const n = [Math.cos(at) * Math.cos(b), Math.sin(b), Math.sin(at) * Math.cos(b)];
+          return push(p, n, ii / nA * 24, kk / nB);
         };
         const [p, q, r2, t] = [vtx(i, k), vtx(i + 1, k), vtx(i + 1, k + 1), vtx(i, k + 1)];
         tri(p, q, r2);
@@ -178,7 +192,7 @@ export function curtainMesh() {
     }
     // The tassel: a wrapped head at the knot, then threads hanging from it,
     // each its own length, swaying apart a little toward their ends.
-    const knot = [cx + (to < 0 ? 0.03 : -0.03), yT - 0.012, cz - 0.062];
+    const knot = [end - side * 0.004, yT - 0.006, cz + 0.012];
     const tube3 = (a, b, r, s2) => {
       const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
       const ux = Math.abs(d[1]) > 0.5 ? [1, 0, 0] : [0, 1, 0];
@@ -196,12 +210,21 @@ export function curtainMesh() {
         tri(p, r2, t);
       }
     };
-    tube3(knot, [knot[0], knot[1] - 0.035, knot[2]], 0.012, 0);
-    for (let n = 0; n < 26; n++) {
-      const a = (n / 26) * Math.PI * 2;
-      const top = [knot[0] + Math.cos(a) * 0.009, knot[1] - 0.035, knot[2] + Math.sin(a) * 0.009];
-      const len = 0.13 + 0.03 * Math.sin(n * 2.7);
-      tube3(top, [top[0] + Math.cos(a) * 0.012, top[1] - len, top[2] + Math.sin(a) * 0.012], 0.0018, n * 1.3);
+    // The knot: a few turns of the cord bunched at the hook.
+    for (let t = 0; t < 3; t++) {
+      const a0 = t * 2.1;
+      const c0 = [knot[0] + Math.cos(a0) * 0.005, knot[1] + 0.004 * t - 0.004, knot[2] + Math.sin(a0) * 0.005];
+      tube3([c0[0] - 0.008, c0[1], c0[2]], [c0[0] + 0.008, c0[1] + 0.003, c0[2]], 0.0055, t * 3);
+    }
+    // The tassel: a slim wrapped head under the knot, its threads falling
+    // fine and close, each its own length.
+    tube3([knot[0], knot[1] - 0.008, knot[2]], [knot[0], knot[1] - 0.03, knot[2]], 0.0075, 0);
+    tube3([knot[0], knot[1] - 0.022, knot[2]], [knot[0], knot[1] - 0.026, knot[2]], 0.0085, 2);
+    for (let n = 0; n < 30; n++) {
+      const a = (n / 30) * Math.PI * 2;
+      const top = [knot[0] + Math.cos(a) * 0.006, knot[1] - 0.03, knot[2] + Math.sin(a) * 0.006];
+      const len = 0.075 + 0.015 * Math.sin(n * 2.7);
+      tube3(top, [top[0] + Math.cos(a) * 0.006, top[1] - len, top[2] + Math.sin(a) * 0.006], 0.0011, n * 1.3);
     }
   }
   const data = new Float32Array(out);
