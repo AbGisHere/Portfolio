@@ -41,7 +41,7 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_LIGHT_DATA, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
 import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
 import { HOUSE_BOUNDS, MOUND, POOL, moundY } from './houseShape';
 
@@ -413,51 +413,28 @@ export default function MistCanvas({ recipe, onFail }) {
     let house = null;
     let houseBuilt = null;
     let houseWorker = null;
-    const updateHouseBuffer = () => {
-      if (!house || !houseBuilt) return;
-      const { data, count, lawn, glass: panes } = houseBuilt.house;
-      gl.bindBuffer(gl.ARRAY_BUFFER, house.buf);
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-      house.count = count;
-      house.lawn = lawn;
-      house.panes = panes;
-      dirty = true;
-      kickRef.current();
-    };
-    const buildHouse = (targetStyling, force = false) => {
-      if ((houseWorker || houseBuilt) && !force) return;
-      if (houseWorker) {
-        houseWorker.terminate();
-        houseWorker = null;
-      }
-      const styling = targetStyling || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('styling') || '0.4.29' : '0.4.29');
-      const here = () => {
-        houseBuilt = { house: houseMesh(), curtains: curtainMesh(), styling };
-        updateHouseBuffer();
-      };
+    const buildHouse = () => {
+      if (houseWorker || houseBuilt) return;
+      const here = () => (houseBuilt = { house: houseMesh(), curtains: curtainMesh() });
       try {
         houseWorker = new Worker(new URL('./houseWorker.js', import.meta.url));
         houseWorker.onmessage = e => {
           houseBuilt = e.data;
-          houseWorker?.terminate();
-          houseWorker = null;
+          houseWorker.terminate();
           warmHouse();
-          updateHouseBuffer();
           // (Redrawn with it, even at rest.)
           dirty = true;
           kickRef.current();
         };
         houseWorker.onerror = () => {
-          houseWorker?.terminate();
-          houseWorker = null;
+          houseWorker.terminate();
           here();
         };
-        houseWorker.postMessage({ styling });
+        houseWorker.postMessage(0);
       } catch {
         here();
       }
     };
-    if (typeof window !== 'undefined') window.__setHouseStyling = pass => buildHouse(pass, true);
     const houseProgram = () => {
       if (house !== null) return house;
       buildHouse();
@@ -490,6 +467,17 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      // (0.4.30) The lights' data, a texel each, on unit 16 for good (0–15
+      // are taken; WebGL2 gives at least 32).
+      const lt = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE16);
+      gl.bindTexture(gl.TEXTURE_2D, lt);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, HOUSE_LIGHT_DATA.width, HOUSE_LIGHT_DATA.height, 0, gl.RGBA, gl.FLOAT, HOUSE_LIGHT_DATA.data);
+      gl.activeTexture(gl.TEXTURE0);
       house = { prog: hp, vao, buf: hb, count, lawn, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
       return house;
     };
@@ -2078,6 +2066,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uNight'), houseNight());
       gl.uniformMatrix4fv(g.u('uLightVP'), false, sh ? sh.map.matrix : IDENTITY);
       gl.uniform1i(g.u('uShadow'), 9);
+      gl.uniform1i(g.u('uLightData'), 16);
       gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
       gl.uniform1i(g.u('uCaustics'), 10);
       gl.uniform1f(g.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);

@@ -8,9 +8,10 @@
  * rejects, found on a real Xiaomi 12 Pro.
  *
  *   node --import ./scripts/lib/resolve-js.mjs scripts/devices.mjs
- *        [--base URL] [--only <name,…>] [--list] [--quiet]
+ *        [--base URL] [--path /?…] [--only <name,…>] [--list] [--quiet]
  *
- * Per device it opens the site at the desk's end (`?desk=0.6`), then in the
+ * Per device it opens the site at `--path` (default the house by night,
+ * `/?contact=0.6&theme=night`; `&theme=day` for the day), then in the
  * page compiles and links each program from the repo's own shader sources
  * (the main scene, the crests, the grass, the meadow's paint, flowers and
  * foot mist), reads the GPU, WebGL2 and which renderer the site picked, and

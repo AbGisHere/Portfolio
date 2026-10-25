@@ -49,27 +49,6 @@ export default function HouseExplorer() {
   const surface = useRef(null);
   const [where, setWhere] = useState('');
   const { theme, toggle } = useTheme();
-  const [styling, setStyling] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('styling') || '0.4.29';
-    }
-    return '0.4.29';
-  });
-
-  const toggleStyling = () => {
-    const next = styling === '0.4.29' ? '0.4.28' : '0.4.29';
-    setStyling(next);
-    if (typeof window !== 'undefined' && window.__setHouseStyling) {
-      window.__setHouseStyling(next);
-      const url = new URL(window.location.href);
-      url.searchParams.set('styling', next);
-      window.history.replaceState(null, '', url.toString());
-    } else if (typeof window !== 'undefined') {
-      const c = getFreeCam();
-      const camStr = c ? `${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)},${c.yaw.toFixed(3)},${c.pitch.toFixed(3)},${c.zoom.toFixed(2)}` : '';
-      window.location.search = `?cam=${camStr}&styling=${next}`;
-    }
-  };
 
   useEffect(() => {
     pinDescent({ about: 1, desk: 1, contact: 0.64 });
@@ -148,9 +127,6 @@ export default function HouseExplorer() {
             </button>
           ))}
           <button type="button" onClick={toggle}>{theme === 'night' ? 'Day' : 'Night'}</button>
-          <button type="button" onClick={toggleStyling} style={{ borderColor: 'rgb(255 180 80 / 60%)', color: '#ffb450' }}>
-            Compare: {styling === '0.4.29' ? '0.4.29 (New)' : '0.4.28 (Classic)'}
-          </button>
         </div>
       </div>
     </>

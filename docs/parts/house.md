@@ -160,7 +160,10 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   on in the switch, its glow; each strip's line, direction, fall-off,
   spread and the share of it bounced round its room), so a pixel weighs
   only its own room's lights (outside, its own and the front rooms'
-  through the glass). Its fittings are meshed from the same data
+  through the glass). The shader reads them from a float texture, a row
+  per array (`HOUSE_LIGHT_DATA`, unit 16; `0.4.30`), never from `const`
+  arrays: Adreno miscompiles those indexed in a loop, and lit the garden
+  green. Its fittings are meshed from the same data
   (`lightFixtures.js`), and each glows as its light is set
   (`fittingGlow()`: an off one is dark).
   - **Kinds:** a lamp; downlights; uplights; the bar's narrow spots; an

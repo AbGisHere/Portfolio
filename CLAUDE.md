@@ -260,7 +260,7 @@ components/
     gl/propsShader.js, gl/propsShape.js — the things on the desk: notebook and pen, mug and steam, sticky notes, glasses; their places, shadows and the lamp's keep-out (0.3.12)
     gl/meshKit.js — the primitives the lamp, the things on the desk and the house are built from (0.3.12)
     gl/houseShape.js, houseMesh.js, houseRooms.js, furniture.js, plantMesh.js — the house on its hill (0.4): its plan and zones; its shell; its rooms and curtains; its furniture; its plants
-    gl/houseLightPlan.js, houseLights.js, lightFixtures.js — the house's lighting (0.4.28): the brief as data; its lights by room, as the shader takes them; their fittings
+    gl/houseLightPlan.js, houseLights.js, lightFixtures.js — the house's lighting (0.4.28): the brief as data; its lights by room, packed into a texture for the shader (0.4.30); their fittings
     gl/houseShader.js, houseShadow.js, houseGlass.js, poolWater.js, bloom.js — its surfaces and lamps; the sun's shadow map; the glass and the water; the pool's waves and caustics; the night's bloom
     gl/houseWorker.js — builds the house's mesh off the main thread from the load (0.4.13)
     gl/mirrorProbe.js — the mirrors' reflections: a probe of each one's room, box-projected (0.4.18)
@@ -327,7 +327,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; optimisation the last `0.4` release; then the walk and the contact form over the pool |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling, then QA; `0.4.32` optimisation, then QA for baselines; then the walk and the contact form over the pool |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

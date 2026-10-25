@@ -6,15 +6,12 @@
  */
 import { houseLayout } from './houseMesh';
 import { curtainMesh } from './houseRooms';
-import { setStylingPass } from './houseStyling';
 
 // (Only inside a worker: the unit tests import every module here.)
 if (typeof self !== 'undefined') {
-  self.onmessage = e => {
-    const styling = e.data?.styling || '0.4.29';
-    setStylingPass(styling);
+  self.onmessage = () => {
     const house = houseLayout();
     const curtains = curtainMesh();
-    self.postMessage({ house, curtains, styling }, [house.data.buffer, curtains.data.buffer]);
+    self.postMessage({ house, curtains }, [house.data.buffer, curtains.data.buffer]);
   };
 }
