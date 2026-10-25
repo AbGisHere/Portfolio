@@ -5,14 +5,14 @@
  * round them is houseMesh.js's.
  */
 
-import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
+import { FLOOR, HOUSE_PART, MATCH_AXES, STOREY, TERRACE } from './houseShape';
 import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from './meshKit';
 import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import { clad, longVanity, toilet, walkInShower } from './washrooms';
 import { bouquet } from './plantMesh';
 import {
-  bath, bed, bench, bookcase, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase,
+  bath, bed, bench, bookcase, canvas, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase, wineGlass,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, sofa, stool, tallUnit, tv, v,
 } from './furniture';
 
@@ -298,26 +298,30 @@ export function groundRooms(out, ix, iz, glass) {
   homeDisplay(out, [6.95, B + 1.42, -67.44], [0, 0, 1]);
 
   // ---- The dining room: a table for eight under a long pendant.
+  // (0.4.27) Laid for two, not eight: across its end toward the garden,
+  // their chairs pushed back a little and turned, a glass of wine each;
+  // the rest of the table bare but for the flowers.
   marbleTable(out, [2.55, B, -67.9], Math.PI / 2, { w: 2.6, d: 1.05 });
-  for (const z of [-68.85, -67.9, -66.95]) {
+  for (const z of [-68.85, -67.9]) {
     chair(out, [2.0, B, z], Math.PI / 2);
     chair(out, [3.1, B, z], -Math.PI / 2);
   }
+  chair(out, [1.9, B, -66.98], Math.PI / 2 + 0.14);
+  chair(out, [3.21, B, -66.92], -Math.PI / 2 - 0.09);
   chair(out, [2.55, B, -69.45], 0);
   chair(out, [2.55, B, -66.35], Math.PI);
   for (const z of [-68.5, -67.3]) pendant(out, [2.55, B + 2.05, z], CEIL_G, 0.16);
   // (0.4.20) A round stoneware vase in the middle (it was a plain angular
-  // bottle), and a place laid at each of the eight seats.
+  // bottle).
   vase(out, [2.55, B + 0.75, -67.9], 0.3, v(P.ceramic, 0.8));
   // (0.4.26) Flowers in it: garden roses and eucalyptus.
   bouquet(out, [2.55, B + 0.75 + 0.3, -67.9], 11);
-  for (const z of [-68.85, -67.9, -66.95]) {
-    placeSetting(out, [2.27, B + 0.75, z], [-1, 0]);
-    placeSetting(out, [2.83, B + 0.75, z], [1, 0]);
-  }
-  placeSetting(out, [2.55, B + 0.75, -68.95], [0, -1]);
-  placeSetting(out, [2.55, B + 0.75, -66.85], [0, 1]);
-  picture(out, [4.54, B + 1.6, -68.6], -Math.PI / 2, 1.2, 0.9, 0.2);
+  placeSetting(out, [2.27, B + 0.75, -66.95], [-1, 0]);
+  placeSetting(out, [2.83, B + 0.75, -66.95], [1, 0]);
+  for (const [gx, gz] of [[2.47, -66.78], [2.63, -67.12]]) wineGlass(out, [gx, B + 0.75, gz]);
+  // (0.4.27) Over it, a large calm painting: two fields stacked on a warm
+  // ground, on canvas (it was a print the size of the rest).
+  canvas(out, [4.54, B + 1.62, -68.7], -Math.PI / 2, 1.6, 1.1, 0.3);
 
   // ---- The WC (0.4.23): Italian marble on every wall and the floor, the
   // vanity's wall bookmatched; a wall-hung toilet on its marble ledge, a
@@ -328,11 +332,17 @@ export function groundRooms(out, ix, iz, glass) {
     const t = 0.015;
     clad(out, [wx0 + 0.004, B + 0.02, wz0 + 0.004], [wx1 - 0.004, B + 0.03, wz1 - 0.004], 0.85);
     clad(out, [wx0 + 0.004, B + 0.03, wz0 + 0.004], [wx0 + 0.004 + t, top, wz1 - 0.004]);
-    clad(out, [wx1 - 0.004 - t, B + 0.03, wz0 + 0.004], [wx1 - 0.004, top, wz1 - 0.004], 0.6);
+    // (0.4.27) The vanity's wall, bookmatched, cut round the slot window
+    // over the mirror (houseMesh.js; the marble ran over its glass), as the
+    // en-suite's is.
+    const sl = [-71.1, -68.0, B + 1.7, CEIL_G - 0.35];
+    for (const [y0, y1, a, b] of [[B + 0.03, sl[2], wz0 + 0.004, wz1 - 0.004], [sl[3], top, wz0 + 0.004, wz1 - 0.004], [sl[2], sl[3], wz0 + 0.004, sl[0]], [sl[2], sl[3], sl[1], wz1 - 0.004]]) clad(out, [wx1 - 0.004 - t, y0, a], [wx1 - 0.004, y1, b], 0.62);
     clad(out, [wx0 + 0.02, B + 0.03, wz0 + 0.004], [wx1 - 0.02, top, wz0 + 0.004 + t]);
     for (const [a, b, y0] of [[wx0 + 0.02, 4.99, B + 0.03], [5.91, wx1 - 0.02, B + 0.03], [4.99, 5.91, B + 2.23]]) clad(out, [a, y0, wz1 - 0.004 - t], [b, top, wz1 - 0.004]);
     toilet(out, [6.35, B + 0.03, wz0 + 0.02], 0);
-    longVanity(out, [wx1 - 0.02, B + 0.03, -69.3], -Math.PI / 2, 1.2, 1);
+    // (0.4.27) Centred under its slot window, on the bookmatch's join
+    // (MATCH_AXES).
+    longVanity(out, [wx1 - 0.02, B + 0.03, MATCH_AXES[0]], -Math.PI / 2, 1.2, 1);
   }
 
   // ---- The kitchen: the run along the back with its sink and hob, a tall
@@ -348,7 +358,8 @@ export function groundRooms(out, ix, iz, glass) {
   desk(out, [-2.0, B, iz[0] + 0.36], 0, 1.8);
   bookcase(out, [1.48, B, -75.9], -Math.PI / 2, 2.6, 2.4, 29);
   loungeChair(out, [-4.4, B, -74.4], Math.PI * 0.75, v(P.fabric, 0.1));
-  picture(out, [-5.32, B + 1.55, -76.4], Math.PI / 2, 1.0, 0.75, 0.6);
+  // (0.4.27) A pair of small contour maps, side by side.
+  for (const [z, k] of [[-76.12, 0.64], [-76.68, 0.71]]) picture(out, [-5.32, B + 1.55, z], Math.PI / 2, 0.42, 0.56, k);
   rug(out, [-4.8, -77.8], [0.6, -73.8], y, 0.5);
 
   // ---- The stair: solid walnut treads cantilevered from a walnut
@@ -447,7 +458,8 @@ export function upperRooms(out, glass, jx, jz) {
   // (0.4.10) Against the bedroom's wall, facing the void, clear of the way
   // out to the terrace.
   bench(out, [-4.8, T, -76.3], Math.PI / 2, { w: 1.3, padded: true });
-  picture(out, [jx[0] + 0.01, T + 1.6, -78.0], Math.PI / 2, 0.8, 1.0, 0.8);
+  // (0.4.27) A tall print: a disc over a horizon.
+  picture(out, [jx[0] + 0.01, T + 1.6, -78.0], Math.PI / 2, 0.7, 1.0, 0.82);
 
   // ---- The main bedroom: the bed facing the glass, its tables and lamps,
   // an armchair at the glass, a dresser, a rug.
@@ -461,7 +473,8 @@ export function upperRooms(out, glass, jx, jz) {
   loungeChair(out, [1.7, y, -72.2], Math.PI * 1.2, v(P.fabric, 0.3));
   dresser(out, [-4.38, y, -72.6], Math.PI / 2, 1.3);
   mirror(out, [-4.43, y + 1.55, -72.6], Math.PI / 2, 0.9, 1.0);
-  picture(out, [-0.95, y + 1.95, -75.72], 0, 1.4, 0.6, 0.4);
+  // (0.4.27) Over the bed, a quiet long one: ridges into the haze.
+  picture(out, [-0.95, y + 1.95, -75.72], 0, 1.4, 0.6, 0.5);
 
   // ---- The walk-in wardrobe (0.4.21): a run of walnut cabinetry along
   // its back wall, bays of long hanging, double hanging, and shelves over
@@ -483,11 +496,11 @@ export function upperRooms(out, glass, jx, jz) {
     const t = 0.015;
     const f0 = y + 0.012;
     clad(out, [ex0 + 0.004, y, ez0 + 0.004], [ex1 - 0.004, f0, ez1 - 0.004], 0.85);
-    for (const [a, b, y0, y1] of [[ez1 + 0.004 - 0.008, -73.69, f0, top], [-74.61, ez0 + 0.004, f0, top], [-73.69, -74.61, y + 2.21, top]]) clad(out, [ex0 + 0.004, y0, Math.min(a, b)], [ex0 + 0.004 + t, y1, Math.max(a, b)], 0.6);
+    for (const [a, b, y0, y1] of [[ez1 + 0.004 - 0.008, -73.69, f0, top], [-74.61, ez0 + 0.004, f0, top], [-73.69, -74.61, y + 2.21, top]]) clad(out, [ex0 + 0.004, y0, Math.min(a, b)], [ex0 + 0.004 + t, y1, Math.max(a, b)], 0.64);
     clad(out, [ex0 + 0.02, f0, ez0 + 0.004], [5.95, top, ez0 + 0.004 + t]);
     clad(out, [ex0 + 0.02, f0, ez1 - 0.004 - t], [ex1 - 0.02, top, ez1 - 0.004]);
     for (const [y0, y1, a, b] of [[f0, T + 1.5, ez0 + 0.02, ez1 - 0.02], [CEIL_U - 0.3, top, ez0 + 0.02, ez1 - 0.02], [T + 1.5, CEIL_U - 0.3, ez0 + 0.02, -74.6], [T + 1.5, CEIL_U - 0.3, -72.2, ez1 - 0.02]]) clad(out, [ex1 - 0.004 - t, y0, a], [ex1 - 0.004, y1, b]);
-    longVanity(out, [ex0 + 0.02, f0, -72.45], Math.PI / 2, 1.8, 2);
+    longVanity(out, [ex0 + 0.02, f0, MATCH_AXES[1]], Math.PI / 2, 1.8, 2);
     bath(out, [4.6, f0, -72.15], 0);
     toilet(out, [4.3, f0, ez0 + 0.02], 0);
     walkInShower(out, glass, f0, [5.95, ex1 - 0.02], [ez0 + 0.004, -73.15], CEIL_U);

@@ -359,7 +359,7 @@ export function table(out, c, yaw, { w = 2.4, d = 1.0, h = 0.75, top = v(P.walnu
  */
 export function marbleTable(out, c, yaw, { w = 2.6, d = 1.05, h = 0.75 } = {}) {
   const f = frame(c, yaw);
-  slab(out, f, 0, h - 0.016, 0, w / 2, 0.016, d / 2, v(P.marble, 0));
+  slab(out, f, 0, h - 0.016, 0, w / 2, 0.016, d / 2, v(P.marble, slabCut(f.ax)));
   for (const sx of [-1, 1]) {
     soft(out, f.at(sx * (w / 2 - 0.55), (h - 0.03) / 2, 0), [0.13, (h - 0.03) / 2, 0.3], v(P.walnut, 0), { e1: 0.08, e2: 0.55, ax: f.ax, nu: 36, nv: 10 });
   }
@@ -397,6 +397,18 @@ export function placeSetting(out, c, to) {
   const sx = -0.245;
   obox(out, at(sx, 0.0035, -0.06), [0.0055, 0.0018, 0.07], S, ax);
   soft(out, at(sx, 0.006, 0.04), [0.019, 0.005, 0.028], S, { e1: 1, e2: 1, ax, nu: 14, nv: 6 });
+}
+
+/** (0.4.27) A wine glass at c (its foot) with a glass of red in it: a
+ * foot, a stem, a tulip bowl; the wine's colour through its lower part,
+ * its surface level a third of the way up. */
+export function wineGlass(out, c) {
+  const G = v(P.ceramic, 0.3);
+  const W = v(P.ceramic, 0.845);
+  lathe(out, c, [0, 1, 0], [[0, 0], [0.036, 0], [0.036, 0.002], [0.005, 0.007], [0.0035, 0.09], [0.012, 0.096]], G, 24);
+  lathe(out, c, [0, 1, 0], [[0.012, 0.096], [0.03, 0.115], [0.037, 0.132]], W, 24);
+  lathe(out, c, [0, 1, 0], [[0.037, 0.132], [0.04, 0.155], [0.036, 0.19], [0.0345, 0.19], [0.0385, 0.155], [0.0355, 0.132]], G, 24);
+  lathe(out, c, [0, 1, 0], [[0.0355, 0.132], [0, 0.132]], W, 24);
 }
 
 /** (0.4.20) A vase thrown round, a full belly narrowing to a short neck and
@@ -681,7 +693,7 @@ export function kitchenRun(out, c, yaw, w) {
     obox(out, f.at(x, 0.48, doorZ(0.6)), [w / n / 2 - 0.004, 0.375, DOOR / 2], v(P.walnut, 0.6), f.ax);
     pullOn(out, f, [x - Math.min(0.16, w / n / 2 - 0.06), 0.8], [x + Math.min(0.16, w / n / 2 - 0.06), 0.8], doorZ(0.6) + DOOR / 2);
   }
-  soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.marble, 0), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
+  soft(out, f.at(0, 0.88, 0.31), [w / 2 + 0.01, 0.02, 0.32], v(P.marble, slabCut(f.ax)), { e1: 0.12, e2: 0.02, ax: f.ax, nu: 40, nv: 6 });
   // The sink, sunk in the top, and its tap.
   // (0.4.14) Its rim 5 mm proud of the stone, the basin's top under it.
   obox(out, f.at(-w / 4, 0.78, 0.31), [0.38, 0.1, 0.2], v(P.steel, 0.5), f.ax);
@@ -704,13 +716,19 @@ export function kitchenRun(out, c, yaw, w) {
   lathe(out, f.at(-w / 2 + 0.25, 0.9, 0.12), [0, 1, 0], [[0, 0], [0.035, 0], [0.035, 0.2], [0.012, 0.26], [0.012, 0.3], [0, 0.3]], v(P.ceramic, 0.8), 16);
 }
 
+/** (0.4.27) The marble's variant for a piece cut along ax[0] (its length):
+ * its veins laid along it (houseShader.js). */
+export const slabCut = ax => (Math.abs(ax[0][0]) > Math.abs(ax[0][2]) ? 0 : 0.1);
+
 /** A kitchen island: base units, a stone top with waterfall ends. */
 export function island(out, c, yaw, w = 2.8, d = 1.0) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.45, 0), [w / 2 - 0.04, 0.45, d / 2 - 0.08], v(P.walnut, 0), f.ax);
   for (let k = 0; k < 4; k++) obox(out, f.at(-w / 2 + 0.04 + ((w - 0.08) * (k + 0.5)) / 4, 0.48, doorZ(d / 2 - 0.08)), [(w - 0.08) / 8 - 0.004, 0.37, DOOR / 2], v(P.walnut, 0.5), f.ax);
-  obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.marble, 0), f.ax);
-  for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.marble, 0), f.ax);
+  // (0.4.27) The top and its ends one slab, its veins folding over the
+  // edge (houseShader.js, variant .2: placed along x).
+  obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.marble, 0.2), f.ax);
+  for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.marble, 0.2), f.ax);
   // A bowl, a vase of stems.
   lathe(out, f.at(0.5, 0.935, 0), [0, 1, 0], [[0, 0], [0.08, 0], [0.16, 0.08], [0.17, 0.1], [0.16, 0.1], [0.07, 0.03], [0, 0.03]], v(P.ceramic, 0.5), 24);
   lathe(out, f.at(-0.6, 0.935, 0.1), [0, 1, 0], [[0, 0], [0.06, 0], [0.07, 0.1], [0.04, 0.25], [0.03, 0.3], [0, 0.3]], v(P.ceramic, 0.8), 18);
@@ -873,7 +891,9 @@ export function picture(out, c, yaw, w, h, variant = 0) {
   const [pw, ph] = [Math.max(0.04, iw - 0.07), Math.max(0.04, ih - 0.07)];
   const bev = 0.004;
   const [zp, zm] = [0.013, 0.01675];
+  const from = out.length;
   obox(out, f.at(0, 0, zp / 2), [pw, ph, zp / 2], v(P.art, variant), f.ax);
+  artCoords(out, from, f.at(0, 0, 0), f.ax, pw, ph, false);
   for (const s2 of [-1, 1]) {
     obox(out, f.at(s2 * (pw + bev + (iw - pw - bev) / 2), 0, zm / 2), [(iw - pw - bev) / 2, ih, zm / 2], P.paper, f.ax);
     obox(out, f.at(0, s2 * (ph + bev + (ih - ph - bev) / 2), zm / 2), [pw + bev, (ih - ph - bev) / 2, zm / 2], P.paper, f.ax);
@@ -895,6 +915,46 @@ export function picture(out, c, yaw, w, h, variant = 0) {
       tri(p0, q0, q1, n);
       tri(p0, q1, p1, n);
     }
+  }
+}
+
+/**
+ * (0.4.27) A picture's surface coordinates, for houseShader.js's art: from
+ * vertex `from` on, st becomes its place across the picture (c its middle,
+ * ax its axes, hw × hh its half size), 0 … 1 each way, plus 2 on st.x for a
+ * canvas, and its width to its height (in eighths) folded into st.y as
+ * twice a whole number, so one part draws any shape of picture true.
+ */
+function artCoords(out, from, c, ax, hw, hh, canvas) {
+  const k = 2 * Math.round((hw / hh) * 8);
+  for (let i = from; i < out.length; i += 9) {
+    const d = [out[i] - c[0], out[i + 1] - c[1], out[i + 2] - c[2]];
+    const u = (d[0] * ax[0][0] + d[1] * ax[0][1] + d[2] * ax[0][2]) / (2 * hw) + 0.5;
+    const t = (d[0] * ax[1][0] + d[1] * ax[1][1] + d[2] * ax[1][2]) / (2 * hh) + 0.5;
+    out[i + 7] = Math.min(1, Math.max(0, u)) + (canvas ? 2 : 0);
+    out[i + 8] = Math.min(1, Math.max(0, t)) + k;
+  }
+}
+
+/**
+ * (0.4.27) A painting on canvas at c, facing yaw, w × h: the canvas on its
+ * stretcher 3.8 cm deep, its painting carried round the edges, in a black
+ * float frame a hair taller, an 8 mm shadow gap all round. (Nothing over
+ * anything else within a centimetre: the gap's floor only in the gap.)
+ */
+export function canvas(out, c, yaw, w, h, variant = 0.3) {
+  const f = frame(c, yaw);
+  const [hw, hh, dz] = [w / 2, h / 2, 0.038];
+  const from = out.length;
+  obox(out, f.at(0, 0, dz / 2), [hw, hh, dz / 2], v(P.art, variant), f.ax);
+  artCoords(out, from, f.at(0, 0, 0), f.ax, hw, hh, true);
+  const [gap, t, fz] = [0.008, 0.012, 0.046];
+  for (const s2 of [-1, 1]) {
+    // The frame's sides, then the floor of the gap inside them.
+    obox(out, f.at(s2 * (hw + gap + t / 2), 0, fz / 2), [t / 2, hh + gap + t, fz / 2], P.frame, f.ax);
+    obox(out, f.at(0, s2 * (hh + gap + t / 2), fz / 2), [hw + gap, t / 2, fz / 2], P.frame, f.ax);
+    obox(out, f.at(s2 * (hw + gap / 2), 0, 0.003), [gap / 2, hh + gap, 0.003], P.frame, f.ax);
+    obox(out, f.at(0, s2 * (hh + gap / 2), 0.003), [hw, gap / 2, 0.003], P.frame, f.ax);
   }
 }
 

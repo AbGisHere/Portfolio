@@ -33,7 +33,10 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
 - **Living** (x −7.72 … 0.5, z −63.28 … −71.5): the sofa facing the glass,
   two lounge chairs, a coffee table, a rug, the TV on the left wall over a
   console, a floor lamp, the fig by the glass.
-- **Dining** (x 0.5 … 4.6): a table for eight under a pendant.
+- **Dining** (x 0.5 … 4.6): a table for eight under a pendant, laid for two
+  (`0.4.27`: across its end toward the garden, their chairs pushed back and
+  turned, a glass of red each, `wineGlass()`), a large painting on canvas
+  over it.
 - **Foyer** (x 4.6 … 7.72, z −63.28 … −67.5): the front door in the timber
   panel, a bench, a mirror, a walnut hook rail with two coats on hangers
   and a scarf over the middle hook (`0.4.21`).
@@ -41,11 +44,19 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
   folded, domain-warped field (they meander, fork and rejoin, down one
   diagonal): bold main veins of uneven width with a soft grey halo, broken
   in places and touched with gold, finer veins between, hairline threads,
-  each drawn to its pixel's share.
+  each drawn to its pixel's share. (`0.4.27`) A piece cut from one slab
+  (variant under `.25`) has its veins along its length (`slabCut()`: `.0`
+  along x, `.1` along z); the island's (`.2`) folds over its waterfall
+  ends, cut from the same slab. Cladding is set out as a mason would: the
+  floor's squares centred on the room, the walls' slabs floor to ceiling
+  (no join across them), one centred on the room's middle, and each
+  bookmatch's join on what it's behind (`MATCH_AXES`, variants `.62`
+  the WC's vanity, `.64` the en-suite's, `.66` the shower's rain head).
 - **WC** (x 4.6 … 7.72, z −67.5 … −71.5): Italian marble on every wall and
   the floor (`washrooms.js`, `0.4.23`), a wall-hung toilet on its marble
-  ledge, a floating vanity under a 3 : 1 mirror lit from behind; its door
-  off the foyer.
+  ledge, a floating vanity under a 3 : 1 mirror lit from behind, centred
+  under the slot window high in its side wall (`0.4.27`: the marble is cut
+  round the slot; it ran over its glass); its door off the foyer.
 - **Kitchen** (x 1.6 … 7.72, z −71.5 … −78.72): counters along the back
   with a sink and the hob's extractor, tall cupboards and the fridge along
   the side, an island with stools and pendants.
@@ -87,7 +98,8 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
   its ledge, and a walk-in shower in the far corner (a wet wall with a lit
   niche, a rain head flush in the ceiling, a hand shower on a slide rail,
   a linear drain, glass on two sides); a slot window at the side. Both
-  washrooms keep their lights partly on by day.
+  washrooms keep their lights partly on by day. (`0.4.27`) Its double
+  vanity centred on its bookmatch.
 - **Guest bedroom** (x 2.6 … 7.72, z −75.5 … −78.72): a bed, a desk.
 
 Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
@@ -113,8 +125,13 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   fronts are 19 mm doors 2 mm off their carcasses (`DOOR`, `HINGE` in
   `furniture.js`); pictures (`0.4.20`) are a stepped walnut moulding (a
   raised lip, two steps down), a brass slip, a mount with a bevel-cut
-  window and the print in it, each print its own soft abstract under a
-  glass sheen (`0.4.26`: no back board, the print only in the window, the
+  window and the print in it, each print one of five kinds of picture
+  under a glass sheen (`0.4.27`, by variant: soft colour fields, stacked
+  fields, ridges into the haze under a low sun, a survey's contours, a
+  disc over a horizon; its coordinates and its shape folded into st by
+  `artCoords()`); a large painting on canvas (`canvas()`) in a black float
+  frame over the dining table, a pair of small contour maps in the study,
+  a tall disc print on the landing, a long ridge print over the bed (`0.4.26`: no back board, the print only in the window, the
   mount and print solid back to the wall and the bevel a slope between
   them, so no two faces in a picture lie within a centimetre: from the
   desk they flickered through each other); a mirror's glass and the TV's
@@ -135,6 +152,19 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   sofa's and the lounge chair's scatter cushions on the seat, against the
   back. The sofa's throw follows the arm's section with a centimetre's
   clearance, two faces 8 mm apart, its hems rolled.
+- **Lighting** (`0.4.27`, `houseShape.js`): each room lit for its use, not
+  one amber: its colour its room's (`ROOM_TONE`: about 2700 K through the
+  house, 2200 K in the bedrooms, 3000 K and clearer in the washrooms, the
+  bar's strips 2400 K amber). By night the living room is the brightest,
+  its reading lamp the focus; the dining table under its pendant; the
+  kitchen down to its under-cabinet light; the bedroom's ceiling off, its
+  bedside lamps low; the study only its desk lamp; the wardrobe and the
+  guest room nearly dark. The bar has two narrow spots in the soffit over
+  its counter (kind 5, `BAR_SPOTS`) and tight pools from its shelf strips.
+  A fitting glows as its own light is set (`fittingGlow()`: an off one is
+  dark). By day the rooms in use keep their lamps, pendants and strips on
+  at part strength (`ROOM_DAY`), the ceilings' downlights off but the
+  washrooms' (`DAY_DOWN`).
 - **Lived in** (`homeDetails.js`, `0.4.22`): brushed-brass socket and
   switch plates, one family, where things plug in (the console, the sofa,
   the dining wall, over the kitchen counter, the desks, by each bed) and

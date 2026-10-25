@@ -75,6 +75,14 @@ export const EDGE = -58.6;
  * terrace's (houseGlass.js, at its index 1.52). */
 export const GLASS_THICK = 0.012;
 
+/**
+ * (0.4.27) The washrooms' bookmatches, each centred on what it's behind
+ * (houseShader.js marble, variants .62, .64, .66): the WC's vanity, under
+ * its slot window (z); the en-suite's double vanity (z); the shower's wet
+ * wall, on its rain head (x).
+ */
+export const MATCH_AXES = [-69.55, -72.45, 6.825];
+
 const CEIL_G = FLOOR + STOREY - 0.35;
 const CEIL_U = TERRACE + STOREY - 0.35;
 
@@ -99,36 +107,84 @@ export const ZONES = [
 /**
  * The lights by night: [x, y, z, radius (m), strength, kind, zone]. Kind 0
  * a lamp (shining every way), 1 a downlight outside (the soffit's, the
- * porch's), 3 one recessed in a room's ceiling (throwing down). Zone:
- * ZONES's, 0 outside.
+ * porch's), 3 one recessed in a room's ceiling (throwing down), 4 an
+ * uplight, 5 a narrow spot (throwing down, tight). Zone: ZONES's, 0
+ * outside. Strength 0 is a light that's off (its fitting dark too).
  */
+/** (0.4.27) The bar's two spots in the soffit (x), over its counter's
+ * middle (z). */
+export const BAR_SPOTS = [4.25, 5.75];
+export const BAR_SPOT_Z = PLAN.upper.z[1] + 0.04 + 0.3;
+
 /** (0.4.6) The path's bollards (x, z). */
 export const BOLLARDS = [[-0.95, -55.2], [0.95, -51.6], [-0.95, -48.0], [0.95, -44.4]];
 
+/**
+ * (0.4.27) The lights' colours, as their lamps' white points (not measured
+ * Kelvin): `warm` about 2700 K, `candle` 2200 K, `amber` 2400 K, `clear`
+ * 3000 K. ROOM_TONE is each zone's (ZONES; 0 outside), STRIP_TONE the
+ * strips' (outside, only the bar's).
+ */
+export const TONE = {
+  warm: [1.0, 0.71, 0.44],
+  candle: [1.0, 0.6, 0.31],
+  amber: [1.0, 0.63, 0.35],
+  clear: [1.0, 0.8, 0.6],
+};
+export const ROOM_TONE = [TONE.warm, TONE.clear, TONE.warm, TONE.warm, TONE.candle, TONE.warm, TONE.clear, TONE.candle, TONE.warm];
+export const STRIP_TONE = ROOM_TONE.map((t, i) => (i === 0 ? TONE.amber : t));
+
+/**
+ * (0.4.27) By day, how much of its night's light each room keeps on (ZONES;
+ * 0 outside, whose lights are off by day): its lamps, pendants and strips,
+ * not its ceiling's downlights (DAY_DOWN, only the washrooms', whose
+ * windows are slots). The kitchen's under-cabinet light and the pendants,
+ * the desk lamp, the bedside lamps, the wardrobe's rails; the guest room
+ * and the landing off.
+ */
+export const ROOM_DAY = [0, 0.45, 0.55, 0.45, 0.35, 0.6, 0.45, 0, 0];
+export const DAY_DOWN = [0, 0.45, 0, 0, 0, 0, 0.45, 0, 0];
+
 const down = (zone, ceil, pts, r = 5, k = 0.45) => pts.map(([x, z]) => [x, ceil - 0.05, z, r, k, 3, zone]);
 export const HOUSE_LIGHTS = [
-  ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3], [2.5, -65.5], [2.5, -70.3], [3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6], [6.2, -65.0], [-5.8, -74.5], [0, -67.5]]),
-  [2.55, FLOOR + 1.8, -67.9, 5, 0.7, 0, 3],
-  [4.4, FLOOR + 2.1, -74.9, 5, 0.7, 0, 3],
-  [-7.2, FLOOR + 1.55, -70.3, 3.5, 0.7, 0, 3],
+  // (0.4.27) Each room lit for what it's used for by night, not one amber
+  // through the house (ROOM_TONE its colour). The living room the
+  // brightest, its reading lamp the focus; the table under its pendant;
+  // the kitchen down to its under-cabinet light, its cooking done.
+  ...down(3, CEIL_G, [[-5.5, -66.0], [-3, -66.0], [-5.5, -69.3], [-3, -69.3]], 5, 0.55),
+  ...down(3, CEIL_G, [[2.5, -65.5], [2.5, -70.3], [0, -67.5]], 5, 0.32),
+  ...down(3, CEIL_G, [[3.4, -73.6], [5.6, -73.6], [3.4, -76.6], [5.6, -76.6]], 5, 0.2),
+  ...down(3, CEIL_G, [[6.2, -65.0], [-5.8, -74.5]], 5, 0.28),
+  [2.55, FLOOR + 1.8, -67.9, 4, 0.85, 0, 3],
+  [4.4, FLOOR + 2.1, -74.9, 5, 0.5, 0, 3],
+  [-7.2, FLOOR + 1.55, -70.3, 3.8, 0.8, 0, 3],
   // (0.4.23) The washrooms lit warm and strong: over the WC's toilet and
   // its vanity; over the en-suite's vanity, bath, toilet and shower.
-  ...down(1, CEIL_G, [[6.0, -70.4], [7.1, -69.3], [5.6, -68.4]], 4, 0.6),
-  ...down(2, CEIL_G, [[-2, -76]]),
-  [-2.75, FLOOR + 1.1, -78.2, 2.5, 0.5, 0, 2],
-  ...down(8, CEIL_U, [[-6.1, -73.0], [-6.1, -76.0], [-1, -78.1], [1.5, -78.1]]),
-  ...down(4, CEIL_U, [[-2.5, -73.0], [0.8, -73.0], [-1, -74.8]]),
-  [-2.26, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
-  [0.36, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
-  ...down(5, CEIL_U, [[-2.5, -76.65], [0.8, -76.65]], 3.5),
-  ...down(6, CEIL_U, [[3.3, -72.45], [4.6, -72.15], [4.3, -74.3], [6.8, -74.05], [6.6, -72.4]], 4, 0.6),
-  ...down(7, CEIL_U, [[5.2, -76.9]], 4),
-  [6.31, TERRACE + 1.29, -78.38, 3, 0.5, 0, 7],
+  // (0.4.27) Clear and bright, a cleaner white than the rooms.
+  ...down(1, CEIL_G, [[6.0, -70.4], [7.1, MATCH_AXES[0]], [5.6, -68.4]], 4, 0.7),
+  // The study: only its desk lamp, someone working late.
+  ...down(2, CEIL_G, [[-2, -76]], 5, 0),
+  [-2.75, FLOOR + 1.1, -78.2, 3.6, 0.7, 0, 2],
+  ...down(8, CEIL_U, [[-6.1, -73.0], [-6.1, -76.0], [-1, -78.1], [1.5, -78.1]], 5, 0.2),
+  // The main bedroom: its ceiling off, the bedside lamps low and warm,
+  // the wash behind the bed.
+  ...down(4, CEIL_U, [[-2.5, -73.0], [0.8, -73.0], [-1, -74.8]], 5, 0),
+  [-2.26, TERRACE + 1.29, -75.44, 3, 0.72, 0, 4],
+  [0.36, TERRACE + 1.29, -75.44, 3, 0.72, 0, 4],
+  // The wardrobe and the guest room nearly dark: nobody's in them.
+  ...down(5, CEIL_U, [[-2.5, -76.65], [0.8, -76.65]], 3.5, 0),
+  ...down(6, CEIL_U, [[3.3, -72.45], [4.6, -72.15], [4.3, -74.3], [6.8, -74.05], [6.6, -72.4]], 4, 0.7),
+  ...down(7, CEIL_U, [[5.2, -76.9]], 4, 0),
+  [6.31, TERRACE + 1.29, -78.38, 3, 0, 0, 7],
   // Two downlights in the porch's ceiling, under the cantilever.
   [-6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
   [6.2, FLOOR + STOREY - 0.4, -60.8, 4.5, 0.6, 1, 0],
   // The soffit's downlights over the terrace.
-  ...[-6, -2, 2, 6].map(x => [x, TERRACE + STOREY - 0.42, -69.8, 4.5, 0.55, 1, 0]),
+  // (0.4.27) Its two over the bar dimmer, so the bar's own pools read.
+  ...[-6, -2, 2, 6].map(x => [x, TERRACE + STOREY - 0.42, -69.8, 4.5, x === 6 ? 0.38 : 0.55, 1, 0]),
+  // (0.4.27) Over the bar's counter, two narrow spots in the soffit (kind
+  // 5, a tight cone): a pool of light each on its stone.
+  ...BAR_SPOTS.map(x => [x, TERRACE + STOREY - 0.4, BAR_SPOT_Z, 3.2, 1.1, 5, 0]),
   // (0.4.6) Outside by night: uplights (kind 4, throwing up) grazing the
   // columns, the timber, the stone base, and into the olive; low bollards
   // along the path (kind 1).
@@ -172,20 +228,20 @@ const BAR_STRIP_Z = PLAN.upper.z[1] + 0.04 + 0.2025;
  */
 export const HOUSE_STRIPS = [
   [[2.6, FLOOR + 1.44, -78.42], [4.85, FLOOR + 1.44, -78.42], [0, -1, 0.2], 1.6, 0.5, 3],
-  [[2.6, FLOOR + 0.03, -78.15], [7.3, FLOOR + 0.03, -78.15], [0, -0.4, 1], 1.0, 0.4, 3],
-  [[3.1, FLOOR + 0.03, -74.46], [5.7, FLOOR + 0.03, -74.46], [0, -0.4, 1], 1.0, 0.4, 3],
-  [[3.1, FLOOR + 0.03, -75.34], [5.7, FLOOR + 0.03, -75.34], [0, -0.4, -1], 1.0, 0.4, 3],
+  [[2.6, FLOOR + 0.03, -78.15], [7.3, FLOOR + 0.03, -78.15], [0, -0.4, 1], 1.0, 0.3, 3],
+  [[3.1, FLOOR + 0.03, -74.46], [5.7, FLOOR + 0.03, -74.46], [0, -0.4, 1], 1.0, 0.3, 3],
+  [[3.1, FLOOR + 0.03, -75.34], [5.7, FLOOR + 0.03, -75.34], [0, -0.4, -1], 1.0, 0.3, 3],
   // (0.4.17) The stair's, under every tread: brighter and wider (they
   // barely showed by night).
   [[-7.12, FLOOR + 0.13, -72.05], [-7.12, FLOOR + 3.33, -76.53], [0, -1, 0], 1.7, 1.0, 3, true],
   [[-2.65, TERRACE + 1.38, -75.73], [0.75, TERRACE + 1.38, -75.73], [0, 1, 0.15], 1.4, 0.55, 4],
-  [[3.65, TERRACE + 1.38, -78.71], [6.65, TERRACE + 1.38, -78.71], [0, 1, 0.15], 1.4, 0.5, 7],
-  [[-2.5, TERRACE + 0.46, -75.44], [-2.0, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
-  [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
+  [[3.65, TERRACE + 1.38, -78.71], [6.65, TERRACE + 1.38, -78.71], [0, 1, 0.15], 1.4, 0, 7],
+  [[-2.5, TERRACE + 0.46, -75.44], [-2.0, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.3, 4],
+  [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.3, 4],
   [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3, true],
   [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3, true],
   // (0.4.23) Behind the washrooms' mirrors and in the shower's niche.
-  [[7.68, FLOOR + 1.7, -68.75], [7.68, FLOOR + 1.7, -69.85], [-1, 0.4, 0], 0.9, 0.6, 1, true],
+  [[7.68, FLOOR + 1.7, MATCH_AXES[0] + 0.55], [7.68, FLOOR + 1.7, MATCH_AXES[0] - 0.55], [-1, 0.4, 0], 0.9, 0.6, 1, true],
   [[2.71, TERRACE + 2.0, -71.6], [2.71, TERRACE + 2.0, -73.3], [1, 0.4, 0], 1.0, 0.6, 6, true],
   [[6.3, TERRACE + 1.48, -74.8], [6.9, TERRACE + 1.48, -74.8], [0, -1, 0.3], 0.6, 0.5, 6, true],
   // (0.4.22) The terrace's bar: under its two shelves, and under its
@@ -193,11 +249,14 @@ export const HOUSE_STRIPS = [
   // (0.4.26) At the strips themselves, set in the shelves' undersides
   // (it was at the wall a centimetre under, lighting the shelf's own
   // underside hot: a pixel's row that came and went from the desk).
-  [[3.5, TERRACE + 1.425, BAR_STRIP_Z], [6.3, TERRACE + 1.425, BAR_STRIP_Z], [0, -1, 0.15], 1.3, 0.7, 0, true],
-  [[3.5, TERRACE + 1.825, BAR_STRIP_Z], [6.3, TERRACE + 1.825, BAR_STRIP_Z], [0, -1, 0.15], 1.1, 0.5, 0, true],
+  // (0.4.27) Tight pools on the bottles, amber (STRIP_TONE).
+  [[3.5, TERRACE + 1.425, BAR_STRIP_Z], [6.3, TERRACE + 1.425, BAR_STRIP_Z], [0, -1, 0.15], 0.9, 0.95, 0, true],
+  [[3.5, TERRACE + 1.825, BAR_STRIP_Z], [6.3, TERRACE + 1.825, BAR_STRIP_Z], [0, -1, 0.15], 0.8, 0.7, 0, true],
   // (0.4.21) The wardrobe's, under the shelf over each rail, down its run.
-  [[-4.3, TERRACE + 2.07, -76.9], [2.4, TERRACE + 2.07, -76.9], [0, -1, -0.5], 1.3, 0.7, 5, true],
-  [[-4.3, TERRACE + 1.11, -76.9], [2.4, TERRACE + 1.11, -76.9], [0, -1, -0.5], 1.0, 0.45, 5, true],
+  // (0.4.27) Left on low over the top rail only; the guest room's wash
+  // off, and the toe-kicks and the nightstands' dimmer.
+  [[-4.3, TERRACE + 2.07, -76.9], [2.4, TERRACE + 2.07, -76.9], [0, -1, -0.5], 1.3, 0.16, 5, true],
+  [[-4.3, TERRACE + 1.11, -76.9], [2.4, TERRACE + 1.11, -76.9], [0, -1, -0.5], 1.0, 0, 5, true],
 ];
 
 /** The bounds the sun's shadow map covers (houseShadow.js): everything the

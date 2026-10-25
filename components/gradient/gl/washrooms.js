@@ -23,7 +23,7 @@
 
 import { HOUSE_PART } from './houseShape';
 import { add, axes, box, lathe, obox, soft, sweep, tube } from './meshKit';
-import { mirror } from './furniture';
+import { mirror, slabCut } from './furniture';
 
 const P = HOUSE_PART;
 const v = (part, k) => part + Math.min(0.9, Math.max(0, k));
@@ -41,7 +41,9 @@ export function toilet(out, c, yaw, ledge = 1.1) {
   const f = frame(c, yaw);
   // The ledge: the cistern's box clad in marble, its top a slab.
   obox(out, f.at(0, 0.52, 0.1), [ledge / 2, 0.52, 0.1], v(P.marble, 0.3), f.ax);
-  obox(out, f.at(0, 1.055, 0.105), [ledge / 2 + 0.01, 0.015, 0.11], v(P.marble, 0.3), f.ax);
+  // (0.4.27) Its top one piece, its veins along it (not the cladding's
+  // slabs, whose join fell across it).
+  obox(out, f.at(0, 1.055, 0.105), [ledge / 2 + 0.01, 0.015, 0.11], v(P.marble, slabCut(f.ax)), f.ax);
   // The flush plate: brass, two buttons.
   obox(out, f.at(0, 0.82, 0.203), [0.11, 0.075, 0.003], P.brass, f.ax);
   for (const s of [-1, 1]) obox(out, f.at(s * 0.052, 0.82, 0.208), [0.045, 0.06, 0.002], P.brass, f.ax);
@@ -76,7 +78,7 @@ export function longVanity(out, c, yaw, w, basins = 1) {
     const dw = w / (basins * 2);
     obox(out, f.at(-w / 2 + dw * (k + 0.5), 0.62, 0.5 + 0.0105), [dw / 2 - 0.003, 0.195, 0.0095], v(P.walnut, 0.6), f.ax);
   }
-  obox(out, f.at(0, 0.84, 0.26), [w / 2 + 0.01, 0.02, 0.26], v(P.marble, 0.3), f.ax);
+  obox(out, f.at(0, 0.84, 0.26), [w / 2 + 0.01, 0.02, 0.26], v(P.marble, slabCut(f.ax)), f.ax);
   obox(out, f.at(0, 0.417, 0.25), [w / 2 - 0.05, 0.003, 0.2], P.lamp, f.ax);
   for (let k = 0; k < basins; k++) {
     const x = basins === 1 ? 0 : -w / 4 + (k * w) / 2;
@@ -100,7 +102,7 @@ export function walkInShower(out, glass, y, [x0, x1], [z0, z1], ceil) {
   // The wet wall: marble 12 cm proud, a niche in it, lit.
   const d = 0.12;
   const n = [x0 + 0.35, x0 + 0.95, y + 1.05, y + 1.4];
-  const ww = (a, b, ya, yb) => box(out, [a, ya, z0], [b, yb, z0 + d], v(P.marble, 0.6));
+  const ww = (a, b, ya, yb) => box(out, [a, ya, z0], [b, yb, z0 + d], v(P.marble, 0.66));
   ww(x0, n[0], y, ceil - 0.005);
   ww(n[1], x1, y, ceil - 0.005);
   ww(n[0], n[1], y, n[2]);

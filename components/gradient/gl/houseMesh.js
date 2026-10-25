@@ -436,6 +436,13 @@ export function houseLayout() {
   for (const [x0, x1] of [[R.x[0] + inner, U.x[0]], [U.x[1], R.x[1] - inner]]) box(out, [x0, sf, R.z[0] + inner], [x1, sf + 0.025, U.z[1] + 0.04], P.timber);
   box(out, [U.x[0], sf, R.z[0] + inner], [U.x[1], sf + 0.025, U.z[0]], P.timber);
   for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, sf - 0.012, -69.87], [x + 0.07, sf, -69.73], P.lamp);
+  // (0.4.27) The bar's spots: a black baffle round a small lens, set up in
+  // the boards.
+  for (const [x, , z, , , kind] of HOUSE_LIGHTS) {
+    if (kind !== 5) continue;
+    lathe(out, [x, sf, z], [0, -1, 0], [[0.048, 0], [0.04, 0.004], [0.026, 0.004], [0.022, 0.0]], P.frame, 20);
+    lathe(out, [x, sf - 0.003, z], [0, -1, 0], [[0.022, 0], [0, 0.002]], P.lamp, 16);
+  }
   // (0.4.26) The roof's top: a deck of large pale porcelain pavers on
   // pedestals, open-jointed (houseShader.js draws the joints and each
   // paver's own tone), standing 1.5 cm proud of a margin of dark basalt

@@ -6,6 +6,43 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.27 — 2026-10-25
+
+The interiors' design pass (`.impeccable/critique`, the owner's choice of
+four, and the details): light by room, a table for two, the art, the
+marble, and the washroom's window.
+
+- **Lighting by room.** Each room lit for its use, each its own colour
+  (`ROOM_TONE`: about 2700 K through the house, 2200 K in the bedrooms,
+  3000 K in the washrooms, the bar 2400 K), so from the meadow the house
+  reads lived in, not a lit box: the living room the brightest, its
+  reading lamp the focus; the dining table under its pendant; the kitchen
+  down to its under-cabinet light; the bedroom's ceiling off and its
+  bedside lamps low; the study only its desk lamp; the wardrobe and the
+  guest room nearly dark. The bar has two narrow spots in the soffit (a new
+  kind, a tight cone) and its shelf strips throw tight pools on the
+  bottles. Every fitting glows as its own light is set (an off one dark).
+  By day the rooms in use keep their lamps, pendants and strips on at part
+  strength (`ROOM_DAY`), the downlights off but the washrooms'.
+- **The table laid for two**, across its end toward the garden: their
+  chairs pushed back and turned, a glass of red each; the rest bare but
+  the flowers.
+- **The art varied by composition, not colour:** five kinds of picture
+  (soft fields, stacked fields, ridges into haze under a low sun, a
+  survey's contours, a disc over a horizon), each drawn true to its shape;
+  a large painting on canvas in a black float frame over the dining table,
+  a pair of small contour maps in the study, a tall print on the landing,
+  a long one over the bed.
+- **Marble cut on purpose:** slabs with their veins along their length;
+  the island's veins folding over its waterfall ends; cladding set out
+  from each room's centre, the walls floor-to-ceiling slabs with no join
+  across, each bookmatch centred on its vanity or the shower's rain head;
+  the vanities and tops one piece, not crossed by the cladding's joins.
+- **The WC's slot window** was covered by its marble: cut round it, the
+  vanity, its mirror's light and its downlight centred under it.
+- **Walnut's pores** ran across the grain (close to, dashes cut through
+  it): now long along it and fine across.
+
 ## 0.4.26 — 2026-10-25
 
 The owner's review of `0.4.16`–`0.4.25`, and the flicker from afar.
