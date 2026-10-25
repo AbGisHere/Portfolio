@@ -152,19 +152,60 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   sofa's and the lounge chair's scatter cushions on the seat, against the
   back. The sofa's throw follows the arm's section with a centimetre's
   clearance, two faces 8 mm apart, its hems rolled.
-- **Lighting** (`0.4.27`, `houseShape.js`): each room lit for its use, not
-  one amber: its colour its room's (`ROOM_TONE`: about 2700 K through the
-  house, 2200 K in the bedrooms, 3000 K and clearer in the washrooms, the
-  bar's strips 2400 K amber). By night the living room is the brightest,
-  its reading lamp the focus; the dining table under its pendant; the
-  kitchen down to its under-cabinet light; the bedroom's ceiling off, its
-  bedside lamps low; the study only its desk lamp; the wardrobe and the
-  guest room nearly dark. The bar has two narrow spots in the soffit over
-  its counter (kind 5, `BAR_SPOTS`) and tight pools from its shelf strips.
-  A fitting glows as its own light is set (`fittingGlow()`: an off one is
-  dark). By day the rooms in use keep their lamps, pendants and strips on
-  at part strength (`ROOM_DAY`), the ceilings' downlights off but the
-  washrooms' (`DAY_DOWN`).
+- **Lighting** (`0.4.28`, the brief in `ROADMAP.md`): an evening of
+  hosting, balanced, the light mostly hidden, four statement pieces. Its
+  lights are data (`houseLightPlan.js`), sorted by room into the form the
+  shader and the mesh share (`houseLights.js`: each light's place, reach,
+  strength, kind, colour, its share on by day and by night, when it comes
+  on in the switch, its glow; each strip's line, direction, fall-off,
+  spread and the share of it bounced round its room), so a pixel weighs
+  only its own room's lights (outside, its own and the front rooms'
+  through the glass). Its fittings are meshed from the same data
+  (`lightFixtures.js`), and each glows as its light is set
+  (`fittingGlow()`: an off one is dark).
+  - **Kinds:** a lamp; downlights; uplights; the bar's narrow spots; an
+    aimed spot (a cone along its way, a baffled can in the ceiling);
+    moonlight (a wide cone from a tree, dappled by its leaves). Strips:
+    coves, grazing slots, lines in joinery, skirtings, rails, mirrors'
+    bars.
+  - **Colour:** close, by room (`TONE2`): about 2700 K through the house,
+    the bedrooms a touch warmer, the washrooms a touch cleaner, the closet
+    between, the bar's 2500 K, moonlight cool.
+  - **Ceilings:** floating panels in the main rooms (`PANELS`), 12 cm deep
+    hung 16 cm down, a cove on their tops washing the band of ceiling
+    round them and filling the room; downlights few, each a spot aimed at
+    something (a table's centre, flowers, the canvas at 30°, a door).
+  - **Statement pieces:** opal globes cascading through the stair's void
+    (`GLOBES`); a brushed-brass linear pendant over the dining table; brass
+    sconces with a reading arm by the bed; a brass ring with an opal
+    diffuser in the walk-in closet.
+  - **By room:** the living room's coffee-table pool, reading lamp, side
+    tables' lamps, the TV wall grazed, the fig lit from its pot, the
+    bookcase lit down its uprights bay by bay; the kitchen with its cooking
+    done (pendants and under-cabinet low, a pin-spot on the island's
+    flowers, the plinths' glow); the foyer's front wall washed, its mirror
+    backlit, the door's frame lit from the floor; the stair's under-tread
+    strips, wall step lights every other tread and a line in its rail; the
+    study a library (its bookcase, a reading lamp, the desk lamp off); the
+    washrooms' bookmatched walls grazed, light either side of their
+    mirrors and behind them, the glow under the vanities, the bath's cove,
+    the shower's niche and floor wash; the bedroom's headboard wash, a
+    picture light over the print, a reading lamp, the dresser's mirror
+    backlit, a glow under the bed; the closet lit down every bay's sides,
+    over its rails and under its shelves; the guest room winding down (one
+    bedside lamp, the glow under its bed); the upper passage's skirting,
+    its picture light, lit door frames, a spot on the stair's head.
+  - **Outside**, a step under the rooms' glow: the stone base grazed from
+    its foot, the timber by the door washed from the porch, a line along
+    each cantilever's edge, a faint one under the roof's coping, the
+    entrance steps lit from their cheeks, moonlight from the trees by the
+    house, the pool's coping glowing, lanterns by the loungers, a line at
+    the glass balustrade's foot; the soffit's downlights, the bar's spots
+    and shelves, the columns', timber's and olive's uplights, the bollards.
+  - **By day** the statement pieces on low, the washrooms' mirrors and
+    grazing, the coves softly on. **In the switch** the coves and lamps
+    come on first, the accents next, the facade and the garden last
+    (`nightOn()`), on the switch's own clock.
 - **Lived in** (`homeDetails.js`, `0.4.22`): brushed-brass socket and
   switch plates, one family, where things plug in (the console, the sofa,
   the dining wall, over the kitchen counter, the desks, by each bed) and
@@ -229,7 +270,7 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   beside the bedroom's glass, facing the pool: a walnut counter with a
   stone top, doors with brass pulls and a glass-fronted wine fridge, two
   floating shelves of bottles and stemmed glasses lit from under (two
-  `HOUSE_STRIPS`, their light lines at the strips set into the shelves'
+  strips, their light lines at the strips set into the shelves'
   undersides, `0.4.26`), a tray, a bowl of lemons, two stools. Two of the
   terrace's uplights moved out from under it.
 - **The roof** (`0.4.17`): the slab, then a fascia in two layers (a deep

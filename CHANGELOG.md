@@ -6,6 +6,58 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.28 — 2026-10-25
+
+The house lit to the lighting brief (`ROADMAP.md`, "Lighting brief
+(`0.4.28`)"), agreed with the owner over eight rounds of questions after
+research into how luxury homes are lit and what the perception research
+supports; built on a dev route beside the shipped lighting, compared, and
+made the only lighting ("V2 is peak").
+
+- **One light format, by room.** The brief's lights are data
+  (`houseLightPlan.js`); `houseLights.js` sorts them by room, so a pixel
+  weighs only its own room's lights (outside, its own and the front
+  rooms' through the glass): far fewer per pixel than every light in the
+  house. Each light: its reach, strength, kind, colour, its share on by
+  day and by night, when it comes on in the switch, its fitting's glow;
+  each strip: its line, direction, fall-off, spread and how much of it is
+  bounced round its room. Before the old tables went, the refactor drew
+  the shipped lighting pixel for pixel (indoors identical; outside only
+  the wind, fireflies, water and grain moved).
+- **Floating ceilings** in the main rooms, their coves washing the band of
+  ceiling round each panel and filling the room; downlights few, each a
+  baffled spot aimed at something (a table's centre, the canvas at 30°,
+  the island's flowers, a door, the stair's head), fading out past its
+  beam as a real one does (no rim).
+- **Statement pieces:** opal globes cascading through the stair's void,
+  both floors; a brushed-brass linear pendant over the dining table;
+  brass sconces with reading arms by the bed, aimed onto each side of it;
+  a brass ring with an opal diffuser in the walk-in closet.
+- **Every corner:** the living room's bookcase lit down its uprights, the
+  TV wall grazed, side tables with lamps, the fig (it was never placed)
+  lit from its pot; the kitchen with its cooking done; the foyer's front
+  wall washed, its mirror backlit, the door's frame lit; the stair's step
+  lights and a line in its rail; the study a library; the washrooms'
+  bookmatched walls grazed, light either side of their mirrors, the bath's
+  cove, the shower's floor wash, the vanities' glow; the bedroom's
+  picture light, reading lamp, backlit mirror and the glow under the bed,
+  hidden at the base's edge so it floats; the closet lit down every bay;
+  the guest room winding down; the upper passage's skirting, picture light
+  and lit door frames.
+- **Outside**, a step under the rooms' glow: the stone base grazed from its
+  foot, the timber by the door washed, a line along each cantilever, a
+  faint one under the roof's coping, the entrance steps lit, moonlight
+  dappled from the trees by the house, the pool's coping glowing,
+  lanterns by the loungers, a line at the balustrade's foot.
+- **The switch:** the coves and lamps come on first, the accents next, the
+  facade and the garden last. **By day** the statement pieces low, the
+  washrooms' mirrors and grazing, the coves softly on.
+- **Exposure** checked against the owner's frames: a fifth down at night, a
+  lamp's light softened close to its shade (one by a wall burned a spot
+  into it), the coves a third down.
+- Optimisation is now the last `0.4` release, after the walk and the
+  contact form (the owner).
+
 ## 0.4.27 — 2026-10-25
 
 The interiors' design pass (`.impeccable/critique`, the owner's choice of

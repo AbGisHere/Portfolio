@@ -522,7 +522,7 @@ export function console_(out, c, yaw, w = 2.2) {
  * floating walnut nightstands on the panel; glass globe pendants on cords
  * from the ceiling at `ceil` either side.
  */
-export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true, true] } = {}) {
+export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true, true], pendants = true } = {}) {
   const f = frame(c, yaw);
   const hw = w / 2;
   const panel = w + 1.5;
@@ -603,6 +603,7 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
       pullOn(out, f, [x - 0.07, 0.48], [x + 0.07, 0.48], doorZ(0.5) + DOOR / 2);
       lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
     }
+    if (!pendants) return;
     const g = f.at(x, 1.22, 0.3);
     tube(out, add(g, [0, 0.12, 0]), [g[0], ceil, g[2]], 0.002, P.steel, 6);
     lathe(out, add(g, [0, 0.11, 0]), [0, 1, 0], [[0.02, 0], [0.02, 0.03]], P.brass, 10);

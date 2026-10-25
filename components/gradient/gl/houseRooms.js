@@ -11,6 +11,7 @@ import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import { clad, longVanity, toilet, walkInShower } from './washrooms';
 import { bouquet } from './plantMesh';
+import { CEILS, panelUnder } from './houseLightPlan';
 import {
   bath, bed, bench, bookcase, canvas, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase, wineGlass,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, sofa, stool, tallUnit, tv, v,
@@ -310,7 +311,7 @@ export function groundRooms(out, ix, iz, glass) {
   chair(out, [3.21, B, -66.92], -Math.PI / 2 - 0.09);
   chair(out, [2.55, B, -69.45], 0);
   chair(out, [2.55, B, -66.35], Math.PI);
-  for (const z of [-68.5, -67.3]) pendant(out, [2.55, B + 2.05, z], CEIL_G, 0.16);
+  // (0.4.28) Its light a linear pendant over it (lightFixtures.js).
   // (0.4.20) A round stoneware vase in the middle (it was a plain angular
   // bottle).
   vase(out, [2.55, B + 0.75, -67.9], 0.3, v(P.ceramic, 0.8));
@@ -351,7 +352,8 @@ export function groundRooms(out, ix, iz, glass) {
   tallUnit(out, [ix[1], B, -73.6], -Math.PI / 2, 2.2, 2.6);
   island(out, [4.4, B, -74.9], 0, 2.8, 1.0);
   for (const x of [3.5, 4.4, 5.3]) stool(out, [x, B, -74.05]);
-  for (const x of [3.6, 4.4, 5.2]) pendant(out, [x, B + 2.4, -74.9], CEIL_G, 0.13);
+  // (0.4.28) Hung from the floating ceiling's panel.
+  for (const x of [3.6, 4.4, 5.2]) pendant(out, [x, B + 2.4, -74.9], panelUnder(CEILS.ground), 0.13);
 
   // ---- The study: a desk at the wall, an office chair, shelves, a chair
   // to read in, a picture.
@@ -464,7 +466,8 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The main bedroom: the bed facing the glass, its tables and lamps,
   // an armchair at the glass, a dresser, a rug.
   rug(out, [-3.6, -75.6], [1.6, -72.0], y, 0.3);
-  bed(out, [-0.95, y, -75.74], 0, { w: 1.9, l: 2.1, ceil: CEIL_U });
+  // (0.4.28) Brass sconces by it instead of the globes (lightFixtures.js).
+  bed(out, [-0.95, y, -75.74], 0, { w: 1.9, l: 2.1, ceil: CEIL_U, pendants: false });
   // (0.4.22) A socket over each nightstand, on the panel; a switch by the
   // door, by the en-suite's.
   for (const x of [-2.26, 0.36]) socket(out, [x, y + 0.72, -75.645], [0, 0, 1]);

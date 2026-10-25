@@ -12,7 +12,8 @@
 
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
-import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, DAY_DOWN, MATCH_AXES, ROOF_DECK, ROOM_DAY, ROOM_TONE, STOREY, STRIP_TONE, TERRACE, WALL, ZONES } from './houseShape';
+import { FLOOR, HOUSE_PART, PLAN, POOL, MATCH_AXES, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
+import { LIGHTS, LIGHT_RANGE, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
@@ -79,6 +80,9 @@ export const ROOMS = [
   [[U.x[0] + WALL, TERRACE, U.z[0] + WALL], [U.x[1] - WALL, utop, U.z[1] - WALL], [-7.2, 2.6, TERRACE, utop, U.z[1]]],
 ];
 const opening = i => `vec4(${ROOMS[i][2].slice(0, 4).map(f).join(', ')})`;
+// (0.4.28) The rooms that look out through the front glass (their lamps'
+// light goes out there too).
+const FRONT_ZONES = [...new Set(ZONE_BOXES.filter(z => z.light === 1).map(z => z.id))];
 
 /** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
  * the lamps by night. Needs METAL_GLSL's ggx. */
@@ -116,9 +120,9 @@ float sunShadow(vec4 lp) {
   return s / 8.0;
 }
 
-// Which room a point is in (houseShape.js ZONES): 0 outside.
+// Which room a point is in (houseLights.js ZONE_BOXES): 0 outside.
 int roomOf(vec3 p) {
-${ZONES.map(([lo, hi], i) => `  if (inBox(p, ${v3(lo)} - 0.03, ${v3(hi)} + 0.03)) return ${i + 1};`).join('\n')}
+${ZONE_BOXES.map(({ lo, hi, id }) => `  if (inBox(p, ${v3(lo)} - 0.03, ${v3(hi)} + 0.03)) return ${id};`).join('\n')}
   return 0;
 }
 
@@ -152,107 +156,151 @@ bool lampSees(vec3 l, vec3 p, int room, int at) {
   return c.x > o.x && c.x < o.y && c.y > o.z && c.y < o.w;
 }
 
-const vec4 LAMPS[${HOUSE_LIGHTS.length}] = vec4[](${HOUSE_LIGHTS.map(([x, y, z, r]) => `vec4(${f(x)}, ${f(y)}, ${f(z)}, ${f(r)})`).join(', ')});
-const vec3 LAMP_K[${HOUSE_LIGHTS.length}] = vec3[](${HOUSE_LIGHTS.map(([, , , , s, k, z]) => `vec3(${f(s)}, ${f(k)}, ${f(z)})`).join(', ')});
-// (0.4.27) Each light's colour, its room's (houseShape.js ROOM_TONE).
-const vec3 LAMP_C[${HOUSE_LIGHTS.length}] = vec3[](${HOUSE_LIGHTS.map(l => v3(ROOM_TONE[l[6]])).join(', ')});
-const vec3 ROOM_C[${ROOM_TONE.length}] = vec3[](${ROOM_TONE.map(v3).join(', ')});
-const float ROOM_DAY[${ROOM_DAY.length}] = float[](${ROOM_DAY.map(f).join(', ')});
-const float DAY_DOWN[${DAY_DOWN.length}] = float[](${DAY_DOWN.map(f).join(', ')});
-const vec3 STRIP_C[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(l => v3(STRIP_TONE[l[5]])).join(', ')});
-const vec3 STRIP_A[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([a]) => v3(a)).join(', ')});
-const vec3 STRIP_B[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, b]) => v3(b)).join(', ')});
-const vec3 STRIP_D[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, , d]) => { const l = Math.hypot(...d); return v3(d.map(x => x / l)); }).join(', ')});
-const vec3 STRIP_K[${HOUSE_STRIPS.length}] = vec3[](${HOUSE_STRIPS.map(([, , , r, k, z]) => v3([r, k, z])).join(', ')});
+// (0.4.28) Every light and strip (houseLights.js), sorted by room: each
+// room's range in them, and the rooms seen through the front glass, whose
+// lamps light the garden too.
+const vec4 L_P[${LIGHTS.length}] = vec4[](${LIGHTS.map(l => `vec4(${v3(l.p).slice(5, -1)}, ${f(l.r)})`).join(', ')});
+const vec4 L_K[${LIGHTS.length}] = vec4[](${LIGHTS.map(l => `vec4(${f(l.k)}, ${f(l.kind)}, ${f(l.zone)}, ${f(l.day)})`).join(', ')});
+const vec4 L_W[${LIGHTS.length}] = vec4[](${LIGHTS.map(l => `vec4(${f(l.night)}, ${f(l.cat)}, ${f(l.cone ?? 0)}, ${f(l.glow)})`).join(', ')});
+const vec3 L_D[${LIGHTS.length}] = vec3[](${LIGHTS.map(l => v3(l.dir ?? [0, -1, 0])).join(', ')});
+const vec3 L_C[${LIGHTS.length}] = vec3[](${LIGHTS.map(l => v3(l.tone)).join(', ')});
+const ivec2 L_RANGE[${LIGHT_RANGE.length}] = ivec2[](${LIGHT_RANGE.map(([a, b]) => `ivec2(${a}, ${b})`).join(', ')});
+const vec3 S_A[${STRIPS.length}] = vec3[](${STRIPS.map(s => v3(s.a)).join(', ')});
+const vec3 S_B[${STRIPS.length}] = vec3[](${STRIPS.map(s => v3(s.b)).join(', ')});
+const vec4 S_D[${STRIPS.length}] = vec4[](${STRIPS.map(s => { const l = Math.hypot(...s.d); return `vec4(${v3(s.d.map(x => x / l)).slice(5, -1)}, ${f(s.spread)})`; }).join(', ')});
+const vec4 S_K[${STRIPS.length}] = vec4[](${STRIPS.map(s => `vec4(${f(s.r)}, ${f(s.k)}, ${f(s.zone)}, ${f(s.fall)})`).join(', ')});
+const vec4 S_W[${STRIPS.length}] = vec4[](${STRIPS.map(s => `vec4(${f(s.day)}, ${f(s.night)}, ${f(s.cat)}, ${f(s.glow)})`).join(', ')});
+const float S_F[${STRIPS.length}] = float[](${STRIPS.map(s => f(s.fill)).join(', ')});
+const vec3 S_C[${STRIPS.length}] = vec3[](${STRIPS.map(s => v3(s.tone)).join(', ')});
+const ivec2 S_RANGE[${STRIP_RANGE.length}] = ivec2[](${STRIP_RANGE.map(([a, b]) => `ivec2(${a}, ${b})`).join(', ')});
+const vec3 ROOM_C[${ROOM_GLOW_TONE.length}] = vec3[](${ROOM_GLOW_TONE.map(v3).join(', ')});
+const float ROOM_DAY[${ROOM_GLOW_DAY.length}] = float[](${ROOM_GLOW_DAY.map(f).join(', ')});
+const int FRONT_N = ${FRONT_ZONES.length};
+const int FRONT_Z[${FRONT_ZONES.length}] = int[](${FRONT_ZONES.join(', ')});
 
-// The lamps' light at p (normal N, to the eye V), by night: diffuse and a
-// soft highlight of roughness a. (0.4.27) With \`day\`, only the room's own
-// lights, as many and as strong as it keeps on by day (ROOM_DAY).
-vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room, bool day) {
+// (0.4.28) How far on a light is by night as the house turns to it: the
+// coves and lamps first, the accents next, the facade and the garden last
+// (cat 0 – 2).
+float nightOn(float cat) {
+  return cat > 1.5 ? smoothstep(0.45, 1.0, uNight) : cat > 0.5 ? smoothstep(0.2, 0.8, uNight) : smoothstep(0.0, 0.55, uNight);
+}
+
+// One light's at p in room, as on as \`w\`; \`own\` when it's p's room's
+// (else it's seen through the front glass).
+vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own) {
+  vec3 l = L_P[i].xyz;
+  vec3 d = l - p;
+  float r = length(d);
+  int kind = int(L_K[i].y + 0.5);
+  int at = int(L_K[i].z + 0.5);
+  float k = L_K[i].x * w;
+  // Every lamp in a room fills all of it a little, bounced off its walls.
+  vec3 sum = own && at != 0 ? L_C[i] * k * 0.04 : vec3(0.0);
+  if (r > L_P[i].w) return sum;
+  if (!own && !lampSees(l, p, room, at)) return sum;
+  vec3 Ld = d / r;
+  float fall = pow(clamp(1.0 - pow(r / L_P[i].w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
+  // (0.4.28) A lamp's light leaves its whole shade, not a point: close to,
+  // it's softer (a lamp by a wall burned a spot into it).
+  if (kind == 0) fall *= r * r / (r * r + 0.25);
+  // A downlight throws down, in a cone.
+  if (kind == 1 || kind == 3) fall *= mix(0.12, 1.0, smoothstep(0.25, 0.8, Ld.y));
+  // (0.4.6) An uplight throws up, a narrow beam grazing what it's under.
+  if (kind == 4) fall *= smoothstep(0.55, 0.9, -Ld.y) * 1.6;
+  // (0.4.27) A spot throws a tight pool straight down, its edge soft.
+  if (kind == 5) fall *= smoothstep(0.93, 0.985, Ld.y) * 2.4;
+  // (0.4.28) An aimed spot: its beam along its way, its edge soft; and
+  // moonlight, a wide cone down from a tree, broken by its leaves.
+  // A real spot's light fades out past its beam (its field angle), not at
+  // its edge: full within a quarter of the cone, nothing past twice it, so
+  // a pool has no rim (it had one, a stage's oval).
+  if (kind == 6 || kind == 7) {
+    float cone = L_W[i].z;
+    float c = dot(-Ld, L_D[i]);
+    fall *= kind == 6 ? smoothstep(cone - (1.0 - cone), 1.0 - (1.0 - cone) * 0.25, c) * 1.8 : smoothstep(cone, mix(cone, 1.0, 0.3), c);
+    if (kind == 7) fall *= mix(0.2, 1.0, smoothstep(0.4, 0.62, noise2(p.xz * 1.4 + l.xz))) * (0.75 + 0.25 * noise2(p.xz * 6.0));
+  }
+  vec3 H = normalize(Ld + V);
+  float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
+  // (With a share of its light bounced round the room, from every side.)
+  return sum + L_C[i] * k * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));
+}
+
+// The lamps' light at p (normal N, to the eye V): diffuse and a soft
+// highlight of roughness a. (0.4.27) Each as on as it is by night and by
+// day (its \`day\` share, only in its own room). (0.4.28) Only p's room's,
+// and outside the garden's and the front rooms' through the glass.
+vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   vec3 sum = vec3(0.0);
-  for (int i = 0; i < ${HOUSE_LIGHTS.length}; i++) {
-    // (A light that's off.)
-    if (LAMP_K[i].x <= 0.0) continue;
-    vec3 l = LAMPS[i].xyz;
-    vec3 d = l - p;
-    float r = length(d);
-    int kind = int(LAMP_K[i].y + 0.5);
-    int at = int(LAMP_K[i].z + 0.5);
-    float on = 1.0;
-    if (day) {
-      if (at != room) continue;
-      on = kind == 3 ? DAY_DOWN[room] : ROOM_DAY[room];
-      if (on <= 0.0) continue;
+  float dayOn = 1.0 - uNight;
+  ivec2 lr = L_RANGE[room];
+  for (int i = lr.x; i < lr.y; i++) {
+    if (L_K[i].x <= 0.0) continue;
+    float w = L_W[i].x * nightOn(L_W[i].y) + L_K[i].w * dayOn;
+    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true);
+  }
+  if (room == 0 && uNight > 0.0) {
+    for (int f = 0; f < FRONT_N; f++) {
+      ivec2 fr = L_RANGE[FRONT_Z[f]];
+      for (int i = fr.x; i < fr.y; i++) {
+        if (L_K[i].x <= 0.0) continue;
+        float w = L_W[i].x * nightOn(L_W[i].y);
+        if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false);
+      }
     }
-    // Every lamp in a room fills all of it a little, bounced off its walls.
-    if (at != 0 && room == at) sum += LAMP_C[i] * LAMP_K[i].x * 0.04 * on;
-    if (r > LAMPS[i].w) continue;
-    // The soffit's and the porch's downlights light only outside.
-    if (at == 0 && room != 0) continue;
-    if (at != 0 && !lampSees(l, p, room, at)) continue;
-    vec3 Ld = d / r;
-    float fall = pow(clamp(1.0 - pow(r / LAMPS[i].w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
-    // A downlight throws down, in a cone.
-    if (kind == 1 || kind == 3) fall *= mix(0.12, 1.0, smoothstep(0.25, 0.8, Ld.y));
-    // (0.4.6) An uplight throws up, a narrow beam grazing what it's under.
-    if (kind == 4) fall *= smoothstep(0.55, 0.9, -Ld.y) * 1.6;
-    // (0.4.27) A spot throws a tight pool straight down, its edge soft.
-    if (kind == 5) fall *= smoothstep(0.93, 0.985, Ld.y) * 2.4;
-    vec3 H = normalize(Ld + V);
-    float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
-    // (With a share of its light bounced round the room, from every side.)
-    sum += LAMP_C[i] * LAMP_K[i].x * on * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind == 5 ? 0.0 : 0.05) : 0.3));
   }
   // (0.4.6) The LED strips: each lights what's before it along its way,
   // from its nearest point.
-  for (int i = 0; i < ${HOUSE_STRIPS.length}; i++) {
-    int at = int(STRIP_K[i].z + 0.5);
-    if (room != at || STRIP_K[i].y <= 0.0 || (day && (at == 0 || ROOM_DAY[at] <= 0.0))) continue;
-    vec3 a = STRIP_A[i];
-    vec3 ab = STRIP_B[i] - a;
+  ivec2 sr = S_RANGE[room];
+  for (int i = sr.x; i < sr.y; i++) {
+    float w = S_W[i].y * nightOn(S_W[i].z) + S_W[i].x * dayOn;
+    if (S_K[i].y <= 0.0 || w <= 0.0) continue;
+    // (0.4.28) A cove's light (a slot's, a little) bounced round its room.
+    sum += S_C[i] * S_K[i].y * w * S_F[i];
+    vec3 a = S_A[i];
+    vec3 ab = S_B[i] - a;
     vec3 c = a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
     vec3 d = c - p;
     float r = length(d);
-    if (r > STRIP_K[i].x) continue;
+    if (r > S_K[i].x) continue;
     vec3 Ld = d / max(r, 1e-4);
-    float fall = pow(clamp(1.0 - pow(r / STRIP_K[i].x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 2.0);
-    fall *= smoothstep(-0.1, 0.6, dot(-Ld, STRIP_D[i]));
+    float fall = pow(clamp(1.0 - pow(r / S_K[i].x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * S_K[i].w);
+    fall *= smoothstep(S_D[i].w, 0.6, dot(-Ld, S_D[i].xyz));
     // (0.4.26) Nothing behind the face it shines from: not the shelf
     // it's set in.
-    fall *= smoothstep(0.0, 0.015, dot(p - c, STRIP_D[i]));
-    sum += STRIP_C[i] * STRIP_K[i].y * (day ? ROOM_DAY[at] : 1.0) * fall * max(dot(N, Ld), 0.0);
+    fall *= smoothstep(0.0, 0.015, dot(p - c, S_D[i].xyz));
+    sum += S_C[i] * S_K[i].y * w * fall * max(dot(N, Ld), 0.0);
   }
-  return sum * 1.35;
+  // (0.4.28) A fifth down, by night most (overexposed: the owner).
+  return sum * mix(1.35, 1.08, uNight);
 }
 
 // (0.4.27) How a fitting at p glows: as its light is set (the nearest
 // light's colour and strength, a strip's within a few centimetres), so
-// one that's off is dark and a dimmed one dim; \`day\` how much of it is on
-// by day.
-vec3 fittingGlow(vec3 p, int room, out float day) {
+// one that's off is dark and a dimmed one dim, by night and by day.
+vec3 fittingGlow(vec3 p, int room) {
   float best = 1.0;
   vec3 glow = ROOM_C[room];
-  day = room == 0 ? 0.0 : ROOM_DAY[room];
-  for (int i = 0; i < ${HOUSE_LIGHTS.length}; i++) {
-    float r = length(LAMPS[i].xyz - p);
+  float w = uNight + (room == 0 ? 0.0 : ROOM_DAY[room]) * (1.0 - uNight);
+  for (int i = 0; i < ${LIGHTS.length}; i++) {
+    float r = length(L_P[i].xyz - p);
     if (r < best) {
       best = r;
-      glow = LAMP_C[i] * min(LAMP_K[i].x / 0.42, 1.15);
-      int at = int(LAMP_K[i].z + 0.5);
-      day = at == 0 ? 0.0 : int(LAMP_K[i].y + 0.5) == 3 ? DAY_DOWN[at] : ROOM_DAY[at];
+      glow = L_C[i] * L_W[i].w;
+      w = L_W[i].x * nightOn(L_W[i].y) + L_K[i].w * (1.0 - uNight);
     }
   }
-  for (int i = 0; i < ${HOUSE_STRIPS.length}; i++) {
-    vec3 a = STRIP_A[i];
-    vec3 ab = STRIP_B[i] - a;
+  for (int i = 0; i < ${STRIPS.length}; i++) {
+    vec3 a = S_A[i];
+    vec3 ab = S_B[i] - a;
     float r = length(a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0) - p);
     if (r < min(best, 0.08)) {
       best = r;
-      glow = STRIP_C[i] * min(STRIP_K[i].y / 0.42, 1.15);
-      day = ROOM_DAY[int(STRIP_K[i].z + 0.5)];
+      glow = S_C[i] * S_W[i].w;
+      w = S_W[i].y * nightOn(S_W[i].z) + S_W[i].x * (1.0 - uNight);
     }
   }
-  return glow;
+  return glow * w;
 }
 `;
 
@@ -1027,9 +1075,7 @@ void main() {
     alb = vec3(0.92, 0.9, 0.85);
     rough = 0.6;
     // (0.4.27) As its own light is set, by night and by day.
-    float dayOn;
-    vec3 glow = fittingGlow(vWorld, roomOf(vWorld), dayOn);
-    emit = glow * 2.4 * (uNight + dayOn * (1.0 - uNight));
+    emit = fittingGlow(vWorld, roomOf(vWorld)) * 2.4;
     // (0.4.26) A strip of light (variant .5, about a centimetre) smaller
     // than a pixel is in only some of them, and which ones changes as the
     // camera moves: it's given what the pixel would average to (its share
@@ -1098,11 +1144,11 @@ void main() {
   // ceiling first: it comes in warmer and less coloured by the sky.
   if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.6;
   float dim = mix(1.0, 0.3, uNight);
-  vec3 lamps = uNight > 0.0 ? lampsAt(vWorld, N, V, rough, room, false) * uNight : vec3(0.0);
   // (0.4.23) The washrooms keep their lights on by day too (they've only
   // a slot of window; they were dim), less than by night. (0.4.27) And
-  // every room in use its lamps (ROOM_DAY).
-  if (uNight < 1.0 && room != 0) lamps += lampsAt(vWorld, N, V, rough, room, true) * (1.0 - uNight);
+  // every room in use its lamps (ROOM_DAY; houseLights.js each light's
+  // \`day\`).
+  vec3 lamps = lampsAt(vWorld, N, V, rough, room);
   float ao = ambientAt(room);
   open *= ao;
   lamps *= mix(1.0, ao, 0.7);

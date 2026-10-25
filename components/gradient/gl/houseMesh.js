@@ -7,7 +7,9 @@
  * (meshKit.js); the glass panes and the water are houseGlass.js's.
  */
 
-import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, ROOF_DECK, STOREY, TERRACE, WALL, moundY } from './houseShape';
+import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_PART, MOUND, PLAN, POOL, ROOF_DECK, STOREY, TERRACE, WALL, moundY } from './houseShape';
+import { LIGHTS, STRIPS } from './houseLights';
+import { lightFixtures } from './lightFixtures';
 import { ball, barPull, box, grid, lathe, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
 import { drapedTowel, robe, rolledTowels } from './garments';
@@ -161,7 +163,7 @@ export function houseLayout() {
     box(out, [x - 0.05, y - 0.1, z - 0.05], [x + 0.05, y + 0.6, z + 0.05], v(P.brass, 0.6));
     box(out, [x - 0.051, y + 0.5, z - 0.051], [x + 0.051, y + 0.56, z + 0.051], P.lamp);
   }
-  for (const [x, y, z, , , kind] of HOUSE_LIGHTS) if (kind === 4) lathe(out, [x, y - 0.04, z], [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.04], [0.035, 0.04], [0, 0.043]], P.lamp, 14);
+  for (const { p: [x, y, z], mesh } of LIGHTS) if (mesh === 'can') lathe(out, [x, y - 0.04, z], [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.04], [0.035, 0.04], [0, 0.043]], P.lamp, 14);
 
   // ---- The stone base, its forecourt, the steps and their cheek walls.
   box(out, [-9.5, 0.2, -81], [9.5, B, -57.5], P.stone);
@@ -287,11 +289,7 @@ export function houseLayout() {
   holed(out, [ix[0], top - 0.02, iz[0]], [ix[1], top, iz[1]], VOID, P.ceiling);
   groundRooms(out, ix, iz, glass);
   // (0.4.6) The LED strips, each a thin bright line where it's fitted.
-  for (const [a, b, , , , , hidden] of HOUSE_STRIPS) if (!hidden) tube(out, a, b, 0.005, v(P.lamp, 0.5), 6);
-  // The recessed lights in both ceilings (HOUSE_LIGHTS kind 3).
-  for (const [x, y, z, , , kind] of HOUSE_LIGHTS) {
-    if (kind === 3) lathe(out, [x, y + 0.05, z], [0, -1, 0], [[0.075, 0], [0.06, 0.012], [0, 0.012]], P.lamp, 16);
-  }
+  for (const { a, b, mesh } of STRIPS) if (mesh === 'line') tube(out, a, b, 0.005, v(P.lamp, 0.5), 6);
 
   // ---- The terrace slab round the pool's hole, the pool, the deck.
   const sy = [top, T];
@@ -308,7 +306,7 @@ export function houseLayout() {
   box(out, [px0, fl0 - 0.05, pz1], [px1, top, bz1], v(P.slab, 0.3));
   for (const x of [-8.1, 8.1]) box(out, [x - 0.09, B, EDGE - 0.28], [x + 0.09, top, EDGE - 0.1], P.steel);
   // (Only the porch's, under the cantilever: the bollards are kind 1 too.)
-  for (const [x, , z, , , kind] of HOUSE_LIGHTS) if (kind === 1 && z > G.z[1] && z < EDGE) box(out, [x - 0.07, top - 0.012, z - 0.07], [x + 0.07, top, z + 0.07], P.lamp);
+  for (const { p: [x, , z], mesh } of LIGHTS) if (mesh === 'porch') box(out, [x - 0.07, top - 0.012, z - 0.07], [x + 0.07, top, z + 0.07], P.lamp);
   box(out, [-8.4, sy[0], pz0], [px0, sy[1], pz1], P.slab);
   box(out, [px1, sy[0], pz0], [8.4, sy[1], pz1], P.slab);
   // The basin: tiled floor and walls, and steps down at one end.
@@ -438,8 +436,8 @@ export function houseLayout() {
   for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, sf - 0.012, -69.87], [x + 0.07, sf, -69.73], P.lamp);
   // (0.4.27) The bar's spots: a black baffle round a small lens, set up in
   // the boards.
-  for (const [x, , z, , , kind] of HOUSE_LIGHTS) {
-    if (kind !== 5) continue;
+  for (const { p: [x, , z], mesh } of LIGHTS) {
+    if (mesh !== 'barSpot') continue;
     lathe(out, [x, sf, z], [0, -1, 0], [[0.048, 0], [0.04, 0.004], [0.026, 0.004], [0.022, 0.0]], P.frame, 20);
     lathe(out, [x, sf - 0.003, z], [0, -1, 0], [[0.022, 0], [0, 0.002]], P.lamp, 16);
   }
@@ -477,6 +475,8 @@ export function houseLayout() {
     box(out, [x - 0.12, B, zw - 0.12], [x + 0.12, B + 0.012, zw + 0.06], P.frame);
   }
 
+  // (0.4.28) The lighting brief's fittings.
+  lightFixtures(out);
   const data = new Float32Array(out);
   return { data, count: data.length / 9, lawn, glass, mirrors: MIRRORS.map(m => ({ c: [...m.c], n: [...m.n] })) };
 }

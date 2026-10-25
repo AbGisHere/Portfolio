@@ -13,7 +13,7 @@ as the site takes shape.
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
 | `0.3.x` | The desk: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. The descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, ending at a laptop (a tablet on portrait viewports). Its project screen comes in `0.5.x`. |
-| `0.4.x` | Current line — contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form is planned (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes, `0.4.1` the house in 3D, `0.4.2` the house rebuilt room by room, its glass, the pool's water, `0.4.3` caustics, the mirrored house, grass on the hill, contact shadows, `0.4.4` real birds, sliding glass, curtains tied by day and closed by night; `0.4.5` clean frames, wishbone chairs, a marble table, hotel beds, `0.4.6` lighting by night, `0.4.7` the stair, the bookcases, birds by the desk, `0.4.8` books, pillows, marble counters, a glass balustrade, the planters, tied curtains, `0.4.9` limestone paving and steps, daylight indoors, the stair's handrail, `0.4.10` the camera on foot from the desk through the house to the pool (replaced), `0.4.11` the turn made looking straight down over the desk, `0.4.12` the meadow running on behind the house, the hill's lawn its grass, `0.4.13` no stall on the first turn to the house, `0.4.14` no flicker on the kitchen and pictures, the upstairs glass open, curtains untied by night, `0.4.15` CI's hygiene fixed, the house in perf (info), `0.4.16` flowers and grass to the house, twigs, the entrance planting, the land behind, `0.4.17` the roof built up, the olive's pot, the pool inside the glass, brass rails, the stair's rail and lights, `0.4.18` doors' grain, real handles and pulls, mirrors that reflect, `0.4.19` pillows and cushions at rest, the throw clear of the arm, braided ties, `0.4.20` the shelves styled, real frames and prints, the table laid, `0.4.21` garments on hangers, the coat rail, the wardrobe built, `0.4.22` the terrace's bar, sockets and switches, the Home display, `0.4.23` marble washrooms with toilets, wide mirrors and a walk-in shower, `0.4.24` butterflies, the walker designed, `0.4.25` the pool fitted to every frame, `0.4.26` no flicker from afar on frames, rails and the bar's lights, the roof paved, Calacatta veining, mirrors that see out, fireflies, roses on the table, a robe and towels by the pool, `0.4.27` light by room, a table for two, the art varied, the marble cut on purpose. |
+| `0.4.x` | Current line — contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form is planned (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes, `0.4.1` the house in 3D, `0.4.2` the house rebuilt room by room, its glass, the pool's water, `0.4.3` caustics, the mirrored house, grass on the hill, contact shadows, `0.4.4` real birds, sliding glass, curtains tied by day and closed by night; `0.4.5` clean frames, wishbone chairs, a marble table, hotel beds, `0.4.6` lighting by night, `0.4.7` the stair, the bookcases, birds by the desk, `0.4.8` books, pillows, marble counters, a glass balustrade, the planters, tied curtains, `0.4.9` limestone paving and steps, daylight indoors, the stair's handrail, `0.4.10` the camera on foot from the desk through the house to the pool (replaced), `0.4.11` the turn made looking straight down over the desk, `0.4.12` the meadow running on behind the house, the hill's lawn its grass, `0.4.13` no stall on the first turn to the house, `0.4.14` no flicker on the kitchen and pictures, the upstairs glass open, curtains untied by night, `0.4.15` CI's hygiene fixed, the house in perf (info), `0.4.16` flowers and grass to the house, twigs, the entrance planting, the land behind, `0.4.17` the roof built up, the olive's pot, the pool inside the glass, brass rails, the stair's rail and lights, `0.4.18` doors' grain, real handles and pulls, mirrors that reflect, `0.4.19` pillows and cushions at rest, the throw clear of the arm, braided ties, `0.4.20` the shelves styled, real frames and prints, the table laid, `0.4.21` garments on hangers, the coat rail, the wardrobe built, `0.4.22` the terrace's bar, sockets and switches, the Home display, `0.4.23` marble washrooms with toilets, wide mirrors and a walk-in shower, `0.4.24` butterflies, the walker designed, `0.4.25` the pool fitted to every frame, `0.4.26` no flicker from afar on frames, rails and the bar's lights, the roof paved, Calacatta veining, mirrors that see out, fireflies, roses on the table, a robe and towels by the pool, `0.4.27` light by room, a table for two, the art varied, the marble cut on purpose, `0.4.28` the house lit to the lighting brief: floating ceilings, a cascade through the stair's void, statement pieces, every corner lit. |
 | `0.5.x` | The device screen: the projects inside the laptop and the tablet (see "The device screen"; moved here from `0.3.15`+, the owner, 2026-10-24). |
 | `0.6.x` | A header on top of the site to navigate between the sections. |
 | `0.7.x` | Populating the site with the real content. |
@@ -776,7 +776,7 @@ Group related fixes into coherent releases rather than one version per fix.
 Each release below retains the detailed requests and acceptance checks gathered
 so far. Further feedback can extend the plan; visual choices marked open still
 need design exploration within their release. These are planned changes, not
-shipped behavior; the current release stays `0.4.27`. No implementation, commit
+shipped behavior; the current release stays `0.4.28`. No implementation, commit
 or push is part of this planning pass.
 
 | Version | Scope | Acceptance |
@@ -793,8 +793,8 @@ or push is part of this planning pass.
 | `0.4.25` | **Responsive pool framing.** Pool framing on phones and shorter screens — exploratory. Improve how the pool and terrace fit the viewport during the approach and final contact hold. Brainstorm the treatment before implementation: camera distance/pitch and hold framing, responsive pool proportions, or a combination. | The pool reads clearly on phone portrait, phone landscape and short desktop viewports, with useful space for the future contact form. Preserve the continuous, reversible camera path. The specific camera or geometry changes remain undecided; this is a viewport/framing request, not a confirmed performance defect. |
 | `0.4.26` | **The owner's review of `0.4.16`–`0.4.25`, and flicker from afar.** Shipped. The picture frames, the brass rails over the terrace glass and the bar's shelf lights flickered as the camera turned from the desk to the house: the frames' layers sat millimetres apart (the depth buffer can't separate them from 35 m and more), the rails' curve was thinner than a pixel, and the bar's light lit its own shelf's underside. The roof's sedum read as fungus: restyled flat as a paved roof deck. The marble's veins made more like real Calacatta. The mirrors see the outdoors past the windows, softly. Fireflies by night, flowers in the dining vase, a robe and towels by the pool. | No flicker on frames, rails or the bar's lights through the turn to the house, day or night. The roof reads as a crisp, built roof from the pool hold. Washroom marble reads as stone, not drawn lines. A mirror facing a window shows ground, trees and sky. Fireflies only by night, never sub-pixel sparkle. |
 | `0.4.27` | **The interiors' design pass.** Shipped. From the design critique, the owner's four: lighting by room (each its own level and colour, the house lived in from the meadow, lamps on by day in the rooms in use), the table laid for two, the art varied by composition (a canvas, a pair, a tall print), the marble cut on purpose (veins along each slab, the island's waterfall, cladding set out from each room, bookmatches centred); and the details: the WC's slot window cut clear of its marble, walnut's pores along the grain. | From the meadow by night the rooms read at different levels and colours, a few dark. No fitting glows that's off. Each bookmatch's join on its vanity. No marble over glass. |
-| `0.4.28` | **Lighting, every corner (planned).** The owner: about 40% of the house looking premium is how it's lit; at 8/10 now, to 10/10. Researched (layered light in architect-designed homes: ambient, task, accent, decorative; cove, wall-wash and grazing, pendants, night lights) and planned room by room with the owner, then built: rooms with no light of their own yet (the guest room, the walk-in closet, the stair's head, the way to the guest room on the upper floor) and every other corner. | Every room and passage has a deliberate light by night and, where in use, by day. Agreed plan first. |
-| `0.4.29` | **Full-quality loading and optimization.** Progressive loading and scene preparation at full visual quality. Prioritize the opening mountain view, prepare the desk during the mountain section, and prepare the house before its approach. Audit the current loading/rendering architecture first; these are candidate improvements, not confirmed existing bottlenecks. | Measure initial load and frame-time spikes before and after changes. Defer eligible scene-specific code/resources, spread geometry generation and GPU preparation into small scheduled tasks, and reuse prepared geometry/buffers instead of rebuilding them during scrolling. Priorities follow the visitor's position and direction, including fast scrolling and direct entry; retain prepared scenes for smooth reverse scrolling within measured memory limits. Check compression, cache behavior and repeat visits. Preserve the full intended geometry, material quality, grass variation and scene appearance: this release does not authorize reduced detail, lower-resolution rendering or adaptive quality cuts. Verify the complete forward/reverse journey on phones and desktop, with cold and warm caches, both themes and no newly introduced pop-in or stalls. |
+| `0.4.28` | **Lighting, every corner (agreed with the owner 2026-10-25; brief below).** Shipped. The owner: about 40% of the house looking premium is how it's lit; at 8/10, to 10/10. Built to the brief "Lighting brief (`0.4.28`)" under this table, reviewed all at once. | Every room and passage lit to the brief, by night and by day; renders of every space day and night, and the house from the meadow, for one review. |
+| last `0.4` | **Full-quality loading and optimization.** Progressive loading and scene preparation at full visual quality. Prioritize the opening mountain view, prepare the desk during the mountain section, and prepare the house before its approach. Audit the current loading/rendering architecture first; these are candidate improvements, not confirmed existing bottlenecks. | Measure initial load and frame-time spikes before and after changes. Defer eligible scene-specific code/resources, spread geometry generation and GPU preparation into small scheduled tasks, and reuse prepared geometry/buffers instead of rebuilding them during scrolling. Priorities follow the visitor's position and direction, including fast scrolling and direct entry; retain prepared scenes for smooth reverse scrolling within measured memory limits. Check compression, cache behavior and repeat visits. Preserve the full intended geometry, material quality, grass variation and scene appearance: this release does not authorize reduced detail, lower-resolution rendering or adaptive quality cuts. Verify the complete forward/reverse journey on phones and desktop, with cold and warm caches, both themes and no newly introduced pop-in or stalls. |
 
 #### Design and implementation suggestions
 
@@ -847,7 +847,67 @@ boundary if a more enclosed setting is preferred; neither is a fixed design
 decision yet. Check camera sightlines before adding detail and measure the
 completed backdrop against the existing render budget without reducing visual quality.
 
-**Loading and preparation suggestions (`0.4.29`):** distinguish network
+**Lighting brief (`0.4.28`)**, from the research (Sally Storey / John
+Cullen Lighting: choose what not to light, no grid of downlights, see the
+effect never the source, layers each dimmable, accents about 3× ambient,
+art lit at 30°, vertical surfaces lit, door frames and reveals drawing the
+eye on; archviz: rooms at different levels, warm against a blue sky, one
+hero) and the owner's answers:
+
+- **The night story:** an evening of hosting, about 8 pm: living, dining,
+  kitchen and the terrace's bar alive and warm, the bedrooms softly on,
+  nothing fully dark. **Contrast** balanced: clear pools and accents,
+  never gloomy. **Colour** varied by room (as `0.4.27`). **Fittings**
+  mostly hidden (coves, joinery, slots) with a few statements: a cascade
+  of opal globes through the stair's void (both floors), one long
+  brushed-brass linear pendant over the dining table, brass sconces with
+  reading arms by the bed, a brass ring with an opal diffuser in the walk-in
+  closet. Metalwork brushed brass. Strictly warm white; no colour light.
+- **Ceilings:** floating ceilings (a dropped centre, a lit shadow gap round
+  it) in the main rooms; downlights fewer, deep-set and baffled, each aimed
+  at something (a table's centre, flowers, art, a door frame).
+- **Stair:** a strip under every tread, step lights low in its wall every
+  other tread, an LED line in the handrail. **Upstairs passage** (the stair's
+  head, the way to the bedrooms and the guest room): a skirting glow, a
+  picture light on its art, lit door frames to each room. **Lit reveals** at
+  the key doorways (living to hall, bedroom to en-suite, the stair's head)
+  and the big window reveals. **Night lights:** under both beds, the
+  washrooms' toe-kicks, the kitchen's plinths, the passage's skirting.
+- **Living:** the bookcase lit compartment by compartment, a slot grazing
+  the TV wall, an uplight into the fig, a pair of table lamps, the reading
+  lamp. **Dining:** the linear pendant, a light on the canvas. **Kitchen:**
+  mood, its cooking done (pendants and under-cabinet low, plinth glow).
+  **Study:** library mood (the bookcase lit, a reading lamp by the chair,
+  the desk lamp off). **Foyer:** the front door's timber panel washed, its
+  mirror backlit, the door frame uplit.
+- **Main bedroom:** the brass sconces, the headboard's wash and a picture
+  light over the print that lights the pillows too, a floor lamp by the
+  lounge chair, the dresser's mirror backlit. **Walk-in closet:** a warm
+  dressing room (2700–3000 K): light down every bay's sides, over each
+  rail, under the shelves, the brass ring in the middle. **Guest room:** a
+  guest in, winding down (its bedside lamp and the glow under its bed).
+- **Washrooms:** a ceiling slot grazing the bookmatched walls, vertical
+  light either side of each mirror as well as the backlight, a soft cove
+  over the bath, the shower's niche and a low wash over its floor.
+- **Outside:** the interior's glow the hero, a step down from it: the
+  stone base grazed, the timber washed, the soffit's light along the
+  cantilever; moonlighting from the trees (dappled on the lawn and path),
+  step lights in the entrance stairs and the deck's steps; the olive's
+  uplight kept, the other plant uplights dropped. **Terrace:** the bar as
+  `0.4.27`, a glow along the deck's step edges and the pool's coping, low
+  lights by the loungers, a line at the foot of the glass balustrade.
+  **Pool** cool aqua (as now). **Roof:** a faint line under the parapet's
+  coping.
+- **By day:** the statement pieces on low, the washrooms' mirrors and
+  grazing, the coves softly on.
+- **The switch:** the evening scene comes on in order (coves and lamps,
+  then accents, then the facade and the garden), staggered across the
+  switch on its clock.
+- **Budget:** quality first; the final `0.4` release (optimisation) makes
+  it fit 120 fps. Per-room light lists from the start, so each pixel only
+  weighs its own room's lights.
+
+**Loading and preparation suggestions (the last `0.4` release):** distinguish network
 loading from CPU geometry generation, shader compilation and GPU uploads;
 profile each before choosing changes. Make the opening scene usable first,
 then prepare upcoming sections with enough lead time for fast scrolling.
@@ -884,7 +944,7 @@ The mini-bar, sockets and Home display share a lived-in-home release. Finish
 scenery and character design before final phone/short-screen pool framing
 (`0.4.25`). All detailed checks above remain part of their grouped release.
 
-**Optimization is the final release (`0.4.29`).** (Renumbered from `0.4.26`, which took the owner's review of the batch, then from `0.4.27`, which took the interiors' design pass, and `0.4.28` the lighting.) Apply progressive loading,
+**Optimization is the final `0.4` release** (the owner, 2026-10-25: after the lighting, the walk and the contact form, since everything before it is what it optimises). (Renumbered from `0.4.26`, which took the owner's review of the batch, then from `0.4.27`, which took the interiors' design pass, and `0.4.28` the lighting.) Apply progressive loading,
 preparation, caching and reuse to the completed batch, preserving full visual
 quality. Continue normal correctness and performance checks as each feature
 lands; this catches regressions without moving the dedicated optimization pass

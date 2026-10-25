@@ -27,6 +27,21 @@ const PLACES = {
   Guest: { x: 3.2, y: 8.9, z: -76.8, yaw: Math.PI / 2 + 0.3, pitch: 0.15 },
   Terrace: { x: 6.5, y: 8.8, z: -59.2, yaw: Math.PI + 0.55, pitch: 0.25 },
   'Pool, above': { x: 0, y: 14, z: -60.7, yaw: Math.PI, pitch: 1.5 },
+  // (0.4.28) For the lighting's comparison.
+  'From the meadow': { x: 0, y: 6, z: -38, yaw: Math.PI, pitch: 0.03 },
+  Cascade: { x: -4.9, y: 8.9, z: -74.4, yaw: Math.PI * 1.5, pitch: 0.05 },
+  Passage: { x: 1.6, y: 8.9, z: -78.1, yaw: Math.PI * 1.5, pitch: 0.05 },
+  Stair: { x: -4.6, y: 5.3, z: -71.2, yaw: Math.PI + 0.75, pitch: -0.15 },
+};
+
+// (0.4.28) The camera as a query (?cam=x,y,z,yaw,pitch,zoom), to open on
+// a view.
+const camFromQuery = () => {
+  const q = new URLSearchParams(window.location.search).get('cam');
+  const n = q?.split(',').map(Number);
+  if (!n || n.length !== 6 || n.some(x => !Number.isFinite(x))) return null;
+  const [x, y, z, yaw, pitch, zoom] = n;
+  return { x, y, z, yaw, pitch, zoom };
 };
 const SPEED = 2.4;
 
@@ -39,7 +54,7 @@ export default function HouseExplorer() {
     pinDescent({ about: 1, desk: 1, contact: 0.64 });
     // (For the harness: set the camera from the console or a script.)
     window.__houseCam = setFreeCam;
-    setFreeCam({ on: true, ...PLACES.Approach, zoom: 1 });
+    setFreeCam({ on: true, ...PLACES.Approach, zoom: 1, ...camFromQuery() });
     const keys = new Set();
     const down = e => {
       if (e.target instanceof HTMLButtonElement) return;
