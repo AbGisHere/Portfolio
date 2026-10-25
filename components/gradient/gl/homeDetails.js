@@ -18,7 +18,9 @@
  */
 
 import { HOUSE_PART } from './houseShape';
-import { add, ball, barPull, box, cross, lathe, obox, soft, tube, unit } from './meshKit';
+import { add, axes, ball, barPull, box, cross, lathe, obox, soft, tube, unit } from './meshKit';
+import { isLivedIn } from './houseStyling';
+import { lemon } from './furniture';
 
 const P = HOUSE_PART;
 const v = (part, k) => part + Math.min(0.9, Math.max(0, k));
@@ -95,10 +97,24 @@ export function miniBar(out, y, wall, [x0, x1]) {
   box(out, [x0 - 0.02, y + h - 0.04, wall], [x1 + 0.02, y + h, front + 0.04], v(P.marble, 0));
   // On it: a tray with two tumblers and a shaker, a bowl of lemons.
   box(out, [x0 + 0.5, y + h, wall + 0.2], [x0 + 0.85, y + h + 0.012, wall + 0.42], v(P.walnut, 0.2));
-  for (const [tx, tz] of [[x0 + 0.58, wall + 0.3], [x0 + 0.66, wall + 0.34]]) lathe(out, [tx, y + h + 0.012, tz], [0, 1, 0], [[0, 0], [0.034, 0], [0.038, 0.09], [0.034, 0.09], [0.03, 0.006], [0, 0.006]], v(P.ceramic, 0.3), 20);
+  for (const [tx, tz] of [[x0 + 0.58, wall + 0.3], [x0 + 0.66, wall + 0.34]]) {
+    lathe(out, [tx, y + h + 0.012, tz], [0, 1, 0], [[0, 0], [0.034, 0], [0.038, 0.09], [0.034, 0.09], [0.03, 0.006], [0, 0.006]], v(P.ceramic, 0.3), 20);
+    if (isLivedIn()) {
+      // (0.4.31) Ice in the tumblers (a clear cube) catching the shelf light
+      obox(out, [tx, y + h + 0.036, tz], [0.016, 0.016, 0.016], v(P.ceramic, 0.3), axes(0.2, 0.4));
+    }
+  }
   lathe(out, [x0 + 0.77, y + h + 0.012, wall + 0.3], [0, 1, 0], [[0, 0], [0.04, 0], [0.045, 0.14], [0.03, 0.2], [0.018, 0.24], [0, 0.245]], v(P.steel, 0.5), 20);
   lathe(out, [x1 - 0.9, y + h, wall + 0.3], [0, 1, 0], [[0, 0], [0.06, 0], [0.13, 0.07], [0.135, 0.085], [0.125, 0.085], [0.06, 0.015], [0, 0.015]], v(P.ceramic, 0.5), 24);
-  for (let k = 0; k < 4; k++) ball(out, [x1 - 0.9 + Math.cos(k * 1.7) * 0.05, y + h + 0.05 + (k === 3 ? 0.04 : 0), wall + 0.3 + Math.sin(k * 1.7) * 0.05], 0.035, P.fruit, 10, 6);
+  if (!isLivedIn()) {
+    for (let k = 0; k < 4; k++) ball(out, [x1 - 0.9 + Math.cos(k * 1.7) * 0.05, y + h + 0.05 + (k === 3 ? 0.04 : 0), wall + 0.3 + Math.sin(k * 1.7) * 0.05], 0.035, P.fruit, 10, 6);
+  } else {
+    // (0.4.31) Real lemons (shaped, dimpled peel, a nub at each end)
+    for (let k = 0; k < 4; k++) {
+      const a = k * 1.6 + 0.3;
+      lemon(out, [x1 - 0.9 + Math.cos(a) * 0.045, y + h + 0.052 + (k === 3 ? 0.035 : 0), wall + 0.3 + Math.sin(a) * 0.045], axes(0.25, a));
+    }
+  }
   // The shelves on the timber over it: walnut, floating, a strip of light
   // under each front, bottles and glasses along them.
   for (const [sy, seed] of [[y + 1.38, 3], [y + 1.78, 7]]) {

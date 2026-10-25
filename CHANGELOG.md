@@ -6,6 +6,21 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.31 — 2026-10-26
+
+Styling: the lived-in pass across the house.
+
+- **Foyer:** floating walnut shelf under the mirror with turned-brass key tray; stoneware umbrella stand by the door; coir matting set flush in a brass frame at the threshold.
+- **Living:** fluted walnut acoustic slats floor-to-ceiling behind the TV; coffee table group of three (plain oversized books stacked off-angle with ribbon marker, ribbed smoked-glass candle with dark wick, soapstone bowl with brass spheres); corner-draped sofa throw with fringe.
+- **Dining:** brushed-brass napkin rings; ribbed crystal water tumbler by each wine glass; arching olive branch in table roses.
+- **Kitchen:** fluted walnut island tambour on knee-side; turned walnut salt cellar with brass spoon; secondary prep tap on island; dimpled organic lemons.
+- **Study:** stitched saddle-leather blotter; turned brass pen cup with steel ruler; open linen sketchbook with ribbon marker.
+- **WC & En-suite:** champagne-bronze cross-handle taps; amber apothecary soap bottle; rolled waffle towels in walnut basket; 3 folded white bath sheets in open vanity cubby; slatted teak bath bridge with waffle washcloth, sponge, and candle.
+- **Stair & Landing:** 5 mm dark wall recess shadow gap per tread; charred-wood plinth with bronze sculpture on landing.
+- **Bed & Closet:** crystal bedside carafe with upturned tumbler + brass valet tray on left nightstand; open hardcover book face-down on right nightstand; open wardrobe drawer with segmented velvet watch/jewellery organizer; angled shoe shelf with brass heel stops.
+- **Terrace & Bar:** limestone drum table with chilled tumblers and lime wedges; clear ice cubes and real lemons in bar.
+- **Compare tool (`/house`):** interactive HUD toggle button in the dev `/house` viewer to live hot-swap buffers between 0.4.31 (Lived-in) and 0.4.28 (Classic).
+
 ## 0.4.30 — 2026-10-25
 
 The house's lights fixed on Adreno phones, and `0.4.29` undone.
