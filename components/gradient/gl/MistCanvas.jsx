@@ -50,13 +50,14 @@ import { HOUSE_BOUNDS, MOUND, POOL, moundY } from './houseShape';
 const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, POOL.at[2] - POOL.d / 2 - 0.5], [POOL.at[0] + POOL.w / 2 + 0.5, POOL.at[1] + 0.3, POOL.at[2] + POOL.d / 2 + 0.5]];
 const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
 import { makeWater } from './poolWater';
-import { PROBE, PROBE_FACES, makeProbes, probeLayout } from './mirrorProbe';
+import { PROBE, PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX, PROBE_FACES, makeProbes, probeLayout } from './mirrorProbe';
 import { personMesh } from './personMesh';
 import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
 import { BIRD_STRIDE, birdMesh } from './birdShape';
 import { BIRD_INSTANCE, birdsAt } from './birdFlight';
 import { butterfliesAt, butterflyMesh } from './butterflies';
+import { firefliesAt, fireflyMesh } from './fireflies';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
@@ -665,9 +666,10 @@ export default function MistCanvas({ recipe, onFail }) {
       if (birdPass !== null) return birdPass;
       const bp = passProgram(gl, 'birds', BIRD_VERTEX, BIRD_FRAGMENT);
       if (!bp) return (birdPass = false);
-      // (0.4.24) And the butterflies, a fourth kind.
-      const kinds = ['swallow', 'kite', 'goose', 'butterfly'].map((name, kind) => {
-        const { data, count } = name === 'butterfly' ? butterflyMesh() : birdMesh(name);
+      // (0.4.24) And the butterflies, a fourth kind; (0.4.26) the
+      // fireflies a fifth, last (their light is added on).
+      const kinds = ['swallow', 'kite', 'goose', 'butterfly', 'firefly'].map((name, kind) => {
+        const { data, count } = name === 'butterfly' ? butterflyMesh() : name === 'firefly' ? fireflyMesh() : birdMesh(name);
         const mb = gl.createBuffer();
         const ib = gl.createBuffer();
         const vao = gl.createVertexArray();
@@ -685,18 +687,20 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.vertexAttribDivisor(i, 1);
         }
         gl.bindVertexArray(null);
-        return { name, kind, vao, mb, ib, count, joints: jointsOf(name) };
+        return { name, kind, vao, mb, ib, count, joints: name === 'firefly' ? { shoulder: [0, 0, 0], wrist: 0 } : jointsOf(name) };
       });
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       const BU = {};
       birdPass = { prog: bp, kinds, u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
       return birdPass;
     };
-    function drawBirds() {
+    // (0.4.26) `glow`: the fireflies alone, added on after the sky's pass
+    // (which would paint over them where they're before it), by night.
+    function drawBirds(glow = false) {
       const g = birdProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
-      const flocks = { ...birdsAt(skyT, birdWeight), butterfly: butterfliesAt(skyT, birdWeight) };
+      const flocks = glow ? { firefly: firefliesAt(skyT, houseNight()) } : { ...birdsAt(skyT, birdWeight), butterfly: butterfliesAt(skyT, birdWeight) };
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
@@ -713,8 +717,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
+      if (glow) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.depthMask(false);
+      }
       for (const k of g.kinds) {
         const data = flocks[k.name];
+        if (!data) continue;
         gl.bindBuffer(gl.ARRAY_BUFFER, k.ib);
         gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
         gl.uniform1i(g.u('uKind'), k.kind);
@@ -722,6 +732,10 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1f(g.u('uWrist'), k.joints.wrist);
         gl.bindVertexArray(k.vao);
         gl.drawArraysInstanced(gl.TRIANGLES, 0, k.count, data.length / BIRD_INSTANCE);
+      }
+      if (glow) {
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -865,6 +879,8 @@ export default function MistCanvas({ recipe, onFail }) {
     // clock, seconds on this loop's clock while it shows.
     let lifeShown = false;
     let birdWeight = 0;
+    // (0.4.26) Whether the fireflies were drawn (they keep the frames coming).
+    let fliesOn = false;
     // (0.3.2) The meadow's paint is in the frame (its wind and clouds move).
     let meadowShown = false;
     // What the meadow pass draws with, from the last rebuild (null: none).
@@ -1925,6 +1941,15 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1fv(g.u('uProbeReady'), set.map(m => (m.faces >= 6 || m.night >= 0 ? 1 : 0)));
     }
     // One face of the probe most in need of it, if any is (true: drawn).
+    let backdrop = null;
+    const probeBackdrop = () => {
+      if (backdrop !== null) return backdrop;
+      const bp = passProgram(gl, 'probe backdrop', PROBE_BACKDROP_VERTEX, PROBE_BACKDROP_FRAGMENT);
+      if (!bp) return (backdrop = false);
+      const BU = {};
+      backdrop = { prog: bp, vao: gl.createVertexArray(), u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
+      return backdrop;
+    };
     function probeStep() {
       const pr = mirrorProbes();
       if (!pr || !houseProgram()) return false;
@@ -1954,7 +1979,28 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LESS);
       gl.disable(gl.BLEND);
-      pr.face(k, f, rgb01(sky[1]), () => drawHouse(false, false, view));
+      // (0.4.26) The house, its lawn, then the outdoors where they left the
+      // face empty.
+      pr.face(k, f, rgb01(sky[1]), () => {
+        drawHouse(false, false, view);
+        drawHouse(false, true, view);
+        const b = probeBackdrop();
+        if (!b) return;
+        gl.useProgram(b.prog);
+        gl.uniform2f(b.u('uYP'), yaw, pitch);
+        gl.uniform3fv(b.u('uTop'), rgb01(sky[0]));
+        gl.uniform3fv(b.u('uLow'), rgb01(sky[1]));
+        gl.uniform3fv(b.u('uHaze'), rgb01(meadowAt.mist ?? sky[1]));
+        gl.uniform1f(b.u('uNight'), night);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
+        gl.bindVertexArray(b.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+        gl.useProgram(prog);
+      });
       gl.viewport(0, 0, canvas.width, canvas.height);
       m.faces = f + 1;
       if (m.faces === 6) m.night = night;
@@ -2350,6 +2396,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (deskOn && !noProps) drawSteam();
       gl.depthMask(true);
       if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
+      // (0.4.26) The fireflies by night (fireflies.js), added on.
+      fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
+      if (fliesOn) drawBirds(true);
       // (0.4.6) By night round the house, the bright spills a glow.
       const night = houseNight();
       if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
@@ -2434,7 +2483,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (groundShown && !motion.matches && !frozen) windPhase += dt * WIND.speed;
       // The closing sky, the meadow and the grass in the wind move every frame, not on
       // the idle tick; so do footprints springing back.
-      const living = ((lifeShown || !!grassAt || meadowShown || poolSeen) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
+      const living = ((lifeShown || !!grassAt || meadowShown || poolSeen || fliesOn) && !motion.matches && !frozen) || (!!grassAt && walker.live(performance.now() / 1000).length > 0);
       if (living) skyT += dt;
       // A scroll, a switch or the spring redraws every frame; at rest the
       // drift, the wind and the veils share one IDLE_HZ tick.

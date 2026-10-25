@@ -10,8 +10,10 @@
  * The probes are drawn a face at a time, one a frame, while the house is
  * in view and its mirror within REACH of the camera; drawn again as the
  * day/night switch relights the house. Inside a probe the mirrors show
- * their plain glass (no mirror in a mirror). What's past a window shows
- * as the sky's colour.
+ * their plain glass (no mirror in a mirror). (0.4.26) What's past a
+ * window shows the outdoors, softly: the hill's lawn round the house,
+ * then a backdrop (PROBE_BACKDROP) of the sky, the woods' crowns along the
+ * horizon, hazed, and the meadow under it (it was the sky's colour alone).
  */
 
 import { FLOOR, STOREY, ZONES } from './houseShape';
@@ -184,3 +186,55 @@ export function makeProbes(gl, unit) {
     },
   };
 }
+
+/**
+ * (0.4.26) The outdoors behind a probe's face, wherever the house and its
+ * lawn left it empty (drawn at the far plane, depth LEQUAL): the sky above
+ * the horizon, a band of tree crowns of uneven height along it, the meadow
+ * below, all fading into the haze toward the horizon; darker by night.
+ * `uYP` the face's yaw and pitch (PROBE_FACES).
+ */
+export const PROBE_BACKDROP_VERTEX = `#version 300 es
+out vec2 vP;
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)) * 2.0 - 1.0;
+  vP = p;
+  gl_Position = vec4(p, 1.0, 1.0);
+}
+`;
+
+export const PROBE_BACKDROP_FRAGMENT = `#version 300 es
+precision highp float;
+in vec2 vP;
+uniform vec2 uYP;
+uniform vec3 uTop;
+uniform vec3 uLow;
+uniform vec3 uHaze;
+uniform float uNight;
+out vec4 outColor;
+float h1(float x) { return fract(sin(x * 127.1) * 43758.5453); }
+float n1(float x) {
+  float i = floor(x);
+  float f = fract(x);
+  return mix(h1(i), h1(i + 1.0), f * f * (3.0 - 2.0 * f));
+}
+void main() {
+  float y = uYP.x;
+  float p = uYP.y;
+  vec3 f = vec3(sin(y) * cos(p), -sin(p), cos(y) * cos(p));
+  vec3 r = vec3(cos(y), 0.0, -sin(y));
+  vec3 u = vec3(sin(y) * sin(p), cos(p), cos(y) * sin(p));
+  vec3 d = normalize(f + r * vP.x + u * vP.y);
+  float az = atan(d.x, d.z);
+  float lit = mix(1.0, 0.22, uNight);
+  vec3 sky = mix(uLow, uTop, smoothstep(0.0, 0.6, d.y));
+  // Each crown a rounded bump, their heights uneven.
+  float k = az * 40.0;
+  float bump = sqrt(max(0.0, 1.0 - pow(fract(k) * 2.0 - 1.0, 2.0)));
+  float crown = 0.02 + 0.045 * n1(az * 7.0) + (0.012 + 0.03 * h1(floor(k))) * bump;
+  vec3 trees = mix(vec3(0.17, 0.25, 0.12) * lit, uHaze, 0.5);
+  vec3 meadow = mix(vec3(0.3, 0.42, 0.17) * lit, uHaze, exp(d.y * 10.0) * 0.8);
+  vec3 col = d.y < 0.0 ? meadow : d.y < crown ? mix(trees, sky, smoothstep(crown - 0.01, crown, d.y)) : sky;
+  outColor = vec4(col, 1.0);
+}
+`;

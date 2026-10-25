@@ -16,6 +16,7 @@ import { BLOOM_PROGRAMS } from '../../components/gradient/gl/bloom.js';
 import { BIRD_FRAGMENT, BIRD_VERTEX } from '../../components/gradient/gl/birdShader.js';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX } from '../../components/gradient/gl/houseShadow.js';
 import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/houseGlass.js';
+import { PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX } from '../../components/gradient/gl/mirrorProbe.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
 import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
@@ -34,6 +35,7 @@ export const PROGRAMS = [
   ['house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT],
   ['house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT],
   ['house-glass', GLASS_VERTEX, GLASS_FRAGMENT],
+  ['probe-backdrop', PROBE_BACKDROP_VERTEX, PROBE_BACKDROP_FRAGMENT],
   ...WATER_PROGRAMS,
   ...BLOOM_PROGRAMS,
   ['birds', BIRD_VERTEX, BIRD_FRAGMENT],

@@ -37,6 +37,11 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
 - **Foyer** (x 4.6 … 7.72, z −63.28 … −67.5): the front door in the timber
   panel, a bench, a mirror, a walnut hook rail with two coats on hangers
   and a scarf over the middle hook (`0.4.21`).
+- **Marble** (`0.4.26`): Calacatta, its veins the level lines of a
+  folded, domain-warped field (they meander, fork and rejoin, down one
+  diagonal): bold main veins of uneven width with a soft grey halo, broken
+  in places and touched with gold, finer veins between, hairline threads,
+  each drawn to its pixel's share.
 - **WC** (x 4.6 … 7.72, z −67.5 … −71.5): Italian marble on every wall and
   the floor (`washrooms.js`, `0.4.23`), a wall-hung toilet on its marble
   ledge, a floating vanity under a 3 : 1 mirror lit from behind; its door
@@ -107,10 +112,22 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   from the garden, so things are built as they're made. Cabinet and drawer
   fronts are 19 mm doors 2 mm off their carcasses (`DOOR`, `HINGE` in
   `furniture.js`); pictures (`0.4.20`) are a stepped walnut moulding (a
-  raised lip, two steps down) round a back board, a brass slip, a mount
-  with a bevel-cut window and the print behind it, each print its own soft
-  abstract under a glass sheen; a mirror's glass and the TV's
+  raised lip, two steps down), a brass slip, a mount with a bevel-cut
+  window and the print in it, each print its own soft abstract under a
+  glass sheen (`0.4.26`: no back board, the print only in the window, the
+  mount and print solid back to the wall and the bevel a slope between
+  them, so no two faces in a picture lie within a centimetre: from the
+  desk they flickered through each other); a mirror's glass and the TV's
   sit in their frames' rebates; frames clear their openings by 2 mm.
+- **Seen from afar** (`0.4.26`, `houseShader.js`): where a surface's
+  normal turns within a pixel (a brass rail, a slip, seen from the desk)
+  its highlight is widened by that turn and its normal bent toward the
+  eye, so it's lit as its average rather than flashing pixel by pixel; a
+  strip of light (`P.lamp` variant `.5`) thinner than a pixel gives only
+  its share of it. Strips are set into the shelves they light, and a
+  strip lights nothing behind the face it shines from. Details of a few
+  millimetres (the deck's screws, the marble's hairlines) fade out by
+  pixel size; they show only up close (`/house`).
 - **Soft things rest where they're held** (`0.4.19`): each pillow and
   cushion stands with its foot on what's under it and leans back
   (tilt π/2 + its lean) against what's behind it: the bed's euros on the
@@ -126,7 +143,10 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   a few lit, the climate's dial), glowing.
 - **Styling** (`0.4.20`): the dining table laid for eight (`placeSetting()`:
   a plate on a charger, a napkin under the fork, a knife and a spoon) round
-  a thrown stoneware vase (`vase()`); the bookcase leaves about one
+  a thrown stoneware vase (`vase()`) of garden roses, cream to blush, and
+  silver-dollar eucalyptus (`bouquet()` in `plantMesh.js`, `0.4.26`: each
+  rose its petals in three rings, cupped round a closed centre, the outer
+  opening); the bookcase leaves about one
   compartment in five to a single piece (a tall bottle and a small vessel,
   a brass sphere on a stone block, a print propped), its flat stacks topped
   by a brass dish or a small pot.
@@ -142,7 +162,10 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   probe there, so the reflection moves with the viewing angle. Faces are
   drawn one a frame while the house is in view and the mirror within
   28 m, and again as the switch relights the house; inside a probe the
-  mirrors are plain glass. `?mirror=0` turns them off with the pool's.
+  mirrors are plain glass. Past a window a probe shows the outdoors,
+  softly (`0.4.26`): the hill's lawn, then a backdrop pass
+  (`PROBE_BACKDROP`) of the sky, the woods' crowns along the horizon and
+  the meadow, hazed. `?mirror=0` turns them off with the pool's.
 
 ## Outside
 
@@ -168,18 +191,27 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   porch's roof), frameless glass round the open sides capped by a
   brushed-brass rail, loungers, an olive in a thrown stoneware pot (dark
   glaze, rolled lip, soil inside it), its uplight on the deck beside it.
+  By the loungers (`garments.js`, `0.4.26`): a navy-and-white striped towel
+  thrown over the far one's foot (`drapedTowel`), white towels rolled on
+  the table between (`rolledTowels`), and a white towelling robe on a
+  brass hook on the timber wall past the bar, its belt tied (`robe`).
 - **The bar** (`homeDetails.js`, `0.4.22`): against the timber wall
   beside the bedroom's glass, facing the pool: a walnut counter with a
   stone top, doors with brass pulls and a glass-fronted wine fridge, two
   floating shelves of bottles and stemmed glasses lit from under (two
-  `HOUSE_STRIPS`), a tray, a bowl of lemons, two stools. Two of the
+  `HOUSE_STRIPS`, their light lines at the strips set into the shelves'
+  undersides, `0.4.26`), a tray, a bowl of lemons, two stools. Two of the
   terrace's uplights moved out from under it.
 - **The roof** (`0.4.17`): the slab, then a fascia in two layers (a deep
   band of render, a shadow gap, a bronzed coping standing up as a low
   parapet); a recessed soffit of timber boards over the terrace and round
-  the sides, its downlights in it; sedum inside the parapet (`roof` part)
-  with a gravel margin; two scuppers at the back into downpipes that run
-  back under the soffit and down the wall.
+  the sides, its downlights in it; inside the parapet (`0.4.26`; it was
+  sedum, which read as fungus from the pool) a deck of large pale
+  porcelain pavers on pedestals in a stack bond (`ROOF_DECK`, 18 × 16, the
+  open joints and each paver's tone drawn by the shader), 1.5 cm proud of
+  a margin of dark basalt gravel, and two frameless skylights on bronze
+  upstands laid to its joints; two scuppers at the back into downpipes
+  that run back under the soffit and down the wall.
 
 ## The person (`0.4.24`, the design)
 

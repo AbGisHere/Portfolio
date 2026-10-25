@@ -103,7 +103,10 @@ export function miniBar(out, y, wall, [x0, x1]) {
   // under each front, bottles and glasses along them.
   for (const [sy, seed] of [[y + 1.38, 3], [y + 1.78, 7]]) {
     box(out, [x0 + 0.15, sy, wall], [x1 - 0.15, sy + 0.035, wall + 0.24], v(P.walnut, 0.25));
-    box(out, [x0 + 0.17, sy - 0.01, wall + 0.19], [x1 - 0.17, sy, wall + 0.215], P.lamp);
+    // (0.4.26) Set in a groove in the shelf's underside, its face 2 mm
+    // below it: hung a centimetre under, it showed from the desk as a
+    // sliver thinner than a pixel, there one frame and gone the next.
+    box(out, [x0 + 0.17, sy - 0.002, wall + 0.19], [x1 - 0.17, sy + 0.012, wall + 0.215], v(P.lamp, 0.5));
     let s = seed;
     const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
     let bx = x0 + 0.25;

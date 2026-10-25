@@ -147,6 +147,21 @@ export const HOUSE_LIGHTS = [
 ];
 
 /**
+ * (0.4.26) The roof's deck: large-format porcelain pavers on pedestals in a
+ * stack bond, `n` across x and z, inside the parapet's gravel margin.
+ */
+export const ROOF_DECK = (() => {
+  const R = PLAN.roof;
+  const x = [R.x[0] + 0.34, R.x[1] - 0.34];
+  const z = [R.z[0] + 0.34, R.z[1] - 0.34];
+  const n = [18, 16];
+  return { x, z, n, cell: [(x[1] - x[0]) / n[0], (z[1] - z[0]) / n[1]] };
+})();
+
+// The bar's shelf strips' line: in front of its wall (homeDetails.js).
+const BAR_STRIP_Z = PLAN.upper.z[1] + 0.04 + 0.2025;
+
+/**
  * (0.4.6) The LED strips by night: [a (x, y, z), b, the way they shine
  * (x, y, z), radius, strength, zone]: under the kitchen's wall units and
  * along its toe-kicks and the island's, along the stair's treads, washing
@@ -175,8 +190,11 @@ export const HOUSE_STRIPS = [
   [[6.3, TERRACE + 1.48, -74.8], [6.9, TERRACE + 1.48, -74.8], [0, -1, 0.3], 0.6, 0.5, 6, true],
   // (0.4.22) The terrace's bar: under its two shelves, and under its
   // counter's lip onto the deck.
-  [[3.5, TERRACE + 1.42, -70.75], [6.3, TERRACE + 1.42, -70.75], [0, -1, 0.5], 1.3, 0.7, 0, true],
-  [[3.5, TERRACE + 1.82, -70.75], [6.3, TERRACE + 1.82, -70.75], [0, -1, 0.5], 1.1, 0.5, 0, true],
+  // (0.4.26) At the strips themselves, set in the shelves' undersides
+  // (it was at the wall a centimetre under, lighting the shelf's own
+  // underside hot: a pixel's row that came and went from the desk).
+  [[3.5, TERRACE + 1.425, BAR_STRIP_Z], [6.3, TERRACE + 1.425, BAR_STRIP_Z], [0, -1, 0.15], 1.3, 0.7, 0, true],
+  [[3.5, TERRACE + 1.825, BAR_STRIP_Z], [6.3, TERRACE + 1.825, BAR_STRIP_Z], [0, -1, 0.15], 1.1, 0.5, 0, true],
   // (0.4.21) The wardrobe's, under the shelf over each rail, down its run.
   [[-4.3, TERRACE + 2.07, -76.9], [2.4, TERRACE + 2.07, -76.9], [0, -1, -0.5], 1.3, 0.7, 5, true],
   [[-4.3, TERRACE + 1.11, -76.9], [2.4, TERRACE + 1.11, -76.9], [0, -1, -0.5], 1.0, 0.45, 5, true],

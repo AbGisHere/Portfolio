@@ -295,3 +295,71 @@ export function trailing(out, edge, dir, len, seed) {
     }
   }
 }
+
+/**
+ * (0.4.26) Cut flowers for a vase, `c` the middle of its mouth: garden
+ * roses, cream to blush, on stems leaning out of the neck in a loose dome,
+ * a few still half-open; sprigs of silver-dollar eucalyptus between them,
+ * arching further out. Each rose its petals in rings, the inner cupped
+ * tight round a closed centre, the outer opening and curling back. (The
+ * petals the leaf part's .99, houseShader.js; the eucalyptus its blue-
+ * green .3; the stems .68.)
+ */
+export function bouquet(out, c, seed) {
+  const rnd = seeded(seed);
+  const stem = (a, lean, len) => {
+    const d = unit([Math.cos(a) * Math.sin(lean), Math.cos(lean), Math.sin(a) * Math.sin(lean)]);
+    const foot = add(c, [0, -0.12, 0]);
+    const pts = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      // Straight up the neck, then leaning out, bowing a little.
+      const out1 = Math.max(0, t - 0.25) / 0.75;
+      pts.push(add(add(foot, [0, len * t, 0]), [d[0], 0, d[2]], len * Math.sin(lean) * out1 * out1 * 1.1 + 0.008 * t));
+    }
+    return pts;
+  };
+  const rose = (top, up, r, open) => {
+    ball(out, add(top, up, r * 0.15), r * 0.32, LEAF + 0.99, 10, 6);
+    const rings = [[6, 0.62, -0.05, 2.0], [8, 0.82, 0.12, 1.7], [10, 0.98, 0.3 + 0.3 * open, 1.1]];
+    rings.forEach(([n, size, flare, cup], ring) => {
+      const az0 = rnd() * Math.PI * 2;
+      for (let k = 0; k < n; k++) {
+        const az = az0 + ((k + ring * 0.5) / n) * Math.PI * 2;
+        const side = [Math.cos(az), 0, Math.sin(az)];
+        const s = unit(add(side, up, -(side[0] * up[0] + side[2] * up[2])));
+        const dir = unit(add(up, s, flare));
+        const face = unit(add(s, up, -flare * 0.6));
+        leaf(out, add(add(top, s, r * 0.14 * (ring + 0.6)), up, -r * 0.18 * ring), dir, face, r * size * 1.05, r * size * 1.15, oval, cup * 0.35, -0.06 * ring * open, 0.99);
+      }
+    });
+  };
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + rnd() * 0.6;
+    const lean = i === 0 ? 0.06 : 0.35 + 0.25 * rnd();
+    const len = 0.29 + 0.06 * rnd() - (i === 0 ? 0 : 0.03);
+    const pts = stem(a, lean, len);
+    sweep(out, pts, 0.0035, LEAF + 0.68, { seg: 5 });
+    const up = unit(add(pts[6], pts[5], -1));
+    rose(pts[6], up, 0.042 + 0.01 * rnd(), rnd());
+    // A leaf or two under the head.
+    const at = pts[4];
+    const la = a + 1.5 + rnd();
+    const d = unit([Math.cos(la), 0.4, Math.sin(la)]);
+    leaf(out, at, d, unit(add([0, 1, 0], d, -0.4)), 0.07, 0.04, oval, 0.2, 0.2, 0.0);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.4 + rnd() * 0.5;
+    const pts = stem(a, 0.75 + 0.25 * rnd(), 0.26 + 0.06 * rnd());
+    sweep(out, pts, 0.0022, LEAF + 0.68, { seg: 4 });
+    for (let k = 2; k <= 6; k++) {
+      const p = pts[k];
+      const along = unit(add(pts[Math.min(6, k + 1)], pts[k - 1], -1));
+      const sideA = unit(cross(along, [0, 1, 0]));
+      for (const s of [-1, 1]) {
+        const d = unit(add(sideA, along, 0.3 * s));
+        leaf(out, p, scale(d, s), unit(add([0, 1, 0], along, -0.3)), 0.05 - 0.004 * k, 0.046 - 0.004 * k, oval, 0.1, 0.1, 0.3);
+      }
+    }
+  }
+}

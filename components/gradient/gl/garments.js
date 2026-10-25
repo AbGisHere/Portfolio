@@ -17,12 +17,15 @@
  *   ends falling either side, one longer, fringed.
  * - **Folded** (`foldedStack`): each piece a slab with its folded front
  *   edge rolled round, a hair of sag, no two the same size or colour.
+ * - **By the pool** (0.4.26): a white towelling robe on a brass hook, its
+ *   belt tied (`robe`); a striped towel thrown over a lounger's foot
+ *   (`drapedTowel`); white towels rolled on a table (`rolledTowels`).
  *
  * In the garment's frame: x across its shoulders, y up, z its front.
  */
 
 import { HOUSE_PART } from './houseShape';
-import { add, axes, ball, grid, scale, soft, sweep, tube } from './meshKit';
+import { add, axes, ball, grid, lathe, scale, soft, sweep, tube } from './meshKit';
 
 const P = HOUSE_PART;
 const v = (part, k) => part + Math.min(0.9, Math.max(0, k));
@@ -33,6 +36,8 @@ const KINDS = {
   coat: { sh: 0.24, len: 1.02, body: [0.27, 0.31], neck: 0.085, slope: 0.045, sleeve: [0.68, 0.058, 0.046], thick: 0.026, collar: true, buttons: 4 },
   dress: { sh: 0.16, len: 1.0, body: [0.17, 0.33], neck: 0.07, slope: 0.035, sleeve: null, thick: 0.01, waist: [0.36, 0.14] },
   trousers: { sh: 0.19, len: 0.56, body: [0.19, 0.17], neck: 0, slope: 0, sleeve: null, thick: 0.014, over: true },
+  // (0.4.26) A bathrobe: long, roomy, thick towelling, its sleeves wide.
+  robe: { sh: 0.25, len: 1.1, body: [0.29, 0.34], neck: 0.09, slope: 0.05, sleeve: [0.6, 0.075, 0.068], thick: 0.034, collar: true },
 };
 
 /** The hanger at the frame's origin (its hook's eye on the rail at
@@ -175,4 +180,60 @@ export function scarf(out, at, yaw, len, k) {
     ring.push(pt(-Math.cos(a) * 0.02, Math.sin(a) * 0.012, 0.004));
   }
   for (let b = -2; b <= 2; b++) sweep(out, ring.map(p => add(p, ax[2], b * 0.0)).map(p => add(p, [0, 0, 0], 0)).map((p, i) => add(p, ax[0], 0)), 0.006, part, { seg: 5 });
+}
+
+/** (0.4.26) The robe on a brass hook at `hook` on a wall facing yaw: hung
+ * by its loop, its belt tied round the waist, the ends hanging. */
+export function robe(out, hook, yaw) {
+  const ax = axes(0, yaw);
+  const pt = (x, y, z) => add(add(add(hook, ax[0], x), ax[1], y), ax[2], z);
+  // The hook: a plate, an arm out and up.
+  tube(out, pt(0, 0, 0), pt(0, 0, 0.05), 0.007, P.brass, 10);
+  ball(out, pt(0, 0.012, 0.055), 0.011, P.brass, 10, 6);
+  garment(out, pt(0, -0.02, 0.06), yaw, 'robe', 0.3, 7, { hang: false });
+  // The belt round its waist, knotted at the front, the ends falling.
+  const wy = -0.5;
+  const ring = [];
+  for (let i = 0; i <= 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    ring.push(pt(Math.sin(a) * 0.3, wy + 0.01 * Math.cos(a * 2), 0.06 + Math.cos(a) * 0.075));
+  }
+  sweep(out, ring, 0.012, v(P.clothes, 0.3), { closed: true, seg: 6 });
+  ball(out, pt(0.03, wy, 0.14), 0.024, v(P.clothes, 0.3), 10, 6);
+  for (const [x, l] of [[0.0, 0.34], [0.06, 0.28]]) sweep(out, [pt(0.03, wy, 0.145), pt(x, wy - l * 0.5, 0.15), pt(x - 0.01, wy - l, 0.142)], 0.011, v(P.clothes, 0.3), { seg: 6 });
+}
+
+/** (0.4.26) A towel thrown over a lounger's foot: lying along its seat
+ * from `z0` to its end at `z1` (−z to +z) on top `y`, over the end and down
+ * `drop`, `w` wide at x; a little rumpled. Striped (clothes .95). */
+export function drapedTowel(out, x, y, z0, z1, w = 0.62, drop = 0.3) {
+  const r = 0.03;
+  const lie = z1 - z0;
+  const path = u => {
+    // Along the seat, round the edge, down the end.
+    const d = u * (lie + (Math.PI / 2) * r + drop);
+    if (d < lie) return [z0 + d, y + 0.004];
+    if (d < lie + (Math.PI / 2) * r) {
+      const a = (d - lie) / r;
+      return [z1 + Math.sin(a) * r, y + 0.004 - r + Math.cos(a) * r];
+    }
+    return [z1 + r, y - r - (d - lie - (Math.PI / 2) * r)];
+  };
+  for (const side of [1, -1]) {
+    grid(out, 8, 24, (u, t) => {
+      const [z, yy] = path(t);
+      const rumple = 0.008 * Math.sin(u * 9.0 + t * 7.0) * Math.sin(t * 11.0);
+      const off = side > 0 ? 0 : -0.005;
+      const p = t * (lie + (Math.PI / 2) * r + drop) < lie ? [x - w / 2 + u * w, yy + rumple + off, z] : [x - w / 2 + u * w, yy, z + rumple * 0.6 + off];
+      return { p, part: P.clothes + 0.95, s: t * 4.0, t: u };
+    }, side > 0 ? [0, 0.7, 0.7] : [0, -0.7, -0.7]);
+  }
+}
+
+/** (0.4.26) White towels rolled, `n` along a table's top at `c`, one on
+ * them, lying along x. */
+export function rolledTowels(out, c, n = 2) {
+  const roll = (at, rr, len) => lathe(out, add(at, [-len / 2, 0, 0]), [1, 0, 0], [[0, 0], [rr * 0.9, 0], [rr, 0.01], [rr, len - 0.01], [rr * 0.9, len], [0, len]], v(P.clothes, 0.3), 20);
+  for (let i = 0; i < n; i++) roll(add(c, [0, 0.058, (i - (n - 1) / 2) * 0.118]), 0.058, 0.3);
+  roll(add(c, [0.02, 0.158, 0]), 0.055, 0.28);
 }

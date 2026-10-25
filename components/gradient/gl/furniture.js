@@ -845,8 +845,14 @@ export function picture(out, c, yaw, w, h, variant = 0) {
   // two steps down toward the picture), a brass slip inside it; a white
   // mount 2.5 mm thick with its window cut on a bevel (the white core
   // showing round it), the print set behind the window; a back board.
+  // (0.4.26) Nothing in it sits over anything else within a centimetre:
+  // seen from the desk (35 m and more) the depth buffer can't tell 2 mm
+  // apart, and a back board behind the print, the print running under the
+  // mount and their own backs 2 – 3 mm behind their faces all flickered
+  // through each other as the camera moved. So the print fills only the
+  // window and the mount only round it, both solid back to the wall, the
+  // bevel a slope between them.
   const m = 0.04;
-  obox(out, f.at(0, 0, 0.004), [w / 2 - 0.002, h / 2 - 0.002, 0.004], v(P.walnut, 0), f.ax);
   const steps = [[0, 0.014, 0.034], [0.014, 0.028, 0.029], [0.028, m, 0.024]];
   for (const [a, b, dz] of steps) {
     for (const s2 of [-1, 1]) {
@@ -860,24 +866,35 @@ export function picture(out, c, yaw, w, h, variant = 0) {
     obox(out, f.at(s2 * (w / 2 - m - sl / 2), 0, 0.011), [sl / 2, h / 2 - m, 0.011], P.brass, f.ax);
     obox(out, f.at(0, s2 * (h / 2 - m - sl / 2), 0.011), [w / 2 - m - sl, sl / 2, 0.011], P.brass, f.ax);
   }
-  // The print behind the mount's window, then the mount round it.
+  // The print in the window, then the mount round it, its face 3.75 mm
+  // proud of the print's.
   const iw = w / 2 - m - sl;
   const ih = h / 2 - m - sl;
   const [pw, ph] = [Math.max(0.04, iw - 0.07), Math.max(0.04, ih - 0.07)];
-  obox(out, f.at(0, 0, 0.0115), [pw + 0.01, ph + 0.01, 0.0015], v(P.art, variant), f.ax);
+  const bev = 0.004;
+  const [zp, zm] = [0.013, 0.01675];
+  obox(out, f.at(0, 0, zp / 2), [pw, ph, zp / 2], v(P.art, variant), f.ax);
   for (const s2 of [-1, 1]) {
-    obox(out, f.at(s2 * (pw + (iw - pw) / 2), 0, 0.0155), [(iw - pw) / 2, ih, 0.00125], P.paper, f.ax);
-    obox(out, f.at(0, s2 * (ph + (ih - ph) / 2), 0.0155), [pw, (ih - ph) / 2, 0.00125], P.paper, f.ax);
+    obox(out, f.at(s2 * (pw + bev + (iw - pw - bev) / 2), 0, zm / 2), [(iw - pw - bev) / 2, ih, zm / 2], P.paper, f.ax);
+    obox(out, f.at(0, s2 * (ph + bev + (ih - ph - bev) / 2), zm / 2), [pw + bev, (ih - ph - bev) / 2, zm / 2], P.paper, f.ax);
   }
-  // The bevel: a strip of the mount's core round the window, angled in.
-  const bev = 0.003;
-  const tilt = 0.8;
-  for (const s2 of [-1, 1]) {
-    const ax = axes(0, yaw).map(x => x);
-    const sideA = [ax[0].map((q, i) => q * Math.cos(tilt) + ax[2][i] * Math.sin(tilt) * s2 * -1), ax[1], ax[2].map((q, i) => q * Math.cos(tilt) - ax[0][i] * Math.sin(tilt) * s2 * -1)];
-    obox(out, f.at(s2 * (pw + bev / 2), 0, 0.0145), [bev / 2, ph, 0.0006], v(P.paper, 0.5), sideA);
-    const sideB = [ax[0], ax[1].map((q, i) => q * Math.cos(tilt) + ax[2][i] * Math.sin(tilt) * s2 * -1), ax[2].map((q, i) => q * Math.cos(tilt) - ax[1][i] * Math.sin(tilt) * s2 * -1)];
-    obox(out, f.at(0, s2 * (ph + bev / 2), 0.0145), [pw + bev, bev / 2, 0.0006], v(P.paper, 0.5), sideB);
+  // The bevel: the mount's core, a slope from the print's edge up to the
+  // mount's face, mitred at the corners.
+  const [X, Y, Z] = f.ax;
+  const tri = (p, q, r, n) => {
+    for (const c of [p, q, r]) out.push(...c, ...n, v(P.paper, 0.5), 0, 0);
+  };
+  for (const [ax, bx, a, b] of [[X, Y, pw, ph], [Y, X, ph, pw]]) {
+    for (const s2 of [-1, 1]) {
+      const at = (u, t, z) => add(add(add(c, ax, s2 * u), bx, t), Z, z);
+      const n = add(scale(ax, -s2 * (zm - zp)), Z, bev).map(x => x / Math.hypot(zm - zp, bev));
+      const [p0, p1] = [at(a, -b, zp), at(a, b, zp)];
+      const [q0, q1] = [at(a + bev, -b - bev, zm), at(a + bev, b + bev, zm)];
+      // Wound to face out of the slope either way: the shader takes its
+      // normal from the attribute, not the winding.
+      tri(p0, q0, q1, n);
+      tri(p0, q1, p1, n);
+    }
   }
 }
 

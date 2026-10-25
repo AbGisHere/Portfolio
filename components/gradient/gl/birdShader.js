@@ -26,6 +26,7 @@ layout(location = 6) in vec4 iC;      // scale, seed
 ${CAMERA_GLSL}
 uniform vec3 uShoulder;
 uniform float uWrist;
+uniform highp int uKind;
 out vec3 vWorld;
 out vec3 vNorm;
 out float vAlong;
@@ -44,6 +45,18 @@ void main() {
   vSeed = iC.y;
   if (iC.x <= 0.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+  if (uKind == 4) {
+    // (0.4.26) A firefly's glow (fireflies.js): a disc facing the camera,
+    // 3 cm across or five CSS pixels, whichever is bigger, its halo out
+    // to three times that.
+    vec4 c = project(iA.xyz);
+    float r = max(uPitch.w * uPitch.z * length(viewOf(vec3(0.015, 0.0, 0.0))) / max(c.w, 1e-4), 2.5);
+    c.xy += aPos.xy * r * 3.0 * 2.0 / uScreen.zw * c.w;
+    vWorld = iA.xyz;
+    vNorm = vec3(aPos.xy * 3.0, iB.z);
+    gl_Position = c;
     return;
   }
   vec3 p = aPos;
@@ -80,7 +93,7 @@ export const BIRD_FRAGMENT = `#version 300 es
 precision highp float;
 
 ${CAMERA_GLSL}
-uniform int uKind;      // 0 swallow, 1 kite, 2 goose, 3 a butterfly (0.4.24)
+uniform highp int uKind;      // 0 swallow, 1 kite, 2 goose, 3 a butterfly (0.4.24), 4 a firefly (0.4.26)
 uniform vec3 uSun;
 uniform vec3 uEnvTop;
 uniform vec3 uEnvLow;
@@ -99,6 +112,14 @@ flat in float vSeed;
 out vec4 outColor;
 
 void main() {
+  if (uKind == 4) {
+    // (0.4.26) The firefly's light: a bright core, a soft halo, added on.
+    float d = length(vNorm.xy);
+    float glow = (exp(-d * d * 1.4) * 2.4 + exp(-d * d * 0.3) * 0.4) * vNorm.z;
+    if (glow < 0.004) discard;
+    outColor = vec4(vec3(0.78, 1.0, 0.32) * glow * smoothstep(9.0, 2.0, d * d), 1.0);
+    return;
+  }
   vec3 N = normalize(vNorm);
   if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(uCam - vWorld);

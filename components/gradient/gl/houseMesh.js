@@ -7,9 +7,10 @@
  * (meshKit.js); the glass panes and the water are houseGlass.js's.
  */
 
-import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, STOREY, TERRACE, WALL, moundY } from './houseShape';
+import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_LIGHTS, HOUSE_STRIPS, HOUSE_PART, MOUND, PLAN, POOL, ROOF_DECK, STOREY, TERRACE, WALL, moundY } from './houseShape';
 import { ball, barPull, box, grid, lathe, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
+import { drapedTowel, robe, rolledTowels } from './garments';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
 import { miniBar } from './homeDetails';
@@ -286,7 +287,7 @@ export function houseLayout() {
   holed(out, [ix[0], top - 0.02, iz[0]], [ix[1], top, iz[1]], VOID, P.ceiling);
   groundRooms(out, ix, iz, glass);
   // (0.4.6) The LED strips, each a thin bright line where it's fitted.
-  for (const [a, b, , , , , hidden] of HOUSE_STRIPS) if (!hidden) tube(out, a, b, 0.005, P.lamp, 6);
+  for (const [a, b, , , , , hidden] of HOUSE_STRIPS) if (!hidden) tube(out, a, b, 0.005, v(P.lamp, 0.5), 6);
   // The recessed lights in both ceilings (HOUSE_LIGHTS kind 3).
   for (const [x, y, z, , , kind] of HOUSE_LIGHTS) {
     if (kind === 3) lathe(out, [x, y + 0.05, z], [0, -1, 0], [[0.075, 0], [0.06, 0.012], [0, 0.012]], P.lamp, 16);
@@ -355,6 +356,12 @@ export function houseLayout() {
   miniBar(out, gy, PLAN.upper.z[1] + 0.04, [3.3, 6.6]);
   // Two loungers by the pool, a side table between, an olive in a pot.
   for (const x of [5.65, 7.25]) lounger(out, x, -63.85, gy);
+  // (0.4.26) A striped towel over the far lounger's foot, white towels
+  // rolled on the table between, and a robe on a hook on the timber wall
+  // past the bar, by the uplight.
+  drapedTowel(out, 7.25, gy + 0.428, -62.55, -61.86);
+  rolledTowels(out, [6.35, gy + 0.42, -62.23]);
+  robe(out, [7.15, gy + 1.78, PLAN.upper.z[1] + 0.04], 0);
   box(out, [6.08, gy, -62.50], [6.62, gy + 0.42, -61.96], P.walnut);
   // (0.4.17) The olive's pot: thrown stoneware in a dark glaze, wide at
   // the shoulder, a rolled lip, tapering to a foot that lifts it off the
@@ -402,7 +409,7 @@ export function houseLayout() {
   // fascia all round in two layers, a deep band of smooth render under a
   // bronzed metal coping standing up as a low parapet, a shadow gap
   // between; under the overhang a soffit of timber boards, recessed;
-  // inside the parapet a sedum roof with a margin of pale gravel; and at
+  // inside the parapet a paved roof deck (0.4.26) in a gravel margin; and at
   // the back two scuppers through the parapet into downpipes.
   const R = PLAN.roof;
   const rt = utop + SLAB + 0.05;
@@ -429,17 +436,27 @@ export function houseLayout() {
   for (const [x0, x1] of [[R.x[0] + inner, U.x[0]], [U.x[1], R.x[1] - inner]]) box(out, [x0, sf, R.z[0] + inner], [x1, sf + 0.025, U.z[1] + 0.04], P.timber);
   box(out, [U.x[0], sf, R.z[0] + inner], [U.x[1], sf + 0.025, U.z[0]], P.timber);
   for (const x of [-6, -2, 2, 6]) box(out, [x - 0.07, sf - 0.012, -69.87], [x + 0.07, sf, -69.73], P.lamp);
-  // The roof's top: sedum, a gravel margin 30 cm wide inside the parapet.
+  // (0.4.26) The roof's top: a deck of large pale porcelain pavers on
+  // pedestals, open-jointed (houseShader.js draws the joints and each
+  // paver's own tone), standing 1.5 cm proud of a margin of dark basalt
+  // gravel 30 cm wide inside the parapet; two frameless skylights on
+  // bronze upstands, one long over the stair, one square over the hall,
+  // each laid to the pavers' joints. (It was sedum, which read from the
+  // pool as a fungus.)
   const gx0 = R.x[0] - o + 0.07;
   const gx1 = R.x[1] + o - 0.07;
   const gz0 = R.z[0] - o + 0.07;
   const gz1 = R.z[1] + o - 0.07;
   box(out, [gx0, rt, gz0], [gx1, rt + 0.06, gz1], v(P.roof, 0.8), { bottom: false });
-  grid(out, 60, 36, (u, w) => {
-    const x = gx0 + 0.3 + u * (gx1 - gx0 - 0.6);
-    const z = gz0 + 0.3 + w * (gz1 - gz0 - 0.6);
-    return { p: [x, rt + 0.075 + 0.012 * Math.sin(x * 3.1 + z * 1.7) * Math.sin(z * 2.3 - x * 0.9), z], part: v(P.roof, 0.2), s: x, t: z };
-  });
+  const D = ROOF_DECK;
+  box(out, [D.x[0], rt + 0.02, D.z[0]], [D.x[1], rt + 0.075, D.z[1]], v(P.roof, 0.2), { bottom: false });
+  const at = (i, k) => [D.x[0] + i * D.cell[0], D.z[0] + k * D.cell[1]];
+  for (const [i0, k0, i1, k1] of [[1, 5, 2, 11], [13, 6, 15, 8]]) {
+    const [x0, z0] = at(i0, k0);
+    const [x1, z1] = at(i1, k1);
+    box(out, [x0 + 0.01, rt + 0.075, z0 + 0.01], [x1 - 0.01, rt + 0.17, z1 - 0.01], v(P.steel, 0.15), { bottom: false });
+    box(out, [x0 + 0.035, rt + 0.17, z0 + 0.035], [x1 - 0.035, rt + 0.188, z1 - 0.035], P.screen, { bottom: false });
+  }
   for (const x of [R.x[0] + 0.9, R.x[1] - 0.9]) {
     box(out, [x - 0.09, rt + 0.03, R.z[0] - o - 0.06], [x + 0.09, rt + 0.13, R.z[0] - o + 0.07], P.frame);
     box(out, [x - 0.11, rt - 0.12, R.z[0] - o - 0.2], [x + 0.11, rt + 0.03, R.z[0] - o - 0.04], v(P.steel, 0.15));

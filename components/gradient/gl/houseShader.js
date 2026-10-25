@@ -12,7 +12,7 @@
 
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
-import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, STOREY, TERRACE, WALL, ZONES } from './houseShape';
+import { FLOOR, HOUSE_LIGHTS, HOUSE_PART, HOUSE_STRIPS, PLAN, POOL, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
@@ -195,6 +195,9 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     vec3 Ld = d / max(r, 1e-4);
     float fall = pow(clamp(1.0 - pow(r / STRIP_K[i].x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 2.0);
     fall *= smoothstep(-0.1, 0.6, dot(-Ld, STRIP_D[i]));
+    // (0.4.26) Nothing behind the face it shines from: not the shelf
+    // it's set in.
+    fall *= smoothstep(0.0, 0.015, dot(p - c, STRIP_D[i]));
     sum += WARM * STRIP_K[i].y * fall * max(dot(N, Ld), 0.0);
   }
   return sum * 1.35;
@@ -260,6 +263,18 @@ out vec4 outColor;
 
 ${METAL_GLSL}
 ${HOUSE_LIGHT_GLSL}
+
+// (0.4.26) Five octaves of noise2: the marble's folded layers.
+float fbm5(vec2 p) {
+  float s = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 5; i++) {
+    s += a * noise2(p);
+    p = p * 2.03 + vec2(1.7, 9.2);
+    a *= 0.5;
+  }
+  return s / 0.97;
+}
 
 // Boards: which board a coordinate is on, and how far into the dark of the
 // gap at its edge (w the board's width, g the gap's).
@@ -583,6 +598,13 @@ void main() {
       // The grass's plumes: straw.
       alb = vec3(0.78, 0.68, 0.48) * (0.85 + 0.2 * hash2(floor(vWorld.xy * 80.0)));
       rough = 0.8;
+    } else if (vVar > 0.985) {
+      // (0.4.26) A rose's petals (the vase's, plantMesh.js bouquet): each
+      // rose its own cream to blush, deeper toward the petal's base, a
+      // soft sheen.
+      float tint = hash2(floor(vWorld.xz * 14.0) + 2.0);
+      alb = mix(vec3(0.95, 0.93, 0.88), vec3(0.93, 0.7, 0.68), smoothstep(0.35, 0.9, tint)) * (0.82 + 0.18 * smoothstep(0.0, 0.6, st.x));
+      rough = 0.55;
     } else if (vVar > 0.94) {
       // (0.4.16) A coneflower's cone: rust, darker at its base.
       alb = vec3(0.36, 0.17, 0.06) * (0.75 + 0.4 * hash2(floor(vWorld.xz * 300.0)));
@@ -642,18 +664,34 @@ void main() {
         w2.x = (pair * 2.0 + 1.0 - abs(lx - 1.0)) * slab.x;
       }
     }
-    vec2 q = w2 * 1.4;
-    float warp = noise2(q * 0.9) * 2.2 + noise2(q * 2.7) * 0.8;
-    float main = abs(sin((q.x * 0.8 + q.y * 0.45) * 2.2 + warp * 2.4));
-    // (0.4.23) The veins softened at their edges and broken along their
-    // length, as stone's are (they were inked lines of even weight).
-    float wid = (0.03 + 0.05 * noise2(q * 3.0)) * smoothstep(0.25, 0.6, noise2(q * 0.7 + 11.0));
-    float vein = (1.0 - smoothstep(0.0, wid + 0.035, main)) * (0.45 + 0.55 * smoothstep(0.0, wid + 0.001, wid - main * 0.4));
-    float thread = (1.0 - smoothstep(0.0, 0.02, abs(sin((q.x * 0.3 - q.y * 1.1) * 5.0 + warp * 4.0 + noise2(q * 6.0) * 2.0)))) * smoothstep(0.3, 0.7, noise2(q * 1.3 + 5.0));
-    float cloud = noise2(q * 1.7) * 0.6 + noise2(q * 5.0) * 0.4;
-    alb = vec3(0.93, 0.915, 0.89) * (0.94 + 0.08 * cloud);
-    vec3 vc = mix(vec3(0.52, 0.52, 0.53), vec3(0.72, 0.62, 0.45), smoothstep(0.55, 0.8, noise2(q * 0.6 + 4.0)));
-    alb = mix(alb, vc, vein * 0.6 + thread * 0.22 * (1.0 - vein));
+    // (0.4.26) The veins as real Calacatta's: not waves but the contours
+    // of the stone's own warped layers, a level line through a folded
+    // field, so they meander, fork and rejoin. One flow down the slab's
+    // diagonal; bold main veins of uneven width (a dark core, a soft grey
+    // halo bleeding into the white), broken here and there and touched
+    // with gold in places; finer veins branching between them; hairline
+    // threads faintest of all. Each drawn to its pixel's share, so none
+    // crawls from across the room.
+    vec2 q = mat2(0.8, -0.6, 0.6, 0.8) * (w2 * 0.85);
+    q.x *= 0.42;
+    vec2 wp = q + vec2(fbm5(q * 1.3), fbm5(q * 1.3 + 7.3)) * 1.7;
+    float n1 = fbm5(wp * 0.9);
+    float v1 = abs(n1 - 0.5);
+    float w1 = 0.006 + 0.02 * noise2(q * 2.0 + 4.0);
+    float core = 1.0 - smoothstep(w1 * 0.3, w1 + fwidth(n1), v1);
+    float halo = 1.0 - smoothstep(0.0, w1 * 7.0 + 0.02, v1);
+    float run = smoothstep(0.22, 0.55, noise2(q * 0.9 + 3.0));
+    float n2 = fbm5(wp * 2.4 + 5.0);
+    float second = (1.0 - smoothstep(0.0, 0.005 + fwidth(n2), abs(n2 - 0.5))) * smoothstep(0.35, 0.7, noise2(q * 1.7 + 11.0));
+    float n3 = fbm5(wp * 6.5 + 2.0);
+    float thread = (1.0 - smoothstep(0.0, 0.003 + fwidth(n3), abs(n3 - 0.5))) * min(1.0, 0.006 / max(fwidth(n3), 1e-4));
+    float cloud = fbm5(q * 2.2 + 9.0);
+    alb = vec3(0.955, 0.945, 0.925) * (0.95 + 0.07 * cloud);
+    vec3 vc = mix(vec3(0.36, 0.36, 0.38), vec3(0.6, 0.5, 0.34), smoothstep(0.6, 0.78, noise2(q * 0.5 + 4.0)));
+    alb = mix(alb, mix(alb, vc, 0.5), halo * 0.35 * run);
+    alb = mix(alb, vc, core * 0.8 * run);
+    alb = mix(alb, mix(alb, vc, 0.7), second * 0.5);
+    alb = mix(alb, mix(alb, vc, 0.6), thread * 0.28);
     alb *= 1.0 - 0.35 * joint;
     rough = vVar > 0.8 ? 0.22 : 0.07;
     f0 = 0.045;
@@ -695,6 +733,13 @@ void main() {
     alb = vec3(0.8, 0.62, 0.36);
     rough = 0.3;
     metal = 1.0;
+  } else if (vPart == ${P.clothes} && vVar > 0.92) {
+    // (0.4.26) The pool towel: a flat-woven cotton, navy and white in
+    // bands across its length, a fine rib, its fringed ends paler.
+    float band = step(0.5, fract(st.x * 1.6));
+    alb = mix(vec3(0.1, 0.14, 0.26), vec3(0.9, 0.88, 0.84), band) * (0.93 + 0.07 * sin(st.y * 400.0));
+    rough = 1.0;
+    f0 = 0.02;
   } else if (vPart == ${P.clothes}) {
     alb = k < 2.0 ? vec3(0.12, 0.14, 0.2) : k < 4.0 ? vec3(0.85, 0.84, 0.8) : k < 5.5 ? vec3(0.4, 0.36, 0.3) : k < 7.0 ? vec3(0.55, 0.2, 0.17) : k < 8.5 ? vec3(0.2, 0.2, 0.21) : vec3(0.5, 0.56, 0.6);
     alb *= 0.92 + 0.1 * noise2(vWorld.xy * 50.0);
@@ -797,17 +842,26 @@ void main() {
       rough = 0.8;
     }
   } else if (vPart == ${P.roof}) {
-    // (0.4.17) The roof: sedum in drifts of its own greens, olive and rust,
-    // tiny rosettes; or the margin's pale gravel, speckled.
+    // (0.4.26) The roof: its deck of large porcelain pavers (ROOF_DECK),
+    // each its own pale warm grey, a fine aggregate in it, a little
+    // weathered toward its edges, the open joints between them dark; or
+    // the margin's basalt gravel.
     if (vVar < 0.5) {
-      float drift = noise2(vWorld.xz * 0.7) * 0.6 + noise2(vWorld.xz * 2.3) * 0.4;
-      vec3 a = mix(vec3(0.2, 0.3, 0.12), vec3(0.36, 0.38, 0.14), smoothstep(0.35, 0.65, drift));
-      a = mix(a, vec3(0.42, 0.2, 0.12), smoothstep(0.72, 0.85, noise2(vWorld.xz * 1.4 + 9.0)));
-      float ros = noise2(vWorld.xz * 60.0);
-      alb = a * (0.65 + 0.6 * ros) * (0.9 + 0.2 * hash2(floor(vWorld.xz * 140.0)));
-      rough = 0.85;
+      vec2 q = (vWorld.xz - ${v2([ROOF_DECK.x[0], ROOF_DECK.z[0]])}) / ${v2(ROOF_DECK.cell)};
+      vec2 id = floor(q);
+      vec2 e = min(fract(q), 1.0 - fract(q)) * ${v2(ROOF_DECK.cell)};
+      float px = length(fwidth(vWorld.xz));
+      // The joints, 6 mm: their share of a pixel once they're thinner
+      // than one, so they never crawl.
+      float joint = (1.0 - smoothstep(0.0, px, min(e.x, e.y) - 0.003)) * min(1.0, 0.006 / max(px, 1e-4));
+      float tone = hash2(id + 3.0);
+      alb = vec3(0.76, 0.74, 0.7) * (0.9 + 0.12 * tone) * (0.95 + 0.06 * noise2(vWorld.xz * 9.0 + id * 3.1));
+      alb *= 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.12, min(e.x, e.y)));
+      alb *= 0.96 + 0.06 * mix(0.5, hash2(floor(vWorld.xz * 160.0)), detail(0.01, vWorld.xz));
+      alb = mix(alb, vec3(0.1, 0.1, 0.1), joint * 0.9);
+      rough = 0.78;
     } else {
-      alb = vec3(0.68, 0.66, 0.62) * (0.75 + 0.35 * hash2(floor(vWorld.xz * 90.0)) + 0.1 * noise2(vWorld.xz * 8.0));
+      alb = vec3(0.24, 0.24, 0.25) * (0.75 + 0.45 * mix(0.5, hash2(floor(vWorld.xz * 90.0)), detail(0.02, vWorld.xz)) + 0.1 * noise2(vWorld.xz * 8.0));
       rough = 0.95;
     }
   } else if (vPart == ${P.soil}) {
@@ -820,6 +874,17 @@ void main() {
     alb = vec3(0.92, 0.9, 0.85);
     rough = 0.6;
     emit = WARM * 2.4 * uNight;
+    // (0.4.26) A strip of light (variant .5, about a centimetre) smaller
+    // than a pixel is in only some of them, and which ones changes as the
+    // camera moves: it's given what the pixel would average to (its share
+    // of it, the rest the dark round it), so it doesn't sparkle along its
+    // length from across the garden.
+    if (vVar > 0.4) {
+      float cover = clamp(0.012 / max(length(fwidth(vWorld)), 1e-5), 0.0, 1.0);
+      // (Seen edge-on, a pixel spans metres of it: its share is nothing.)
+      alb = mix(vec3(0.12), alb, cover);
+      emit *= cover * cover;
+    }
   } else if (vPart == ${P.cushion}) {
     alb = k < 0.5 ? vec3(0.9, 0.88, 0.84) : k < 2.0 ? vec3(0.74, 0.56, 0.25) : k < 4.5 ? vec3(0.3, 0.35, 0.4) : vec3(0.86, 0.82, 0.74);
     alb *= 0.94 + 0.08 * noise2(vWorld.xz * 30.0 + vWorld.y * 20.0);
@@ -840,6 +905,19 @@ void main() {
     f0 = 0.02;
     N = normalize(N + vec3(noise2(vWorld.xz * 300.0) - 0.5, 0.0, noise2(vWorld.xz * 300.0 + 7.0) - 0.5) * 0.35);
   }
+
+  // (0.4.26) Where the normal turns within a pixel (a brass rail or a
+  // frame's slip seen from the desk), one sample of it would flash the
+  // highlight on and off as the camera moves: the highlight is widened by
+  // how much the normal varies across the pixel (geometric specular
+  // anti-aliasing), which is what the pixel would show on average.
+  vec3 dN = fwidth(normalize(vNorm));
+  rough = sqrt(min(1.0, rough * rough + min(0.45, 2.0 * dot(dN, dN))));
+  // And where it turns right round within one or two (the rail is two
+  // pixels tall from the desk), each row would take a different slice of
+  // the tube's light: it's lit as its average, its normal bent toward the
+  // eye.
+  N = normalize(mix(N, V, smoothstep(0.3, 1.0, length(dN)) * 0.85));
 
   // ---- The light.
   int room = roomOf(vWorld);

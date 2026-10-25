@@ -6,6 +6,45 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.26 — 2026-10-25
+
+The owner's review of `0.4.16`–`0.4.25`, and the flicker from afar.
+
+- **No flicker as the camera turns to the house.** The picture frames'
+  layers sat 1–3 mm apart (a back board behind the print, the print under
+  the mount, each box's own back behind its face), which the depth buffer
+  can't separate from 35 m: rebuilt with nothing within a centimetre. The
+  brass rails over the terrace glass are about two pixels tall from the
+  desk, their highlight flipping orange to grey frame to frame: the house
+  shader widens a highlight by how far the normal turns within a pixel and
+  bends that normal toward the eye (geometric specular anti-aliasing). The
+  bar's shelf strips hung a centimetre under their shelves and their light
+  lines lit the shelves' own undersides: the strips are set into the
+  shelves, the lines moved to them, a strip lights nothing behind its
+  face, and a strip thinner than a pixel gives only its share of it.
+  Checked frame to frame with 2 cm camera steps at 30 m, day and night.
+- **The roof** restyled flat: a deck of large pale porcelain pavers on
+  pedestals, open-jointed, in a dark basalt gravel margin, two frameless
+  skylights (the sedum read as a fungus).
+- **Marble** veins as Calacatta's: the level lines of a folded field,
+  meandering and forking, bold with a soft halo, finer veins and hairlines
+  between (they were bent sine waves).
+- **Mirrors** see the outdoors past the windows, softly: each probe draws
+  the hill's lawn, then a backdrop of sky, the woods' crowns and the
+  meadow (it was the sky's colour).
+- **Fireflies** by night, a fifth kind in the birds' pass: 108 glows round
+  the desk, along the way and in the garden, flashing each on its own
+  rhythm. (Declaring `uKind` in the bird vertex shader needed `highp` in
+  both stages, or the pass doesn't link.)
+- **Flowers** in the dining vase: garden roses, cream to blush, and
+  eucalyptus.
+- **By the pool:** a striped towel over a lounger, white towels rolled on
+  the table, a robe on a hook by the bar.
+- `ROADMAP.md`: this release written in, the optimisation renumbered
+  `0.4.27`, and future plans (the owner's real wardrobe, a bar redesign,
+  the walker redesigned together, the contact form later).
+- Not measured: the owner asked to push without QA for this release.
+
 ## 0.4.25 — 2026-10-25
 
 The pool framed for every screen.

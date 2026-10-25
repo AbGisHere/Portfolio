@@ -416,7 +416,13 @@ camera at `about` 1 exactly (unit-tested).
   each on its own low wandering path round the desk's drifts, along the
   way and by the house, beating at 8–11 Hz out of step, resting now and
   then on a flower, wings slowly opening and closing. By day only, and
-  none under reduced motion (the birds' weight).
+  none under reduced motion (the birds' weight). From `0.4.26` fireflies
+  are a fifth (`fireflies.js`, `uKind` 4): 108 of them round the desk,
+  along the way and in the house's garden, each a soft glow facing the
+  camera (3 cm, never under 5 CSS px, so never a sparkle), added on after
+  the sky's pass, wandering 0.3–1.6 m up and flashing on its own rhythm
+  of a few seconds; by night only (`houseNight`), none under reduced
+  motion. While they show, frames keep coming.
 - **Known gaps:** the layered fallback ignores `desk` and `contact` (it
   holds the pull-back's end), and reduced motion runs the full desk path.
   Parity and switch still cover the `0.2` stretch. From `0.4.15`, perf also

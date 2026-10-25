@@ -10,6 +10,7 @@ import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from '.
 import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import { clad, longVanity, toilet, walkInShower } from './washrooms';
+import { bouquet } from './plantMesh';
 import {
   bath, bed, bench, bookcase, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, sofa, stool, tallUnit, tv, v,
@@ -308,6 +309,8 @@ export function groundRooms(out, ix, iz, glass) {
   // (0.4.20) A round stoneware vase in the middle (it was a plain angular
   // bottle), and a place laid at each of the eight seats.
   vase(out, [2.55, B + 0.75, -67.9], 0.3, v(P.ceramic, 0.8));
+  // (0.4.26) Flowers in it: garden roses and eucalyptus.
+  bouquet(out, [2.55, B + 0.75 + 0.3, -67.9], 11);
   for (const z of [-68.85, -67.9, -66.95]) {
     placeSetting(out, [2.27, B + 0.75, z], [-1, 0]);
     placeSetting(out, [2.83, B + 0.75, z], [1, 0]);
@@ -362,7 +365,7 @@ export function groundRooms(out, ix, iz, glass) {
     box(out, [sx, y - 0.07, z - 0.3], [ix[0] + 1.22, y, z], v(P.walnut, 0));
     // The LED tucked under its nosing, in an opal diffuser (0.4.17: 1.2 cm,
     // it was a 5 mm sliver that barely showed).
-    box(out, [sx + 0.04, y - 0.082, z - 0.05], [ix[0] + 1.16, y - 0.07, z - 0.02], P.lamp);
+    box(out, [sx + 0.04, y - 0.082, z - 0.05], [ix[0] + 1.16, y - 0.07, z - 0.02], P.lamp + 0.5);
   }
   // The stringer: a plate 4.5 cm thick against the wall, its top and bottom
   // edges parallel to the stair's pitch.
@@ -527,7 +530,7 @@ function wardrobeRun(out, y, back, [x0, x1]) {
     for (const e of [a + 0.01, b - 0.01]) box(out, [e - 0.004, ry - 0.02, back + D / 2 - 0.02], [e + (e < (a + b) / 2 ? 0.01 : -0.004) + 0.004, ry + 0.02, back + D / 2 + 0.02], P.brass);
   };
   // A light strip under a shelf's front edge, an opal diffuser.
-  const strip = (a, b, sy) => box(out, [a + 0.02, sy - 0.012, front - 0.06], [b - 0.02, sy, front - 0.035], P.lamp);
+  const strip = (a, b, sy) => box(out, [a + 0.02, sy - 0.002, front - 0.06], [b - 0.02, sy + 0.01, front - 0.035], P.lamp + 0.5);
   const shelf = (a, b, sy) => box(out, [a, sy, back + 0.012], [b, sy + t, front - 0.01], W);
   const hangRow = (a, b, ry, pick) => {
     rail(a, b, ry);
