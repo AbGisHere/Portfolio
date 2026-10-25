@@ -899,29 +899,6 @@ export function mirror(out, c, yaw, w, h) {
   obox(out, f.at(0, 0, 0.014), [w / 2 - m - 0.001, h / 2 - m - 0.001, 0.003], P.mirror, f.ax);
 }
 
-/** A WC on the floor at c against a wall behind it: a wall-hung bowl, a
- * seat, its flush plate. */
-export function wc(out, c, yaw) {
-  const f = frame(c, yaw);
-  soft(out, f.at(0, 0.32, 0.28), [0.18, 0.12, 0.27], P.ceramic, { e1: 0.5, e2: 0.6, ax: f.ax });
-  soft(out, f.at(0, 0.445, 0.3), [0.18, 0.012, 0.25], v(P.ceramic, 0.3), { e1: 0.4, e2: 0.6, ax: f.ax });
-  obox(out, f.at(0, 0.95, 0.005), [0.12, 0.08, 0.005], v(P.steel, 0.5), f.ax);
-}
-
-/** A vanity at a wall: a floating walnut unit, a stone top, basins on it,
- * taps from the wall, a mirror over it. */
-export function vanity(out, c, yaw, w = 1.4, basins = 1) {
-  const f = frame(c, yaw);
-  obox(out, f.at(0, 0.62, 0.25), [w / 2, 0.2, 0.25], v(P.walnut, 0), f.ax);
-  obox(out, f.at(0, 0.84, 0.26), [w / 2 + 0.01, 0.02, 0.26], v(P.slab, 0.6), f.ax);
-  for (let k = 0; k < basins; k++) {
-    const x = basins === 1 ? 0 : -w / 4 + (k * w) / 2;
-    lathe(out, f.at(x, 0.86, 0.28), [0, 1, 0], [[0, 0], [0.12, 0], [0.2, 0.12], [0.195, 0.125], [0.12, 0.012], [0, 0.012]], P.ceramic, 28);
-    sweep(out, [f.at(x, 1.1, 0.0), f.at(x, 1.1, 0.16), f.at(x, 1.08, 0.2)], 0.01, P.brass, { seg: 8 });
-    mirror(out, f.at(x, 1.6, 0), yaw, 0.7, 0.9);
-  }
-}
-
 /** A freestanding bath at c: a deep oval tub, its hollow, a floor tap. */
 export function bath(out, c, yaw) {
   const f = frame(c, yaw);
@@ -937,16 +914,6 @@ export function bath(out, c, yaw) {
   }
   sweep(out, ring, 0.03, P.ceramic, { closed: true, seg: 8 });
   sweep(out, [f.at(0.95, 0, 0.0), f.at(0.95, 0.85, 0), f.at(0.85, 0.92, 0), f.at(0.75, 0.86, 0)], 0.016, P.brass, { seg: 8 });
-}
-
-/** A walk-in shower: a stone tray, a glass screen (houseGlass.js pane), a
- * rain head and its arm. */
-export function shower(out, c, yaw, w = 1.4, d = 1.1, ceil = 3.2) {
-  const f = frame(c, yaw);
-  obox(out, f.at(0, 0.012, 0), [w / 2, 0.012, d / 2], v(P.tile, 0.5), f.ax);
-  sweep(out, [f.at(0, 2.2, -d / 2), f.at(0, 2.25, -d / 2 + 0.05), f.at(0, 2.25, 0)], 0.01, P.brass, { seg: 6 });
-  lathe(out, f.at(0, 2.25, 0), [0, -1, 0], [[0, 0], [0.15, 0], [0.15, 0.01], [0, 0.01]], P.brass, 24);
-  void ceil;
 }
 
 /** A sun lounger: its teak frame and slats from z0 toward +z at x, the

@@ -9,9 +9,10 @@ import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
 import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from './meshKit';
 import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
+import { clad, longVanity, toilet, walkInShower } from './washrooms';
 import {
   bath, bed, bench, bookcase, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase,
-  kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
+  kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, sofa, stool, tallUnit, tv, v,
 } from './furniture';
 
 const P = HOUSE_PART;
@@ -315,9 +316,21 @@ export function groundRooms(out, ix, iz, glass) {
   placeSetting(out, [2.55, B + 0.75, -66.85], [0, 1]);
   picture(out, [4.54, B + 1.6, -68.6], -Math.PI / 2, 1.2, 0.9, 0.2);
 
-  // ---- The WC: a wall-hung WC, a basin, a mirror.
-  wc(out, [6.4, B, -71.44], 0);
-  vanity(out, [ix[1] - 0.01, B - 0.1, -69.0], -Math.PI / 2, 0.8, 1);
+  // ---- The WC (0.4.23): Italian marble on every wall and the floor, the
+  // vanity's wall bookmatched; a wall-hung toilet on its marble ledge, a
+  // floating vanity under a mirror three times as wide as it's tall.
+  {
+    const [wx0, wx1, wz0, wz1] = [4.66, ix[1], -71.44, -67.56];
+    const top = CEIL_G - 0.005;
+    const t = 0.015;
+    clad(out, [wx0 + 0.004, B + 0.02, wz0 + 0.004], [wx1 - 0.004, B + 0.03, wz1 - 0.004], 0.85);
+    clad(out, [wx0 + 0.004, B + 0.03, wz0 + 0.004], [wx0 + 0.004 + t, top, wz1 - 0.004]);
+    clad(out, [wx1 - 0.004 - t, B + 0.03, wz0 + 0.004], [wx1 - 0.004, top, wz1 - 0.004], 0.6);
+    clad(out, [wx0 + 0.02, B + 0.03, wz0 + 0.004], [wx1 - 0.02, top, wz0 + 0.004 + t]);
+    for (const [a, b, y0] of [[wx0 + 0.02, 4.99, B + 0.03], [5.91, wx1 - 0.02, B + 0.03], [4.99, 5.91, B + 2.23]]) clad(out, [a, y0, wz1 - 0.004 - t], [b, top, wz1 - 0.004]);
+    toilet(out, [6.35, B + 0.03, wz0 + 0.02], 0);
+    longVanity(out, [wx1 - 0.02, B + 0.03, -69.3], -Math.PI / 2, 1.2, 1);
+  }
 
   // ---- The kitchen: the run along the back with its sink and hob, a tall
   // unit with the fridge up the side wall, the island and its stools.
@@ -454,18 +467,28 @@ export function upperRooms(out, glass, jx, jz) {
   // knitwear on the shelves. (It was two bare rails of soft shapes.)
   wardrobeRun(out, y, -77.44, [-4.42, 2.52]);
 
-  // ---- The en-suite: stone-clad walls, a freestanding bath at the glass
-  // side, a walk-in shower behind glass, a double vanity.
-  const tileH = y + 2.4;
-  // (Each a few millimetres proud of its wall, never in its plane.)
-  box(out, [2.664, y, -74.93], [2.684, tileH, -71.3], v(P.tile, 0.5));
-  box(out, [2.664, y, -74.936], [jx[1] - 0.004, tileH, -74.916], v(P.tile, 0.5));
-  box(out, [jx[1] - 0.024, y, -74.93], [jx[1] - 0.004, tileH, -71.3], v(P.tile, 0.5));
-  box(out, [2.66, y, -74.94], [jx[1], y + 0.005, -71.3], v(P.tile, 0.5));
-  bath(out, [4.9, y, -72.2], 0);
-  shower(out, [6.85, y, -74.3], 0, 1.6, 1.2);
-  glass.push([[6.05, y, -73.7], [6.062, y + 2.0, -71.7], false]);
-  vanity(out, [jx[1] - 0.02, y, -73.2], -Math.PI / 2, 1.6, 2);
+  // ---- The en-suite (0.4.23): Italian marble on every wall and the
+  // floor, bookmatched behind the vanity; a double vanity on the door's
+  // wall under a mirror three times as wide as it's tall, a freestanding
+  // bath by the front wall, a toilet on its ledge on the back wall, a
+  // walk-in shower in the far corner (a wet wall with a lit niche, a rain
+  // head, a hand shower, a linear drain, glass on two sides). (Its old
+  // fittings overlapped, and it had no toilet.)
+  {
+    const [ex0, ex1, ez0, ez1] = [2.66, jx[1], -74.94, -71.28];
+    const top = CEIL_U - 0.005;
+    const t = 0.015;
+    const f0 = y + 0.012;
+    clad(out, [ex0 + 0.004, y, ez0 + 0.004], [ex1 - 0.004, f0, ez1 - 0.004], 0.85);
+    for (const [a, b, y0, y1] of [[ez1 + 0.004 - 0.008, -73.69, f0, top], [-74.61, ez0 + 0.004, f0, top], [-73.69, -74.61, y + 2.21, top]]) clad(out, [ex0 + 0.004, y0, Math.min(a, b)], [ex0 + 0.004 + t, y1, Math.max(a, b)], 0.6);
+    clad(out, [ex0 + 0.02, f0, ez0 + 0.004], [5.95, top, ez0 + 0.004 + t]);
+    clad(out, [ex0 + 0.02, f0, ez1 - 0.004 - t], [ex1 - 0.02, top, ez1 - 0.004]);
+    for (const [y0, y1, a, b] of [[f0, T + 1.5, ez0 + 0.02, ez1 - 0.02], [CEIL_U - 0.3, top, ez0 + 0.02, ez1 - 0.02], [T + 1.5, CEIL_U - 0.3, ez0 + 0.02, -74.6], [T + 1.5, CEIL_U - 0.3, -72.2, ez1 - 0.02]]) clad(out, [ex1 - 0.004 - t, y0, a], [ex1 - 0.004, y1, b]);
+    longVanity(out, [ex0 + 0.02, f0, -72.45], Math.PI / 2, 1.8, 2);
+    bath(out, [4.6, f0, -72.15], 0);
+    toilet(out, [4.3, f0, ez0 + 0.02], 0);
+    walkInShower(out, glass, f0, [5.95, ex1 - 0.02], [ez0 + 0.004, -73.15], CEIL_U);
+  }
 
   // ---- The guest bedroom: a bed, its table and lamp, a desk.
   bed(out, [5.15, y, jz[0] + 0.02], 0, { w: 1.5, l: 2.0, ceil: CEIL_U, stands: [false, true] });

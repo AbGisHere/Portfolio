@@ -111,7 +111,9 @@ export const HOUSE_LIGHTS = [
   [2.55, FLOOR + 1.8, -67.9, 5, 0.7, 0, 3],
   [4.4, FLOOR + 2.1, -74.9, 5, 0.7, 0, 3],
   [-7.2, FLOOR + 1.55, -70.3, 3.5, 0.7, 0, 3],
-  ...down(1, CEIL_G, [[6.2, -69.5]], 4),
+  // (0.4.23) The washrooms lit warm and strong: over the WC's toilet and
+  // its vanity; over the en-suite's vanity, bath, toilet and shower.
+  ...down(1, CEIL_G, [[6.0, -70.4], [7.1, -69.3], [5.6, -68.4]], 4, 0.6),
   ...down(2, CEIL_G, [[-2, -76]]),
   [-2.75, FLOOR + 1.1, -78.2, 2.5, 0.5, 0, 2],
   ...down(8, CEIL_U, [[-6.1, -73.0], [-6.1, -76.0], [-1, -78.1], [1.5, -78.1]]),
@@ -119,7 +121,7 @@ export const HOUSE_LIGHTS = [
   [-2.26, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
   [0.36, TERRACE + 1.29, -75.44, 3, 0.6, 0, 4],
   ...down(5, CEIL_U, [[-2.5, -76.65], [0.8, -76.65]], 3.5),
-  ...down(6, CEIL_U, [[4, -72.6], [6.4, -72.6], [5.2, -74.2]], 4),
+  ...down(6, CEIL_U, [[3.3, -72.45], [4.6, -72.15], [4.3, -74.3], [6.8, -74.05], [6.6, -72.4]], 4, 0.6),
   ...down(7, CEIL_U, [[5.2, -76.9]], 4),
   [6.31, TERRACE + 1.29, -78.38, 3, 0.5, 0, 7],
   // Two downlights in the porch's ceiling, under the cantilever.
@@ -167,6 +169,10 @@ export const HOUSE_STRIPS = [
   [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
   [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3, true],
   [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3, true],
+  // (0.4.23) Behind the washrooms' mirrors and in the shower's niche.
+  [[7.68, FLOOR + 1.7, -68.75], [7.68, FLOOR + 1.7, -69.85], [-1, 0.4, 0], 0.9, 0.6, 1, true],
+  [[2.71, TERRACE + 2.0, -71.6], [2.71, TERRACE + 2.0, -73.3], [1, 0.4, 0], 1.0, 0.6, 6, true],
+  [[6.3, TERRACE + 1.48, -74.8], [6.9, TERRACE + 1.48, -74.8], [0, -1, 0.3], 0.6, 0.5, 6, true],
   // (0.4.22) The terrace's bar: under its two shelves, and under its
   // counter's lip onto the deck.
   [[3.5, TERRACE + 1.42, -70.75], [6.3, TERRACE + 1.42, -70.75], [0, -1, 0.5], 1.3, 0.7, 0, true],

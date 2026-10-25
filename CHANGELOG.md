@@ -6,6 +6,40 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.23 — 2026-10-25
+
+Marble washrooms.
+
+- **Italian marble throughout** both washrooms (`washrooms.js`): slabs a
+  little proud of every wall and the floor, cut 1.2 × 2.4 m on the walls
+  and 1.2 m square on the floor with a fine join between, the floor honed,
+  the wall behind each vanity bookmatched (each pair of slabs mirrored
+  about its join). The marble's veins follow each face's own plane now
+  (they ran in streaks down a wall, being read from the floor's), and are
+  softened and broken along their length (they were inked lines).
+- **A toilet in each** (one wasn't apparent; the en-suite had none): a
+  wall-hung bowl, hollow, its rim rolled, the seat and hinges, the lid up,
+  on a marble-clad ledge to a metre that hides the cistern, a brass flush
+  plate with two buttons.
+- **The vanities:** a floating walnut unit with doors, a marble top,
+  vessel basins with brass taps from the wall; a mirror three times as
+  wide as it's tall over it (1.2 × 0.4 m in the WC, 1.8 × 0.6 m over the
+  en-suite's two basins), lit from behind its top and bottom edges, a glow
+  under the unit. Each mirror has its probe (`0.4.18`).
+- **The en-suite's shower:** a walk-in in the far corner, a marble wet
+  wall with a lit niche (bottles in it), a rain head flush in the ceiling,
+  a hand shower on a slide rail with its hose to the mixer, a linear drain
+  along the wet wall, glass on two sides, the corner open to walk in. The
+  bath stands by the front wall, clear of it (the old fittings
+  overlapped).
+- **Warm, strong light:** downlights over every fitting (three in the WC,
+  five in the en-suite, stronger), strips behind the mirrors and in the
+  niche (three new `HOUSE_STRIPS`), and both rooms keep their lights partly
+  on by day, since they've only a slot of window.
+- **Open:** the marble's variety and the fittings' finish (brass) were a
+  pick; the veining could go further toward a real Calacatta's.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.22 — 2026-10-25
 
 The bar, and the house lived in.

@@ -623,16 +623,39 @@ void main() {
     // Calacatta marble, polished: a warm white, clouded faintly grey, with
     // the long branching veins that run through a block (grey, here and
     // there touched with gold), finer threads off them.
-    vec2 q = vWorld.xz * 1.4;
+    // (0.4.23) On a wall its face's own plane, not the floor's (the veins
+    // ran in streaks down a wall); cladding (variant .3 and up) cut into
+    // slabs 1.2 × 2.4 m on the walls, 1.2 m square on the floor, with a
+    // fine join between, the floor honed; .6 bookmatched (each pair of
+    // slabs mirrored about their join).
+    vec2 w2 = abs(N.y) > 0.5 ? vWorld.xz : abs(N.x) > 0.5 ? vWorld.zy : vWorld.xy;
+    float joint = 0.0;
+    if (vVar > 0.25) {
+      vec2 slab = abs(N.y) > 0.5 ? vec2(1.2) : vec2(1.2, 2.4);
+      vec2 cell = w2 / slab;
+      vec2 fq = fract(cell);
+      vec2 jd = min(fq, 1.0 - fq) * slab;
+      joint = 1.0 - smoothstep(0.0008, 0.0018 + fwidth(w2.x) * 0.5, min(jd.x, jd.y));
+      if (vVar > 0.55 && vVar < 0.8) {
+        float pair = floor(cell.x * 0.5);
+        float lx = cell.x - pair * 2.0;
+        w2.x = (pair * 2.0 + 1.0 - abs(lx - 1.0)) * slab.x;
+      }
+    }
+    vec2 q = w2 * 1.4;
     float warp = noise2(q * 0.9) * 2.2 + noise2(q * 2.7) * 0.8;
     float main = abs(sin((q.x * 0.8 + q.y * 0.45) * 2.2 + warp * 2.4));
-    float vein = 1.0 - smoothstep(0.0, 0.05 + 0.04 * noise2(q * 3.0), main);
-    float thread = 1.0 - smoothstep(0.0, 0.02, abs(sin((q.x * 0.3 - q.y * 1.1) * 5.0 + warp * 4.0 + noise2(q * 6.0) * 2.0)));
+    // (0.4.23) The veins softened at their edges and broken along their
+    // length, as stone's are (they were inked lines of even weight).
+    float wid = (0.03 + 0.05 * noise2(q * 3.0)) * smoothstep(0.25, 0.6, noise2(q * 0.7 + 11.0));
+    float vein = (1.0 - smoothstep(0.0, wid + 0.035, main)) * (0.45 + 0.55 * smoothstep(0.0, wid + 0.001, wid - main * 0.4));
+    float thread = (1.0 - smoothstep(0.0, 0.02, abs(sin((q.x * 0.3 - q.y * 1.1) * 5.0 + warp * 4.0 + noise2(q * 6.0) * 2.0)))) * smoothstep(0.3, 0.7, noise2(q * 1.3 + 5.0));
     float cloud = noise2(q * 1.7) * 0.6 + noise2(q * 5.0) * 0.4;
     alb = vec3(0.93, 0.915, 0.89) * (0.94 + 0.08 * cloud);
     vec3 vc = mix(vec3(0.52, 0.52, 0.53), vec3(0.72, 0.62, 0.45), smoothstep(0.55, 0.8, noise2(q * 0.6 + 4.0)));
-    alb = mix(alb, vc, vein * 0.85 + thread * 0.3 * (1.0 - vein));
-    rough = 0.07;
+    alb = mix(alb, vc, vein * 0.6 + thread * 0.22 * (1.0 - vein));
+    alb *= 1.0 - 0.35 * joint;
+    rough = vVar > 0.8 ? 0.22 : 0.07;
     f0 = 0.045;
   } else if (vPart == ${P.cord}) {
     // Paper cord woven over the seat's rails, wrapped in from its four
@@ -819,6 +842,9 @@ void main() {
   if (room != 0) skyLight = mix(skyLight, vec3(dot(skyLight, vec3(0.3, 0.55, 0.15))) * vec3(1.06, 1.0, 0.9), 0.65) * 1.6;
   float dim = mix(1.0, 0.3, uNight);
   vec3 lamps = uNight > 0.0 ? lampsAt(vWorld, N, V, rough, room) * uNight : vec3(0.0);
+  // (0.4.23) The washrooms keep their lights on by day too (they've only
+  // a slot of window; they were dim), less than by night.
+  if (room == 1 || room == 6) lamps += lampsAt(vWorld, N, V, rough, room) * 0.45 * (1.0 - uNight);
   float ao = ambientAt(room);
   open *= ao;
   lamps *= mix(1.0, ao, 0.7);

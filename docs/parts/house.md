@@ -37,7 +37,9 @@ Interior: x −7.72 … 7.72, z −78.72 … −63.28.
 - **Foyer** (x 4.6 … 7.72, z −63.28 … −67.5): the front door in the timber
   panel, a bench, a mirror, a walnut hook rail with two coats on hangers
   and a scarf over the middle hook (`0.4.21`).
-- **WC** (x 4.6 … 7.72, z −67.5 … −71.5): a basin, a WC, a mirror, its door
+- **WC** (x 4.6 … 7.72, z −67.5 … −71.5): Italian marble on every wall and
+  the floor (`washrooms.js`, `0.4.23`), a wall-hung toilet on its marble
+  ledge, a floating vanity under a 3 : 1 mirror lit from behind; its door
   off the foyer.
 - **Kitchen** (x 1.6 … 7.72, z −71.5 … −78.72): counters along the back
   with a sink and the hob's extractor, tall cupboards and the fridge along
@@ -74,8 +76,13 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
   long hanging, double hanging and shelves over drawers, brass rails, a
   light strip under each shelf over a rail; garments of every kind on
   hangers and folded knitwear (`garments.js`).
-- **En-suite** (x 2.6 … 7.72, z −71.28 … −75.5): a freestanding tub, a glass
-  shower, a double vanity and mirror; a slot window at the side.
+- **En-suite** (x 2.6 … 7.72, z −71.28 … −75.5): marble throughout, the
+  vanity's wall bookmatched (`0.4.23`); a double vanity on the door's wall
+  under a 3 : 1 mirror, a freestanding tub by the front wall, a toilet on
+  its ledge, and a walk-in shower in the far corner (a wet wall with a lit
+  niche, a rain head flush in the ceiling, a hand shower on a slide rail,
+  a linear drain, glass on two sides); a slot window at the side. Both
+  washrooms keep their lights partly on by day.
 - **Guest bedroom** (x 2.6 … 7.72, z −75.5 … −78.72): a bed, a desk.
 
 Partitions are 12 cm, plaster both sides, 3.25 m to the ceiling; doors
