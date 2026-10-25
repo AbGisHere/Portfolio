@@ -80,7 +80,7 @@ export const BIRD_FRAGMENT = `#version 300 es
 precision highp float;
 
 ${CAMERA_GLSL}
-uniform int uKind;      // 0 swallow, 1 kite, 2 goose
+uniform int uKind;      // 0 swallow, 1 kite, 2 goose, 3 a butterfly (0.4.24)
 uniform vec3 uSun;
 uniform vec3 uEnvTop;
 uniform vec3 uEnvLow;
@@ -118,6 +118,32 @@ void main() {
     if (vPart == ${BP.wingUnder} && vAlong > 0.55 && vAlong < 0.78) alb = vec3(0.86, 0.84, 0.8);
     if (wing && vAlong > 0.82) alb = vec3(0.06, 0.05, 0.05);
     if (vPart == ${BP.bill}) alb = vec3(0.85, 0.7, 0.2);
+  } else if (uKind == 3) {
+    // (0.4.24) A butterfly, its kind by its seed: a painted lady (orange,
+    // the forewing's tip black and spotted white), a cabbage white (a
+    // dark tip, a spot), a common blue (a pale fringe), a brimstone
+    // (sulphur, an orange dot); the undersides paler, the body dark.
+    int sp = int(fract(vSeed * 0.618) * 4.0);
+    bool hindW = vPart == ${BP.wingUnder};
+    float r = vAlong;
+    if (!wing) alb = vec3(0.06, 0.05, 0.05);
+    else if (sp == 0) {
+      alb = mix(vec3(0.85, 0.42, 0.12), vec3(0.55, 0.22, 0.08), smoothstep(0.1, 0.0, r));
+      if (!hindW && r > 0.62) alb = vec3(0.05);
+      if (!hindW && r > 0.7 && fract(r * 9.0) > 0.6) alb = vec3(0.92);
+      if (hindW && r > 0.55 && fract(r * 12.0) < 0.3) alb = vec3(0.08);
+    } else if (sp == 1) {
+      alb = vec3(0.94, 0.93, 0.88);
+      if (!hindW && r > 0.75) alb = vec3(0.16, 0.16, 0.17);
+      if (!hindW && abs(r - 0.5) < 0.06) alb = vec3(0.14);
+    } else if (sp == 2) {
+      alb = mix(vec3(0.32, 0.45, 0.85), vec3(0.15, 0.2, 0.45), smoothstep(0.75, 0.92, r));
+      if (r > 0.93) alb = vec3(0.92);
+    } else {
+      alb = vec3(0.93, 0.86, 0.3);
+      if (abs(r - 0.45) < 0.05) alb = vec3(0.9, 0.5, 0.15);
+    }
+    if (!gl_FrontFacing && wing) alb = mix(alb, vec3(0.85, 0.8, 0.7), 0.35);
   } else {
     // The greylag: grey-brown, paler beneath, its wings' tips dark, an
     // orange bill.

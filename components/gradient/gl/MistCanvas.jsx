@@ -43,7 +43,7 @@ import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader'
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
 import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
-import { HOUSE_BOUNDS, MOUND, POOL } from './houseShape';
+import { HOUSE_BOUNDS, MOUND, POOL, moundY } from './houseShape';
 
 // (0.4.13) The pool's and the hill's boxes (metres), for whether they're in
 // the frame.
@@ -51,10 +51,12 @@ const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, 
 const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
 import { makeWater } from './poolWater';
 import { PROBE, PROBE_FACES, makeProbes, probeLayout } from './mirrorProbe';
+import { personMesh } from './personMesh';
 import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
 import { BIRD_STRIDE, birdMesh } from './birdShape';
 import { BIRD_INSTANCE, birdsAt } from './birdFlight';
+import { butterfliesAt, butterflyMesh } from './butterflies';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
@@ -663,8 +665,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (birdPass !== null) return birdPass;
       const bp = passProgram(gl, 'birds', BIRD_VERTEX, BIRD_FRAGMENT);
       if (!bp) return (birdPass = false);
-      const kinds = ['swallow', 'kite', 'goose'].map((name, kind) => {
-        const { data, count } = birdMesh(name);
+      // (0.4.24) And the butterflies, a fourth kind.
+      const kinds = ['swallow', 'kite', 'goose', 'butterfly'].map((name, kind) => {
+        const { data, count } = name === 'butterfly' ? butterflyMesh() : birdMesh(name);
         const mb = gl.createBuffer();
         const ib = gl.createBuffer();
         const vao = gl.createVertexArray();
@@ -693,7 +696,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const g = birdProgram();
       if (!g) return;
       const { pitch: P, cm: c, colours } = meadowAt;
-      const flocks = birdsAt(skyT, birdWeight);
+      const flocks = { ...birdsAt(skyT, birdWeight), butterfly: butterfliesAt(skyT, birdWeight) };
       gl.useProgram(g.prog);
       gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
@@ -1875,6 +1878,39 @@ export default function MistCanvas({ recipe, onFail }) {
       if (probes && !probeSet) probeSet = probeLayout(houseBuilt.house.mirrors).map(m => ({ ...m, faces: 0, night: -1 }));
       return probes;
     };
+    // (0.4.24) The person, for checking its design in place (the walk isn't
+    // built): `?person=x,z,yaw[,pose]` stands it there (metres, degrees;
+    // `stand`, `stride` or `pass`), lit by the house's pass. Off without it.
+    const personAt = (() => {
+      const q = params.get('person');
+      if (!q) return null;
+      const [x, z, yaw = 180, name = 'stride'] = q.split(',');
+      return { x: +x || 0, z: +z || 0, yaw: ((+yaw || 0) * Math.PI) / 180, name };
+    })();
+    let person = null;
+    const personBuffer = () => {
+      if (person !== null || !personAt) return person;
+      const { data, count } = personMesh(personAt.name);
+      const c = Math.cos(personAt.yaw);
+      const sn = Math.sin(personAt.yaw);
+      const y = moundY(personAt.x, personAt.z);
+      for (let i = 0; i < data.length; i += HOUSE_STRIDE) {
+        const [x, py, z, nx, ny, nz] = data.slice(i, i + 6);
+        data.set([personAt.x + c * x + sn * z, y + py, personAt.z - sn * x + c * z, c * nx + sn * nz, ny, -sn * nx + c * nz], i);
+      }
+      const b = gl.createBuffer();
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
+        gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, n, gl.FLOAT, false, HOUSE_STRIDE * 4, at * 4);
+      }
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      return (person = { vao, buf: b, count });
+    };
     function mirrorUniforms(g, on) {
       const set = probes ? probeSet : null;
       gl.uniform1f(g.u('uProbeOn'), on && set ? 1 : 0);
@@ -1944,7 +1980,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // the ground (meadowShader.js writes the hill's depth).
     // (0.4.18) `view`: drawn for a mirror's probe instead, from its camera
     // ({ P, c, size }: no shadow map redrawn, no occlusion, no grain).
-    function drawHouse(mirror = false, lawn = false, view = null) {
+    function drawHouse(mirror = false, lawn = false, view = null, who = false) {
       const g = houseProgram();
       if (!g) return;
       const { colours } = meadowAt;
@@ -1985,7 +2021,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
       mirrorUniforms(g, !view && !mirror);
-      if (lawn) houseGeometry(g, g.u, 'lawn'); else if (!mirror && !view && aoReady) {
+      if (who) {
+        const pb = personBuffer();
+        gl.uniform1f(g.u('uAOOn'), 0);
+        gl.uniform1f(g.u('uMorph'), 0);
+        gl.bindVertexArray(pb.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, pb.count);
+        gl.bindVertexArray(null);
+      } else if (lawn) houseGeometry(g, g.u, 'lawn'); else if (!mirror && !view && aoReady) {
         // (0.4.2) Its depth first, colour off (the depth pass's program,
         // which shades nothing), then each pixel shaded once.
         const a = aoPass;
@@ -2282,6 +2325,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (deskOn && !noLamp) drawLamp();
       if (deskOn && !noProps) drawProps();
       if (deskOn && !noHouse && houseSeen) drawHouse();
+      if (deskOn && personAt && houseProgram()) drawHouse(false, false, null, true);
       if (deskOn) drawDesk(false);
       if (grassOn) {
         drawGrass(prints);

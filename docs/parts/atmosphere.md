@@ -173,6 +173,7 @@ blanked every ridge fill.
 | `?scroll=0.5` | Pin the descent's `about` (`components/scroll/descent.js`); the scroll layer then publishes nothing |
 | `?grain=0` | No grain layer (grain is random per load) |
 | `?desk=0.5` / `?contact=0.5` | Pin the descent's `desk` or `contact` stretch (the `0.3` and `0.4` cameras), as `?scroll` pins `about` |
+| `?person=x,z,yaw,pose` | (`0.4.24`) Stand the walker (`personMesh.js`) at x, z (metres, on the ground or the hill), facing yaw (degrees), in `stand`, `stride` or `pass`, to judge its design in place; off without it (the walk isn't built) |
 | `data-sun-cx` / `data-sun-cy` | Painted sun centre, CSS px |
 | `data-sun-toggle` on the sun button | Stable selector for the harness (not `aria-pressed`: the button has none; its accessible name matches `/switch to/i`) |
 | `data-busy` on the sun button | Set while a switch runs (clicks are ignored) |
@@ -409,7 +410,13 @@ camera at `about` 1 exactly (unit-tested).
   Birds now use the instanced 3D pass (`birdShape.js`, `birdFlight.js`,
   `birdShader.js`): swallows around the meadow, desk and house, red kites
   circling high, and passing geese. Their flight runs on the same `skyT`
-  clock, without another animation loop.
+  clock, without another animation loop. From `0.4.24` butterflies are a
+  fourth kind in the same pass (`butterflies.js`): 36 of them, four
+  species by seed (painted lady, cabbage white, common blue, brimstone),
+  each on its own low wandering path round the desk's drifts, along the
+  way and by the house, beating at 8–11 Hz out of step, resting now and
+  then on a flower, wings slowly opening and closing. By day only, and
+  none under reduced motion (the birds' weight).
 - **Known gaps:** the layered fallback ignores `desk` and `contact` (it
   holds the pull-back's end), and reduced motion runs the full desk path.
   Parity and switch still cover the `0.2` stretch. From `0.4.15`, perf also

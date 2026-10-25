@@ -773,6 +773,29 @@ void main() {
       alb *= 1.0 - 0.5 * tie * detail(0.02, q);
     } else alb = vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
     rough = 0.85;
+  } else if (vPart == ${P.person}) {
+    // (0.4.24) The person (personMesh.js): skin, hair, an off-white linen
+    // shirt (a slub across it), navy chinos (a twill), tan leather shoes,
+    // their soles.
+    if (vVar < 0.2) {
+      alb = vec3(0.62, 0.43, 0.32);
+      rough = 0.55;
+    } else if (vVar < 0.4) {
+      alb = vec3(0.07, 0.05, 0.04);
+      rough = 0.7;
+    } else if (vVar < 0.6) {
+      alb = vec3(0.9, 0.88, 0.83) * (0.93 + 0.08 * noise2(vWorld.xy * vec2(300.0, 40.0)));
+      rough = 0.9;
+    } else if (vVar < 0.8) {
+      alb = vec3(0.1, 0.13, 0.22) * (0.9 + 0.1 * sin((vWorld.x + vWorld.y) * 900.0));
+      rough = 0.85;
+    } else if (vVar < 0.95) {
+      alb = vec3(0.45, 0.27, 0.14);
+      rough = 0.4;
+    } else {
+      alb = vec3(0.86, 0.84, 0.78);
+      rough = 0.8;
+    }
   } else if (vPart == ${P.roof}) {
     // (0.4.17) The roof: sedum in drifts of its own greens, olive and rust,
     // tiny rosettes; or the margin's pale gravel, speckled.

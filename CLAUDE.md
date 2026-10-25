@@ -266,6 +266,8 @@ components/
     gl/garments.js — clothes: garments cut to their kind on hangers, a scarf, folded stacks (0.4.21)
     gl/homeDetails.js — sockets, switches, the Home display, the terrace's bar (0.4.22)
     gl/washrooms.js — the marble washrooms' cladding, toilet, vanity and walk-in shower (0.4.23)
+    gl/butterflies.js — the butterflies, a fourth kind in the birds' pass (0.4.24)
+    gl/personMesh.js — the walker's design: a figure built on a pose's joints (0.4.24; `?person=`)
     gl/birdShape.js, birdFlight.js, birdShader.js — the birds in 3D: swallows, kites, geese (0.4.4)
     freeCam.js — the /house route's free camera
     gl/meadowShader.js, gl/meadowTexture.js — the meadow pass: the ground painted as grass, prints, flowers (0.3.2), the mist at the mountains' foot (0.3.3); each extra pass fails alone (`passProgram`, 0.3.4)

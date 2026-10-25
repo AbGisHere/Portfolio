@@ -30,6 +30,9 @@ export const SPECIES = {
   kite: { body: [0.065, 0.06, 0.24], head: 0.045, half: 0.82, shoulder: [0.05, 0.02, 0.05], wrist: 0.36, chord: [0.38, 0.32], sweep: 0.12, tail: [0.3, 0.2, 0.4], fingers: 6 },
   // The greylag goose: a heavy body, a long neck, broad wings, a short tail.
   goose: { body: [0.12, 0.11, 0.42], head: 0.055, half: 0.8, shoulder: [0.08, 0.04, 0.08], wrist: 0.34, chord: [0.3, 0.2], sweep: 0.2, tail: [0.14, 0.12, 0.0], fingers: 4, neck: 0.42 },
+  // (0.4.24) A butterfly's wings hinge on its body's axis (butterflies.js
+  // builds it; only its joints here).
+  butterfly: { shoulder: [0.002, 0, 0], wrist: 1 },
 };
 
 /** The materials (birdShader.js): the body above, its belly, the wings

@@ -181,6 +181,16 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   with a gravel margin; two scuppers at the back into downpipes that run
   back under the soffit and down the wall.
 
+## The person (`0.4.24`, the design)
+
+`personMesh.js`: the walker who'll go from the desk to the house, designed
+but not yet walking. Stylised and seen from behind, never a likeness:
+1.78 m, an off-white linen shirt untucked with the sleeves rolled, navy
+chinos, tan leather shoes, short dark hair. Every limb is a tapered form
+between two joints of a pose (`POSES`: `stand`, and a stride's two keys,
+`stride` and `pass`), so the walk only has to move the joints. Lit by
+the house's pass (`person` part). `?person=` stands it in the scene.
+
 ## Building it
 
 The mesh is about 3 million vertices and takes about 2 s, so it's built in

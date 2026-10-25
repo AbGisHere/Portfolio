@@ -6,6 +6,38 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.24 — 2026-10-25
+
+Butterflies, and the walker designed.
+
+- **Butterflies** (`butterflies.js`), a fourth kind in the birds' pass on
+  the same clock: a slim body with antennae, a forewing and a hindwing a
+  side (each a fan from its root, both faces, hinged on the body's axis).
+  Four species by seed: a painted lady (orange, black tips spotted white),
+  a cabbage white, a common blue, a brimstone. 36 of them: gathered by the
+  flowers round the desk, strung along the way to the house, and round
+  its forecourt planters and hill. Each wanders low on its own path,
+  bobbing, beating at 8–11 Hz out of step with the rest, gliding now and
+  then, and every 9–15 s it settles on a flower for a while, its wings
+  opening and closing slowly. By day only (none by night, none under
+  reduced motion), like the birds.
+- **The walker's design** (`personMesh.js`): stylised, small in the
+  frame and seen from behind, never a likeness. 1.78 m, about seven and a
+  half heads; an off-white linen shirt untucked with its sleeves rolled to
+  the forearm and the collar open, navy chinos to the ankle, tan leather
+  shoes, short dark hair. Built on a skeleton: every limb a tapered form
+  between two joints of a pose (pelvis, spine, neck, head, shoulders,
+  elbows, wrists, hips, knees, ankles, toes), the clothes over them, so
+  the walk to come only moves the joints. Three poses: standing, and a
+  stride's contact and passing keys. Lit by the house's pass.
+- **Not the walk yet:** the figure isn't on the page; `?person=x,z,yaw,pose`
+  stands it anywhere to judge it in place (checked beside the desk, along
+  the way and before the house, by day and by night). The scroll-driven
+  walk and the pool sequence need their own scope.
+- **Open:** butterflies' night treatment (none for now; moths?), the
+  robe/towel for the pool, the character's palette.
+- **Measured:** unit tests 28/28.
+
 ## 0.4.23 — 2026-10-25
 
 Marble washrooms.
