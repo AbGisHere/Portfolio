@@ -111,6 +111,12 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   sofa's and the lounge chair's scatter cushions on the seat, against the
   back. The sofa's throw follows the arm's section with a centimetre's
   clearance, two faces 8 mm apart, its hems rolled.
+- **Lived in** (`homeDetails.js`, `0.4.22`): brushed-brass socket and
+  switch plates, one family, where things plug in (the console, the sofa,
+  the dining wall, over the kitchen counter, the desks, by each bed) and
+  by the doors; a Home display by the front door, its screen the house's
+  controls drawn by the shader (`P.screen` variant `.6`: rooms as tiles,
+  a few lit, the climate's dial), glowing.
 - **Styling** (`0.4.20`): the dining table laid for eight (`placeSetting()`:
   a plate on a charger, a napkin under the fork, a knife and a spoon) round
   a thrown stoneware vase (`vase()`); the bookcase leaves about one
@@ -155,6 +161,12 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   porch's roof), frameless glass round the open sides capped by a
   brushed-brass rail, loungers, an olive in a thrown stoneware pot (dark
   glaze, rolled lip, soil inside it), its uplight on the deck beside it.
+- **The bar** (`homeDetails.js`, `0.4.22`): against the timber wall
+  beside the bedroom's glass, facing the pool: a walnut counter with a
+  stone top, doors with brass pulls and a glass-fronted wine fridge, two
+  floating shelves of bottles and stemmed glasses lit from under (two
+  `HOUSE_STRIPS`), a tray, a bowl of lemons, two stools. Two of the
+  terrace's uplights moved out from under it.
 - **The roof** (`0.4.17`): the slab, then a fascia in two layers (a deep
   band of render, a shadow gap, a bronzed coping standing up as a low
   parapet); a recessed soffit of timber boards over the terrace and round

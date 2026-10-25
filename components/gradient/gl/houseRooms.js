@@ -8,6 +8,7 @@
 import { FLOOR, HOUSE_PART, STOREY, TERRACE } from './houseShape';
 import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from './meshKit';
 import { foldedStack, garment, scarf } from './garments';
+import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import {
   bath, bed, bench, bookcase, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, shower, sofa, stool, tallUnit, tv, v, vanity, wc,
@@ -283,6 +284,17 @@ export function groundRooms(out, ix, iz, glass) {
   tv(out, [ix[0] + 0.05, B + 1.45, -68.2], Math.PI / 2);
   bookcase(out, [-3.4, B, -72.935], 0, 3.8, 2.4, 17);
 
+  // (0.4.22) Sockets where things plug in (by the console and the sofa, the
+  // dining wall, over the kitchen's counter, the study's desk), switches by
+  // the front door; the Home display by it, in the foyer.
+  for (const z of [-67.3, -69.1, -70.6]) socket(out, [ix[0], B + 0.3, z], [1, 0, 0]);
+  socket(out, [4.54, B + 0.3, -67.0], [-1, 0, 0]);
+  for (const x of [3.2, 6.6]) socket(out, [x, B + 1.1, iz[0]], [0, 0, 1]);
+  socket(out, [-2.6, B + 0.86, iz[0]], [0, 0, 1]);
+  lightSwitch(out, [7.1, B + 1.05, iz[1]], [0, 0, -1]);
+  lightSwitch(out, [7.2, B + 1.05, iz[1]], [0, 0, -1]);
+  homeDisplay(out, [6.95, B + 1.42, -67.44], [0, 0, 1]);
+
   // ---- The dining room: a table for eight under a long pendant.
   marbleTable(out, [2.55, B, -67.9], Math.PI / 2, { w: 2.6, d: 1.05 });
   for (const z of [-68.85, -67.9, -66.95]) {
@@ -425,6 +437,11 @@ export function upperRooms(out, glass, jx, jz) {
   // an armchair at the glass, a dresser, a rug.
   rug(out, [-3.6, -75.6], [1.6, -72.0], y, 0.3);
   bed(out, [-0.95, y, -75.74], 0, { w: 1.9, l: 2.1, ceil: CEIL_U });
+  // (0.4.22) A socket over each nightstand, on the panel; a switch by the
+  // door, by the en-suite's.
+  for (const x of [-2.26, 0.36]) socket(out, [x, y + 0.72, -75.645], [0, 0, 1]);
+  lightSwitch(out, [-4.44, T + 1.1, -74.68], [1, 0, 0]);
+  lightSwitch(out, [2.54, T + 1.1, -74.8], [-1, 0, 0]);
   loungeChair(out, [1.7, y, -72.2], Math.PI * 1.2, v(P.fabric, 0.3));
   dresser(out, [-4.38, y, -72.6], Math.PI / 2, 1.3);
   mirror(out, [-4.43, y + 1.55, -72.6], Math.PI / 2, 0.9, 1.0);
@@ -453,6 +470,8 @@ export function upperRooms(out, glass, jx, jz) {
   // ---- The guest bedroom: a bed, its table and lamp, a desk.
   bed(out, [5.15, y, jz[0] + 0.02], 0, { w: 1.5, l: 2.0, ceil: CEIL_U, stands: [false, true] });
   desk(out, [jx[1] - 0.4, y, -76.0], -Math.PI / 2, 1.2);
+  socket(out, [6.26, y + 0.72, jz[0] + 0.115], [0, 0, 1]);
+  socket(out, [jx[1], y + 0.86, -76.55], [-1, 0, 0]);
 
   // ---- Curtains at the glass.
   const cz = -71.42;

@@ -6,6 +6,34 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.22 — 2026-10-25
+
+The bar, and the house lived in.
+
+- **A mini-bar on the terrace** (`homeDetails.js`), against the timber
+  wall beside the bedroom's glass, facing the pool, clear of the way into
+  the bedroom: a walnut counter on a recessed plinth with a stone top
+  overhanging it, doors with brass bar pulls, a glass-fronted wine fridge
+  at its end; two floating walnut shelves on the timber over it with
+  bottles (wine's and spirits', green and amber glass) and stemmed
+  glasses, each lit by a strip under its front (two new `HOUSE_STRIPS`,
+  outside); a tray with tumblers and a shaker, a bowl of lemons; two
+  stools before it. Two of the terrace's uplights stood where it is; one
+  moved beside it.
+- **Sockets and switches:** one family of plates, 86 mm square, brushed
+  brass, a socket's face a dark well with its pins' holes, a switch's a
+  rocker. Sockets where things plug in: by the TV's console and the sofa,
+  the dining wall, over the kitchen's counter, the study's and the guest
+  room's desks, over each nightstand. Switches by the front door and the
+  bedroom's and en-suite's doors.
+- **The Home display:** a slim tablet on a wall mount in the foyer, by
+  the front door, its screen the house's controls drawn in the shader
+  (rooms as tiles over a deep wallpaper, a few lit warm, a climate tile
+  with its dial), glowing day and night. Not interactive.
+- **Open:** the bar's design, the plate finish, the display's placement
+  and what it shows were picks (the plan left them to agree).
+- **Measured:** unit tests 28/28.
+
 ## 0.4.21 — 2026-10-25
 
 The entrance's coats and the walk-in wardrobe.

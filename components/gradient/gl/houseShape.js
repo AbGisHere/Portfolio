@@ -134,7 +134,9 @@ export const HOUSE_LIGHTS = [
   [8.1, FLOOR + 0.05, -58.42, 4, 0.7, 4, 0],
   [5.0, FLOOR + 0.05, -62.75, 4, 0.6, 4, 0],
   [7.4, FLOOR + 0.05, -62.75, 4, 0.6, 4, 0],
-  ...[3.4, 5.4, 7.4].map(x => [x, TERRACE + 0.08, -70.75, 3.6, 0.55, 4, 0]),
+  // (0.4.22) Not where the bar stands (it has its own light).
+  [7.4, TERRACE + 0.08, -70.75, 3.6, 0.55, 4, 0],
+  [2.95, TERRACE + 0.08, -70.75, 3.6, 0.55, 4, 0],
   ...[-6, -3, 3, 6].map(x => [x, moundY(x, -56.9) + 0.05, -56.9, 3.5, 0.6, 4, 0]),
   // (0.4.17) The olive's on the deck beside its pot, aimed into the tree
   // (it sat on the old box's rim).
@@ -165,6 +167,10 @@ export const HOUSE_STRIPS = [
   [[0.1, TERRACE + 0.46, -75.44], [0.6, TERRACE + 0.46, -75.44], [0, -1, 0], 0.9, 0.4, 4],
   [[-5.25, FLOOR + 2.36, -72.6], [-1.55, FLOOR + 2.36, -72.6], [0, -1, 0.3], 1.5, 0.45, 3, true],
   [[-5.25, FLOOR + 1.16, -72.6], [-1.55, FLOOR + 1.16, -72.6], [0, -1, 0.3], 1.2, 0.35, 3, true],
+  // (0.4.22) The terrace's bar: under its two shelves, and under its
+  // counter's lip onto the deck.
+  [[3.5, TERRACE + 1.42, -70.75], [6.3, TERRACE + 1.42, -70.75], [0, -1, 0.5], 1.3, 0.7, 0, true],
+  [[3.5, TERRACE + 1.82, -70.75], [6.3, TERRACE + 1.82, -70.75], [0, -1, 0.5], 1.1, 0.5, 0, true],
   // (0.4.21) The wardrobe's, under the shelf over each rail, down its run.
   [[-4.3, TERRACE + 2.07, -76.9], [2.4, TERRACE + 2.07, -76.9], [0, -1, -0.5], 1.3, 0.7, 5, true],
   [[-4.3, TERRACE + 1.11, -76.9], [2.4, TERRACE + 1.11, -76.9], [0, -1, -0.5], 1.0, 0.45, 5, true],

@@ -658,6 +658,12 @@ void main() {
     alb = vVar < 0.2 ? vec3(0.93, 0.92, 0.89) : vVar < 0.4 ? vec3(0.86, 0.85, 0.83) : vVar < 0.7 ? vec3(0.55, 0.42, 0.33) : vec3(0.28, 0.36, 0.34);
     rough = vVar > 0.2 && vVar < 0.4 ? 0.3 : 0.12;
     f0 = 0.045;
+    // (0.4.22) Bottle glass: deep green, or amber; glossy.
+    if (vVar > 0.86) {
+      alb = vVar > 0.89 ? vec3(0.3, 0.13, 0.03) : vec3(0.03, 0.09, 0.05);
+      rough = 0.05;
+      f0 = 0.05;
+    }
   } else if (vPart == ${P.mirror}) {
     alb = vec3(0.92, 0.93, 0.92);
     rough = 0.02;
@@ -682,6 +688,38 @@ void main() {
     alb = vec3(0.012, 0.013, 0.016);
     rough = 0.05;
     f0 = 0.045;
+    if (vVar > 0.5) {
+      // (0.4.22) The Home display, on: the house's controls over a deep
+      // wallpaper, a header, then the rooms as tiles in a grid, a few lit
+      // (their lights on: warm and bright, a glowing dot), the rest dim;
+      // a wide tile for the climate, its dial.
+      vec2 q = st;
+      vec3 ui = mix(vec3(0.05, 0.08, 0.16), vec3(0.08, 0.2, 0.24), smoothstep(-0.09, 0.09, q.x + q.y * 0.6));
+      float head = 1.0 - smoothstep(0.0, 0.001, abs(q.y - 0.066) - 0.004) ;
+      ui = mix(ui, vec3(0.85), head * step(abs(q.x + 0.075), 0.03));
+      vec2 cell = vec2(0.054, 0.04);
+      vec2 g = (q - vec2(-0.108, -0.072)) / cell;
+      vec2 gi = floor(g);
+      if (gi.x >= 0.0 && gi.x < 4.0 && gi.y >= 0.0 && gi.y < 3.0) {
+        vec2 c = (gi + 0.5) * cell + vec2(-0.108, -0.072);
+        vec2 o = abs(q - c) - (cell * 0.5 - vec2(0.004)) + 0.006;
+        float tile = 1.0 - smoothstep(-0.0004, 0.0004, length(max(o, 0.0)) - 0.006);
+        float on = step(0.55, fract(sin(dot(gi, vec2(12.9898, 78.233))) * 43758.5453));
+        bool climate = gi.y == 2.0 && gi.x >= 2.0;
+        vec3 tc = climate ? vec3(0.22, 0.3, 0.34) : on > 0.5 ? vec3(0.95, 0.88, 0.7) : vec3(0.2, 0.23, 0.28);
+        float dot_ = 1.0 - smoothstep(0.0055, 0.0065, length(q - c - vec2(-0.012, 0.006)));
+        tc = mix(tc, on > 0.5 && !climate ? vec3(1.0, 0.72, 0.25) : vec3(0.75), dot_ * (climate ? 0.0 : 1.0));
+        if (climate) {
+          vec2 cc = vec2(-0.108 + 3.0 * cell.x, -0.072 + 2.5 * cell.y);
+          float ring = 1.0 - smoothstep(0.0008, 0.0016, abs(length(q - cc) - 0.012));
+          tc = mix(tc, vec3(0.95, 0.6, 0.3), ring * step(-0.4, atan(q.y - cc.y, q.x - cc.x) * 0.3));
+        }
+        ui = mix(ui, tc, tile * 0.92);
+      }
+      alb = ui * 0.15;
+      emit = ui * 0.85;
+      rough = 0.08;
+    }
   } else if (vPart == ${P.art}) {
     // A print: (0.4.20) each its own (by its variant), soft fields of two
     // colours drifting over the paper, a third in a band; under glass, so

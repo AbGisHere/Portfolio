@@ -12,6 +12,7 @@ import { ball, barPull, box, grid, lathe, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
+import { miniBar } from './homeDetails';
 
 // (0.4.16) A seeded stream for the planting's drifts.
 const seededMesh = seed => {
@@ -349,6 +350,9 @@ export function houseLayout() {
     tube(out, [a[0], gy + 1.062, a[1]], [b[0], gy + 1.062, b[1]], 0.021, P.brass, 14);
   }
   for (const [x, z, r] of [[-8.25, EDGE - 0.15, 0.024], [8.25, EDGE - 0.15, 0.024], [-8.25, -70.9, 0.021], [8.25, -70.9, 0.021]]) ball(out, [x, gy + 1.062, z], r, P.brass, 14, 8);
+  // (0.4.22) A bar against the timber wall beside the bedroom's glass,
+  // facing the pool, clear of the way into the bedroom.
+  miniBar(out, gy, PLAN.upper.z[1] + 0.04, [3.3, 6.6]);
   // Two loungers by the pool, a side table between, an olive in a pot.
   for (const x of [5.65, 7.25]) lounger(out, x, -63.85, gy);
   box(out, [6.08, gy, -62.50], [6.62, gy + 0.42, -61.96], P.walnut);
