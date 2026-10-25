@@ -6,6 +6,28 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.25 — 2026-10-25
+
+The pool framed for every screen.
+
+- **The pool fits the frame:** the hold over the pool was one framing for
+  every frame shape (a portrait one from higher up), so the pool was small
+  on a short desktop or a phone held sideways (a third of the height) and
+  nothing reserved room for the contact form. The hold now zooms so the
+  pool and its coping span up to a share of the frame's width (88 % of a
+  narrow frame's, 60 % of a wide one's, running smoothly with the aspect,
+  no step) and at most half its height (`POOL_FRAME`, `poolFit` in
+  `deskCamera.js`). On a phone held upright it spans nearly the width; on
+  a phone held sideways or a short desktop it fills half the height with
+  deck round it; on a laptop it's as before. The zoom eases in over the
+  approach (`poolFit` 0 before the hold's keys), so the path stays
+  continuous and reversible.
+- **Open:** where the contact form sits against the pool is still to
+  design; the camera and geometry stay as they were otherwise (the
+  plan's other options, a lower camera or a reshaped pool, weren't
+  needed).
+- **Measured:** unit tests 28/28.
+
 ## 0.4.24 — 2026-10-25
 
 Butterflies, and the walker designed.

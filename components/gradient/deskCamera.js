@@ -103,7 +103,8 @@ export const DESK_PATH = {
  * (../scroll/stops.js CONTACT_STOPS).
  */
 const POOL_HIGH = { y: POOL.at[1] + 15 };
-const POOL_HOLD = { d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, tablet: POOL_HIGH };
+// (0.4.25) `poolFit`: the hold fits the pool to the frame (pitchOf).
+const POOL_HOLD = { d: POOL.at[2], y: POOL.at[1] + 6.5, pitch: 90, centre: 1, zoom: 1, yaw: 180, poolFit: 1, tablet: POOL_HIGH };
 
 export const CONTACT_PATH = {
   keys: [
@@ -169,7 +170,7 @@ function monotone(xs, ys, x) {
  * the camera. */
 function keysFrom(path, end, device) {
   const y = (1 + end.rise) * WORLD_M;
-  return path.keys.map(k => ({ fit: 0, yaw: 0, x: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
+  return path.keys.map(k => ({ fit: 0, yaw: 0, x: 0, poolFit: 0, ...(k.d == null ? { ...k, d: DESK_PATH.d0, y } : k), ...(device === 'tablet' ? k.tablet : null) }));
 }
 
 /** The camera at `x` along a path (deskCameraAt's fields). */
@@ -189,6 +190,7 @@ function cameraOn(path, x, end, device) {
     centre: at('centre'),
     zoom: at('zoom'),
     fit: at('fit'),
+    poolFit: at('poolFit'),
     eye: y / WORLD_M,
     // How far ahead of the camera the desk is (toward the mountains).
     ahead: -d / WORLD_M,
@@ -268,6 +270,10 @@ export const deviceFor = (w, h) => (h > w ? 'tablet' : 'laptop');
  * it may take (`most`). */
 const SCREEN_FIT = { laptop: { span: 0.39, most: 0.8 }, tablet: { span: 0.279, most: 0.74 } };
 
+/** (0.4.25) The pool's share of the frame at the hold: across (a narrow
+ * frame's, a wide one's), and down at most. */
+const POOL_FRAME = { narrow: 0.88, wide: 0.6, down: 0.5 };
+
 /**
  * The pitch as the shader takes it: the optical centre on screen (`sx`,
  * `sy`) and on the virtual plane (`vx`, `vy`, the 0.2 frame's horizon), the
@@ -281,8 +287,23 @@ export function pitchOf(cam, view, w, h) {
   // until it spans `most` of the width at most.
   const fit = cam.fit ?? 0;
   const { span, most } = SCREEN_FIT[deviceFor(w, h)];
-  const zoom = cam.zoom * (1 - fit) + Math.min(cam.zoom, ((most / span) * w) / h) * fit;
+  let zoom = cam.zoom * (1 - fit) + Math.min(cam.zoom, ((most / span) * w) / h) * fit;
   const f = h - (view.horizon + cam.tilt * h);
+  // (0.4.25) Over the pool, zoomed so the pool and its coping fit the
+  // frame by its shape (they were one framing for every frame, small on a
+  // short or a narrow one): across up to POOL_FRAME's share of the width
+  // (more of a narrow frame's, less of a wide one's), down at most its
+  // share of the height, so a contact form has room round it; the share
+  // runs smoothly with the aspect, no step.
+  const pf = cam.poolFit ?? 0;
+  if (pf > 0 && f > 0) {
+    const Y = Math.max(1, cam.eye * WORLD_M - POOL.at[1]);
+    const a = w / h;
+    const t = Math.min(1, Math.max(0, (a - 0.5) / 1.3));
+    const across = POOL_FRAME.narrow + (POOL_FRAME.wide - POOL_FRAME.narrow) * t * t * (3 - 2 * t);
+    const fitZ = Math.min((across * w * Y) / ((POOL.w + 0.7) * f), (POOL_FRAME.down * h * Y) / ((POOL.d + 0.7) * f));
+    zoom = zoom * (1 - pf) + Math.min(3, Math.max(0.5, fitZ)) * pf;
+  }
   const vy = view.horizon;
   return {
     sx: w / 2,

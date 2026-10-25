@@ -733,6 +733,13 @@ house) and `x` (metres across).
   comes up to the house, and goes up and over onto the pool: the contact
   hold (`CONTACT_STOPS` .96). A unit test checks it turns only at a pitch
   of 90°.
+- **The pool fits the frame** (`0.4.25`): the hold's keys carry `poolFit`
+  (1 at the hold, 0 elsewhere, so it eases in over the approach), and
+  `pitchOf` zooms so the pool and its coping span up to `POOL_FRAME`'s
+  share of the width (88 % of a narrow frame's, 60 % of a wide one's,
+  smoothly with the aspect) and at most half the height, leaving the
+  contact form room round it. A portrait frame still holds from higher up
+  (`POOL_HIGH`), as its device does at the desk.
 - **Turned off the mountains' plane** the painted far scene (ridges,
   bodies, veils) fades out by `face` (`YAW_OFF`), and the ground runs on to
   the horizon, hazing into the air as distance thickens
