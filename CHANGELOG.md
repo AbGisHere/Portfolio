@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.29 — 2026-10-25
+
+Styling: the lived-in pass across every room, and fixing lights on mobile GPUs (Qualcomm Adreno and ARM Mali).
+
+- **The lived-in pass (`furniture.js`, `homeDetails.js`, `washrooms.js`, `houseRooms.js`):**
+  From interior design science and styling critique: props grouped in sets of three (tall, middle, flat), open-pore walnut, brushed brass, and natural linen.
+  - *Living:* corner-draped waffle throw with fringe overhang across the sofa; three offset monograph volumes with an open silk ribbon marker, a ribbed smoked-glass candle with wax line and dark wick, and a shallow soapstone bowl with three brushed brass spheres on the coffee table; floor-to-ceiling fluted walnut acoustic slats behind the TV grazed by slot light.
+  - *Dining:* brushed-brass napkin rings holding rolled linen napkins at both settings; heavy-base crystal water tumblers with internal refraction rims.
+  - *Kitchen:* fluted vertical walnut tambour on the island's knee-side; secondary champagne-bronze prep tap beside the sink; turned walnut salt cellar with a miniature brass spoon; organic dimpled lemons with stem nubs.
+  - *Study:* stitched saddle-leather desk blotter; turned brass cylindrical pen cup holding metal pens and steel rule; open linen sketchbook with ribbon.
+  - *Bedrooms:* crystal water carafe with upturned tumbler and shallow brass valet tray on the left nightstand; open hardcover book face down mid-chapter on the right nightstand.
+  - *Closet:* partially open top drawer revealing a segmented dark velvet jewelry/watch tray; angled low shoe shelf with brass heel stops.
+  - *Bathrooms:* slatted teak bath bridge across the freestanding soaking tub with folded waffle cloth, sea sponge and votive candle; three plush folded bath sheets in open vanity cubbies; champagne-bronze cross-handle taps; amber apothecary glass soap bottle with black pump; rolled waffle hand towels in a walnut basket.
+  - *Foyer, stair & landing:* floating walnut entry shelf with brass key dish; fluted stoneware umbrella stand; flush coir matting at the door; 5 mm dark wall recess shadow gap per tread; low charred-wood gallery plinth on the landing with an abstract bronze sculpture.
+  - *Terrace & bar:* low limestone drum table between loungers with chilled tumblers and lime wedges; clear ice cubes in cocktail glasses.
+- **Mobile GPU lighting fix (`houseShader.js`):**
+  Dynamic `vec3[]` array indexing in GLSL caused a rotating phase shift on Qualcomm Adreno and ARM Mali drivers due to 16-byte alignment (`base + i * 12` vs 16 bytes), turning lights neon green, cyan, magenta, and radioactive yellow. Packed all light, strip, room, and book arrays into strictly 16-byte aligned `vec4` arrays (`L_P`, `L_D`, `L_C`, `L_K`, `S_A`, `S_B`, `S_D`, `S_K`, `ROOM_C`, `BOOKS`) with `precision highp int;` addressing. Reduced constant uniform vectors from 1,386 to 900 (under the mobile 1,024-vector hardware ceiling). Verified on a physical OnePlus 11R (Snapdragon / Adreno 730) via BrowserStack with zero shader errors and zero color artifacts.
+- **Compare tool & theme query support:**
+  Added HUD comparison button in `/house` to live-toggle between `0.4.29 (New)` and `0.4.28 (Classic)` with dynamic buffer swapping, and added `?theme=night`/`?theme=day` query parameter support to `ThemeProvider.jsx` and `app/layout.jsx`.
+
 ## 0.4.28 — 2026-10-25
 
 The house lit to the lighting brief (`ROADMAP.md`, "Lighting brief

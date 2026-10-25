@@ -91,6 +91,7 @@ for (let i = 2; i < process.argv.length; i++) {
   args[a.slice(2)] = next && !next.startsWith('--') ? (i++, next) : true;
 }
 const BASE = String(args.base ?? 'http://localhost:3001').replace(/\/$/, '');
+const PATH = args.path ? String(args.path) : '/?contact=0.6&theme=night';
 const QUIET = !!args.quiet;
 const ONLY = args.only ? String(args.only).toLowerCase().split(',') : null;
 const OUT = join('scripts', 'out', 'devices');
@@ -209,7 +210,8 @@ try {
       continue;
     }
     try {
-      await driver.get(`${BASE}/?desk=0.6`);
+      const url = `${BASE}${PATH.startsWith('/') ? PATH : `/${PATH}`}`;
+      await driver.get(url);
       await driver.sleep(8000);
       const r = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS);
       row.gpu = r.gpu;

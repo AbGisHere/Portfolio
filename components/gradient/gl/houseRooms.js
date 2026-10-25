@@ -6,14 +6,15 @@
  */
 
 import { FLOOR, HOUSE_PART, MATCH_AXES, STOREY, TERRACE } from './houseShape';
-import { add, axes, ball, barPull, box, grid, lathe, obox, sweep, tube } from './meshKit';
+import { add, axes, ball, barPull, box, grid, lathe, obox, soft, sweep, tube } from './meshKit';
 import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import { clad, longVanity, toilet, walkInShower } from './washrooms';
 import { bouquet } from './plantMesh';
 import { CEILS, panelUnder } from './houseLightPlan';
+import { isLivedIn } from './houseStyling';
 import {
-  bath, bed, bench, bookcase, canvas, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase, wineGlass,
+  bath, bed, bench, bookcase, canvas, chair, coffeeTable, console_, desk, door, dresser, floorLamp, island, placeSetting, vase, waterTumbler, wineGlass,
   kitchenRun, loungeChair, marbleTable, mirror, pendant, picture, rug, sofa, stool, tallUnit, tv, v,
 } from './furniture';
 
@@ -261,6 +262,20 @@ export function groundRooms(out, ix, iz, glass) {
   // bench, a mirror over it, hooks with coats.
   bench(out, [7.3, B, -65.4], -Math.PI / 2, { w: 1.3, padded: true });
   mirror(out, [ix[1], B + 1.5, -65.4], -Math.PI / 2, 0.8, 1.1);
+  if (isLivedIn()) {
+    // (0.4.29) A floating walnut shelf under the mirror with a turned-brass key tray
+    box(out, [ix[1] - 0.18, B + 0.88, -65.7], [ix[1], B + 0.91, -65.1], v(P.walnut, 0.25));
+    lathe(out, [ix[1] - 0.09, B + 0.91, -65.4], [0, 1, 0], [[0, 0], [0.05, 0], [0.065, 0.018], [0.055, 0.018], [0.045, 0.004], [0, 0.004]], P.brass, 16);
+    // (0.4.29) A stoneware umbrella stand by the door
+    lathe(out, [6.8, B, -63.6], [0, 1, 0], [[0, 0], [0.1, 0], [0.11, 0.46], [0.095, 0.46], [0.09, 0.02], [0, 0.02]], v(P.ceramic, 0.4), 20);
+    tube(out, [6.78, B + 0.02, -63.6], [6.74, B + 0.65, -63.58], 0.01, v(P.walnut, 0.1), 6);
+    // (0.4.29) Coir matting set flush in a brass frame at the threshold
+    box(out, [4.8, B + 0.002, -63.7], [6.2, B + 0.012, -62.9], v(P.rug, 0.6));
+    tube(out, [4.8, B + 0.014, -63.7], [6.2, B + 0.014, -63.7], 0.004, P.brass, 4);
+    tube(out, [4.8, B + 0.014, -62.9], [6.2, B + 0.014, -62.9], 0.004, P.brass, 4);
+    tube(out, [4.8, B + 0.014, -63.7], [4.8, B + 0.014, -62.9], 0.004, P.brass, 4);
+    tube(out, [6.2, B + 0.014, -63.7], [6.2, B + 0.014, -62.9], 0.004, P.brass, 4);
+  }
   // (0.4.21) A walnut hook rail on the wall, three brass hooks; two coats
   // on hangers and a scarf over the middle hook, clear of the mirror (they
   // were a row of rounded shapes on a rail, merging into one mass).
@@ -285,6 +300,17 @@ export function groundRooms(out, ix, iz, glass) {
   floorLamp(out, [-7.2, B, -70.3]);
   console_(out, [ix[0] + 0.24, B, -68.2], Math.PI / 2, 2.0);
   tv(out, [ix[0] + 0.05, B + 1.45, -68.2], Math.PI / 2);
+  if (isLivedIn()) {
+    // (0.4.29) Fluted walnut slats floor to ceiling behind the TV, grazed by its slot light
+    const tvZ0 = -69.5;
+    const tvZ1 = -66.9;
+    const nSlats = 36;
+    const slatW = (tvZ1 - tvZ0) / nSlats;
+    for (let k = 0; k < nSlats; k++) {
+      const sz = tvZ0 + (k + 0.5) * slatW;
+      box(out, [ix[0] + 0.002, B + 0.02, sz - slatW * 0.28], [ix[0] + 0.022, CEIL_G - 0.02, sz + slatW * 0.28], v(P.walnut, 0.6));
+    }
+  }
   bookcase(out, [-3.4, B, -72.935], 0, 3.8, 2.4, 17);
 
   // (0.4.22) Sockets where things plug in (by the console and the sofa, the
@@ -320,6 +346,13 @@ export function groundRooms(out, ix, iz, glass) {
   placeSetting(out, [2.27, B + 0.75, -66.95], [-1, 0]);
   placeSetting(out, [2.83, B + 0.75, -66.95], [1, 0]);
   for (const [gx, gz] of [[2.47, -66.78], [2.63, -67.12]]) wineGlass(out, [gx, B + 0.75, gz]);
+  if (isLivedIn()) {
+    // (0.4.29) A ribbed crystal water tumbler by each wine glass
+    waterTumbler(out, [2.39, B + 0.75, -66.68]);
+    waterTumbler(out, [2.71, B + 0.75, -67.22]);
+    // (0.4.29) An olive branch arching out of the roses
+    sweep(out, [[2.55, B + 0.75 + 0.25, -67.9], [2.52, B + 0.75 + 0.45, -67.85], [2.42, B + 0.75 + 0.52, -67.75], [2.3, B + 0.75 + 0.48, -67.65]], 0.005, v(P.bark, 0.2), { seg: 6 });
+  }
   // (0.4.27) Over it, a large calm painting: two fields stacked on a warm
   // ground, on canvas (it was a print the size of the rest).
   canvas(out, [4.54, B + 1.62, -68.7], -Math.PI / 2, 1.6, 1.1, 0.3);
@@ -376,6 +409,10 @@ export function groundRooms(out, ix, iz, glass) {
     const z = z0 - (i - 1) * run;
     const y = B + i * rise;
     box(out, [sx, y - 0.07, z - 0.3], [ix[0] + 1.22, y, z], v(P.walnut, 0));
+    if (isLivedIn()) {
+      // (0.4.29) 5 mm shadow gap where each tread meets the wall, cut as a dark recess into the wall
+      box(out, [ix[0] + 0.001, y - 0.075, z - 0.305], [sx, y + 0.005, z + 0.005], P.frame);
+    }
     // The LED tucked under its nosing, in an opal diffuser (0.4.17: 1.2 cm,
     // it was a 5 mm sliver that barely showed).
     box(out, [sx + 0.04, y - 0.082, z - 0.05], [ix[0] + 1.16, y - 0.07, z - 0.02], P.lamp + 0.5);
@@ -460,6 +497,12 @@ export function upperRooms(out, glass, jx, jz) {
   // (0.4.10) Against the bedroom's wall, facing the void, clear of the way
   // out to the terrace.
   bench(out, [-4.8, T, -76.3], Math.PI / 2, { w: 1.3, padded: true });
+  if (isLivedIn()) {
+    // (0.4.29) A low limestone or charred-wood plinth by the bench with one small bronze sculpture
+    box(out, [-4.95, T, -75.45], [-4.65, T + 0.35, -75.15], v(P.walnut, 0.1));
+    soft(out, [-4.8, T + 0.43, -75.3], [0.038, 0.075, 0.038], P.brass, { e1: 0.6, e2: 0.4 });
+    ball(out, [-4.8, T + 0.51, -75.3], 0.024, P.brass, 8, 6);
+  }
   // (0.4.27) A tall print: a disc over a horizon.
   picture(out, [jx[0] + 0.01, T + 1.6, -78.0], Math.PI / 2, 0.7, 1.0, 0.82);
 
@@ -569,6 +612,15 @@ function wardrobeRun(out, y, back, [x0, x1]) {
       shelf(a + t, b, y + 2.02);
       strip(a + t, b, y + 2.02);
       hangRow(a + t, b, y + 1.9, i => [i % 3 === 1 ? 'dress' : 'coat', [0.05, 0.45, 0.9, 0.62, 0.2][(i + bay) % 5]]);
+      if (isLivedIn() && bay === 0) {
+        // (0.4.29) Angled shoe shelf at base, leather dress shoes and plain sneakers on brass heel stops
+        obox(out, [(a + b) / 2, y + 0.18, back + D / 2], [(b - a - t) / 2 - 0.02, 0.012, 0.2], W, axes(-0.25));
+        tube(out, [a + t + 0.04, y + 0.14, back + 0.18], [b - 0.04, y + 0.14, back + 0.18], 0.005, P.brass, 6);
+        for (let s = 0; s < 3; s++) {
+          const sx = a + t + 0.16 + s * 0.26;
+          soft(out, [sx, y + 0.22, back + 0.3], [0.05, 0.035, 0.12], s === 2 ? v(P.fabric, 0.9) : v(P.walnut, 0.1), { e1: 0.6, e2: 0.4, ax: axes(-0.25) });
+        }
+      }
     } else if (kind === 'double') {
       shelf(a + t, b, y + 2.02);
       strip(a + t, b, y + 2.02);
@@ -580,8 +632,16 @@ function wardrobeRun(out, y, back, [x0, x1]) {
       // Drawers, three, then shelves of folded things, lit.
       for (let d = 0; d < 3; d++) {
         const dy = y + 0.1 + d * 0.24;
-        box(out, [a + t + 0.002, dy, front - 0.02], [b - 0.002, dy + 0.232, front], v(P.walnut, 0.5));
-        barPull(out, [(a + b) / 2 - 0.09, dy + 0.17, front], [(a + b) / 2 + 0.09, dy + 0.17, front], [0, 0, 1], P.brass);
+        const openD = isLivedIn() && bay === 2 && d === 2;
+        const df = openD ? front + 0.16 : front;
+        box(out, [a + t + 0.002, dy, front - 0.02], [b - 0.002, dy + 0.232, df], v(P.walnut, 0.5));
+        barPull(out, [(a + b) / 2 - 0.09, dy + 0.17, df], [(a + b) / 2 + 0.09, dy + 0.17, df], [0, 0, 1], P.brass);
+        if (openD) {
+          // (0.4.29) Segmented dark-grey velvet tray for watches and jewellery
+          box(out, [a + t + 0.03, dy + 0.14, front + 0.01], [b - 0.03, dy + 0.2, df - 0.02], v(P.fabric, 0.2));
+          ball(out, [(a + b) / 2 - 0.08, dy + 0.21, front + 0.08], 0.014, P.brass, 8, 4);
+          ball(out, [(a + b) / 2 + 0.08, dy + 0.21, front + 0.08], 0.012, P.steel, 8, 4);
+        }
       }
       for (let r = 0; r < 4; r++) {
         const sy = y + 0.82 + r * 0.37;

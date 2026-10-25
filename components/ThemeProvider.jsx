@@ -17,7 +17,8 @@ export default function ThemeProvider({ children }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('abg-theme');
+    const q = new URLSearchParams(window.location.search).get('theme');
+    const stored = (q && themes[q]) ? q : window.localStorage.getItem('abg-theme');
     if (stored && themes[stored]) setTheme(stored);
     setLoaded(true);
   }, []);

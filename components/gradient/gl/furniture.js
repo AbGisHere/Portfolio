@@ -10,6 +10,7 @@
 
 import { HOUSE_PART } from './houseShape';
 import { add, axes, ball, barPull, box, grid, lathe, lever, obox, scale, soft, sweep, tube } from './meshKit';
+import { isLivedIn } from './houseStyling';
 
 const P = HOUSE_PART;
 /** A part with a variant (0 … 0.9): houseShader.js reads the fraction. */
@@ -145,72 +146,99 @@ export function sofa(out, c, yaw, { width = 2.9, fabric = v(P.fabric, 0.1) } = {
   [[-hw + 0.42, 0.3, v(P.cushion, 0.15), 0.25, 0.3], [-hw + 0.78, -0.2, v(P.cushion, 0.6), 0.22, 0.36], [hw - 0.5, 0.25, v(P.cushion, 0.35), 0.24, 0.26]].forEach(([x, ty, part, s, lean]) =>
     cushion(out, f, x, 0.52 + s * 0.95 * Math.cos(lean) - 0.015, 0.43 + 0.03 * (lean - 0.3), s, 0.06, s * 0.95, part, { tilt: Math.PI / 2 + lean, yaw: ty, pinch: 0.55, e1: 0.75, e2: 0.32 }),
   );
-  // The throw: a folded blanket hanging over the right arm. (0.4.19)
-  // Shaped round the arm's own section (its faces at tx ± 0.1, its top
-  // 0.66, corners rounded) with a centimetre's clearance, and as thick as
-  // a wool throw folded (two faces 8 mm apart, the hems rolled): it lay on
-  // the arm's face, which broke through it.
-  const tx = hw - 0.1;
-  const cl = 0.012;
-  const R = 0.05;
-  const legs = [[tx + 0.1 + cl, 0.2], [tx + 0.1 + cl, 0.66 - R], [tx - 0.1 - cl, 0.66 - R], [tx - 0.1 - cl, 0.53]];
-  // Along the section: down the outer leg, over two rounded corners and the
-  // top, down the inner side to rest on the seat.
-  const L1 = legs[1][1] - legs[0][1];
-  const arc = (Math.PI / 2) * (R + cl);
-  const flat = 0.2 - 2 * R;
-  const L3 = legs[2][1] - legs[3][1];
-  const total = L1 + 2 * arc + flat + L3;
-  const section = t => {
-    let d = t * total;
-    if (d < L1) return [[tx + 0.1 + cl, 0.2 + d], [1, 0]];
-    d -= L1;
-    if (d < arc) {
-      const a = (d / arc) * (Math.PI / 2);
-      return [[tx + 0.1 - R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+  if (isLivedIn()) {
+    // (0.4.29) The throw draped across the seat's corner with a fringe, not folded over the arm.
+    const x0 = hw - 0.72;
+    const x1 = hw - 0.12;
+    const ySeat = 0.53;
+    const z0 = 0.44;
+    const z1 = d - 0.02;
+    const fallY = 0.22;
+    grid(out, 16, 14, (u, w) => {
+      const x = x0 + u * (x1 - x0);
+      const z = z0 + w * (z1 - z0);
+      const wave = 0.005 * Math.sin(u * 14 + w * 9);
+      return { p: f.at(x, ySeat + wave, z), part: v(P.fabric, 0.45), s: u, t: w };
+    }, f.ax[1]);
+    grid(out, 16, 10, (u, w) => {
+      const x = x0 + u * (x1 - x0);
+      const y = ySeat - w * (ySeat - fallY);
+      const ripple = 0.006 * Math.sin(u * 16 + w * 6);
+      return { p: f.at(x, y, z1 + ripple), part: v(P.fabric, 0.45), s: u, t: w };
+    }, f.ax[2]);
+    const nFringe = 22;
+    for (let i = 0; i < nFringe; i++) {
+      const x = x0 + (i / nFringe) * (x1 - x0);
+      tube(out, f.at(x, fallY, z1), f.at(x + 0.002 * Math.sin(i * 3), fallY - 0.045, z1 + 0.008), 0.002, v(P.fabric, 0.45), 4);
     }
-    d -= arc;
-    if (d < flat) return [[tx + 0.1 - R - d, 0.66 + cl], [0, 1]];
-    d -= flat;
-    if (d < arc) {
-      const a = Math.PI / 2 + (d / arc) * (Math.PI / 2);
-      return [[tx - 0.1 + R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+  } else {
+    // The throw: a folded blanket hanging over the right arm. (0.4.19)
+    // Shaped round the arm's own section (its faces at tx ± 0.1, its top
+    // 0.66, corners rounded) with a centimetre's clearance, and as thick as
+    // a wool throw folded (two faces 8 mm apart, the hems rolled): it lay on
+    // the arm's face, which broke through it.
+    const tx = hw - 0.1;
+    const cl = 0.012;
+    const R = 0.05;
+    const legs = [[tx + 0.1 + cl, 0.2], [tx + 0.1 + cl, 0.66 - R], [tx - 0.1 - cl, 0.66 - R], [tx - 0.1 - cl, 0.53]];
+    // Along the section: down the outer leg, over two rounded corners and the
+    // top, down the inner side to rest on the seat.
+    const L1 = legs[1][1] - legs[0][1];
+    const arc = (Math.PI / 2) * (R + cl);
+    const flat = 0.2 - 2 * R;
+    const L3 = legs[2][1] - legs[3][1];
+    const total = L1 + 2 * arc + flat + L3;
+    const section = t => {
+      let d = t * total;
+      if (d < L1) return [[tx + 0.1 + cl, 0.2 + d], [1, 0]];
+      d -= L1;
+      if (d < arc) {
+        const a = (d / arc) * (Math.PI / 2);
+        return [[tx + 0.1 - R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+      }
+      d -= arc;
+      if (d < flat) return [[tx + 0.1 - R - d, 0.66 + cl], [0, 1]];
+      d -= flat;
+      if (d < arc) {
+        const a = Math.PI / 2 + (d / arc) * (Math.PI / 2);
+        return [[tx - 0.1 + R + Math.cos(a) * (R + cl), 0.66 - R + Math.sin(a) * (R + cl)], [Math.cos(a), Math.sin(a)]];
+      }
+      d -= arc;
+      return [[tx - 0.1 - cl, 0.66 - R - d], [-1, 0]];
+    };
+    const TH = 0.008;
+    // In five pieces (the sides, the corners, the top), each faced its own
+    // way out from the arm, so no normal turns inside out.
+    const cuts = [0, L1, L1 + arc, L1 + arc + flat, L1 + 2 * arc + flat, total].map(d => d / total);
+    for (const face of [1, -1]) {
+      for (let k = 0; k < 5; k++) {
+        const [w0, w1] = [cuts[k], cuts[k + 1]];
+        const [, [mx, my]] = section((w0 + w1) / 2);
+        const outward = add(scale(f.ax[0], mx), f.ax[1], my);
+        grid(out, 12, Math.max(2, Math.round((w1 - w0) * 40)), (u, ww) => {
+          const w = w0 + (w1 - w0) * ww;
+          const z = 0.25 + u * 0.5;
+          const [[x, y], [nx, ny]] = section(w);
+          // Its folds: soft ripples down its fall, more toward the hems.
+          const ripple = 0.006 * Math.sin(u * 19 + w * 7) * (0.4 + 0.6 * Math.abs(w * 2 - 1));
+          const o = (face > 0 ? TH : 0) + ripple;
+          return { p: f.at(x + nx * o, y + ny * o, z), part: v(P.fabric, 0.45), s: u, t: w };
+        }, face > 0 ? outward : scale(outward, -1));
+      }
     }
-    d -= arc;
-    return [[tx - 0.1 - cl, 0.66 - R - d], [-1, 0]];
-  };
-  const TH = 0.008;
-  // In five pieces (the sides, the corners, the top), each faced its own
-  // way out from the arm, so no normal turns inside out.
-  const cuts = [0, L1, L1 + arc, L1 + arc + flat, L1 + 2 * arc + flat, total].map(d => d / total);
-  for (const face of [1, -1]) {
-    for (let k = 0; k < 5; k++) {
-      const [w0, w1] = [cuts[k], cuts[k + 1]];
-      const [, [mx, my]] = section((w0 + w1) / 2);
-      const outward = add(scale(f.ax[0], mx), f.ax[1], my);
-      grid(out, 12, Math.max(2, Math.round((w1 - w0) * 40)), (u, ww) => {
-        const w = w0 + (w1 - w0) * ww;
-        const z = 0.25 + u * 0.5;
-        const [[x, y], [nx, ny]] = section(w);
-        // Its folds: soft ripples down its fall, more toward the hems.
-        const ripple = 0.006 * Math.sin(u * 19 + w * 7) * (0.4 + 0.6 * Math.abs(w * 2 - 1));
-        const o = (face > 0 ? TH : 0) + ripple;
-        return { p: f.at(x + nx * o, y + ny * o, z), part: v(P.fabric, 0.45), s: u, t: w };
-      }, face > 0 ? outward : scale(outward, -1));
+    // The hems, rolled.
+    for (const w of [0, 1]) {
+      const [[x, y], [nx, ny]] = section(w);
+      tube(out, f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25), f.at(x + nx * TH / 2, y + ny * TH / 2, 0.75), TH / 2 + 0.001, v(P.fabric, 0.45), 6);
     }
-  }
-  // The hems, rolled.
-  for (const w of [0, 1]) {
-    const [[x, y], [nx, ny]] = section(w);
-    tube(out, f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25), f.at(x + nx * TH / 2, y + ny * TH / 2, 0.75), TH / 2 + 0.001, v(P.fabric, 0.45), 6);
-  }
-  for (const u of [0, 1]) {
-    const pts = [];
-    for (let k = 0; k <= 24; k++) {
-      const [[x, y], [nx, ny]] = section(k / 24);
-      pts.push(f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25 + u * 0.5));
+    for (const u of [0, 1]) {
+      const pts = [];
+      for (let k = 0; k <= 24; k++) {
+        const [[x, y], [nx, ny]] = section(k / 24);
+        pts.push(f.at(x + nx * TH / 2, y + ny * TH / 2, 0.25 + u * 0.5));
+      }
+      sweep(out, pts, TH / 2 + 0.001, v(P.fabric, 0.45), { seg: 6 });
     }
-    sweep(out, pts, TH / 2 + 0.001, v(P.fabric, 0.45), { seg: 6 });
   }
   for (const sx of [-1, 1]) for (const sz of [0.06, d - 0.06]) lathe(out, f.at(sx * (hw - 0.08), 0, sz), [0, 1, 0], [[0, 0], [0.018, 0], [0.024, 0.06]], v(P.walnut, 0), 10);
 }
@@ -381,6 +409,10 @@ export function placeSetting(out, c, to) {
   const S = v(P.steel, 0.5);
   // The napkin, folded in three, under the fork.
   obox(out, at(0.215, 0.006, 0.01), [0.055, 0.006, 0.1], v(P.fabric, 0.9), [ax[0], ax[1], ax[2]]);
+  if (isLivedIn()) {
+    // (0.4.29) Brushed-brass napkin ring cinching the napkin.
+    lathe(out, at(0.215, 0.008, 0.01), ax[2], [[0.014, -0.01], [0.017, -0.01], [0.017, 0.01], [0.014, 0.01]], P.brass, 14);
+  }
   // The fork: a handle widening to its end, a neck, four tines.
   const fx = 0.215;
   const fy = 0.016;
@@ -411,6 +443,21 @@ export function wineGlass(out, c) {
   lathe(out, c, [0, 1, 0], [[0.0355, 0.132], [0, 0.132]], W, 24);
 }
 
+/** (0.4.29) A ribbed crystal water tumbler at c (its foot). */
+export function waterTumbler(out, c) {
+  const G = v(P.ceramic, 0.3);
+  lathe(out, c, [0, 1, 0], [[0, 0], [0.032, 0], [0.035, 0.082], [0.032, 0.082], [0.028, 0.006], [0, 0.006]], G, 20);
+  lathe(out, add(c, [0, 0.052, 0]), [0, 1, 0], [[0, 0], [0.03, 0]], G, 12);
+}
+
+/** (0.4.29) A real lemon with tapered ends, dimpled peel and small nubs. */
+export function lemon(out, c, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) {
+  soft(out, c, [0.042, 0.027, 0.027], P.fruit, { e1: 0.65, e2: 0.65, ax, nu: 14, nv: 8 });
+  for (const s of [-1, 1]) {
+    ball(out, add(c, scale(ax[0], s * 0.04)), 0.004, P.fruit, 6, 4);
+  }
+}
+
 /** (0.4.20) A vase thrown round, a full belly narrowing to a short neck and
  * a turned-out lip, hollow down the neck (its inside drawn). */
 export function vase(out, c, h, part) {
@@ -435,12 +482,33 @@ export function coffeeTable(out, c, yaw) {
   for (const sx of [-1, 1]) obox(out, f.at(sx * 0.5, 0.165, 0), [0.025, 0.165, 0.36], v(P.walnut, 0), f.ax);
   obox(out, f.at(0, 0.09, 0), [0.475, 0.012, 0.32], v(P.walnut, 0), f.ax);
   // On it: books, a bowl, a candle.
-  for (const [y, hw, hd, k, ty] of [[0.405, 0.17, 0.12, 0.1, 0.1], [0.432, 0.14, 0.1, 0.6, -0.05]]) {
-    const a = axes(0, yaw + ty);
-    book(out, f.at(-0.3, y, 0.05), [a[1], a[2], a[0]], 0.013, hd, hw, v(P.book, k));
+  if (!isLivedIn()) {
+    for (const [y, hw, hd, k, ty] of [[0.405, 0.17, 0.12, 0.1, 0.1], [0.432, 0.14, 0.1, 0.6, -0.05]]) {
+      const a = axes(0, yaw + ty);
+      book(out, f.at(-0.3, y, 0.05), [a[1], a[2], a[0]], 0.013, hd, hw, v(P.book, k));
+    }
+    lathe(out, f.at(0.25, 0.39, -0.05), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.12, 0.05], [0.13, 0.075], [0.122, 0.075], [0.11, 0.05], [0.05, 0.015], [0, 0.015]], P.ceramic, 24);
+    lathe(out, f.at(0.0, 0.39, 0.22), [0, 1, 0], [[0, 0], [0.035, 0], [0.035, 0.09], [0, 0.09]], v(P.ceramic, 0.5), 16);
+  } else {
+    // (0.4.29) One group of three: plain oversized books stacked a few degrees off each other with a ribbon marker; a ribbed smoked-glass candle with wax and wick; a shallow soapstone bowl of three brass spheres
+    for (const [y, hw, hd, k, ty] of [
+      [0.405, 0.18, 0.13, 0.1, 0.08],
+      [0.432, 0.155, 0.115, 0.45, -0.04],
+      [0.456, 0.135, 0.1, 0.75, 0.12],
+    ]) {
+      const a = axes(0, yaw + ty);
+      book(out, f.at(-0.3, y, 0.05), [a[1], a[2], a[0]], 0.012, hd, hw, v(P.book, k));
+    }
+    tube(out, f.at(-0.3, 0.46, 0.14), f.at(-0.3, 0.42, 0.19), 0.003, v(P.fabric, 0.8), 4);
+    lathe(out, f.at(0.25, 0.39, -0.05), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.12, 0.04], [0.13, 0.055], [0.122, 0.055], [0.11, 0.04], [0.05, 0.015], [0, 0.015]], v(P.ceramic, 0.6), 24);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      ball(out, f.at(0.25 + Math.cos(a) * 0.035, 0.415, -0.05 + Math.sin(a) * 0.035), 0.013, P.brass, 8, 4);
+    }
+    lathe(out, f.at(0.0, 0.39, 0.22), [0, 1, 0], [[0, 0], [0.038, 0], [0.038, 0.082], [0.034, 0.082], [0.034, 0.012], [0, 0.012]], v(P.ceramic, 0.35), 18);
+    lathe(out, f.at(0.0, 0.39 + 0.062, 0.22), [0, 1, 0], [[0, 0], [0.033, 0]], v(P.ceramic, 0.1), 12);
+    tube(out, f.at(0.0, 0.39 + 0.062, 0.22), f.at(0.0, 0.39 + 0.076, 0.22), 0.0016, P.steel, 4);
   }
-  lathe(out, f.at(0.25, 0.39, -0.05), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.12, 0.05], [0.13, 0.075], [0.122, 0.075], [0.11, 0.05], [0.05, 0.015], [0, 0.015]], P.ceramic, 24);
-  lathe(out, f.at(0.0, 0.39, 0.22), [0, 1, 0], [[0, 0], [0.035, 0], [0.035, 0.09], [0, 0.09]], v(P.ceramic, 0.5), 16);
 }
 
 /** A rug from corner a to b (x, z) on the floor at y: its pile, a border
@@ -601,7 +669,18 @@ export function bed(out, c, yaw, { w = 1.8, l = 2.1, ceil = 3.2, stands = [true,
       obox(out, f.at(x, 0.48, 0.3), [0.25, 0.09, 0.2], v(P.walnut, 0), f.ax);
       obox(out, f.at(x, 0.48, doorZ(0.5)), [0.235, 0.075, DOOR / 2], v(P.walnut, 0.5), f.ax);
       pullOn(out, f, [x - 0.07, 0.48], [x + 0.07, 0.48], doorZ(0.5) + DOOR / 2);
-      lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
+      if (!isLivedIn()) {
+        lathe(out, f.at(x - 0.1, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.05, 0], [0.05, 0.02], [0, 0.02]], v(P.book, 0.3), 12);
+      } else if (k === 0) {
+        // (0.4.29) Left: crystal carafe with upturned tumbler on neck and small brass valet tray with watch
+        lathe(out, f.at(x - 0.07, 0.57, 0.28), [0, 1, 0], [[0, 0], [0.028, 0], [0.035, 0.03], [0.02, 0.085], [0.014, 0.11], [0.016, 0.12], [0.013, 0.12]], v(P.ceramic, 0.3), 16);
+        lathe(out, f.at(x - 0.07, 0.57 + 0.105, 0.28), [0, 1, 0], [[0, 0.016], [0.019, 0.016], [0.018, 0.0], [0.016, 0.0]], v(P.ceramic, 0.3), 14);
+        obox(out, f.at(x + 0.07, 0.573, 0.26), [0.04, 0.003, 0.032], P.brass, f.ax);
+        ball(out, f.at(x + 0.07, 0.578, 0.26), 0.01, P.steel, 8, 4);
+      } else {
+        // (0.4.29) Right: open hardcover book face down
+        soft(out, f.at(x, 0.582, 0.28), [0.09, 0.015, 0.065], v(P.book, 0.65), { e1: 0.8, e2: 0.5, ax: f.ax });
+      }
     }
     if (!pendants) return;
     const g = f.at(x, 1.22, 0.3);
@@ -654,9 +733,26 @@ export function desk(out, c, yaw, w = 1.6) {
     sweep(out, [f.at(sx * (w / 2 - 0.06), 0, -0.3), f.at(sx * (w / 2 - 0.06), 0.715, -0.3), f.at(sx * (w / 2 - 0.06), 0.715, 0.3), f.at(sx * (w / 2 - 0.06), 0, 0.3)], 0.014, P.steel, { seg: 6 });
   }
   obox(out, f.at(w / 2 - 0.35, 0.66, 0), [0.25, 0.05, 0.3], v(P.walnut, 0.5), f.ax);
+  if (isLivedIn()) {
+    // (0.4.29) Saddle-leather blotter under laptop/stationery
+    obox(out, f.at(0, 0.754, 0.05), [0.38, 0.002, 0.24], v(P.fabric, 0.2), f.ax);
+  }
   obox(out, f.at(-0.15, 0.762, 0.05), [0.16, 0.007, 0.11], v(P.steel, 0.5), axes(0, yaw - 0.12));
   lathe(out, f.at(0.35, 0.753, 0.0), [0, 1, 0], [[0, 0], [0.04, 0], [0.04, 0.095], [0.036, 0.095], [0.036, 0.008], [0, 0.008]], P.ceramic, 18);
-  obox(out, f.at(0.15, 0.755, 0.12), [0.105, 0.002, 0.148], P.paper, axes(0, yaw + 0.2));
+  if (!isLivedIn()) {
+    obox(out, f.at(0.15, 0.755, 0.12), [0.105, 0.002, 0.148], P.paper, axes(0, yaw + 0.2));
+  } else {
+    // (0.4.29) Turned brass pen cup with two pens and a steel rule
+    lathe(out, f.at(w / 2 - 0.2, 0.753, -0.15), [0, 1, 0], [[0, 0], [0.026, 0], [0.026, 0.075], [0.022, 0.075], [0.022, 0.005], [0, 0.005]], P.brass, 14);
+    tube(out, f.at(w / 2 - 0.205, 0.758, -0.15), f.at(w / 2 - 0.22, 0.85, -0.145), 0.003, P.steel, 4);
+    tube(out, f.at(w / 2 - 0.195, 0.758, -0.15), f.at(w / 2 - 0.18, 0.86, -0.155), 0.003, P.brass, 4);
+    obox(out, f.at(w / 2 - 0.2, 0.82, -0.14), [0.008, 0.07, 0.001], v(P.steel, 0.5), axes(0.15, yaw + 0.3));
+    // (0.4.29) Open linen-bound sketchbook with ribbon
+    const sbAt = f.at(0.15, 0.758, 0.12);
+    obox(out, sbAt, [0.11, 0.003, 0.15], v(P.book, 0.25), axes(0, yaw + 0.2));
+    obox(out, add(sbAt, [0, 0.003, 0]), [0.105, 0.002, 0.145], P.pages, axes(0, yaw + 0.2));
+    tube(out, add(sbAt, [0, 0.004, 0]), add(sbAt, [0.05, 0.002, 0.18]), 0.0015, v(P.fabric, 0.8), 4);
+  }
   // The desk lamp: a steel arm and a small shade.
   const base = f.at(-w / 2 + 0.2, 0.753, -0.22);
   lathe(out, base, [0, 1, 0], [[0, 0], [0.08, 0], [0.08, 0.015], [0.01, 0.02]], P.steel, 16);
@@ -711,8 +807,23 @@ export function kitchenRun(out, c, yaw, w) {
   for (let k = 0; k < 3; k++) obox(out, f.at(-w / 2 + 0.05 + (w / 2 - 0.1) * ((k + 0.5) / 3), 1.85, doorZ(0.36)), [(w / 2 - 0.1) / 6 - 0.004, 0.39, DOOR / 2], v(P.walnut, 0.5), f.ax);
   // On the counter: a board, a bowl of lemons, a kettle, a bottle.
   obox(out, f.at(w / 4 - 0.65, 0.915, 0.35), [0.2, 0.012, 0.14], v(P.walnut, 0.5), axes(0, yaw + 0.3));
+  if (isLivedIn()) {
+    // (0.4.29) Turned walnut salt cellar with a brass spoon by the board
+    const saltAt = f.at(w / 4 - 0.42, 0.915, 0.42);
+    lathe(out, saltAt, [0, 1, 0], [[0, 0], [0.032, 0], [0.035, 0.03], [0.032, 0.035], [0.026, 0.035], [0.026, 0.006], [0, 0.006]], v(P.walnut, 0.2), 16);
+    tube(out, add(saltAt, [0, 0.015, -0.01]), add(saltAt, [0.025, 0.045, 0.025]), 0.002, P.brass, 4);
+    ball(out, add(saltAt, [0.025, 0.045, 0.025]), 0.004, P.brass, 6, 4);
+  }
   lathe(out, f.at(-w / 4 - 0.7, 0.9, 0.3), [0, 1, 0], [[0, 0], [0.06, 0.005], [0.13, 0.07], [0.135, 0.09], [0.125, 0.09], [0.08, 0.04], [0, 0.03]], P.ceramic, 22);
-  for (let k = 0; k < 5; k++) soft(out, f.at(-w / 4 - 0.7 + Math.cos(k * 1.3) * 0.05, 0.98 + (k > 2 ? 0.04 : 0), 0.3 + Math.sin(k * 1.3) * 0.05), [0.035, 0.03, 0.03], P.fruit, { e1: 0.9, e2: 0.9, nu: 12, nv: 8 });
+  if (!isLivedIn()) {
+    for (let k = 0; k < 5; k++) soft(out, f.at(-w / 4 - 0.7 + Math.cos(k * 1.3) * 0.05, 0.98 + (k > 2 ? 0.04 : 0), 0.3 + Math.sin(k * 1.3) * 0.05), [0.035, 0.03, 0.03], P.fruit, { e1: 0.9, e2: 0.9, nu: 12, nv: 8 });
+  } else {
+    // (0.4.29) Real lemons (shaped, dimpled peel, a nub at each end)
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2 + 0.3;
+      lemon(out, f.at(-w / 4 - 0.7 + Math.cos(a) * 0.045, 0.98 + (k > 2 ? 0.038 : 0), 0.3 + Math.sin(a) * 0.045), axes(0.2, yaw + a));
+    }
+  }
   lathe(out, f.at(w / 4 + 0.6, 0.9, 0.45), [0, 1, 0], [[0, 0], [0.08, 0], [0.09, 0.08], [0.07, 0.19], [0.03, 0.22], [0, 0.23]], v(P.steel, 0.5), 20);
   lathe(out, f.at(-w / 2 + 0.25, 0.9, 0.12), [0, 1, 0], [[0, 0], [0.035, 0], [0.035, 0.2], [0.012, 0.26], [0.012, 0.3], [0, 0.3]], v(P.ceramic, 0.8), 16);
 }
@@ -726,12 +837,30 @@ export function island(out, c, yaw, w = 2.8, d = 1.0) {
   const f = frame(c, yaw);
   obox(out, f.at(0, 0.45, 0), [w / 2 - 0.04, 0.45, d / 2 - 0.08], v(P.walnut, 0), f.ax);
   for (let k = 0; k < 4; k++) obox(out, f.at(-w / 2 + 0.04 + ((w - 0.08) * (k + 0.5)) / 4, 0.48, doorZ(d / 2 - 0.08)), [(w - 0.08) / 8 - 0.004, 0.37, DOOR / 2], v(P.walnut, 0.5), f.ax);
+  if (isLivedIn()) {
+    // (0.4.29) Fluted walnut on the island's knee side against the marble ends
+    const flutes = 26;
+    const fw = (w - 0.16) / flutes;
+    for (let k = 0; k < flutes; k++) {
+      const fx = -w / 2 + 0.08 + (k + 0.5) * fw;
+      obox(out, f.at(fx, 0.45, -d / 2 + 0.085), [fw * 0.32, 0.42, 0.005], v(P.walnut, 0.6), f.ax);
+    }
+    // (0.4.29) Champagne-bronze prep tap on the island
+    sweep(out, [f.at(0.0, 0.935, -0.2), f.at(0.0, 1.25, -0.2), f.at(0.0, 1.3, -0.1), f.at(0.0, 1.24, -0.02)], 0.011, P.brass, { seg: 8 });
+  }
   // (0.4.27) The top and its ends one slab, its veins folding over the
   // edge (houseShader.js, variant .2: placed along x).
   obox(out, f.at(0, 0.91, 0), [w / 2, 0.025, d / 2], v(P.marble, 0.2), f.ax);
   for (const sx of [-1, 1]) obox(out, f.at(sx * (w / 2 - 0.025), 0.445, 0), [0.025, 0.445, d / 2], v(P.marble, 0.2), f.ax);
   // A bowl, a vase of stems.
   lathe(out, f.at(0.5, 0.935, 0), [0, 1, 0], [[0, 0], [0.08, 0], [0.16, 0.08], [0.17, 0.1], [0.16, 0.1], [0.07, 0.03], [0, 0.03]], v(P.ceramic, 0.5), 24);
+  if (isLivedIn()) {
+    // (0.4.29) Lemons in the bowl kept
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + 0.4;
+      lemon(out, f.at(0.5 + Math.cos(a) * 0.045, 0.985, Math.sin(a) * 0.045), axes(0.2, yaw + a));
+    }
+  }
   lathe(out, f.at(-0.6, 0.935, 0.1), [0, 1, 0], [[0, 0], [0.06, 0], [0.07, 0.1], [0.04, 0.25], [0.03, 0.3], [0, 0.3]], v(P.ceramic, 0.8), 18);
 }
 
@@ -992,6 +1121,13 @@ export function bath(out, c, yaw) {
   }
   sweep(out, ring, 0.03, P.ceramic, { closed: true, seg: 8 });
   sweep(out, [f.at(0.95, 0, 0.0), f.at(0.95, 0.85, 0), f.at(0.85, 0.92, 0), f.at(0.75, 0.86, 0)], 0.016, P.brass, { seg: 8 });
+  if (isLivedIn()) {
+    // (0.4.29) A slatted teak bridge across the tub with a rolled waffle washcloth, sea sponge and glass candle
+    obox(out, f.at(0.05, rim + 0.012, 0), [0.13, 0.008, 0.41], v(P.walnut, 0.2), f.ax);
+    soft(out, f.at(0.02, rim + 0.032, -0.14), [0.045, 0.018, 0.08], v(P.fabric, 0.9), { e1: 0.8, e2: 0.8, ax: f.ax });
+    lathe(out, f.at(0.07, rim + 0.02, 0.12), [0, 1, 0], [[0, 0], [0.032, 0], [0.032, 0.014], [0.014, 0.014]], v(P.ceramic, 0.4), 14);
+    ball(out, f.at(0.06, rim + 0.032, 0.0), 0.024, v(P.ceramic, 0.7), 8, 6);
+  }
 }
 
 /** A sun lounger: its teak frame and slats from z0 toward +z at x, the

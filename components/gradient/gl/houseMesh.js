@@ -10,12 +10,13 @@
 import { BOLLARDS, EDGE, FLOOR, GLASS_THICK, HOUSE_PART, MOUND, PLAN, POOL, ROOF_DECK, STOREY, TERRACE, WALL, moundY } from './houseShape';
 import { LIGHTS, STRIPS } from './houseLights';
 import { lightFixtures } from './lightFixtures';
-import { ball, barPull, box, grid, lathe, tube } from './meshKit';
+import { ball, barPull, box, grid, lathe, soft, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
 import { drapedTowel, robe, rolledTowels } from './garments';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
 import { miniBar } from './homeDetails';
+import { isLivedIn } from './houseStyling';
 
 // (0.4.16) A seeded stream for the planting's drifts.
 const seededMesh = seed => {
@@ -358,9 +359,20 @@ export function houseLayout() {
   // rolled on the table between, and a robe on a hook on the timber wall
   // past the bar, by the uplight.
   drapedTowel(out, 7.25, gy + 0.428, -62.55, -61.86);
-  rolledTowels(out, [6.35, gy + 0.42, -62.23]);
+  if (!isLivedIn()) {
+    rolledTowels(out, [6.35, gy + 0.42, -62.23]);
+    box(out, [6.08, gy, -62.50], [6.62, gy + 0.42, -61.96], P.walnut);
+  } else {
+    // (0.4.29) A low stone drum table between the loungers with two chilled tumblers, lime wedges and condensation
+    lathe(out, [6.35, gy, -62.23], [0, 1, 0], [[0, 0], [0.22, 0], [0.24, 0.03], [0.24, 0.36], [0.21, 0.39], [0, 0.39]], v(P.stone, 0.5), 24);
+    for (const dx of [-0.07, 0.07]) {
+      const tx = 6.35 + dx;
+      const tz = -62.23;
+      lathe(out, [tx, gy + 0.39, tz], [0, 1, 0], [[0, 0], [0.032, 0], [0.035, 0.082], [0.032, 0.082], [0.028, 0.006], [0, 0.006]], v(P.ceramic, 0.3), 18);
+      soft(out, [tx + 0.012, gy + 0.45, tz], [0.012, 0.008, 0.016], P.fruit, { e1: 0.8, e2: 0.5 });
+    }
+  }
   robe(out, [7.15, gy + 1.78, PLAN.upper.z[1] + 0.04], 0);
-  box(out, [6.08, gy, -62.50], [6.62, gy + 0.42, -61.96], P.walnut);
   // (0.4.17) The olive's pot: thrown stoneware in a dark glaze, wide at
   // the shoulder, a rolled lip, tapering to a foot that lifts it off the
   // deck; the soil 6 cm down inside the lip (it was a plain box).

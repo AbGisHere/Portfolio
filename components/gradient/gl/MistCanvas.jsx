@@ -413,28 +413,51 @@ export default function MistCanvas({ recipe, onFail }) {
     let house = null;
     let houseBuilt = null;
     let houseWorker = null;
-    const buildHouse = () => {
-      if (houseWorker || houseBuilt) return;
-      const here = () => (houseBuilt = { house: houseMesh(), curtains: curtainMesh() });
+    const updateHouseBuffer = () => {
+      if (!house || !houseBuilt) return;
+      const { data, count, lawn, glass: panes } = houseBuilt.house;
+      gl.bindBuffer(gl.ARRAY_BUFFER, house.buf);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      house.count = count;
+      house.lawn = lawn;
+      house.panes = panes;
+      dirty = true;
+      kickRef.current();
+    };
+    const buildHouse = (targetStyling, force = false) => {
+      if ((houseWorker || houseBuilt) && !force) return;
+      if (houseWorker) {
+        houseWorker.terminate();
+        houseWorker = null;
+      }
+      const styling = targetStyling || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('styling') || '0.4.29' : '0.4.29');
+      const here = () => {
+        houseBuilt = { house: houseMesh(), curtains: curtainMesh(), styling };
+        updateHouseBuffer();
+      };
       try {
         houseWorker = new Worker(new URL('./houseWorker.js', import.meta.url));
         houseWorker.onmessage = e => {
           houseBuilt = e.data;
-          houseWorker.terminate();
+          houseWorker?.terminate();
+          houseWorker = null;
           warmHouse();
+          updateHouseBuffer();
           // (Redrawn with it, even at rest.)
           dirty = true;
           kickRef.current();
         };
         houseWorker.onerror = () => {
-          houseWorker.terminate();
+          houseWorker?.terminate();
+          houseWorker = null;
           here();
         };
-        houseWorker.postMessage(0);
+        houseWorker.postMessage({ styling });
       } catch {
         here();
       }
     };
+    if (typeof window !== 'undefined') window.__setHouseStyling = pass => buildHouse(pass, true);
     const houseProgram = () => {
       if (house !== null) return house;
       buildHouse();

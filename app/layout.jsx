@@ -41,7 +41,7 @@ export const viewport = {
 
 // Runs before first paint so a returning night visitor's backdrop is already
 // night, rather than flashing the day sky until React reads localStorage.
-const THEME_SCRIPT = `try{var t=localStorage.getItem('abg-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t}catch(e){}` +
+const THEME_SCRIPT = `try{var q=(new URLSearchParams(location.search)).get('theme');var t=(q==='day'||q==='night')?q:localStorage.getItem('abg-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t}catch(e){}` +
   // (0.3.11) A reload starts at the top of the page, not where the browser
   // left the scroll (the owner, 2026-10-06); the theme above is kept.
   `;try{history.scrollRestoration='manual'}catch(e){}` +
