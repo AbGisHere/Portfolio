@@ -57,6 +57,17 @@ export function pollPassProgram(gl, ext, handle, wait = false) {
   return handle.prog;
 }
 
+// Polls unready handles non-blocking via COMPLETION_STATUS_KHR and returns
+// the count of programs still compiling on background threads.
+export function countInFlight(gl, ext, handles) {
+  let count = 0;
+  for (const h of handles) {
+    if (!h.ready && !h.failed && !h.disposed) pollPassProgram(gl, ext, h, false);
+    if (!h.ready && !h.failed && !h.disposed) count++;
+  }
+  return count;
+}
+
 /** Round-robin retries with 100ms backoff on pending compiles. */
 export function createPreparationQueue({
   schedule,
@@ -88,6 +99,9 @@ export function createPreparationQueue({
     let result;
     try {
       result = task();
+    } catch (err) {
+      console.warn('[atmosphere] preparation step failed:', err?.message || err);
+      result = 'failed';
     } finally {
       restore();
     }
@@ -111,6 +125,11 @@ export function createPreparationQueue({
     add(steps) {
       if (disposed) return;
       tasks.push(...steps);
+      enqueue();
+    },
+    addFirst(steps) {
+      if (disposed) return;
+      tasks.unshift(...steps);
       enqueue();
     },
     resume: enqueue,

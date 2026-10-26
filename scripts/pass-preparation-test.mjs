@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createPreparationQueue, disposePassProgram, pollPassProgram, startPassProgram } from '../components/gradient/gl/passPreparation.js';
+import { countInFlight, createPreparationQueue, disposePassProgram, pollPassProgram, startPassProgram } from '../components/gradient/gl/passPreparation.js';
 
 const driver = () => {
   const calls = [];
@@ -154,4 +154,50 @@ test('disposal cancels queued callbacks and prevents new work', () => {
   h.q.add([() => 'pending']); h.tick(); h.q.dispose();
   h.q.add([() => 'done']); h.q.resume();
   assert.equal(h.callbacks.size, 0);
+});
+
+test('a throwing task logs a warning and allows subsequent tasks to proceed', t => {
+  const logs = [];
+  t.mock.method(console, 'warn', (...args) => logs.push(args.join(' ')));
+  const h = queueHarness();
+  let nextRan = false;
+  h.q.add([
+    () => { throw new Error('simulated task crash'); },
+    () => { nextRan = true; return 'done'; },
+  ]);
+  h.tick();
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /simulated task crash/);
+  h.tick();
+  assert.equal(nextRan, true);
+  assert.deepEqual(h.events, ['restore', 'restore', 'ready']);
+});
+
+test('in-flight compile tracking polls pending handles and frees completed slots', () => {
+  const d = driver();
+  const handles = new Set();
+  const h1 = startPassProgram(d.gl, 'p1', 'vs', 'fs');
+  const h2 = startPassProgram(d.gl, 'p2', 'vs', 'fs');
+  handles.add(h1);
+  handles.add(h2);
+
+  assert.equal(countInFlight(d.gl, d.ext, handles), 2);
+  assert.equal(h1.ready, false);
+  assert.equal(h2.ready, false);
+
+  d.complete();
+
+  assert.equal(countInFlight(d.gl, d.ext, handles), 0);
+  assert.equal(h1.ready, true);
+  assert.equal(h2.ready, true);
+});
+
+test('addFirst prepends priority tasks to the head of the queue', () => {
+  const h = queueHarness();
+  const order = [];
+  h.q.add([() => { order.push('desk'); return 'done'; }]);
+  h.q.addFirst([() => { order.push('house'); return 'done'; }]);
+  h.tick();
+  h.tick();
+  assert.deepEqual(order, ['house', 'desk']);
 });

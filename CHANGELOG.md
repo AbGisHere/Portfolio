@@ -6,6 +6,21 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.34 — 2026-10-26
+
+Compile concurrency limiter, deadlock resolution, direct entry house prioritization, and measured performance.
+
+- **Compile concurrency limiter (< 2 in flight) & deadlock fix:** Added `countInFlight(gl, ext, handles)` to actively poll pending program handles non-blocking via `COMPLETION_STATUS_KHR` before counting. Previously, handles started without immediate polling remained unready in userland, locking `canStartCompile()` forever at $\ge 2$ in flight and forcing all remaining shaders into synchronous compile stalls on scroll. With polling inside `countInFlight`, completed compiles immediately free their slots, strictly capping concurrent driver compiles to 2 while keeping the queue moving smoothly.
+- **Direct entry house prioritization (`addFirst`):** Added `addFirst()` to `createPreparationQueue` using `tasks.unshift()`. On direct links to `/house` or `?contact=`, house shaders and shadow preparation are prepended to the head of the idle queue rather than waiting behind the desk and meadow sequence.
+- **Queue robustness & Safari cadence:** Wrapped preparation queue task execution in `try ... catch` to warn and proceed with subsequent tasks rather than permanently halting the queue if a single step throws. Increased the fallback timer cadence for browsers lacking `requestIdleCallback` (Safari / iOS) from 16 ms to 1000 ms to avoid per-frame link stalls during the opening sweep. Removed unused `startHouseCompiles`.
+- **Verification:** 42/42 unit tests pass (including passPreparation lifecycle, non-blocking in-flight tracking, and retry fairness checks), 9/9 adaptive quality tests pass, and 21/21 production hygiene checks pass.
+- **Measured** (`scripts/perf.mjs --renderers gl --viewports 1440x900@2,1728x1117@2`; `scripts/out/perf/perf-2026-10-26T08-08-43-584Z.json`): P50 frame times are fully restored to **8.3–8.4 ms** (120 Hz vsync restored from the 16.6 ms compile-contention drop). Stutter during scroll is dramatically reduced:
+
+  | Renderer | Viewport | Scroll fps | p50 | p95 | Over 20 ms | Long tasks | Worst frame |
+  |---|---|---|---|---|---|---|---|
+  | GL | 1440×900@2 | **111.6** | **8.3 ms** | 16.4 ms | **4** (was 119) | 1 (207 ms) | 200.1 ms |
+  | GL | 1728×1117@2 | **93.3** | **8.4 ms** | 16.8 ms | **10** (was 605) | 2 (302 ms) | 225.1 ms |
+
 ## 0.4.33 — 2026-10-26
 
 Shader compilation pacing, non-blocking queue backoff, and pop-in elimination.

@@ -5,7 +5,7 @@ import { FRAGMENT, MAX_RIDGES, OFF_FLAGS, VERTEX } from './mistShader';
 import { CREST_FRAGMENT, CREST_VERTEX } from './crestShader';
 import { buildHashTable } from './hashTable';
 import { QUALITY, adaptiveQuality } from './adaptiveQuality';
-import { createPreparationQueue, disposePassProgram, pollPassProgram, startPassProgram } from './passPreparation';
+import { countInFlight, createPreparationQueue, disposePassProgram, pollPassProgram, startPassProgram } from './passPreparation';
 import {
   FAR_VEIL,
   GRAIN_SIZE,
@@ -240,6 +240,8 @@ export default function MistCanvas({ recipe, onFail }) {
       return handle;
     };
     const readyProgram = (handle, wait = requiredPass) => pollPassProgram(gl, extParallel, handle, wait);
+    const compilesInFlight = () => countInFlight(gl, extParallel, asyncPrograms);
+    const canStartCompile = () => compilesInFlight() < 2;
 
     // (0.4.33) Staggered non-blocking parallel compiles: secondary pass shaders
     // are started lazily 1–2 per idle slot in scroll approach order (or on demand
@@ -287,25 +289,21 @@ export default function MistCanvas({ recipe, onFail }) {
     let houseWarmed = false;
     let warmHouse = null;
 
-    const startHouseCompiles = () => {
-      if (houseAsync || noHouse) return;
-      houseAsync = startProgram('house', HOUSE_VERTEX, HOUSE_FRAGMENT);
-      shadowAsync = startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT);
-      if (!noGlass) glassAsync = startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT);
-      if (!noAO && gl.getExtension('EXT_color_buffer_float')) {
-        depthAsync = startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT);
-      }
-    };
+    const startHouseAsync = () => (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, HOUSE_FRAGMENT) : null);
+    const startShadowAsync = () => (shadowAsync ??= !noHouse ? startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT) : null);
+    const startGlassAsync = () => (glassAsync ??= !noHouse && !noGlass ? startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null);
+    const startDepthAsync = () => (depthAsync ??= !noHouse && !noAO && gl.getExtension('EXT_color_buffer_float') ? startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT) : null);
 
-    const ensureWarmHouse = () => {
+    const isDirectHouse = typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'));
+
+    const ensureWarmHouse = (priority = false) => {
       if (stopped || houseWarmed || noHouse) return;
       houseWarmed = true;
-      startHouseCompiles();
-      if (houseBuilt && warmHouse) warmHouse();
+      if (houseBuilt && warmHouse) warmHouse(priority || isDirectHouse);
     };
 
-    if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'))) {
-      ensureWarmHouse();
+    if (isDirectHouse) {
+      ensureWarmHouse(true);
     }
 
     // (0.3.1) The grass pass (grassShader.js): its own program, and an empty
@@ -542,7 +540,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const here = () => {
         houseBuilt = { house: houseMesh(), curtains: curtainMesh() };
         updateHouseBuffer();
-        if (houseWarmed && warmHouse) warmHouse();
+        if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
         dirty = true;
         kickRef.current();
       };
@@ -554,7 +552,7 @@ export default function MistCanvas({ recipe, onFail }) {
           houseWorker?.terminate();
           houseWorker = null;
           updateHouseBuffer();
-          if (houseWarmed && warmHouse) warmHouse();
+          if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
           // (Redrawn with it, even at rest.)
           dirty = true;
           kickRef.current();
@@ -576,8 +574,9 @@ export default function MistCanvas({ recipe, onFail }) {
       ensureWarmHouse();
       buildHouse();
       if (!houseBuilt) return null;
-      const hp = readyProgram(houseAsync, wait);
-      if (!hp) return houseAsync?.failed ? (house = false) : null;
+      const h = startHouseAsync();
+      const hp = readyProgram(h, wait);
+      if (!hp) return h?.failed ? (house = false) : null;
       const { data, count, lawn, glass: panes } = houseBuilt.house;
       const hb = gl.createBuffer();
       const vao = gl.createVertexArray();
@@ -637,8 +636,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (shadow !== null) return shadow;
       if (noHouse) return (shadow = false);
       ensureWarmHouse();
-      const sp = readyProgram(shadowAsync, wait);
-      if (!sp) return shadowAsync?.failed ? (shadow = false) : null;
+      const h = startShadowAsync();
+      const sp = readyProgram(h, wait);
+      if (!sp) return h?.failed ? (shadow = false) : null;
       const map = makeShadow(gl, 9);
       if (!map) return (shadow = false);
       shadow = { prog: sp, map, u: gl.getUniformLocation(sp, 'uLightVP') };
@@ -654,8 +654,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (hp === null) return null;
       if (!hp) return (glass = false);
       ensureWarmHouse();
-      const gp = readyProgram(glassAsync, wait);
-      if (!gp) return glassAsync?.failed ? (glass = false) : null;
+      const h = startGlassAsync();
+      const gp = readyProgram(h, wait);
+      if (!gp) return h?.failed ? (glass = false) : null;
       const mesh = glassMesh(hp.panes);
       const gb = gl.createBuffer();
       const vao = gl.createVertexArray();
@@ -681,8 +682,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (noHouse || noAO || !gl.getExtension('EXT_color_buffer_float')) return (aoPass = false);
       if (aoPass === null) {
         ensureWarmHouse();
-        const dp = readyProgram(depthAsync, wait);
-        if (!dp) return depthAsync?.failed ? (aoPass = false) : null;
+        const h = startDepthAsync();
+        const dp = readyProgram(h, wait);
+        if (!dp) return h?.failed ? (aoPass = false) : null;
         const AU = {};
         aoPass = { prog: dp, u: name => (AU[name] ??= gl.getUniformLocation(dp, name)), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
       }
@@ -997,7 +999,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const preparation = createPreparationQueue({
       schedule: next => typeof window.requestIdleCallback === 'function'
         ? window.requestIdleCallback(next, { timeout: 5000 })
-        : setTimeout(next, 16),
+        : setTimeout(next, 1000),
       cancel: id => (window.cancelIdleCallback ?? clearTimeout)(id),
       restore: cleanGL,
       canRun: () => !stopped && !document.hidden,
@@ -1006,24 +1008,23 @@ export default function MistCanvas({ recipe, onFail }) {
         kickRef.current();
       },
     });
-    const scheduleQueue = steps => preparation.add(steps);
+    const scheduleQueue = (steps, first = false) => (first ? preparation.addFirst(steps) : preparation.add(steps));
 
-    // (0.4.32) Progressive preparation: prepare the desk scene during the
-    // mountain section/idle, so by the descent to the desk, programs and geometry
-    // are already prepared without blocking the hero.
-    // Screen shape: warm the visible device for the current screen orientation first.
+    // (0.4.33) Progressive preparation: secondary passes are compiled in idle slots
+    // throttled to at most 2 concurrent compiles in flight, ordered by scroll approach.
     const portraitFirst = window.innerHeight > window.innerWidth;
     scheduleQueue([
       () => {
         meadowTexture();
+        if (!meadowPaintAsync && !canStartCompile()) return 'pending';
         startMeadowPaintAsync();
-        startMeadowFlowersAsync();
-        startMeadowFootAsync();
         return 'done';
       },
       () => {
         if (noGrass) return 'disabled';
+        if (!grassAsync && !canStartCompile()) return 'pending';
         startGrassAsync();
+        if (!flowerAsync && !canStartCompile()) return 'pending';
         startFlowerAsync();
         const g = grassProgram(false);
         const f = flowerProgram(false);
@@ -1032,50 +1033,68 @@ export default function MistCanvas({ recipe, onFail }) {
       },
       () => {
         if (noTrees) return 'disabled';
+        if (!treeAsync && !canStartCompile()) return 'pending';
         startTreeAsync();
         const t = treeProgram(false);
         return t === null ? 'pending' : 'done';
       },
       () => {
         if (noDesk) return 'disabled';
+        if (!deskAsync && !canStartCompile()) return 'pending';
         startDeskAsync();
         const d = deskProgram(false);
         return d === null ? 'pending' : 'done';
       },
       () => {
         if (noLaptop) return 'disabled';
-        if (portraitFirst) startTabletAsync(); else startLaptopAsync();
-        const dev = portraitFirst ? tabletProgram(false) : laptopProgram(false);
+        const startDev = portraitFirst ? startTabletAsync : startLaptopAsync;
+        const devProg = portraitFirst ? tabletProgram : laptopProgram;
+        const devHandle = portraitFirst ? tabletAsync : laptopAsync;
+        if (!devHandle && !canStartCompile()) return 'pending';
+        startDev();
+        const dev = devProg(false);
         return dev === null ? 'pending' : 'done';
       },
       () => {
         if (noLaptop) return 'disabled';
-        if (portraitFirst) startLaptopAsync(); else startTabletAsync();
-        const dev = portraitFirst ? laptopProgram(false) : tabletProgram(false);
+        const startDev = portraitFirst ? startLaptopAsync : startTabletAsync;
+        const devProg = portraitFirst ? laptopProgram : tabletProgram;
+        const devHandle = portraitFirst ? laptopAsync : tabletAsync;
+        if (!devHandle && !canStartCompile()) return 'pending';
+        startDev();
+        const dev = devProg(false);
         return dev === null ? 'pending' : 'done';
       },
       () => {
         if (noLamp) return 'disabled';
+        if (!lampAsync && !canStartCompile()) return 'pending';
         startLampAsync();
         const l = lampProgram(false);
         return l === null ? 'pending' : 'done';
       },
       () => {
         if (noProps) return 'disabled';
+        if (!propsAsync && !canStartCompile()) return 'pending';
         startPropsAsync();
         const p = propsProgram(false);
         return p === null ? 'pending' : 'done';
       },
       () => {
+        if (!meadowFlowersAsync && !canStartCompile()) return 'pending';
+        startMeadowFlowersAsync();
+        if (!meadowFootAsync && !canStartCompile()) return 'pending';
+        startMeadowFootAsync();
         meadowPrograms(false);
         return meadowPaint === null || meadowFlowers === null || meadowFoot === null ? 'pending' : 'done';
       },
       () => {
         if (noProps) return 'disabled';
+        if (!steamAsync && !canStartCompile()) return 'pending';
         startSteamAsync();
         return steamProgram(false) === null ? 'pending' : 'done';
       },
       () => {
+        if (!birdAsync && !canStartCompile()) return 'pending';
         startBirdAsync();
         return birdProgram(false) === null ? 'pending' : 'done';
       },
@@ -1084,9 +1103,8 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.32) The house: geometry generated by worker, but shader compilation
     // and idle queue preparation are deferred until reaching the desk stretch
     // or direct navigation, preventing GPU context loss on mobile hero views.
-    warmHouse = () => {
+    warmHouse = (first = isDirectHouse) => {
       if (noHouse) return;
-      startHouseCompiles();
       // (Last, the shadow map under the light as it is: unless the light
       // moves first, the house's first frame finds it drawn.)
       const shadowNow = () => {
@@ -1097,14 +1115,32 @@ export default function MistCanvas({ recipe, onFail }) {
         return 'done';
       };
       scheduleQueue([
-        () => (houseProgram(false) === null ? 'pending' : 'done'),
-        () => (houseShadow(false) === null ? 'pending' : 'done'),
         () => {
+          if (!houseAsync && !canStartCompile()) return 'pending';
+          startHouseAsync();
+          return houseProgram(false) === null ? 'pending' : 'done';
+        },
+        () => {
+          if (!shadowAsync && !canStartCompile()) return 'pending';
+          startShadowAsync();
+          return houseShadow(false) === null ? 'pending' : 'done';
+        },
+        () => {
+          if (!glassAsync && !canStartCompile()) return 'pending';
+          startGlassAsync();
           const gp = glassProgram(false);
           return gp === null ? 'pending' : 'done';
         },
-        () => (aoTarget(false) === null ? 'pending' : 'done'),
-        () => (probeBackdrop(false) === null ? 'pending' : 'done'),
+        () => {
+          if (!depthAsync && !canStartCompile()) return 'pending';
+          startDepthAsync();
+          return aoTarget(false) === null ? 'pending' : 'done';
+        },
+        () => {
+          if (!probeBackdropAsync && !canStartCompile()) return 'pending';
+          startProbeBackdropAsync();
+          return probeBackdrop(false) === null ? 'pending' : 'done';
+        },
         () => {
           waterSim();
           return 'done';
@@ -1114,7 +1150,7 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'done';
         },
         shadowNow,
-      ]);
+      ], first);
     };
     gl.uniform1i(uniform('uMoon'), 4);
     gl.uniform1i(uniform('uSky'), 0);
