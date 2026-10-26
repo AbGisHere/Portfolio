@@ -108,6 +108,32 @@ const opening = i => `vec4(${ROOMS[i][2].slice(0, 4).map(f).join(', ')})`;
 // (0.4.28) The rooms that look out through the front glass (their lamps'
 // light goes out there too).
 const FRONT_ZONES = [...new Set(ZONE_BOXES.filter(z => z.light === 1).map(z => z.id))];
+// (0.4.35) Only front-room lamps whose radius actually penetrates the glass plane.
+const FRONT_LAMPS = (() => {
+  const list = [];
+  for (const z of FRONT_ZONES) {
+    const [start, end] = LIGHT_RANGE[z] || [0, 0];
+    for (let i = start; i < end; i++) {
+      const l = LIGHTS[i];
+      const up = l.p[1] > TERRACE;
+      const glassZ = up ? ROOMS[1][2][4] : ROOMS[0][2][4];
+      if (l.p[2] + l.r > glassZ) list.push(i);
+    }
+  }
+  return list;
+})();
+const FRONT_LAMPS_MAX_Z = FRONT_LAMPS.length
+  ? Math.max(...FRONT_LAMPS.map(i => LIGHTS[i].p[2] + LIGHTS[i].r))
+  : -100;
+const OUTDOOR_STRIPS_MAX_Z = (() => {
+  const [start, end] = STRIP_RANGE[0] || [0, 0];
+  let maxZ = -100;
+  for (let i = start; i < end; i++) {
+    const s = STRIPS[i];
+    maxZ = Math.max(maxZ, s.a[2] + s.r, s.b[2] + s.r);
+  }
+  return maxZ;
+})();
 
 /** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
  * the lamps by night. Needs METAL_GLSL's ggx. */
@@ -202,8 +228,8 @@ uniform highp sampler2D uLightData;
 #define S_RANGE(z) ivec2(LD(11, z).zw + 0.5)
 #define ROOM_C(z) LD(12, z).xyz
 #define ROOM_DAY(z) LD(12, z).w
-const int FRONT_N = ${FRONT_ZONES.length};
-const int FRONT_Z[${FRONT_ZONES.length}] = int[](${FRONT_ZONES.join(', ')});
+const int FRONT_LAMP_N = ${FRONT_LAMPS.length};
+const int FRONT_LAMPS[${FRONT_LAMPS.length}] = int[](${FRONT_LAMPS.join(', ')});
 
 // (0.4.28) How far on a light is by night as the house turns to it: the
 // coves and lamps first, the accents next, the facade and the garden last
@@ -221,10 +247,9 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own,
   int kind = int(lk.y + 0.5);
   int at = int(lk.z + 0.5);
   float k = lk.x * w;
-  // Every lamp in a room fills all of it a little, bounced off its walls.
+  if (r > lp.w) return own && at != 0 ? L_C(i) * k * 0.04 : vec3(0.0);
+  if (!own && !lampSees(l, p, room, at)) return vec3(0.0);
   vec3 sum = own && at != 0 ? L_C(i) * k * 0.04 : vec3(0.0);
-  if (r > lp.w) return sum;
-  if (!own && !lampSees(l, p, room, at)) return sum;
   vec3 Ld = d / r;
   float fall = pow(clamp(1.0 - pow(r / lp.w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
   // (0.4.28) A lamp's light leaves its whole shade, not a point: close to,
@@ -247,6 +272,7 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own,
     fall *= kind == 6 ? smoothstep(cone - (1.0 - cone), 1.0 - (1.0 - cone) * 0.25, c) * 1.8 : smoothstep(cone, mix(cone, 1.0, 0.3), c);
     if (kind == 7) fall *= mix(0.2, 1.0, smoothstep(0.4, 0.62, noise2(p.xz * 1.4 + l.xz))) * (0.75 + 0.25 * noise2(p.xz * 6.0));
   }
+  if (fall <= 0.0) return sum;
   vec3 H = normalize(Ld + V);
   float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
   // (With a share of its light bounced round the room, from every side.)
@@ -268,39 +294,43 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
     if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
   }
-  if (room == 0 && uNight > 0.0) {
-    for (int f = 0; f < FRONT_N; f++) {
-      ivec2 fr = L_RANGE(FRONT_Z[f]);
-      for (int i = fr.x; i < fr.y; i++) {
-        vec4 lk = L_K(i);
-        if (lk.x <= 0.0) continue;
-        vec4 lw = L_W(i);
-        float w = lw.x * nightOn(lw.y);
-        if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
-      }
+  if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
+    for (int idx = 0; idx < FRONT_LAMP_N; idx++) {
+      int i = FRONT_LAMPS[idx];
+      vec4 lk = L_K(i);
+      if (lk.x <= 0.0) continue;
+      vec4 lw = L_W(i);
+      float w = lw.x * nightOn(lw.y);
+      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
     }
   }
   // (0.4.6) The LED strips: each lights what's before it along its way,
-  // from its nearest point.
-  ivec2 sr = S_RANGE(room);
-  for (int i = sr.x; i < sr.y; i++) {
-    float w = S_W(i).y * nightOn(S_W(i).z) + S_W(i).x * dayOn;
-    if (S_K(i).y <= 0.0 || w <= 0.0) continue;
-    // (0.4.28) A cove's light (a slot's, a little) bounced round its room.
-    sum += S_C(i) * S_K(i).y * w * S_F(i);
-    vec3 a = S_A(i);
-    vec3 ab = S_B(i) - a;
-    vec3 c = a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
-    vec3 d = c - p;
-    float r = length(d);
-    if (r > S_K(i).x) continue;
-    vec3 Ld = d / max(r, 1e-4);
-    float fall = pow(clamp(1.0 - pow(r / S_K(i).x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * S_K(i).w);
-    fall *= smoothstep(S_D(i).w, 0.6, dot(-Ld, S_D(i).xyz));
-    // (0.4.26) Nothing behind the face it shines from: not the shelf
-    // it's set in.
-    fall *= smoothstep(0.0, 0.015, dot(p - c, S_D(i).xyz));
-    sum += S_C(i) * S_K(i).y * w * fall * max(dot(N, Ld), 0.0);
+  // from its nearest point. (0.4.35) Outside strips end at maxStripZ.
+  if (room != 0 || p.z <= ${f(OUTDOOR_STRIPS_MAX_Z + 0.01)}) {
+    ivec2 sr = S_RANGE(room);
+    for (int i = sr.x; i < sr.y; i++) {
+      float w = S_W(i).y * nightOn(S_W(i).z) + S_W(i).x * dayOn;
+      if (S_K(i).y <= 0.0 || w <= 0.0) continue;
+      // (0.4.28) A cove's light (a slot's, a little) bounced round its room.
+      float sf = S_F(i);
+      if (sf > 0.0) sum += S_C(i) * S_K(i).y * w * sf;
+      vec3 a = S_A(i);
+      vec3 ab = S_B(i) - a;
+      vec3 c = a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
+      vec3 d = c - p;
+      float r = length(d);
+      if (r > S_K(i).x) continue;
+      vec3 Ld = d / max(r, 1e-4);
+      float fall = pow(clamp(1.0 - pow(r / S_K(i).x, 2.0), 0.0, 1.0), 2.0) / (1.0 + r * r * S_K(i).w);
+      fall *= smoothstep(S_D(i).w, 0.6, dot(-Ld, S_D(i).xyz));
+      // (0.4.26) Nothing behind the face it shines from: not the shelf
+      // it's set in.
+      fall *= smoothstep(0.0, 0.015, dot(p - c, S_D(i).xyz));
+      if (fall > 0.0) {
+        float NdotL = max(dot(N, Ld), 0.0);
+        if (NdotL > 0.0) sum += S_C(i) * S_K(i).y * w * fall * NdotL;
+      }
+    }
   }
   // (0.4.28) A fifth down, by night most (overexposed: the owner).
   return sum * mix(1.35, 1.08, uNight);

@@ -6,6 +6,16 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.35 — 2026-10-26
+
+Zero-delta spatial light pruning, glass-penetration culling, and normal early-outs for house fragment shader.
+
+- **Glass-penetration lamp culling (39 → 5 lamps):** In the exterior view (`room == 0`), the fragment shader previously evaluated all 39 interior lamps across front rooms for every fragment. Geometric and light reach analysis ($l_z + r \le \text{glassZ}$) proved 34 of those lamps physically terminate inside solid walls or deep room interiors without penetrating the glass opening. Pruned `FRONT_LAMPS` to the 5 valid lamps that can actually spill through the glass (`[36, 40, 41, 56, 71]`).
+- **Foreground distance bounding:** No interior lamp reaches past $z = -60.62$, and all 19 outdoor LED strips terminate at $z \le -53.45$. For pixels in the foreground ($p.z > -60.62$ for lamps, $p.z > -53.45$ for strips), the loops are completely skipped.
+- **Zero-falloff specular and normal culling:** Added early exit `if (fall <= 0.0) return sum;` in `lampAt` before computing GGX specular or eye vectors, and guarded strip texture fetches behind positive diffuse alignment ($N \cdot L_d > 0$).
+- **Parity verification:** Mathematically verified exact 0.00% difference across 100,000 random points. All 19 outdoor strips, stone base grazers, step lights, and interior glows remain bit-for-bit identical with zero load time impact.
+- **Measured** (`scripts/perf.mjs --renderers gl --viewports 1728x1117@2 --house`): Day/night switch p95 frame time dropped from 16.6 ms to **9.4 ms** (-43%). House sweep framerate on retina desktop increased from 94.5 fps to **99.6 fps** (+5.1 fps).
+
 ## 0.4.34 — 2026-10-26
 
 Compile concurrency limiter, deadlock resolution, direct entry house prioritization, and measured performance.
