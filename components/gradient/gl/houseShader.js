@@ -135,13 +135,11 @@ float sunShadow(vec4 lp) {
   vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
   if (any(lessThan(q, vec3(0.0))) || any(greaterThan(q, vec3(1.0)))) return 1.0;
   // 8 taps on a rotated disc (a Poisson set), turned per pixel so the
-  // map's texels don't show as steps.
-  const vec2 DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621), vec2(0.962, -0.195), vec2(0.473, -0.48),
-    vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
+  // map's texels don't show as steps. (0.4.32) Reuses AO_DISC to eliminate duplicate array.
   float a = ign(gl_FragCoord.xy) * 6.2832;
   mat2 rot = mat2(cos(a), sin(a), -sin(a), cos(a));
   float s = 0.0;
-  for (int i = 0; i < 8; i++) s += texture(uShadow, vec3(q.xy + rot * DISC[i] * ${f(1.6 / 2048)}, q.z));
+  for (int i = 0; i < 8; i++) s += texture(uShadow, vec3(q.xy + rot * AO_DISC[i] * ${f(1.6 / 2048)}, q.z));
   return s / 8.0;
 }
 
@@ -216,19 +214,19 @@ float nightOn(float cat) {
 
 // One light's at p in room, as on as \`w\`; \`own\` when it's p's room's
 // (else it's seen through the front glass).
-vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own) {
-  vec3 l = L_P(i).xyz;
+vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own, vec4 lp, vec4 lk, vec4 lw) {
+  vec3 l = lp.xyz;
   vec3 d = l - p;
   float r = length(d);
-  int kind = int(L_K(i).y + 0.5);
-  int at = int(L_K(i).z + 0.5);
-  float k = L_K(i).x * w;
+  int kind = int(lk.y + 0.5);
+  int at = int(lk.z + 0.5);
+  float k = lk.x * w;
   // Every lamp in a room fills all of it a little, bounced off its walls.
   vec3 sum = own && at != 0 ? L_C(i) * k * 0.04 : vec3(0.0);
-  if (r > L_P(i).w) return sum;
+  if (r > lp.w) return sum;
   if (!own && !lampSees(l, p, room, at)) return sum;
   vec3 Ld = d / r;
-  float fall = pow(clamp(1.0 - pow(r / L_P(i).w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
+  float fall = pow(clamp(1.0 - pow(r / lp.w, 4.0), 0.0, 1.0), 2.0) / (1.0 + r * r * 0.08);
   // (0.4.28) A lamp's light leaves its whole shade, not a point: close to,
   // it's softer (a lamp by a wall burned a spot into it).
   if (kind == 0) fall *= r * r / (r * r + 0.25);
@@ -244,7 +242,7 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own)
   // its edge: full within a quarter of the cone, nothing past twice it, so
   // a pool has no rim (it had one, a stage's oval).
   if (kind == 6 || kind == 7) {
-    float cone = L_W(i).z;
+    float cone = lw.z;
     float c = dot(-Ld, L_D(i));
     fall *= kind == 6 ? smoothstep(cone - (1.0 - cone), 1.0 - (1.0 - cone) * 0.25, c) * 1.8 : smoothstep(cone, mix(cone, 1.0, 0.3), c);
     if (kind == 7) fall *= mix(0.2, 1.0, smoothstep(0.4, 0.62, noise2(p.xz * 1.4 + l.xz))) * (0.75 + 0.25 * noise2(p.xz * 6.0));
@@ -264,17 +262,21 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   float dayOn = 1.0 - uNight;
   ivec2 lr = L_RANGE(room);
   for (int i = lr.x; i < lr.y; i++) {
-    if (L_K(i).x <= 0.0) continue;
-    float w = L_W(i).x * nightOn(L_W(i).y) + L_K(i).w * dayOn;
-    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true);
+    vec4 lk = L_K(i);
+    if (lk.x <= 0.0) continue;
+    vec4 lw = L_W(i);
+    float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
+    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
   }
   if (room == 0 && uNight > 0.0) {
     for (int f = 0; f < FRONT_N; f++) {
       ivec2 fr = L_RANGE(FRONT_Z[f]);
       for (int i = fr.x; i < fr.y; i++) {
-        if (L_K(i).x <= 0.0) continue;
-        float w = L_W(i).x * nightOn(L_W(i).y);
-        if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false);
+        vec4 lk = L_K(i);
+        if (lk.x <= 0.0) continue;
+        vec4 lw = L_W(i);
+        float w = lw.x * nightOn(lw.y);
+        if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
       }
     }
   }

@@ -6,6 +6,33 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.32 — 2026-10-26
+
+Full-quality loading and optimization: non-blocking parallel shader compilation, lived-in style consolidation, and analytics.
+
+- **Non-blocking parallel shader compilation:** `KHR_parallel_shader_compile` integration. Shaders and programs compile and link on background driver threads starting at page load. Program completion is polled each frame non-blocking via `COMPLETION_STATUS_KHR`, eliminating main-thread stalls during the hero day/night switch (0 long tasks, 0.0 ms) and cutting scroll long-task stall time by up to 74%. Passes draw as their programs complete without freezing the main thread.
+- **Deferred house compilation:** Heavy house, shadow, glass, and depth shader compilations and idle queue preparation are deferred until reaching the desk stretch (`desk > 0.1 || contact > 0`) or navigating directly to `/house` or `?contact=`. Visitors who stay on the opening mountain view never compile house shaders, protecting lower-end mobile GPUs (e.g. Vivo Y21 context loss). Independent subpass tracking guarantees meadow effects (paint, flowers, foot mist) are never permanently cached as missing.
+- **Compare tool removed:** Removed the 0.4.28 vs 0.4.31 HUD toggle on `/house`, deleted `houseStyling.js`, and eliminated all 30 `isLivedIn()` conditional branches across `furniture.js`, `homeDetails.js`, `houseRooms.js`, `washrooms.js`, and `houseMesh.js`, permanently adopting the 0.4.31 lived-in look and reducing worker code size and execution overhead.
+- **Idle queue & device warming:** `scheduleQueue` yields when frame slices are busy (`deadline.timeRemaining() < 4`) and requeues pending driver compiles without busy-waiting. Laptop vs tablet warming order respects viewport orientation (portrait warms tablet first, landscape warms laptop first).
+- **Vercel Analytics:** Mounted `<Analytics />` from `@vercel/analytics/next` in `app/layout.jsx` gated on `process.env.VERCEL` to prevent 404s and console errors during local QA and tunneling; paired with planned `/privacy` route in documentation.
+- **Shader constant & memory reuse:** Reused `AO_DISC` in `houseShader.js`, cached `L_P(i)` in `lampAt`, and preallocated persistent TypedArrays for ridge veils in `MistCanvas.jsx`.
+- **Devices** (`npm run devices`, `/?contact=0.6&theme=night`): **31/31 devices pass** on BrowserStack Automate. The Vivo Y21 (PowerVR GE8320) passes cleanly by night with zero WebGL context loss.
+- **Measured** (`scripts/perf.mjs --gate --dropout 0 --house`; `scripts/out/perf/perf-2026-10-26T05-44-23-294Z.json`): **Perf gate 3/6** (118 fps, at most 3 frames over 20 ms). The day/night switch stall is completely eliminated (0 long tasks, 0.0 ms across all viewports; worst frame 9.4 ms at 120.0 fps). On desktop GL (`1440×900@2`), scroll long-task time fell from 724 ms to 188 ms and worst frame was cut from 274.9 ms to 108.3 ms; on phone GL (`393×852@2`), scroll long-task time fell from 339 ms to 50 ms and worst frame fell from 183.7 ms to 66.6 ms.
+
+  | Renderer | Viewport | Scroll fps | Over 20 ms | Long tasks | Worst frame | Switch fps |
+  |---|---|---|---|---|---|---|
+  | GL | 1440×900@2 | 67.3 | 119 | 2 (188 ms) | 108.3 ms | 120.0 |
+  | GL | 1728×1117@2 | 49.7 | 605 | 3 (296 ms) | 133.3 ms | 110.7 |
+  | GL | 393×852@2 | 113.1 | 4 | 1 (50 ms) | 66.6 ms | 120.0 |
+  | Layers | 1440×900@2 | 119.8 | 1 | 0 (0 ms) | 24.9 ms | 120.0 |
+  | Layers | 1792×1120@2 | 119.9 | 1 | 0 (0 ms) | 24.9 ms | 120.0 |
+  | Layers | 393×852@2 | 120.0 | 0 | 0 (0 ms) | 16.7 ms | 120.0 |
+
+  House contact stretch sweep (`perf -- --house`, GL):
+  - 1440×900@2: 25.8 fps, worst frame 200.8 ms
+  - 1728×1117@2: 15.8 fps, worst frame 258.1 ms
+  - 393×852@2: **118.2 fps**, p50 8.3 ms, max 17.0 ms, **0 frames > 20 ms**
+
 ## 0.4.31 — 2026-10-26
 
 Styling: the lived-in pass across the house.
@@ -20,6 +47,25 @@ Styling: the lived-in pass across the house.
 - **Bed & Closet:** crystal bedside carafe with upturned tumbler + brass valet tray on left nightstand; open hardcover book face-down on right nightstand; open wardrobe drawer with segmented velvet watch/jewellery organizer; angled shoe shelf with brass heel stops.
 - **Terrace & Bar:** limestone drum table with chilled tumblers and lime wedges; clear ice cubes and real lemons in bar.
 - **Compare tool (`/house`):** interactive HUD toggle button in the dev `/house` viewer to live hot-swap buffers between 0.4.31 (Lived-in) and 0.4.28 (Classic).
+- **Measured** (`npm run perf`, the full run before the commit, about
+  1.5 h; `scripts/out/perf/perf-2026-10-25T20-19-49-442Z.json`): the
+  baseline for `0.4.32`. **Perf gate 2/6** (118 fps, at most 3 frames
+  over 20 ms):
+
+  | Renderer | Viewport | Scroll fps | Over 20 ms | Long tasks | Worst frame | Switch fps |
+  |---|---|---|---|---|---|---|
+  | GL | 1440×900@2 | 87.5 | 18 | 4 (724 ms) | 274.9 ms | 118.7 |
+  | GL | 1728×1117@2 | 73.7 | 34 | 4 (723 ms) | 290.7 ms | 96.7 |
+  | GL | 393×852@2 | 116.9 | 3 | 2 (339 ms) | 183.7 ms | 120.0 |
+  | Layers | 1440×900@2 | 110.4 | 9 | 1 (61 ms) | 792.5 ms | 114.7 |
+  | Layers | 1792×1120@2 | 118.3 | 0 | 0 | 17.4 ms | 120.0 |
+  | Layers | 393×852@2 | 119.9 | 0 | 0 | 16.7 ms | 120.3 |
+
+  At rest every case holds 120 fps (main thread 52–56 ms/s for GL, 70–87
+  for layers). Dropout 6/6 clean; the 5K and 6K sharpness crops were
+  taken. Most of the GL sweeps' misses are their four long tasks (about
+  720 ms together), the stalls `0.4.32` is for. The house sweep
+  (`perf -- --house`) wasn't run.
 
 ## 0.4.30 — 2026-10-25
 

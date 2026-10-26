@@ -1,6 +1,7 @@
 import AtmosphereField from '@/components/AtmosphereField';
 import SmoothScroll from '@/components/SmoothScroll';
 import ThemeProvider from '@/components/ThemeProvider';
+import { Analytics } from '@vercel/analytics/next';
 import { fontVariables } from './fonts';
 import { SITE } from './site';
 import './globals.css';
@@ -88,6 +89,7 @@ export default function RootLayout({ children }) {
           {/* Smooth scroll, and the descent's progress from it. */}
           <SmoothScroll />
         </ThemeProvider>
+        {process.env.VERCEL && <Analytics />}
       </body>
     </html>
   );

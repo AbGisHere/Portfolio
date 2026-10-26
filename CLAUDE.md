@@ -331,7 +331,7 @@ The invariants any change must keep, whatever part it touches:
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
-| Trust, privacy and accessibility (`ROADMAP.md`): analytics (provider on hold) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
+| Trust, privacy and accessibility (`ROADMAP.md`): analytics (Vercel, cookieless) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |
 | Decide whether an admin surface is still wanted |
 
 <!-- BEGIN:nextjs-agent-rules -->

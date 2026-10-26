@@ -24,7 +24,6 @@
 import { HOUSE_PART } from './houseShape';
 import { add, axes, box, lathe, obox, soft, sweep, tube } from './meshKit';
 import { mirror, slabCut } from './furniture';
-import { isLivedIn } from './houseStyling';
 
 const P = HOUSE_PART;
 const v = (part, k) => part + Math.min(0.9, Math.max(0, k));
@@ -87,14 +86,12 @@ export function longVanity(out, c, yaw, w, basins = 1) {
     sweep(out, [f.at(x, 1.16, 0.0), f.at(x, 1.16, 0.15), f.at(x, 1.13, 0.2)], 0.011, P.brass, { seg: 10 });
     for (const s of [-1, 1]) {
       lathe(out, f.at(x + s * 0.11, 1.12, 0.0), [0, 0, 1], [[0.025, 0], [0.025, 0.01], [0.012, 0.012], [0.012, 0.05], [0, 0.05]], P.brass, 14);
-      if (isLivedIn()) {
-        // (0.4.31) Champagne-bronze cross-handle taps from the marble
-        tube(out, f.at(x + s * 0.11 - 0.025, 1.12, 0.05), f.at(x + s * 0.11 + 0.025, 1.12, 0.05), 0.003, P.brass, 4);
-        tube(out, f.at(x + s * 0.11, 1.12 - 0.025, 0.05), f.at(x + s * 0.11, 1.12 + 0.025, 0.05), 0.003, P.brass, 4);
-      }
+      // (0.4.31) Champagne-bronze cross-handle taps from the marble
+      tube(out, f.at(x + s * 0.11 - 0.025, 1.12, 0.05), f.at(x + s * 0.11 + 0.025, 1.12, 0.05), 0.003, P.brass, 4);
+      tube(out, f.at(x + s * 0.11, 1.12 - 0.025, 0.05), f.at(x + s * 0.11, 1.12 + 0.025, 0.05), 0.003, P.brass, 4);
     }
   }
-  if (isLivedIn() && basins === 1) {
+  if (basins === 1) {
     // (0.4.31) WC: amber apothecary soap bottle with brass pump; walnut basket of three rolled waffle hand towels
     lathe(out, f.at(0.24, 0.86, 0.25), [0, 1, 0], [[0, 0], [0.024, 0], [0.024, 0.065], [0.01, 0.075], [0.01, 0.09], [0, 0.09]], v(P.ceramic, 0.85), 14);
     tube(out, f.at(0.24, 0.95, 0.25), f.at(0.24, 0.98, 0.25), 0.002, P.brass, 4);
@@ -103,7 +100,7 @@ export function longVanity(out, c, yaw, w, basins = 1) {
     soft(out, f.at(-0.29, 0.89, 0.25), [0.02, 0.02, 0.055], v(P.fabric, 0.9), { e1: 1, e2: 1, ax: f.ax });
     soft(out, f.at(-0.24, 0.89, 0.25), [0.02, 0.02, 0.055], v(P.fabric, 0.9), { e1: 1, e2: 1, ax: f.ax });
     soft(out, f.at(-0.265, 0.925, 0.25), [0.02, 0.02, 0.055], v(P.fabric, 0.9), { e1: 1, e2: 1, ax: f.ax });
-  } else if (isLivedIn() && basins > 1) {
+  } else if (basins > 1) {
     // (0.4.31) En-suite: three folded white bath sheets in an open cubby under the vanity
     for (let i = 0; i < 3; i++) {
       soft(out, f.at(0, 0.46 + i * 0.038, 0.25), [0.18, 0.016, 0.14], v(P.fabric, 0.9), { e1: 0.6, e2: 0.6, ax: f.ax });
