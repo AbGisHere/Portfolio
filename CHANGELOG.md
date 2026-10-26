@@ -6,6 +6,20 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.36 — 2026-10-26
+
+Phones and the turn to the pool: $O(1)$ lamp fitting lookup, precomputed constant room fills, locked adaptive resize during motion, and warm mirror probes in idle queue.
+
+- **$O(1)$ lamp fitting glow tagging (68,892 vertices):** Every fragment where `vPart == P.lamp` previously iterated through all 75 lights and 134 LED strips (209 iterations per lamp fragment) to compute `fittingGlow(vWorld)`. In `tagLampFittings(data)`, all 68,892 lamp vertices are pre-tagged with their matching light fixture or strip index directly in `aST.x` during mesh generation. Replaced the 209-iteration loop in the fragment shader with an instant $O(1)$ lookup, matching the original geometry with 0 mismatches across all 68,892 vertices (0.00% difference).
+- **Precomputed constant room fills:** Ambient bounce fills ($L_C \cdot k \cdot 0.04$ and cove fills $S_C \cdot S_K.y \cdot sf$) depend purely on room zone and night transition, not fragment coordinates $p$, normal $N$, or eye vector $V$. Precomputed these invariant fills into rows 13–16 of `HOUSE_LIGHT_DATA` (`ROOM_CONSTANT_FILLS`) for each zone across day and night categories ($cat_0, cat_1, cat_2$). This freed `lampAt` and strip loops to cull non-reaching lights ($r^2 > reach^2$) immediately without computing GGX specular, normal vectors, or distance square roots.
+- **Motion-locked adaptive resolution:** Wrapped `quality = adaptiveQuality(...)` resize triggers in `pendingResize` so resolution buffer re-allocations are strictly deferred until the camera is at rest (`!dirty && settled()`). Eliminates GPU reallocation hitches mid-turn.
+- **Probe face background warmup & motion elimination:** Moved mirror cubemap probe rendering into the idle `scheduleQueue` (`warmProbes`) once house and backdrop shaders compile, pre-allocating reflection and AO targets. Restricted active probe face stepping during rendering to camera rest (`probing = !dirty && settled() && ...`), eliminating 2 extra redundant house draw calls per frame while turning.
+- **Verification:** 42/42 unit tests pass, 9/9 adaptive quality tests pass, and parity passed 46/46 (worst mean 0.96, p99 3).
+- **Measured** (`scripts/perf.mjs --renderers gl --viewports 1440x900@2,393x852@2 --house`):
+  - **House stretch alone:** **120.0 fps**, p50 **8.3 ms**, p95 **9.3 ms**, max **9.4 ms**, **0 frames > 20 ms** on both desktop (`1440x900@2`) and mobile (`393x852@2`).
+  - **Full scroll sweep:** 118.8 fps (desktop) and 119.2 fps (mobile) with only 2 frames > 20 ms.
+  - **Switch & idle:** Pinned to **120.0 fps** with 0 frames > 20 ms.
+
 ## 0.4.35 — 2026-10-26
 
 Zero-delta spatial light pruning, glass-penetration culling, and normal early-outs for house fragment shader.

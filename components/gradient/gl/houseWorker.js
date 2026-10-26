@@ -6,11 +6,13 @@
  */
 import { houseLayout } from './houseMesh';
 import { curtainMesh } from './houseRooms';
+import { tagLampFittings } from './houseLights';
 
 // (Only inside a worker: the unit tests import every module here.)
 if (typeof self !== 'undefined') {
   self.onmessage = () => {
     const house = houseLayout();
+    tagLampFittings(house.data);
     const curtains = curtainMesh();
     self.postMessage({ house, curtains }, [house.data.buffer, curtains.data.buffer]);
   };

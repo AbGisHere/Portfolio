@@ -43,6 +43,7 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_LIGHT_DATA, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
+import { tagLampFittings } from './houseLights';
 import { CURTAIN_STRIDE, curtainMesh } from './houseRooms';
 import { HOUSE_BOUNDS, MOUND, POOL, moundY } from './houseShape';
 
@@ -538,7 +539,9 @@ export default function MistCanvas({ recipe, onFail }) {
     const buildHouse = () => {
       if (stopped || houseWorker || houseBuilt) return;
       const here = () => {
-        houseBuilt = { house: houseMesh(), curtains: curtainMesh() };
+        const house = houseMesh();
+        tagLampFittings(house.data);
+        houseBuilt = { house, curtains: curtainMesh() };
         updateHouseBuffer();
         if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
         dirty = true;
@@ -1114,6 +1117,11 @@ export default function MistCanvas({ recipe, onFail }) {
         if (g && sh && meadowAt) houseShadowMap(g, sh, meadowAt.colours);
         return 'done';
       };
+      const warmProbes = () => {
+        if (!mirrorProbes() || !houseProgram(false) || !probeBackdrop(false)) return 'pending';
+        if (probeStep(false)) return probesStale() ? 'pending' : 'done';
+        return 'done';
+      };
       scheduleQueue([
         () => {
           if (!houseAsync && !canStartCompile()) return 'pending';
@@ -1134,7 +1142,8 @@ export default function MistCanvas({ recipe, onFail }) {
         () => {
           if (!depthAsync && !canStartCompile()) return 'pending';
           startDepthAsync();
-          return aoTarget(false) === null ? 'pending' : 'done';
+          const ao = aoTarget(false);
+          return ao === null ? 'pending' : 'done';
         },
         () => {
           if (!probeBackdropAsync && !canStartCompile()) return 'pending';
@@ -1142,6 +1151,7 @@ export default function MistCanvas({ recipe, onFail }) {
           return probeBackdrop(false) === null ? 'pending' : 'done';
         },
         () => {
+          if (!noMirror) reflectTarget();
           waterSim();
           return 'done';
         },
@@ -1150,6 +1160,7 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'done';
         },
         shadowNow,
+        warmProbes,
       ], first);
     };
     gl.uniform1i(uniform('uMoon'), 4);
@@ -1347,7 +1358,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // Adaptive quality (0.2.4, ./adaptiveQuality.js): the resolution step,
     // from frame intervals. `?adapt=0` holds the full level (harness);
     // `data-quality` on the scene wrapper says which is set.
-    const quality = params.get('adapt') === '0' ? null : adaptiveQuality(() => resize());
+    // (0.4.36) Defer resize until camera is at rest to avoid target reallocation mid-turn.
+    let pendingResize = false;
+    const quality = params.get('adapt') === '0' ? null : adaptiveQuality(() => {
+      if (!dirty && settled()) resize();
+      else pendingResize = true;
+    });
     const level = () => quality?.level ?? 0;
     // `?cap=0` (harness, 0.2.11: `npm run sharp`) lifts the MAX_PIXELS cap,
     // so large high-DPI frames draw at native (still at most MAX_DPR).
@@ -2276,19 +2292,20 @@ export default function MistCanvas({ recipe, onFail }) {
       backdrop = { prog: bp, vao: gl.createVertexArray(), u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
       return backdrop;
     };
-    function probeStep() {
+    const probesStale = () => probeSet?.some(m => m.faces < 6 || Math.abs(m.night - houseNight()) > 0.03);
+    function probeStep(wait = false) {
       const pr = mirrorProbes();
-      if (!pr || !houseProgram(true)) return false;
-      const b = probeBackdrop(true);
+      if (!pr || !houseProgram(wait)) return false;
+      const b = probeBackdrop(wait);
       if (b === null) return false;
       const night = houseNight();
-      const cm = meadowAt.cm;
+      const cm = meadowAt ? meadowAt.cm : { x: 0, y: 0, z: 0 };
       let k = -1;
       let best = Infinity;
       probeSet.forEach((m, i) => {
         const d = Math.hypot(m.c[0] - cm.x, m.c[1] - cm.y, m.c[2] - cm.z);
         const stale = m.faces < 6 || Math.abs(m.night - night) > 0.03;
-        if (stale && d < PROBE.reach && d < best) {
+        if (stale && d < best) {
           best = d;
           k = i;
         }
@@ -2303,7 +2320,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const [yaw, pitch] = PROBE_FACES[f];
       const S = pr.size;
       const view = { P: { cos: Math.cos(pitch), sin: Math.sin(pitch), f: S / 2, zoom: 1, yc: Math.cos(yaw), ys: Math.sin(yaw), sx: S / 2, sy: S / 2 }, c: { x: m.at[0], y: m.at[1], z: m.at[2] }, size: S };
-      const sky = meadowAt.colours.env;
+      const sky = meadowAt?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LESS);
       gl.disable(gl.BLEND);
@@ -2317,7 +2334,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform2f(b.u('uYP'), yaw, pitch);
         gl.uniform3fv(b.u('uTop'), rgb01(sky[0]));
         gl.uniform3fv(b.u('uLow'), rgb01(sky[1]));
-        gl.uniform3fv(b.u('uHaze'), rgb01(meadowAt.mist ?? sky[1]));
+        gl.uniform3fv(b.u('uHaze'), rgb01(meadowAt?.mist ?? sky[1]));
         gl.uniform1f(b.u('uNight'), night);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
@@ -2675,9 +2692,8 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1fv(uniform('uVeilA'), veilAlphaBuf);
         const prints = printsNow();
         gl.viewport(0, 0, canvas.width, canvas.height);
-        // (0.4.18) A face of a mirror's probe, while one wants it (and the
-        // next frame comes for the next).
-        probing = !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep();
+        // (0.4.18, 0.4.36) Mirror probes: warmed in idle queue; at rest, step if any face is still needed.
+        probing = !dirty && settled() && !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep(false);
         // (0.4.2) The house's depth first, for its ambient occlusion.
         aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
         const grassOn = !!grassAt && !!grassProgram(true);
@@ -2830,6 +2846,10 @@ export default function MistCanvas({ recipe, onFail }) {
       // (The first frame after a wake is timed from the kick, not a frame.)
       quality?.sample(woke ? -1 : gap, woke ? false : busy, now);
       woke = false;
+      if (pendingResize && !busy && settled()) {
+        pendingResize = false;
+        resize();
+      }
       if (busy) rebuild();
       const tick = !busy && now - lastIdleAt >= 1000 / IDLE_HZ;
       let windMoved = false;
