@@ -5,6 +5,7 @@ import { FRAGMENT, MAX_RIDGES, OFF_FLAGS, VERTEX } from './mistShader';
 import { CREST_FRAGMENT, CREST_VERTEX } from './crestShader';
 import { buildHashTable } from './hashTable';
 import { QUALITY, adaptiveQuality } from './adaptiveQuality';
+import { createPreparationQueue, disposePassProgram, pollPassProgram, startPassProgram } from './passPreparation';
 import {
   FAR_VEIL,
   GRAIN_SIZE,
@@ -154,63 +155,6 @@ function passProgram(gl, name, vs, fs) {
   }
 }
 
-// (0.4.32) Non-blocking parallel shader compilation via KHR_parallel_shader_compile.
-// Kicks off compile and link on background driver threads without blocking the main thread.
-function startPassProgram(gl, name, vs, fs) {
-  try {
-    const p = gl.createProgram();
-    const vShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vShader, vs);
-    gl.compileShader(vShader);
-    gl.attachShader(p, vShader);
-
-    const fShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fShader, fs);
-    gl.compileShader(fShader);
-    gl.attachShader(p, fShader);
-
-    gl.bindAttribLocation(p, 0, 'aPos');
-    gl.linkProgram(p);
-
-    return { name, prog: p, vs: vShader, fs: fShader, ready: false, failed: false };
-  } catch (err) {
-    console.warn(`[atmosphere] the ${name} pass failed to start:`, err.message || 'no log');
-    return { name, prog: null, vs: null, fs: null, ready: false, failed: true };
-  }
-}
-
-// Polls COMPLETION_STATUS_KHR each frame without blocking. Once complete, checks
-// LINK_STATUS and returns the compiled program, or null while still in flight.
-function pollPassProgram(gl, ext, handle) {
-  if (!handle || handle.failed || !handle.prog) return null;
-  if (handle.ready) return handle.prog;
-  if (ext) {
-    if (!gl.getProgramParameter(handle.prog, ext.COMPLETION_STATUS_KHR)) {
-      return null;
-    }
-  }
-  if (!gl.getProgramParameter(handle.prog, gl.LINK_STATUS)) {
-    const pLog = gl.getProgramInfoLog(handle.prog) ?? '';
-    const vsLog = handle.vs ? (gl.getShaderInfoLog(handle.vs) ?? '') : '';
-    const fsLog = handle.fs ? (gl.getShaderInfoLog(handle.fs) ?? '') : '';
-    console.warn(`[atmosphere] the ${handle.name} pass failed to link:`, pLog, vsLog ? `\nVS: ${vsLog}` : '', fsLog ? `\nFS: ${fsLog}` : '');
-    handle.failed = true;
-    return null;
-  }
-  if (handle.vs) {
-    gl.detachShader(handle.prog, handle.vs);
-    gl.deleteShader(handle.vs);
-    handle.vs = null;
-  }
-  if (handle.fs) {
-    gl.detachShader(handle.prog, handle.fs);
-    gl.deleteShader(handle.fs);
-    handle.fs = null;
-  }
-  handle.ready = true;
-  return handle.prog;
-}
-
 function texture(gl, filter) {
   const t = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, t);
@@ -287,23 +231,48 @@ export default function MistCanvas({ recipe, onFail }) {
     const U = {};
     const uniform = name => (U[name] ??= gl.getUniformLocation(prog, name));
 
-    // (0.4.32) Non-blocking parallel compiles: start compiling secondary
-    // pass shaders at load on background driver threads. Polled non-blocking
-    // each frame via KHR_parallel_shader_compile.
-    const grassAsync = !noGrass ? startPassProgram(gl, 'grass', GRASS_VERTEX, GRASS_FRAGMENT) : null;
-    const flowerAsync = !noGrass ? startPassProgram(gl, 'flowers', FLOWER_VERTEX, FLOWER_FRAGMENT) : null;
-    const treeAsync = !noTrees ? startPassProgram(gl, 'trees', TREE_VERTEX, TREE_FRAGMENT) : null;
-    const deskAsync = !noDesk ? startPassProgram(gl, 'desk', DESK_VERTEX, DESK_FRAGMENT) : null;
-    const laptopAsync = !noLaptop ? startPassProgram(gl, 'laptop', LAPTOP_VERTEX, LAPTOP_FRAGMENT) : null;
-    const tabletAsync = !noLaptop ? startPassProgram(gl, 'tablet', TABLET_VERTEX, TABLET_FRAGMENT) : null;
-    const lampAsync = !noLamp ? startPassProgram(gl, 'lamp', LAMP_VERTEX, LAMP_FRAGMENT) : null;
-    const propsAsync = !noProps ? startPassProgram(gl, 'props', PROPS_VERTEX, PROPS_FRAGMENT) : null;
-    const steamAsync = !noProps ? startPassProgram(gl, 'steam', STEAM_VERTEX, STEAM_FRAGMENT) : null;
-    const birdAsync = startPassProgram(gl, 'birds', BIRD_VERTEX, BIRD_FRAGMENT);
-    const meadowPaintAsync = startPassProgram(gl, 'meadow paint', MEADOW_VERTEX, MEADOW_PAINT);
-    const meadowFlowersAsync = startPassProgram(gl, 'painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS);
-    const meadowFootAsync = startPassProgram(gl, 'foot mist', MEADOW_VERTEX, MEADOW_FOOT);
-    const probeBackdropAsync = startPassProgram(gl, 'probe backdrop', PROBE_BACKDROP_VERTEX, PROBE_BACKDROP_FRAGMENT);
+    let stopped = false;
+    let requiredPass = false;
+    const asyncPrograms = new Set();
+    const startProgram = (name, vs, fs) => {
+      const handle = startPassProgram(gl, name, vs, fs);
+      asyncPrograms.add(handle);
+      return handle;
+    };
+    const readyProgram = (handle, wait = requiredPass) => pollPassProgram(gl, extParallel, handle, wait);
+
+    // (0.4.33) Staggered non-blocking parallel compiles: secondary pass shaders
+    // are started lazily 1–2 per idle slot in scroll approach order (or on demand
+    // if scrolled early), preventing GPU process compiler contention.
+    let grassAsync = null;
+    let flowerAsync = null;
+    let treeAsync = null;
+    let deskAsync = null;
+    let laptopAsync = null;
+    let tabletAsync = null;
+    let lampAsync = null;
+    let propsAsync = null;
+    let steamAsync = null;
+    let birdAsync = null;
+    let meadowPaintAsync = null;
+    let meadowFlowersAsync = null;
+    let meadowFootAsync = null;
+    let probeBackdropAsync = null;
+
+    const startGrassAsync = () => (grassAsync ??= !noGrass ? startProgram('grass', GRASS_VERTEX, GRASS_FRAGMENT) : null);
+    const startFlowerAsync = () => (flowerAsync ??= !noGrass ? startProgram('flowers', FLOWER_VERTEX, FLOWER_FRAGMENT) : null);
+    const startTreeAsync = () => (treeAsync ??= !noTrees ? startProgram('trees', TREE_VERTEX, TREE_FRAGMENT) : null);
+    const startDeskAsync = () => (deskAsync ??= !noDesk ? startProgram('desk', DESK_VERTEX, DESK_FRAGMENT) : null);
+    const startLaptopAsync = () => (laptopAsync ??= !noLaptop ? startProgram('laptop', LAPTOP_VERTEX, LAPTOP_FRAGMENT) : null);
+    const startTabletAsync = () => (tabletAsync ??= !noLaptop ? startProgram('tablet', TABLET_VERTEX, TABLET_FRAGMENT) : null);
+    const startLampAsync = () => (lampAsync ??= !noLamp ? startProgram('lamp', LAMP_VERTEX, LAMP_FRAGMENT) : null);
+    const startPropsAsync = () => (propsAsync ??= !noProps ? startProgram('props', PROPS_VERTEX, PROPS_FRAGMENT) : null);
+    const startSteamAsync = () => (steamAsync ??= !noProps ? startProgram('steam', STEAM_VERTEX, STEAM_FRAGMENT) : null);
+    const startBirdAsync = () => (birdAsync ??= startProgram('birds', BIRD_VERTEX, BIRD_FRAGMENT));
+    const startMeadowPaintAsync = () => (meadowPaintAsync ??= startProgram('meadow paint', MEADOW_VERTEX, MEADOW_PAINT));
+    const startMeadowFlowersAsync = () => (meadowFlowersAsync ??= startProgram('painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS));
+    const startMeadowFootAsync = () => (meadowFootAsync ??= startProgram('foot mist', MEADOW_VERTEX, MEADOW_FOOT));
+    const startProbeBackdropAsync = () => (probeBackdropAsync ??= startProgram('probe backdrop', PROBE_BACKDROP_VERTEX, PROBE_BACKDROP_FRAGMENT));
 
     // The house's fragment shader is too heavy to compile at scroll 0 on lower-end
     // mobile GPUs (e.g. PowerVR GE8320 on Vivo Y21 loses context). Start house
@@ -320,16 +289,16 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const startHouseCompiles = () => {
       if (houseAsync || noHouse) return;
-      houseAsync = startPassProgram(gl, 'house', HOUSE_VERTEX, HOUSE_FRAGMENT);
-      shadowAsync = startPassProgram(gl, 'house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT);
-      if (!noGlass) glassAsync = startPassProgram(gl, 'house-glass', GLASS_VERTEX, GLASS_FRAGMENT);
+      houseAsync = startProgram('house', HOUSE_VERTEX, HOUSE_FRAGMENT);
+      shadowAsync = startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT);
+      if (!noGlass) glassAsync = startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT);
       if (!noAO && gl.getExtension('EXT_color_buffer_float')) {
-        depthAsync = startPassProgram(gl, 'house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT);
+        depthAsync = startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT);
       }
     };
 
     const ensureWarmHouse = () => {
-      if (houseWarmed || noHouse) return;
+      if (stopped || houseWarmed || noHouse) return;
       houseWarmed = true;
       startHouseCompiles();
       if (houseBuilt && warmHouse) warmHouse();
@@ -344,22 +313,24 @@ export default function MistCanvas({ recipe, onFail }) {
     // non-blocking in parallel at load; prepared without blocking the hero.
     // Null until built; false if this GPU can't build it.
     let grass = null;
-    const grassProgram = () => {
+    const grassProgram = (wait = requiredPass) => {
       if (grass !== null) return grass;
       if (noGrass) return (grass = false);
-      const gp = pollPassProgram(gl, extParallel, grassAsync);
-      if (!gp) return grassAsync?.failed ? (grass = false) : null;
+      const h = startGrassAsync();
+      const gp = readyProgram(h, wait);
+      if (!gp) return h?.failed ? (grass = false) : null;
       const GU = {};
       grass = { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
       return grass;
     };
     // (0.3.5) The flowers in the grass (flowerShader.js), built like it.
     let flowers = null;
-    const flowerProgram = () => {
+    const flowerProgram = (wait = requiredPass) => {
       if (flowers !== null) return flowers;
       if (noGrass) return (flowers = false);
-      const fp = pollPassProgram(gl, extParallel, flowerAsync);
-      if (!fp) return flowerAsync?.failed ? (flowers = false) : null;
+      const h = startFlowerAsync();
+      const fp = readyProgram(h, wait);
+      if (!fp) return h?.failed ? (flowers = false) : null;
       const FU = {};
       flowers = { prog: fp, vao: gl.createVertexArray(), u: name => (FU[name] ??= gl.getUniformLocation(fp, name)) };
       return flowers;
@@ -368,11 +339,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // up once, as per-instance data: the wood, the leaves, then the shadows
     // (each its own vertex array over the one buffer: their own vertex counts and blend).
     let trees = null;
-    const treeProgram = () => {
+    const treeProgram = (wait = requiredPass) => {
       if (trees !== null) return trees;
       if (noTrees) return (trees = false);
-      const tp = pollPassProgram(gl, extParallel, treeAsync);
-      if (!tp) return treeAsync?.failed ? (trees = false) : null;
+      const h = startTreeAsync();
+      const tp = readyProgram(h, wait);
+      if (!tp) return h?.failed ? (trees = false) : null;
       // (0.3.11) The copses jittered by the visitor's seed (new on a hard refresh).
       const { data, wood, parts } = treeLayout(treeSeed());
       const tb = gl.createBuffer();
@@ -403,11 +375,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.6) The desk (deskShader.js): fixed too, up once, the planks then
     // its shadow, as the trees are.
     let desk = null;
-    const deskProgram = () => {
+    const deskProgram = (wait = requiredPass) => {
       if (desk !== null) return desk;
       if (noDesk) return (desk = false);
-      const dp = pollPassProgram(gl, extParallel, deskAsync);
-      if (!dp) return deskAsync?.failed ? (desk = false) : null;
+      const h = startDeskAsync();
+      const dp = readyProgram(h, wait);
+      if (!dp) return h?.failed ? (desk = false) : null;
       const { data, wood } = deskLayout();
       const db = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, db);
@@ -433,11 +406,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.8) The laptop (laptopShader.js): its mesh up once, and its
     // texture (the keys, the trackpad, the logo) drawn once, on unit 6.
     let laptop = null;
-    const laptopProgram = () => {
+    const laptopProgram = (wait = requiredPass) => {
       if (laptop !== null) return laptop;
       if (noLaptop) return (laptop = false);
-      const lp = pollPassProgram(gl, extParallel, laptopAsync);
-      if (!lp) return laptopAsync?.failed ? (laptop = false) : null;
+      const h = startLaptopAsync();
+      const lp = readyProgram(h, wait);
+      if (!lp) return h?.failed ? (laptop = false) : null;
       const { data, count } = laptopMesh();
       const lb = gl.createBuffer();
       const vao = gl.createVertexArray();
@@ -465,11 +439,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.10) The tablet and its books (tabletShader.js), on portrait
     // frames: placed once, the back's texture on unit 7.
     let tablet = null;
-    const tabletProgram = () => {
+    const tabletProgram = (wait = requiredPass) => {
       if (tablet !== null) return tablet;
       if (noLaptop) return (tablet = false);
-      const tp = pollPassProgram(gl, extParallel, tabletAsync);
-      if (!tp) return tabletAsync?.failed ? (tablet = false) : null;
+      const h = startTabletAsync();
+      const tp = readyProgram(h, wait);
+      if (!tp) return h?.failed ? (tablet = false) : null;
       const { data, count } = tabletMesh();
       const tb = gl.createBuffer();
       const vao = gl.createVertexArray();
@@ -495,11 +470,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.11) The desk lamp (lampShader.js): no texture; its mesh rebuilt
     // whenever its top half is dragged to a new pose (../lampPose.js).
     let lamp = null;
-    const lampProgram = () => {
+    const lampProgram = (wait = requiredPass) => {
       if (lamp !== null) return lamp;
       if (noLamp) return (lamp = false);
-      const mp = pollPassProgram(gl, extParallel, lampAsync);
-      if (!mp) return lampAsync?.failed ? (lamp = false) : null;
+      const h = startLampAsync();
+      const mp = readyProgram(h, wait);
+      if (!mp) return h?.failed ? (lamp = false) : null;
       const pose = getLampPose();
       const { data, count } = lampMesh(pose);
       const mb = gl.createBuffer();
@@ -522,11 +498,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.3.12) The things on the desk (propsShader.js): one mesh, built once;
     // and the steam off the mug, a small pass of its own (no buffer).
     let props = null;
-    const propsProgram = () => {
+    const propsProgram = (wait = requiredPass) => {
       if (props !== null) return props;
       if (noProps) return (props = false);
-      const pp = pollPassProgram(gl, extParallel, propsAsync);
-      if (!pp) return propsAsync?.failed ? (props = false) : null;
+      const h = startPropsAsync();
+      const pp = readyProgram(h, wait);
+      if (!pp) return h?.failed ? (props = false) : null;
       const { data, count } = propsMesh();
       const pb = gl.createBuffer();
       const vao = gl.createVertexArray();
@@ -561,15 +538,18 @@ export default function MistCanvas({ recipe, onFail }) {
       kickRef.current();
     };
     const buildHouse = () => {
-      if (houseWorker || houseBuilt) return;
+      if (stopped || houseWorker || houseBuilt) return;
       const here = () => {
         houseBuilt = { house: houseMesh(), curtains: curtainMesh() };
         updateHouseBuffer();
         if (houseWarmed && warmHouse) warmHouse();
+        dirty = true;
+        kickRef.current();
       };
       try {
         houseWorker = new Worker(new URL('./houseWorker.js', import.meta.url));
         houseWorker.onmessage = e => {
+          if (stopped) return;
           houseBuilt = e.data;
           houseWorker?.terminate();
           houseWorker = null;
@@ -580,6 +560,7 @@ export default function MistCanvas({ recipe, onFail }) {
           kickRef.current();
         };
         houseWorker.onerror = () => {
+          if (stopped) return;
           houseWorker?.terminate();
           houseWorker = null;
           here();
@@ -589,13 +570,13 @@ export default function MistCanvas({ recipe, onFail }) {
         here();
       }
     };
-    const houseProgram = () => {
+    const houseProgram = (wait = requiredPass) => {
       if (house !== null) return house;
       if (noHouse) return (house = false);
       ensureWarmHouse();
       buildHouse();
       if (!houseBuilt) return null;
-      const hp = pollPassProgram(gl, extParallel, houseAsync);
+      const hp = readyProgram(houseAsync, wait);
       if (!hp) return houseAsync?.failed ? (house = false) : null;
       const { data, count, lawn, glass: panes } = houseBuilt.house;
       const hb = gl.createBuffer();
@@ -634,7 +615,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, HOUSE_LIGHT_DATA.width, HOUSE_LIGHT_DATA.height, 0, gl.RGBA, gl.FLOAT, HOUSE_LIGHT_DATA.data);
       gl.activeTexture(gl.TEXTURE0);
-      house = { prog: hp, vao, buf: hb, count, lawn, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
+      house = { prog: hp, vao, buf: hb, lightTex: lt, count, lawn, panes, curtains: { vao: cvao, buf: cb, count: cm.count }, u: name => (HU[name] ??= gl.getUniformLocation(hp, name)) };
       return house;
     };
     // (0.4.2) The pool's water (poolWater.js), on texture unit 8: made the
@@ -652,11 +633,11 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.2) The sun's shadow over the house (houseShadow.js): its depth
     // map on texture unit 9 and the program that draws it (null: none here).
     let shadow = null;
-    const houseShadow = () => {
+    const houseShadow = (wait = requiredPass) => {
       if (shadow !== null) return shadow;
       if (noHouse) return (shadow = false);
       ensureWarmHouse();
-      const sp = pollPassProgram(gl, extParallel, shadowAsync);
+      const sp = readyProgram(shadowAsync, wait);
       if (!sp) return shadowAsync?.failed ? (shadow = false) : null;
       const map = makeShadow(gl, 9);
       if (!map) return (shadow = false);
@@ -666,14 +647,14 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.2) The glass and the water (houseGlass.js): their mesh and the
     // copy of the frame they bend (texture unit 11, the canvas's size).
     let glass = null;
-    const glassProgram = () => {
+    const glassProgram = (wait = requiredPass) => {
       if (glass !== null) return glass;
       if (noHouse || noGlass) return (glass = false);
-      const hp = houseProgram();
+      const hp = houseProgram(wait);
       if (hp === null) return null;
       if (!hp) return (glass = false);
       ensureWarmHouse();
-      const gp = pollPassProgram(gl, extParallel, glassAsync);
+      const gp = readyProgram(glassAsync, wait);
       if (!gp) return glassAsync?.failed ? (glass = false) : null;
       const mesh = glassMesh(hp.panes);
       const gb = gl.createBuffer();
@@ -695,12 +676,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // ambient occlusion (texture unit 13): its program and target (null:
     // none here).
     let aoPass = null;
-    const aoTarget = () => {
+    const aoTarget = (wait = requiredPass) => {
       if (aoPass === false) return false;
       if (noHouse || noAO || !gl.getExtension('EXT_color_buffer_float')) return (aoPass = false);
       if (aoPass === null) {
         ensureWarmHouse();
-        const dp = pollPassProgram(gl, extParallel, depthAsync);
+        const dp = readyProgram(depthAsync, wait);
         if (!dp) return depthAsync?.failed ? (aoPass = false) : null;
         const AU = {};
         aoPass = { prog: dp, u: name => (AU[name] ??= gl.getUniformLocation(dp, name)), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
@@ -724,7 +705,12 @@ export default function MistCanvas({ recipe, onFail }) {
         const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.activeTexture(gl.TEXTURE0);
-        if (!ok) return (aoPass = false);
+        if (!ok) {
+          gl.deleteTexture(aoPass.tex);
+          gl.deleteRenderbuffer(aoPass.depth);
+          gl.deleteFramebuffer(aoPass.fbo);
+          return (aoPass = false);
+        }
       }
       return aoPass;
     };
@@ -840,10 +826,11 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.4) The birds (birdShader.js): a program, and per species its mesh
     // and a buffer of its flock's instances, filled every frame.
     let birdPass = null;
-    const birdProgram = () => {
+    const birdProgram = (wait = requiredPass) => {
       if (birdPass !== null) return birdPass;
-      const bp = pollPassProgram(gl, extParallel, birdAsync);
-      if (!bp) return birdAsync?.failed ? (birdPass = false) : null;
+      const h = startBirdAsync();
+      const bp = readyProgram(h, wait);
+      if (!bp) return h?.failed ? (birdPass = false) : null;
       // (0.4.24) And the butterflies, a fourth kind; (0.4.26) the
       // fireflies a fifth, last (their light is added on).
       const kinds = ['swallow', 'kite', 'goose', 'butterfly', 'firefly'].map((name, kind) => {
@@ -921,11 +908,12 @@ export default function MistCanvas({ recipe, onFail }) {
     }
     const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     let steam = null;
-    const steamProgram = () => {
+    const steamProgram = (wait = requiredPass) => {
       if (steam !== null) return steam;
       if (noProps) return (steam = false);
-      const sp = pollPassProgram(gl, extParallel, steamAsync);
-      if (!sp) return steamAsync?.failed ? (steam = false) : null;
+      const h = startSteamAsync();
+      const sp = readyProgram(h, wait);
+      if (!sp) return h?.failed ? (steam = false) : null;
       const SU = {};
       steam = { prog: sp, vao: gl.createVertexArray(), u: name => (SU[name] ??= gl.getUniformLocation(sp, name)) };
       return steam;
@@ -1006,75 +994,90 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     };
 
-    const scheduleQueue = (steps, delay = 5000) => {
-      const next = deadline => {
-        if (!steps.length) return;
-        if (deadline && typeof deadline.timeRemaining === 'function' && !deadline.didTimeout && deadline.timeRemaining() < 4) {
-          warmIdles.push(idle(next, { timeout: delay }));
-          return;
-        }
-        const step = steps.shift();
-        if (step) {
-          const res = step();
-          cleanGL();
-          if (res === 'pending') {
-            steps.push(step);
-          } else if (res === 'done' || res === true) {
-            dirty = true;
-            kickRef.current();
-          }
-        }
-        if (steps.length) warmIdles.push(idle(next, { timeout: delay }));
-      };
-      warmIdles.push(idle(next, { timeout: delay }));
-    };
+    const preparation = createPreparationQueue({
+      schedule: next => typeof window.requestIdleCallback === 'function'
+        ? window.requestIdleCallback(next, { timeout: 5000 })
+        : setTimeout(next, 16),
+      cancel: id => (window.cancelIdleCallback ?? clearTimeout)(id),
+      restore: cleanGL,
+      canRun: () => !stopped && !document.hidden,
+      onReady: () => {
+        dirty = true;
+        kickRef.current();
+      },
+    });
+    const scheduleQueue = steps => preparation.add(steps);
 
     // (0.4.32) Progressive preparation: prepare the desk scene during the
     // mountain section/idle, so by the descent to the desk, programs and geometry
     // are already prepared without blocking the hero.
     // Screen shape: warm the visible device for the current screen orientation first.
-    const isPortrait = () => (typeof window !== 'undefined' && window.innerHeight > window.innerWidth);
+    const portraitFirst = window.innerHeight > window.innerWidth;
     scheduleQueue([
       () => {
         meadowTexture();
+        startMeadowPaintAsync();
+        startMeadowFlowersAsync();
+        startMeadowFootAsync();
         return 'done';
       },
       () => {
         if (noGrass) return 'disabled';
-        const g = grassProgram();
-        const f = flowerProgram();
+        startGrassAsync();
+        startFlowerAsync();
+        const g = grassProgram(false);
+        const f = flowerProgram(false);
         if (g === null || f === null) return 'pending';
         return 'done';
       },
       () => {
         if (noTrees) return 'disabled';
-        const t = treeProgram();
+        startTreeAsync();
+        const t = treeProgram(false);
         return t === null ? 'pending' : 'done';
       },
       () => {
         if (noDesk) return 'disabled';
-        const d = deskProgram();
+        startDeskAsync();
+        const d = deskProgram(false);
         return d === null ? 'pending' : 'done';
       },
       () => {
-        if (noProps) return 'disabled';
-        const p = propsProgram();
-        return p === null ? 'pending' : 'done';
+        if (noLaptop) return 'disabled';
+        if (portraitFirst) startTabletAsync(); else startLaptopAsync();
+        const dev = portraitFirst ? tabletProgram(false) : laptopProgram(false);
+        return dev === null ? 'pending' : 'done';
+      },
+      () => {
+        if (noLaptop) return 'disabled';
+        if (portraitFirst) startLaptopAsync(); else startTabletAsync();
+        const dev = portraitFirst ? laptopProgram(false) : tabletProgram(false);
+        return dev === null ? 'pending' : 'done';
       },
       () => {
         if (noLamp) return 'disabled';
-        const l = lampProgram();
+        startLampAsync();
+        const l = lampProgram(false);
         return l === null ? 'pending' : 'done';
       },
       () => {
-        if (noLaptop) return 'disabled';
-        const dev = isPortrait() ? tabletProgram() : laptopProgram();
-        return dev === null ? 'pending' : 'done';
+        if (noProps) return 'disabled';
+        startPropsAsync();
+        const p = propsProgram(false);
+        return p === null ? 'pending' : 'done';
       },
       () => {
-        if (noLaptop) return 'disabled';
-        const dev = isPortrait() ? laptopProgram() : tabletProgram();
-        return dev === null ? 'pending' : 'done';
+        meadowPrograms(false);
+        return meadowPaint === null || meadowFlowers === null || meadowFoot === null ? 'pending' : 'done';
+      },
+      () => {
+        if (noProps) return 'disabled';
+        startSteamAsync();
+        return steamProgram(false) === null ? 'pending' : 'done';
+      },
+      () => {
+        startBirdAsync();
+        return birdProgram(false) === null ? 'pending' : 'done';
       },
     ]);
 
@@ -1087,21 +1090,21 @@ export default function MistCanvas({ recipe, onFail }) {
       // (Last, the shadow map under the light as it is: unless the light
       // moves first, the house's first frame finds it drawn.)
       const shadowNow = () => {
-        const g = houseProgram();
-        const sh = houseShadow();
+        const g = houseProgram(false);
+        const sh = houseShadow(false);
         if (g === null || sh === null) return 'pending';
         if (g && sh && meadowAt) houseShadowMap(g, sh, meadowAt.colours);
         return 'done';
       };
       scheduleQueue([
-        () => (houseProgram() === null ? 'pending' : 'done'),
-        () => (houseShadow() === null ? 'pending' : 'done'),
+        () => (houseProgram(false) === null ? 'pending' : 'done'),
+        () => (houseShadow(false) === null ? 'pending' : 'done'),
         () => {
-          const gp = glassProgram();
+          const gp = glassProgram(false);
           return gp === null ? 'pending' : 'done';
         },
-        () => (aoTarget() === null ? 'pending' : 'done'),
-        () => (birdProgram() === null ? 'pending' : 'done'),
+        () => (aoTarget(false) === null ? 'pending' : 'done'),
+        () => (probeBackdrop(false) === null ? 'pending' : 'done'),
         () => {
           waterSim();
           return 'done';
@@ -1167,20 +1170,21 @@ export default function MistCanvas({ recipe, onFail }) {
     let meadowPaint = null;
     let meadowFlowers = null;
     let meadowFoot = null;
-    const meadowPrograms = () => {
-      const make = handle => {
-        const prog = pollPassProgram(gl, extParallel, handle);
-        if (!prog) return handle?.failed ? false : null;
+    const meadowPrograms = (wait = requiredPass) => {
+      const make = (starter, handle) => {
+        const h = starter();
+        const prog = readyProgram(h, wait);
+        if (!prog) return h?.failed ? false : null;
         const U = {};
         return { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
       };
-      if (!meadowPaint) {
-        const res = make(meadowPaintAsync);
+      if (meadowPaint === null) {
+        const res = make(startMeadowPaintAsync, meadowPaintAsync);
         if (res === null) return null;
         meadowPaint = res;
       }
-      if (!meadowFlowers) {
-        const res = make(meadowFlowersAsync);
+      if (meadowFlowers === null) {
+        const res = make(startMeadowFlowersAsync, meadowFlowersAsync);
         if (res) {
           meadowFlowers = res;
           dirty = true;
@@ -1189,8 +1193,8 @@ export default function MistCanvas({ recipe, onFail }) {
           meadowFlowers = false;
         }
       }
-      if (!meadowFoot) {
-        const res = make(meadowFootAsync);
+      if (meadowFoot === null) {
+        const res = make(startMeadowFootAsync, meadowFootAsync);
         if (res) {
           meadowFoot = res;
           dirty = true;
@@ -1717,7 +1721,7 @@ export default function MistCanvas({ recipe, onFail }) {
         poolSeen = !!frame.grass && cm.y > POOL.at[1] + 0.05 && seen(POOL_BOX[0], POOL_BOX[1]);
         houseSeen = !!frame.grass && seen(HOUSE_BOUNDS.lo, HOUSE_BOUNDS.hi);
         lawnSeen = !!frame.grass && seen(MOUND_BOX[0], MOUND_BOX[1]);
-        if (desk > 0.1 || contact > 0 || houseSeen || lawnSeen) {
+        if (desk > 0.05 || contact > 0 || houseSeen || lawnSeen) {
           ensureWarmHouse();
         }
         meadowAt = frame.grass
@@ -2226,19 +2230,20 @@ export default function MistCanvas({ recipe, onFail }) {
     }
     // One face of the probe most in need of it, if any is (true: drawn).
     let backdrop = null;
-    const probeBackdrop = () => {
+    const probeBackdrop = (wait = requiredPass) => {
       if (backdrop !== null) return backdrop;
       if (noHouse || noMirror) return (backdrop = false);
-      const bp = pollPassProgram(gl, extParallel, probeBackdropAsync);
-      if (!bp) return probeBackdropAsync?.failed ? (backdrop = false) : null;
+      const h = startProbeBackdropAsync();
+      const bp = readyProgram(h, wait);
+      if (!bp) return h?.failed ? (backdrop = false) : null;
       const BU = {};
       backdrop = { prog: bp, vao: gl.createVertexArray(), u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
       return backdrop;
     };
     function probeStep() {
       const pr = mirrorProbes();
-      if (!pr || !houseProgram()) return false;
-      const b = probeBackdrop();
+      if (!pr || !houseProgram(true)) return false;
+      const b = probeBackdrop(true);
       if (b === null) return false;
       const night = houseNight();
       const cm = meadowAt.cm;
@@ -2618,90 +2623,96 @@ export default function MistCanvas({ recipe, onFail }) {
     }
 
     function draw(vs) {
-      for (let i = 0; i < vs.length; i++) {
-        const v = vs[i];
-        const off = i * 4;
-        veilPos[off] = v[0];
-        veilPos[off + 1] = v[1];
-        veilPos[off + 2] = v[2];
-        veilPos[off + 3] = v[3];
-        veilAlphaBuf[i] = v[4];
-      }
-      gl.uniform4fv(uniform('uVeil'), veilPos);
-      gl.uniform1fv(uniform('uVeilA'), veilAlphaBuf);
-      const prints = printsNow();
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      // (0.4.18) A face of a mirror's probe, while one wants it (and the
-      // next frame comes for the next).
-      probing = !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep();
-      // (0.4.2) The house's depth first, for its ambient occlusion.
-      aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
-      const grassOn = !!grassAt && !!grassProgram();
-      // (0.3.5) The trees show as soon as the meadow's paint does.
-      const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram();
-      // (0.3.6) The desk shows whenever the camera's pitched over the meadow.
-      const deskOn = !!meadowAt && !noDesk && !!deskProgram();
-      if (!grassOn && !treesOn && !deskOn) {
-        gl.disable(gl.DEPTH_TEST);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        drawMeadow(prints);
-        lastDrawn = vs;
-        return;
-      }
-      // (0.3.7) The solid things first, writing their depth: the desk
-      // (0.3.6), the grass, its flowers and the trees (0.3.5). Then the
-      // scene, on the far plane, only where none of them stands, so its
-      // shader never runs under them; then the shadows multiplied into it.
-      gl.enable(gl.DEPTH_TEST);
-      gl.depthMask(true);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.depthFunc(gl.LESS);
-      // (0.3.10) The device before the desk, so the desk's top isn't shaded
-      // behind it.
-      if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
-      if (deskOn && !noLamp) drawLamp();
-      if (deskOn && !noProps) drawProps();
-      if (deskOn && !noHouse && houseSeen) drawHouse();
-      if (deskOn && personAt && houseProgram()) drawHouse(false, false, null, true);
-      if (deskOn) drawDesk(false);
-      if (grassOn) {
-        drawGrass(prints);
-        drawFlowers(prints);
-      }
-      if (treesOn) drawTrees(false);
-      if (birdWeight > 0 && meadowAt) drawBirds();
-      gl.useProgram(prog);
-      gl.bindVertexArray(null);
-      gl.depthFunc(gl.LEQUAL);
-      gl.depthMask(false);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.depthMask(true);
-      gl.depthFunc(gl.LESS);
-      if (deskOn) drawDesk(true);
-      if (treesOn) drawTrees(true);
-      if (deskOn && !noHouse && lawnSeen) drawHouse(false, true);
-      // Then the meadow over the ground the blades leave uncovered (the
-      // depth test skips the rest), writing no depth.
-      gl.depthMask(false);
-      drawMeadow(prints);
-      if (deskOn && !noProps) drawSteam();
-      gl.depthMask(true);
-      if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
-      // (0.4.26) The fireflies by night (fireflies.js), added on.
-      fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
-      if (fliesOn) drawBirds(true);
-      // (0.4.6) By night round the house, the bright spills a glow.
-      const night = houseNight();
-      if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
-        bloom ??= makeBloom(gl, 14) || false;
-        if (bloom) {
-          copyFrame(glass, true);
-          bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
-          gl.useProgram(prog);
+      const wasRequired = requiredPass;
+      requiredPass = true;
+      try {
+        for (let i = 0; i < vs.length; i++) {
+          const v = vs[i];
+          const off = i * 4;
+          veilPos[off] = v[0];
+          veilPos[off + 1] = v[1];
+          veilPos[off + 2] = v[2];
+          veilPos[off + 3] = v[3];
+          veilAlphaBuf[i] = v[4];
         }
+        gl.uniform4fv(uniform('uVeil'), veilPos);
+        gl.uniform1fv(uniform('uVeilA'), veilAlphaBuf);
+        const prints = printsNow();
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        // (0.4.18) A face of a mirror's probe, while one wants it (and the
+        // next frame comes for the next).
+        probing = !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep();
+        // (0.4.2) The house's depth first, for its ambient occlusion.
+        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
+        const grassOn = !!grassAt && !!grassProgram(true);
+        // (0.3.5) The trees show as soon as the meadow's paint does.
+        const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram(true);
+        // (0.3.6) The desk shows whenever the camera's pitched over the meadow.
+        const deskOn = !!meadowAt && !noDesk && !!deskProgram(true);
+        if (!grassOn && !treesOn && !deskOn) {
+          gl.disable(gl.DEPTH_TEST);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          drawMeadow(prints);
+          lastDrawn = vs;
+          return;
+        }
+        // (0.3.7) The solid things first, writing their depth: the desk
+        // (0.3.6), the grass, its flowers and the trees (0.3.5). Then the
+        // scene, on the far plane, only where none of them stands, so its
+        // shader never runs under them; then the shadows multiplied into it.
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthMask(true);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.depthFunc(gl.LESS);
+        // (0.3.10) The device before the desk, so the desk's top isn't shaded
+        // behind it.
+        if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
+        if (deskOn && !noLamp) drawLamp();
+        if (deskOn && !noProps) drawProps();
+        if (deskOn && !noHouse && houseSeen) drawHouse();
+        if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
+        if (deskOn) drawDesk(false);
+        if (grassOn) {
+          drawGrass(prints);
+          drawFlowers(prints);
+        }
+        if (treesOn) drawTrees(false);
+        if (birdWeight > 0 && meadowAt) drawBirds();
+        gl.useProgram(prog);
+        gl.bindVertexArray(null);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+        if (deskOn) drawDesk(true);
+        if (treesOn) drawTrees(true);
+        if (deskOn && !noHouse && lawnSeen) drawHouse(false, true);
+        // Then the meadow over the ground the blades leave uncovered (the
+        // depth test skips the rest), writing no depth.
+        gl.depthMask(false);
+        drawMeadow(prints);
+        if (deskOn && !noProps) drawSteam();
+        gl.depthMask(true);
+        if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
+        // (0.4.26) The fireflies by night (fireflies.js), added on.
+        fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
+        if (fliesOn) drawBirds(true);
+        // (0.4.6) By night round the house, the bright spills a glow.
+        const night = houseNight();
+        if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
+          bloom ??= makeBloom(gl, 14) || false;
+          if (bloom) {
+            copyFrame(glass, true);
+            bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
+            gl.useProgram(prog);
+          }
+        }
+        gl.disable(gl.DEPTH_TEST);
+        lastDrawn = vs;
+      } finally {
+        requiredPass = wasRequired;
       }
-      gl.disable(gl.DEPTH_TEST);
-      lastDrawn = vs;
     }
 
     // Profiling (harness only): `?bench=200` redraws the frame that many
@@ -2737,6 +2748,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
     function frame(now) {
       raf = 0;
+      if (stopped) return;
       if (!w) resize();
       if (!w) return;
       // dt exactly as the engine's Wl: seconds, clamped to [.001, .05].
@@ -2817,7 +2829,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // Like Wl, the clock starts when the loop does, so the first step's dt is
     // the time to the first view.
     const kick = () => {
-      if (!raf && visible && onScreen) {
+      if (!stopped && !raf && visible && onScreen) {
         last = performance.now();
         woke = true;
         raf = requestAnimationFrame(frame);
@@ -2842,6 +2854,7 @@ export default function MistCanvas({ recipe, onFail }) {
     io?.observe(canvas);
     const onVisibility = () => {
       visible = !document.hidden;
+      if (visible) preparation.resume();
       kick();
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -2869,6 +2882,10 @@ export default function MistCanvas({ recipe, onFail }) {
     });
     const onLost = e => {
       e.preventDefault();
+      stopped = true;
+      preparation.dispose();
+      for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
+      houseWorker?.terminate();
       cancelAnimationFrame(raf);
       raf = 0;
       onFail?.(Object.assign(new Error('webgl context lost'), { lost: true }));
@@ -2909,6 +2926,8 @@ export default function MistCanvas({ recipe, onFail }) {
     kick();
 
     return () => {
+      stopped = true;
+      preparation.dispose();
       cancelAnimationFrame(raf);
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();
@@ -2928,6 +2947,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.deleteTexture(moonTex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
+      for (const handle of asyncPrograms) disposePassProgram(gl, handle);
       if (laptop) gl.deleteTexture(laptop.tex);
       if (tablet) gl.deleteTexture(tablet.tex);
       publishLampSpot(null);
@@ -2940,33 +2960,30 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.deleteBuffer(k.mb);
           gl.deleteBuffer(k.ib);
         }
-        gl.deleteProgram(birdPass.prog);
       }
-      shadow?.map.dispose();
+      if (shadow) shadow.map.dispose();
       if (glass) gl.deleteTexture(glass.tex);
+      if (house) {
+        gl.deleteTexture(house.lightTex);
+        gl.deleteBuffer(house.curtains.buf);
+        gl.deleteVertexArray(house.curtains.vao);
+      }
       if (aoPass) {
         gl.deleteTexture(aoPass.tex);
         gl.deleteRenderbuffer(aoPass.depth);
         gl.deleteFramebuffer(aoPass.fbo);
-        gl.deleteProgram(aoPass.prog);
       }
       if (reflect) {
         gl.deleteTexture(reflect.tex);
         gl.deleteRenderbuffer(reflect.depth);
         gl.deleteFramebuffer(reflect.fbo);
       }
-      if (shadow) gl.deleteProgram(shadow.prog);
       if (meadowVao) gl.deleteVertexArray(meadowVao);
-      if (meadowPaint) gl.deleteProgram(meadowPaint.prog);
-      if (meadowFlowers) gl.deleteProgram(meadowFlowers.prog);
-      if (meadowFoot) gl.deleteProgram(meadowFoot.prog);
       if (backdrop) {
-        gl.deleteProgram(backdrop.prog);
         gl.deleteVertexArray(backdrop.vao);
       }
       for (const p of [grass, flowers, trees, desk, laptop, tablet, lamp, props, house, glass, steam]) {
         if (!p) continue;
-        gl.deleteProgram(p.prog);
         for (const v of [p.vao, p.leafVao, p.shadowVao]) if (v) gl.deleteVertexArray(v);
         if (p.buf) gl.deleteBuffer(p.buf);
       }

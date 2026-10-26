@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
 import { test } from 'node:test';
+import './pass-preparation-test.mjs';
 import { fromOklab, hexToLms, hexToRgb, lmsToHex, mix, oklab, rgbToHex } from '../components/gradient/colour.js';
 import { paletteAt } from '../components/gradient/skyKeys.js';
 import { sceneAt } from '../components/gradient/scene.js';

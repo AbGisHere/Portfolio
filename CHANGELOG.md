@@ -6,6 +6,16 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.33 — 2026-10-26
+
+Shader compilation pacing, non-blocking queue backoff, and pop-in elimination.
+
+- **Blocking draws on active frames (`wait = true`):** Restored `wait = false` parameter to `pollPassProgram(gl, ext, handle, wait = false)` and threaded `wait` through all pass getters. During `draw()`, active frames block synchronously on program link status if needed rather than skipping passes, ensuring the desk, grass, trees, and house never pop in or render as missing on rapid scrolls or direct links. The idle preparation queue polls with `wait = false` (non-blocking).
+- **Staggered idle shader compilation:** Replaced the monolithic burst of 14 simultaneous shader compiles at page load with lazy, staggered starters. Secondary passes kick off compilation 1–2 per idle slot ordered by scroll approach (meadow paint/flowers/foot -> grass/flowers -> trees -> desk -> active orientation device -> second device -> lamp -> props -> steam -> birds). Prevents compiler contention in Chrome's GPU process on ANGLE Metal backends. Pass getters lazily start their own compilation on-demand if invoked before their idle turn.
+- **100ms backoff on pending idle steps:** In `createPreparationQueue`, steps that return `'pending'` while shaders compile in the driver now back off by 100ms before scheduling the next idle slot, eliminating tight rIC wake loops and redundant `cleanGL()` state cleans during multi-second compile windows.
+- **Early house compilation approach trigger:** Extended `rebuild()` to start house compilation earlier on the descent (`desk > 0.05 || contact > 0 || houseSeen || lawnSeen`), allowing heavy house shaders and shadows ample time to complete before the camera turns toward the house.
+- **Verification:** 39/39 unit tests pass (including passPreparation lifecycle and retry fairness checks), 9/9 adaptive quality tests pass, and 21/21 production hygiene checks pass.
+
 ## 0.4.32 — 2026-10-26
 
 Full-quality loading and optimization: non-blocking parallel shader compilation, lived-in style consolidation, and analytics.
