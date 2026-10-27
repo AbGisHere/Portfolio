@@ -18,3 +18,29 @@
   mix-blend-mode: overlay;
   pointer-events: none;
 }
+
+/* Direct entry waits behind the same sky palette, then reveals the complete scene. */
+.loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--sky-day);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 180ms ease, visibility 0s 180ms;
+}
+
+.loading[data-active='true'] {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+:global([data-theme='night']) .loading {
+  background: var(--sky-night);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading { transition: none; }
+}

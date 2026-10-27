@@ -21,6 +21,23 @@ on an open laptop (a tablet on portrait viewports) with the mountains behind
 it (`0.3`). The device screen is a painted background with project cards,
 not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
+## Current checkpoint and next task
+
+`0.4.37` is a local development checkpoint requested by the owner on
+2026-10-27, with known visual and performance verification gaps. It is not
+a certified release or a push authorization. Read
+[`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md) before continuing:
+it records the exact snapshot, unsuccessful diagnostics, evidence and ordered
+0.4.38 work. The owner requested documentation and the checkpoint commit
+first, then `/compact`, then implementation. Do not start 0.4.38 in the
+checkpoint turn. Versions 0.4.37 (checkpoint) and 0.4.38 (next work) have
+already been selected by the owner.
+
+Full quality is mandatory: retain wardrobe contents, all intended geometry
+and plant variation; do not reduce precision, resolution, samples or detail
+to meet performance targets. Existing release gates still apply before a
+future push.
+
 ## Versioning
 
 The rebuild goes layer by layer, and the version line tracks which layer:
@@ -262,7 +279,7 @@ components/
     gl/houseShape.js, houseMesh.js, houseRooms.js, furniture.js, plantMesh.js — the house on its hill (0.4): its plan and zones; its shell; its rooms and curtains; its furniture; its plants
     gl/houseLightPlan.js, houseLights.js, lightFixtures.js — the house's lighting (0.4.28): the brief as data; its lights by room, packed into a texture for the shader (0.4.30); their fittings
     gl/houseShader.js, houseShadow.js, houseGlass.js, poolWater.js, bloom.js — its surfaces and lamps; the sun's shadow map; the glass and the water; the pool's waves and caustics; the night's bloom
-    gl/houseWorker.js — builds the house's mesh off the main thread from the load (0.4.13)
+    gl/houseWorker.js — builds and indexes the house off the main thread on approach/direct entry (0.4.37)
     gl/mirrorProbe.js — the mirrors' reflections: a probe of each one's room, box-projected (0.4.18)
     gl/garments.js — clothes: garments cut to their kind on hangers, a scarf, folded stacks (0.4.21)
     gl/homeDetails.js — sockets, switches, the Home display, the terrace's bar (0.4.22)
@@ -327,7 +344,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling, then QA; `0.4.32` optimisation, then QA for baselines; then the walk and the contact form over the pool |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; next `0.4.38` camera smoothness, complete GPU preparation and lossless rendering work (`docs/optimization-0.4.38.md`); then remaining walk/contact work |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

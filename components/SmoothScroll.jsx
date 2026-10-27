@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { isPinned, setDescent } from './scroll/descent';
 import { CONTACT_STOPS, DESK_STOPS, STOP_REACH } from './scroll/stops';
+import { getHouseHold, getHouseReadiness, subscribeHouseReadiness } from './scroll/houseReadiness';
 import styles from './SmoothScroll.module.css';
 
 /**
@@ -56,9 +57,31 @@ export default function SmoothScroll() {
     let loading = false;
     let dead = false;
     let idleId = null;
+    let correctingScroll = false;
+
+    // Wait at the current preparation milestone. Correct the
+    // actual scroll as well as its published progress: no hidden travel can
+    // accumulate behind the hold, and scrolling back always remains free.
+    const holdForHouse = y => {
+      const stop = getHouseHold(tracks, getHouseReadiness(), y, isPinned());
+      if (stop == null) return y;
+      if (!correctingScroll) {
+        correctingScroll = true;
+        try {
+          // Lenis emits synchronously on immediate scrollTo. Its target is
+          // reset here too, so it cannot keep pulling forward while held.
+          if (lenis) lenis.scrollTo(stop, { immediate: true, force: true });
+          else window.scrollTo({ top: stop, behavior: 'auto' });
+        } finally {
+          correctingScroll = false;
+        }
+      }
+      return stop;
+    };
 
     const publish = (y = window.scrollY) => {
       if (pinned) return;
+      y = holdForHouse(y);
       const next = { about: 0, desk: 0, contact: 0 };
       for (const t of tracks) next[t.name] = (y - t.start) / t.span;
       setDescent(next);
@@ -117,6 +140,11 @@ export default function SmoothScroll() {
       publish(l.animatedScroll);
       schedule();
     };
+    // A status change can arrive between scroll events. Re-read the real
+    // position immediately; ready/failed simply release the hold in place.
+    const unsubscribeHouse = subscribeHouseReadiness(() => {
+      publish(lenis ? lenis.animatedScroll : window.scrollY);
+    });
 
     const startLenis = () => {
       if (dead || lenis || loading || native()) return;
@@ -165,6 +193,7 @@ export default function SmoothScroll() {
 
     return () => {
       dead = true;
+      unsubscribeHouse();
       remeasure.current = null;
       if (idleId != null) {
         if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);

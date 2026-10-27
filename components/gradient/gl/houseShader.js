@@ -76,6 +76,7 @@ out vec2 vST;
 out vec4 vLight;
 flat out int vPart;
 flat out float vVar;
+flat out int vFitting;
 
 ${PROJECT_GLSL}
 void main() {
@@ -86,6 +87,7 @@ void main() {
   vST = aST;
   vPart = int(floor(aPart + 0.001));
   vVar = aPart - float(vPart);
+  vFitting = int(floor(aST.x + 0.5));
   // Looked up a little off the surface, so it never shades itself; further
   // off where the light grazes it, where the map's texels stretch.
   vec3 Lv = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
@@ -432,6 +434,7 @@ in vec2 vST;
 in vec4 vLight;
 flat in int vPart;
 flat in float vVar;
+flat in int vFitting;
 out vec4 outColor;
 
 ${METAL_GLSL}
@@ -1147,9 +1150,8 @@ void main() {
     // A shade or a bulb: lit from inside by night.
     alb = vec3(0.92, 0.9, 0.85);
     rough = 0.6;
-    // (0.4.27) As its own light is set, by night and by day.
-    int fitting = int(floor(vST.x + 0.5));
-    emit = fittingGlow(fitting, vWorld, roomOf(vWorld)) * 2.4;
+    // (0.4.27, 0.4.37) As its own light is set, by night and by day (flat per triangle).
+    emit = fittingGlow(vFitting, vWorld, roomOf(vWorld)) * 2.4;
     // (0.4.26) A strip of light (variant .5, about a centimetre) smaller
     // than a pixel is in only some of them, and which ones changes as the
     // camera moves: it's given what the pixel would average to (its share

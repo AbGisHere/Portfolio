@@ -11,6 +11,27 @@ free camera through it.
 Coordinates are metres from the desk's centre: x across, y up, z toward
 the mountains. The house faces +z, back across the meadow at the desk.
 
+## Rendering checkpoint (0.4.37)
+
+The complete original house and curtain geometry is retained. `houseLights.js`
+packs bit-identical Float32 records into vertex/index buffers while preserving
+triangle order. Lamp-fitting IDs are assigned per triangle and passed flat
+to prevent interpolated IDs selecting unrelated lights. The worker transfers
+the buffers, and the renderer clears CPU array references after upload.
+
+Generation begins on approach to the desk or direct house entry. Scroll
+readiness has separate mesh and graphics milestones (see atmosphere.md).
+The current checkpoint retains an unsuccessful diagnostic: architectural
+material IDs 0–13 do not share vertices. Combined house/curtain buffer
+storage is 70,890,912 bytes, not the earlier cleanup experiment's ~43–46 MB.
+The `?houseindexed=0` path expands indices for diagnosis only.
+
+The night approach still fails visual parity (max 7/255; allowed 2/255).
+Full image/performance verification is pending. The next patch profiles the
+pool reveal, prepares first-use resources, investigates repeated depth work
+and further lossless storage. See the
+[0.4.38 plan](../optimization-0.4.38.md) for evidence and acceptance rules.
+
 ## Ground floor (floor at 3.6 m, ceiling 6.85 m)
 
 Interior: x −7.72 … 7.72, z −78.72 … −63.28.

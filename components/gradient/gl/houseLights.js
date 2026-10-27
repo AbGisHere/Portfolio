@@ -83,7 +83,9 @@ export const ROOM_CONSTANT_FILLS = LIGHT_RANGE.map((_, z) => {
   return { day, cats };
 });
 
-/** (0.4.36) Tag each lamp vertex in data with the matching fitting index in aST.x.
+/** (0.4.36, 0.4.37) Tag each lamp triangle in data with the matching fitting index in aST.x.
+ * Computed once at each triangle's centroid and written to all three vertices so
+ * no triangle mixes tags across its vertices.
  * If lamp i, tag = i; if strip si, tag = 1000 + si; if none, tag = -1. */
 export function tagLampFittings(data) {
   const grid = new Map();
@@ -123,9 +125,11 @@ export function tagLampFittings(data) {
   });
 
   const lampPart = HOUSE_PART.lamp;
-  for (let i = 0; i < data.length; i += 9) {
+  for (let i = 0; i < data.length; i += 27) {
     if (Math.floor(data[i + 6] + 0.001) === lampPart) {
-      const x = data[i], y = data[i + 1], z = data[i + 2];
+      const x = (data[i] + data[i + 9] + data[i + 18]) / 3;
+      const y = (data[i + 1] + data[i + 10] + data[i + 19]) / 3;
+      const z = (data[i + 2] + data[i + 11] + data[i + 20]) / 3;
       const items = grid.get(key(Math.floor(x), Math.floor(y), Math.floor(z)));
       let best = 1.0;
       let match = -1;
@@ -154,6 +158,149 @@ export function tagLampFittings(data) {
         }
       }
       data[i + 7] = match;
+      data[i + 16] = match;
+      data[i + 25] = match;
     }
   }
+}
+
+export const HOUSE_STRIDE = 9;
+export const CURTAIN_STRIDE = 15;
+export const HOUSE_BYTES = HOUSE_STRIDE * 4;
+export const CURTAIN_BYTES = CURTAIN_STRIDE * 4;
+
+/** Room index (1..8) of point (x, y, z) matching houseShader.js roomOf(), or 0 outside. */
+export function roomOfPoint(x, y, z) {
+  for (let i = 0; i < ZONE_BOXES.length; i++) {
+    const { lo, hi, id } = ZONE_BOXES[i];
+    if (x >= lo[0] - 0.03 && x <= hi[0] + 0.03 && y >= lo[1] - 0.03 && y <= hi[1] + 0.03 && z >= lo[2] - 0.03 && z <= hi[2] + 0.03) {
+      return id;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Share only vertices whose complete Float32 representations are identical.
+ * The index stream follows the original vertex stream exactly, preserving
+ * triangle order, winding, material boundaries, signed zero and NaN payloads.
+ * Hash entries point into the source data while indexing, avoiding a second
+ * full-size staging VBO. Both the source-index list and hash table grow with
+ * actual unique vertices; the table always retains empty slots for probing.
+ */
+function indexMesh(data, count, stride, uniqueParts = []) {
+  if (!(data instanceof Float32Array) || !Number.isSafeInteger(count) || count < 0 || count > data.length / stride) {
+    throw new RangeError('Invalid Float32 mesh data or vertex count');
+  }
+  const words = new Uint32Array(data.buffer, data.byteOffset, count * stride);
+  const indices = new Uint32Array(count);
+  let sources = new Uint32Array(Math.min(count, 1024));
+  let table = new Uint32Array(1024);
+  let uniqueCount = 0;
+  let hashedCount = 0;
+  const unshared = new Set(uniqueParts);
+  const preserveVertex = source => unshared.size > 0 && unshared.has(Math.floor(data[source * stride + 6] + 0.001));
+  const appendSource = source => {
+    if (uniqueCount === sources.length) {
+      const grown = new Uint32Array(Math.min(count, Math.max(1024, sources.length * 2)));
+      grown.set(sources);
+      sources = grown;
+    }
+    sources[uniqueCount] = source;
+    return uniqueCount++;
+  };
+
+  const hash = source => {
+    const off = source * stride;
+    let h = 2166136261;
+    for (let w = 0; w < stride; w++) h = Math.imul(h ^ words[off + w], 16777619);
+    // Float words often share zero low bits (integer coordinates in grids).
+    // Avalanche the full word before masking into a power-of-two table.
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+  const growTable = () => {
+    table = new Uint32Array(table.length * 2);
+    const mask = table.length - 1;
+    for (let u = 0; u < uniqueCount; u++) {
+      if (preserveVertex(sources[u])) continue;
+      let slot = hash(sources[u]) & mask;
+      while (table[slot]) slot = (slot + 1) & mask;
+      table[slot] = u + 1;
+    }
+  };
+
+  for (let i = 0; i < count; i++) {
+    // Selected material IDs retain a distinct vertex for every occurrence.
+    // This changes storage reuse only; every attribute and index stays ordered.
+    if (preserveVertex(i)) {
+      indices[i] = appendSource(i);
+      continue;
+    }
+    // Grow before probing: even an all-unique mesh cannot fill the table.
+    if ((hashedCount + 1) * 4 > table.length * 3) growTable();
+    const mask = table.length - 1;
+    let slot = hash(i) & mask;
+    while (table[slot]) {
+      const candidate = table[slot] - 1;
+      const off = sources[candidate] * stride;
+      const input = i * stride;
+      let w = 0;
+      while (w < stride && words[off + w] === words[input + w]) w++;
+      if (w === stride) break;
+      slot = (slot + 1) & mask;
+    }
+    if (!table[slot]) {
+      table[slot] = appendSource(i) + 1;
+      hashedCount++;
+    }
+    indices[i] = table[slot] - 1;
+  }
+
+  const vertices = new Float32Array(uniqueCount * stride);
+  const packedWords = new Uint32Array(vertices.buffer);
+  for (let u = 0; u < uniqueCount; u++) {
+    const source = sources[u] * stride;
+    const target = u * stride;
+    for (let w = 0; w < stride; w++) packedWords[target + w] = words[source + w];
+  }
+  return { vertices, indices, vertexCount: uniqueCount };
+}
+
+/**
+ * (0.4.37) Lossless indexed house mesh. Keep the original lawn prefix and
+ * complete solid suffix, in their original triangle order. No room buckets,
+ * size-based detail split or reflection visibility exclusions are introduced.
+ * `uniqueParts` optionally disables vertex sharing for selected material IDs;
+ * it preserves the same full index stream and Float32 attributes.
+ */
+export function packHouseMesh(raw, { uniqueParts = [] } = {}) {
+  const { data, count, lawn, glass, mirrors } = raw;
+  if (!Number.isSafeInteger(lawn) || lawn < 0 || lawn > count || lawn % 3 || count % 3) {
+    throw new RangeError('House ranges must contain complete triangles');
+  }
+  const packed = indexMesh(data, count, HOUSE_STRIDE, uniqueParts);
+  const chunk = (name, start, end) => {
+    if (start === end) return null;
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = start; i < end; i++) {
+      const off = i * HOUSE_STRIDE;
+      for (let axis = 0; axis < 3; axis++) {
+        lo[axis] = Math.min(lo[axis], data[off + axis]);
+        hi[axis] = Math.max(hi[axis], data[off + axis]);
+      }
+    }
+    return { name, room: 0, mirrorSkip: false, lo, hi, offset: start * 4, count: end - start };
+  };
+  const solid = chunk('solid', lawn, count);
+  return { ...packed, indexCount: count, lawnChunk: chunk('lawn', 0, lawn), chunks: solid ? [solid] : [], glass, mirrors };
+}
+
+/** All 15 curtain attributes, including both morph poses, stay bit-exact. */
+export function packCurtainMesh(raw) {
+  const { data, count } = raw;
+  if (count % 3) throw new RangeError('Curtain mesh must contain complete triangles');
+  return { ...indexMesh(data, count, CURTAIN_STRIDE), count };
 }

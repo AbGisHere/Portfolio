@@ -66,6 +66,37 @@ npm run perf   -- --base http://localhost:3002
 `--base` defaults to `http://localhost:3001`. Output goes to `scripts/out/`
 (gitignored).
 
+## Cross-version house checks (0.4.37 checkpoint)
+
+`scripts/house-parity.mjs` compares candidate and reference house renders;
+normal GL/layered parity cannot validate the house. Example, with matching
+servers already running:
+
+```bash
+node scripts/house-parity.mjs --base http://127.0.0.1:3107 --reference http://127.0.0.1:3105 --room-base http://127.0.0.1:3106 --reference-room-base http://127.0.0.1:3104 --reference-dir /private/tmp/portfolio-v0435 --quiet
+node scripts/house-mesh-stats.mjs
+```
+
+The house matrix is 26 views × two themes × two viewports (104 cases), using
+v0.4.35 as reference. Root views use production; `/house` requires dev
+servers because it is intentionally absent from production. Match source
+revisions to builds, keep room-server warnings distinguishable from production
+errors, and record actual GPU/browser. The script uses hardware-GPU launch
+flags. `--views`, `--themes`, `--viewports`, `--settle` and `--out` select
+focused diagnostics. `--candidate-query houseindexed=0` exercises the
+expanded reference path only. Results include PNGs, ×32 differences and JSON.
+
+Gate: max channel difference <= 2/255 and mean < 0.2/255. It currently fails
+at the night approach; no threshold relaxation. Before the full 0.4.38 run,
+replace the fixed-settle/existence check with an actual readiness wait.
+`scripts/house-mesh-stats.mjs` attributes raw generated vertices/bytes by
+module; it does not measure GPU storage or process RAM. The packing and
+readiness tests are included in `npm run test:unit` (55 pass at checkpoint).
+
+See [the 0.4.38 plan](../docs/optimization-0.4.38.md) for exact snapshot
+numbers, current limitations, median-of-three performance requirements and
+physical-device checks. Do not infer current FPS gains from older reports.
+
 ## `npm run parity`
 
 This compares the two renderers at rest for each viewport, theme and descent

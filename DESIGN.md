@@ -1,6 +1,6 @@
 ---
 name: AbG — Abhinav Gupta's portfolio
-description: One continuous camera move through a painted mountain scene, from the sky down to a desk.
+description: One continuous camera move through a painted mountain scene, from the sky down to a desk and onward to a house and pool.
 colors:
   night-charcoal: "#0c0c0d"
   signal-ember: "#ff5a1f"
@@ -235,6 +235,19 @@ outline offset by 4px.
 - **Do** keep touch targets at 44px or more and focus visible on both skies.
 - **Do** measure any new resolution cap or quality step on 5K and 6K at 2×
   before it ships.
+
+### Full-quality motion contract (0.4.38)
+
+Camera movement should feel light through consistent frame delivery. Preserve
+the established path, full scene detail, Float32 geometry precision and
+rendering quality while improving preparation and execution. Preparation holds
+at the overhead desk and laptop release on readiness, not fixed timers;
+reverse travel remains possible. Keep captions out of this patch.
+
+The house image gate against v0.4.35 remains at most 2/255 per RGB channel
+and mean below 0.2/255; memory savings alone do not justify a visual change.
+Implementation priorities and pending evidence are in
+[the 0.4.38 plan](docs/optimization-0.4.38.md).
 
 ### Don't:
 - **Don't** stack sections below a hero, or fall back to a plain CV page.

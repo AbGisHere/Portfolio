@@ -6,14 +6,18 @@
  */
 import { houseLayout } from './houseMesh';
 import { curtainMesh } from './houseRooms';
-import { tagLampFittings } from './houseLights';
+import { packCurtainMesh, packHouseMesh, tagLampFittings } from './houseLights';
 
 // (Only inside a worker: the unit tests import every module here.)
 if (typeof self !== 'undefined') {
   self.onmessage = () => {
-    const house = houseLayout();
-    tagLampFittings(house.data);
-    const curtains = curtainMesh();
-    self.postMessage({ house, curtains }, [house.data.buffer, curtains.data.buffer]);
+    const rawHouse = houseLayout();
+    tagLampFittings(rawHouse.data);
+    const house = packHouseMesh(rawHouse, { uniqueParts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
+    const curtains = packCurtainMesh(curtainMesh());
+    self.postMessage(
+      { house, curtains },
+      [house.vertices.buffer, house.indices.buffer, curtains.vertices.buffer, curtains.indices.buffer],
+    );
   };
 }

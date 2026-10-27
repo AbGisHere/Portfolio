@@ -190,6 +190,8 @@ blanked every ridge fill.
 | `?bench=200` (GL) | Redraw the settled frame that many times, synced by a 1-px `readPixels`; writes `data-bench` and `data-bench-base` (a bare clear) on the scene wrapper, as "median p90" ms |
 | `?adapt=0` (GL) | Hold full resolution (no adaptive quality) |
 | `?cap=0` (GL) | Lift the 4K pixel cap (`MAX_PIXELS`): draw at native, still at most `MAX_DPR`. For `npm run sharp` |
+| `?houseindexed=0` (GL, diagnostic) | Expand the indexed house/curtains for a drawArrays comparison; normal visitors use indexed drawing |
+| `data-house-ready` on the scene wrapper (GL) | Current house preparation milestone reached; 0.4.38 will strengthen first-use readiness |
 | `data-quality` on the scene wrapper (GL) | The current resolution step (1, .875 or .75 of the capped DPR) |
 
 **Framing** (`layout`, both renderers). **Aspect lock:** ridge noise is
@@ -732,6 +734,13 @@ pool: `CONTACT_PATH` in `deskCamera.js`, keyed like the `0.3` path plus
 `yaw` (degrees from facing the mountains, toward +x first; 180 faces the
 house) and `x` (metres across).
 
+- **Preparation holds** (`0.4.37` checkpoint): `houseReadiness.js` publishes
+  idle/loading/mesh-ready/ready/failed. Forward travel can stop at desk .5
+  while geometry builds, then at contact .02 while graphics prepare. Holds
+  are readiness-driven, not fixed delays; reverse travel is free and pinned
+  routes bypass the scroll clamp. Direct house entries use a sky-colour veil.
+  Readiness still needs to cover every first-use allocation/draw in 0.4.38;
+  see [the continuation plan](../optimization-0.4.38.md).
 - **The turn happens looking straight down** (the owner, `0.4.11`): it
   rises back over the desk to its top-down view and only then turns, the
   ground turning 180° under it as it drifts back and up, so the meadow's

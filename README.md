@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.33](https://img.shields.io/badge/version-0.4.33-informational)
+![Version 0.4.37](https://img.shields.io/badge/version-0.4.37-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -18,6 +18,13 @@ site is being rebuilt one layer at a time. `0.1.x` built the atmosphere,
 `0.2.x` built the camera pull-back, and `0.3.x` built the descent onto
 the desk. The current `0.4.x` line adds the house and pool; the contact
 form, project screen and real content are still to come (see [Versioning](#versioning)).
+
+**Development checkpoint:** `0.4.37` records indexed house geometry and
+readiness-based loading. Visual parity has a known edge failure, and fresh
+performance/release QA is pending; this is not a verified deployment.
+`0.4.38` will address camera smoothness and full-quality rendering overhead
+after the owner compacts the conversation. See the
+[optimization plan and continuation record](docs/optimization-0.4.38.md).
 
 ## Contents
 

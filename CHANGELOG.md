@@ -6,6 +6,45 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.37 — 2026-10-27 (local development checkpoint)
+
+Committed at the owner's request before compacting and starting 0.4.38.
+This snapshot is not a verified deployment; no push is requested for it.
+
+- Corrected fitting tags to one ID per triangle, passed as a flat integer.
+- Indexed house and curtains with bit-identical Float32 attributes and
+  original triangle order. Retained all original geometry; the experimental
+  geometry cleanup is not included. Cleared CPU mesh-array references after
+  upload, without claiming a measured process-RAM reduction.
+- Deferred house generation to approach/direct entry. Added mesh/graphics
+  readiness milestones for the overhead-desk/laptop holds and a sky-colour
+  veil for direct house entries. Complete first-use GPU preparation is still
+  pending; holds have no fixed duration.
+- Added packing/readiness unit tests, raw module-attribution tooling and
+  cross-version house comparison tooling. **55/55 unit tests and 9/9
+  adaptive tests pass.** Documentation links/version metadata and diff
+  whitespace checks pass; production checks remain pending.
+- **Exact current buffers:** house 146,615,832 raw bytes → 67,325,040 packed;
+  curtains 14,478,480 → 3,565,872. Combined 161,094,312 → **70,890,912 bytes
+  (56.0% less)**. These are geometry buffers, not total browser memory.
+  Architectural IDs 0–13 still have sharing disabled by an unsuccessful
+  diagnostic; removing it is the first 0.4.38 task. The earlier ~43–46 MB
+  cleanup result is not this checkpoint. Full counts are in the plan below.
+- **Known visual failure:** night contact=0.50 at 1440x900@2, max 7/255,
+  mean 0.000023919753/255, 34 pixels above 2/255, around a frame/wall edge.
+  The expanded unindexed diagnostic reaches max 1/255. Root cause remains
+  unresolved. Earlier pool-above/foyer smoke images reached max 1/255;
+  foyer also reported dev preload warnings. These are partial diagnostics,
+  not a completed 104-view pass.
+- **Performance/QA pending:** owner reports renewed jank on the second
+  climb toward the pool. No comparable current FPS improvement is claimed.
+  Fresh production build/QA, full visual matrix, median-of-three performance
+  and physical phone checks remain outstanding. Older 120 FPS results do
+  not establish the checkpoint's performance.
+- **Next:** 0.4.38 profiles the climb, completes GPU preparation and tests
+  lossless rendering/memory improvements. No implementation before the
+  owner's compact. [Plan, evidence and continuation record](docs/optimization-0.4.38.md).
+
 ## 0.4.36 — 2026-10-26
 
 Phones and the turn to the pool: $O(1)$ lamp fitting lookup, precomputed constant room fills, locked adaptive resize during motion, and warm mirror probes in idle queue.
