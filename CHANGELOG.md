@@ -6,6 +6,31 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.38 — 2026-10-27
+
+- Restored full vertex sharing: house/curtain buffers total 55.15 MB,
+  down from the 70.89 MB checkpoint, retaining every original vertex
+  attribute and triangle.
+- Prepared scene-copy/bloom target storage earlier; cached repeated
+  uniform lookups, including absent locations. Warmed water passes without
+  changing their state and added asynchronous GPU-completion readiness.
+  Added opt-in CPU/GPU pass diagnostics and paired,
+  uninstrumented pool-climb measurements. Tightened capture readiness.
+- 61 unit tests, 9 adaptive tests and wheel/touch-emulated/reduced-motion
+  readiness flows pass. Eight warm-up image controls are bit-identical.
+  FPS runs are provisional because another active application shared system
+  resources; no performance gain is claimed. Existing reference-image
+  failures remain. The owner explicitly approved publishing this batch and
+  moving image-parity fixes, remaining pool-climb optimization and clean
+  benchmarks to **0.4.39**. Evidence: [0.4.38 record](docs/optimization-0.4.38.md);
+  follow-up: [0.4.39 plan](docs/optimization-0.4.39.md).
+- Production build passes. Full QA: standard GL/layered parity **46/46
+  passes**; performance/memory-stress stage stopped after 21 minutes and
+  marked incomplete (the process-close error is from that interruption).
+  Theme-switch QA was stopped when the owner explicitly requested pushing
+  immediately. These are not passes; completing QA is assigned to 0.4.39.
+  Static JavaScript gzip total: 473,031 → 474,094 bytes (+1,063 bytes).
+
 ## 0.4.37 — 2026-10-27 (local development checkpoint)
 
 Committed at the owner's request before compacting and starting 0.4.38.

@@ -191,7 +191,7 @@ blanked every ridge fill.
 | `?adapt=0` (GL) | Hold full resolution (no adaptive quality) |
 | `?cap=0` (GL) | Lift the 4K pixel cap (`MAX_PIXELS`): draw at native, still at most `MAX_DPR`. For `npm run sharp` |
 | `?houseindexed=0` (GL, diagnostic) | Expand the indexed house/curtains for a drawArrays comparison; normal visitors use indexed drawing |
-| `data-house-ready` on the scene wrapper (GL) | Current house preparation milestone reached; 0.4.38 will strengthen first-use readiness |
+| `data-house-ready` on the scene wrapper (GL) | Current house preparation milestone reached; 0.4.38 includes GPU completion; remaining first-use work is in 0.4.39 |
 | `data-quality` on the scene wrapper (GL) | The current resolution step (1, .875 or .75 of the capped DPR) |
 
 **Framing** (`layout`, both renderers). **Aspect lock:** ridge noise is
@@ -739,7 +739,9 @@ house) and `x` (metres across).
   while geometry builds, then at contact .02 while graphics prepare. Holds
   are readiness-driven, not fixed delays; reverse travel is free and pinned
   routes bypass the scroll clamp. Direct house entries use a sky-colour veil.
-  Readiness still needs to cover every first-use allocation/draw in 0.4.38;
+  Version 0.4.38 allocates copy/bloom targets earlier, warms water without
+  advancing it, and polls a GPU fence before the initial graphics milestone.
+  It still needs to cover every remaining first-use draw path;
   see [the continuation plan](../optimization-0.4.38.md).
 - **The turn happens looking straight down** (the owner, `0.4.11`): it
   rises back over the desk to its top-down view and only then turns, the

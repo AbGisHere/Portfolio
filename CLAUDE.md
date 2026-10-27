@@ -21,22 +21,24 @@ on an open laptop (a tablet on portrait viewports) with the mountains behind
 it (`0.3`). The device screen is a painted background with project cards,
 not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
-## Current checkpoint and next task
+## Current release and follow-up
 
-`0.4.37` is a local development checkpoint requested by the owner on
-2026-10-27, with known visual and performance verification gaps. It is not
-a certified release or a push authorization. Read
-[`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md) before continuing:
-it records the exact snapshot, unsuccessful diagnostics, evidence and ordered
-0.4.38 work. The owner requested documentation and the checkpoint commit
-first, then `/compact`, then implementation. Do not start 0.4.38 in the
-checkpoint turn. Versions 0.4.37 (checkpoint) and 0.4.38 (next work) have
-already been selected by the owner.
+The owner selected **0.4.38** for the completed sharing/preparation/readiness
+batch and explicitly requested its push on 2026-10-27, accepting the known
+image-parity failures and provisional performance evidence as follow-up work.
+The local 0.4.37 checkpoint is `2bc08b1`. Evidence and experiments are in
+[`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md).
 
-Full quality is mandatory: retain wardrobe contents, all intended geometry
-and plant variation; do not reduce precision, resolution, samples or detail
-to meet performance targets. Existing release gates still apply before a
-future push.
+The owner selected **0.4.39** for the remainder: resolve existing image
+differences, finish pool-climb optimization and obtain clean performance
+measurements. Read [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md)
+before continuing. This release exception does not waive future gates or
+unrelated new functional failures. Do not ask for the already-selected
+version again.
+
+Full quality remains mandatory: retain wardrobe contents, all intended
+geometry and plant variation; no reduced precision, resolution, samples or
+detail to meet performance targets. Do not claim the pool jank is fixed.
 
 ## Versioning
 
@@ -344,7 +346,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; next `0.4.38` camera smoothness, complete GPU preparation and lossless rendering work (`docs/optimization-0.4.38.md`); then remaining walk/contact work |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; next `0.4.39` resolves image differences, remaining pool-climb work and clean measurements (`docs/optimization-0.4.39.md`); then remaining walk/contact work |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

@@ -11,6 +11,8 @@ import { test } from 'node:test';
 import './house-pack-test.mjs';
 import './house-readiness-test.mjs';
 import './pass-preparation-test.mjs';
+import './pass-profiler-test.mjs';
+import './gpu-completion-test.mjs';
 import { fromOklab, hexToLms, hexToRgb, lmsToHex, mix, oklab, rgbToHex } from '../components/gradient/colour.js';
 import { paletteAt } from '../components/gradient/skyKeys.js';
 import { sceneAt } from '../components/gradient/scene.js';

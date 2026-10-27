@@ -32,6 +32,22 @@ pool reveal, prepares first-use resources, investigates repeated depth work
 and further lossless storage. See the
 [0.4.38 plan](../optimization-0.4.38.md) for evidence and acceptance rules.
 
+## 0.4.38 optimization batch
+
+Version 0.4.38 removes the checkpoint's sharing exceptions: combined
+geometry buffers are now 55,150,236 bytes, with all original geometry and
+Float32 attributes. Scene-copy/bloom targets are allocated in preparation;
+water's drop/step programs warm without advancing its state or random
+sequence. Graphics readiness also polls a GPU fence without blocking.
+Uniform lookups cache absent locations as well as valid ones.
+
+Eight desktop/phone-size day/night approach/pool captures are bit-identical
+to the pre-warm-up candidate, but the inherited 0.4.35 comparison failures
+remain. Native touch emulation, reduced-motion and wheel readiness flows
+pass. The owner approved publishing this batch with the inherited image
+failures documented; remaining work is assigned to
+[0.4.39](../optimization-0.4.39.md).
+
 ## Ground floor (floor at 3.6 m, ceiling 6.85 m)
 
 Interior: x −7.72 … 7.72, z −78.72 … −63.28.

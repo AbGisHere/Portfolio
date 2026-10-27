@@ -136,7 +136,7 @@ function makeCaustics(gl) {
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
   gl.bindVertexArray(null);
   const u = name => gl.getUniformLocation(prog, name);
-  return { prog, tex, fbo, vao, buf, count: pts.length / 2, u: { light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
+  return { prog, tex, fbo, vao, buf, count: pts.length / 2, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
 }
 
 /**
@@ -209,8 +209,36 @@ export function makeWater(gl, unit) {
   };
   const queue = [];
   const caus = makeCaustics(gl);
+  let used = false;
 
   const water = {
+    prepare() {
+      if (used) return;
+      used = true;
+      // Exercise both programs on the initially empty field. Keep the clocks,
+      // queued pointer drops and random sequence untouched, then restore both
+      // fields exactly to their initial clear and the original ping-pong side.
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.viewport(0, 0, nx, nz);
+      gl.bindVertexArray(vao);
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      pass(progs.drop, p => {
+        gl.uniform4f(u(p, 'uDrop'), .5, .5, .1, 0);
+        gl.uniform2f(u(p, 'uAspect'), 1, POOL.d / POOL.w);
+      });
+      pass(progs.step, p => gl.uniform2f(u(p, 'uTexel'), 1 / nx, 1 / nz));
+      gl.clearColor(0, 0, 0, 0);
+      for (const target of targets) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
+      cur = 0;
+      gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindVertexArray(null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    },
     drop(x, z, r = 0.35, s = 0.012) {
       const du = (x - (POOL.at[0] - POOL.w / 2)) / POOL.w;
       const dv = (z - (POOL.at[2] - POOL.d / 2)) / POOL.d;
@@ -219,6 +247,7 @@ export function makeWater(gl, unit) {
       return true;
     },
     step(dt) {
+      used = true;
       // Now and then a faint drop of its own, and all the while the wind's
       // chop: small quick disturbances everywhere, so the surface is never
       // still and the sun through it nets the floor.
@@ -274,7 +303,7 @@ export function makeWater(gl, unit) {
       gl.useProgram(caus.prog);
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
-      gl.uniform1i(gl.getUniformLocation(caus.prog, 'uField'), unit);
+      gl.uniform1i(caus.u.field, unit);
       gl.uniform3fv(caus.u.light, L);
       gl.uniform3f(caus.u.size, POOL.w, POOL.d, POOL.deep);
       gl.uniform2f(caus.u.texel, 1 / nx, 1 / nz);

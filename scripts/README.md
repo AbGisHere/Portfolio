@@ -392,3 +392,34 @@ and in the scripts together. What the harness assumes on top of it:
   clears.
 - `data-renderer` is reported with every result, so a silent fallback to
   `layers` shows.
+
+
+## 0.4.38 pool-climb diagnostics
+
+`node scripts/pool-profile.mjs --base URL --gpu 0` records opt-in CPU pass
+submission times and frame markers. Omit `--gpu 0` for sparsely sampled
+asynchronous GPU timer queries, where supported. No GPU result is waited
+on synchronously; disjoint results are discarded and pending queries are
+bounded. GPU instrumentation perturbs performance: use it to investigate
+passes, not to claim an FPS improvement. Normal visits do not create it.
+
+`node scripts/pool-sweep.mjs --base CANDIDATE --reference BASELINE` runs
+three sequential/interleaved production pairs without profiling enabled,
+with first/reverse/repeat camera sweeps from contact .35 to .80. Options:
+`--theme day|night`, `--viewport 1440x900@2`, `--candidate-query k=v`,
+`--out PATH`. Reports include per-frame gaps, p95/p99/max, long tasks,
+GPU identity, drawing-buffer size and console failures. These are pinned
+camera sweeps, not tests of native scrolling or the complete journey.
+Record the exact source/build identities of both servers separately.
+Never run GPU benchmarks concurrently.
+
+`node scripts/house-readiness-browser.mjs URL` exercises actual wheel,
+native touch-emulated and reduced-motion scrolling: house deferred at the
+hero, reverse travel allowed, GPU readiness reached and laptop hold
+released. The contact track snaps before the absolute document bottom,
+so release is verified by progressing beyond its halfway point.
+
+The house-parity harness now waits for candidate readiness and completed
+mirror probes before capture. It retains the strict max 2/255, mean
+<0.2/255 gate against 0.4.35; passing candidate-to-candidate controls does
+not waive inherited failures against that reference.

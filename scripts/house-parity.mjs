@@ -92,6 +92,14 @@ async function capture(browser, side, vp, theme, view, file) {
     // Freeze hides the grain; keep this image restricted to the renderer, excluding dev HUD/readiness UI.
     await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important}body *{visibility:hidden!important}canvas{visibility:visible!important}' });
     await page.waitForTimeout(settle);
+    if (side === 'candidate') {
+      await page.waitForFunction(() => {
+        const state = window.__debugHouse?.();
+        return state?.house && state.houseBuilt && state.ready && !state.probesStale;
+      }, null, { timeout });
+      // Allow the readiness transition's final draw to reach the compositor.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    }
     const readiness = await page.evaluate(() => window.__debugHouse?.() ?? null);
     if (readiness && (!readiness.house || !readiness.houseBuilt)) throw new Error(`House not ready: ${JSON.stringify(readiness)}`);
     const painted = await readRenderer(page);

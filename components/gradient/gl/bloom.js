@@ -96,6 +96,12 @@ export function makeBloom(gl, unit) {
   } catch {
     return null;
   }
+  const locations = new Map(Object.values(progs).map(p => [p, new Map()]));
+  const u = (p, name) => {
+    const cache = locations.get(p);
+    if (!cache.has(name)) cache.set(name, gl.getUniformLocation(p, name));
+    return cache.get(name);
+  };
   const vao = gl.createVertexArray();
   const targets = [0, 1].map(() => ({ tex: gl.createTexture(), fbo: gl.createFramebuffer() }));
   let size = [0, 0];
@@ -122,27 +128,28 @@ export function makeBloom(gl, unit) {
     gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, from);
-    gl.uniform1i(gl.getUniformLocation(prog, 'uFrom'), unit);
+    gl.uniform1i(u(prog, 'uFrom'), unit);
     set(prog);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
   return {
+    prepare: resize,
     apply(frame, w, h, amount) {
       resize(w, h);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       gl.bindVertexArray(vao);
       gl.viewport(0, 0, size[0], size[1]);
-      run(progs.bright, targets[0], frame, p => gl.uniform2f(gl.getUniformLocation(p, 'uTexel'), 1 / w, 1 / h));
+      run(progs.bright, targets[0], frame, p => gl.uniform2f(u(p, 'uTexel'), 1 / w, 1 / h));
       for (let k = 0; k < 2; k++) {
         const r = 1.6 + k * 1.4;
-        run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(gl.getUniformLocation(p, 'uDir'), r / size[0], 0));
-        run(progs.blur, targets[0], targets[1].tex, p => gl.uniform2f(gl.getUniformLocation(p, 'uDir'), 0, r / size[1]));
+        run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(u(p, 'uDir'), r / size[0], 0));
+        run(progs.blur, targets[0], targets[1].tex, p => gl.uniform2f(u(p, 'uDir'), 0, r / size[1]));
       }
       gl.viewport(0, 0, w, h);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      run(progs.add, null, targets[0].tex, p => gl.uniform1f(gl.getUniformLocation(p, 'uAmount'), amount));
+      run(progs.add, null, targets[0].tex, p => gl.uniform1f(u(p, 'uAmount'), amount));
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
       gl.activeTexture(gl.TEXTURE0);

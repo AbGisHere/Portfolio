@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { createPassProfiler } from './passProfiler';
+import { createGpuCompletion } from './gpuCompletion';
 import { FRAGMENT, MAX_RIDGES, OFF_FLAGS, VERTEX } from './mistShader';
 import { CREST_FRAGMENT, CREST_VERTEX } from './crestShader';
 import { buildHashTable } from './hashTable';
@@ -223,6 +225,17 @@ export default function MistCanvas({ recipe, onFail }) {
       return undefined;
     }
 
+    const profiler = params.get('profile') === '1' ? createPassProfiler(gl, { gpu: params.get('profilegpu') !== '0' }) : null;
+    const houseCompletion = createGpuCompletion(gl);
+
+    const uniformLookup = program => {
+      const locations = new Map();
+      return name => {
+        if (!locations.has(name)) locations.set(name, gl.getUniformLocation(program, name));
+        return locations.get(name);
+      };
+    };
+
     // ---- GPU resources
     gl.useProgram(prog);
     const buf = gl.createBuffer();
@@ -232,11 +245,11 @@ export default function MistCanvas({ recipe, onFail }) {
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-    const U = {};
-    const uniform = name => (U[name] ??= gl.getUniformLocation(prog, name));
+    const uniform = uniformLookup(prog);
 
     let stopped = false;
     let houseComplete = false;
+    let houseFailed = false;
     setHouseReadiness('idle');
     let requiredPass = false;
     const asyncPrograms = new Set();
@@ -328,8 +341,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const h = startGrassAsync();
       const gp = readyProgram(h, wait);
       if (!gp) return h?.failed ? (grass = false) : null;
-      const GU = {};
-      grass = { prog: gp, vao: gl.createVertexArray(), u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
+
+      grass = { prog: gp, vao: gl.createVertexArray(), u: uniformLookup(gp) };
       return grass;
     };
     // (0.3.5) The flowers in the grass (flowerShader.js), built like it.
@@ -340,8 +353,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const h = startFlowerAsync();
       const fp = readyProgram(h, wait);
       if (!fp) return h?.failed ? (flowers = false) : null;
-      const FU = {};
-      flowers = { prog: fp, vao: gl.createVertexArray(), u: name => (FU[name] ??= gl.getUniformLocation(fp, name)) };
+
+      flowers = { prog: fp, vao: gl.createVertexArray(), u: uniformLookup(fp) };
       return flowers;
     };
     // (0.3.5) The trees (treeShader.js): their layout is fixed, so it goes
@@ -374,10 +387,10 @@ export default function MistCanvas({ recipe, onFail }) {
       const leafVao = arrayFrom(wood);
       const shadowVao = arrayFrom(parts);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const TU = {};
+
       trees = {
         prog: tp, vao, leafVao, shadowVao, buf: tb, wood, leaves: parts - wood, shadows: data.length / TREE_STRIDE - parts,
-        u: name => (TU[name] ??= gl.getUniformLocation(tp, name)),
+        u: uniformLookup(tp),
       };
       return trees;
     };
@@ -408,8 +421,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const vao = arrayFrom(0);
       const shadowVao = arrayFrom(wood);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const DU = {};
-      desk = { prog: dp, vao, shadowVao, buf: db, wood, u: name => (DU[name] ??= gl.getUniformLocation(dp, name)) };
+
+      desk = { prog: dp, vao, shadowVao, buf: db, wood, u: uniformLookup(dp) };
       return desk;
     };
     // (0.3.8) The laptop (laptopShader.js): its mesh up once, and its
@@ -441,8 +454,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
       if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
       gl.activeTexture(gl.TEXTURE0);
-      const LU = {};
-      laptop = { prog: lp, vao, buf: lb, tex, count, u: name => (LU[name] ??= gl.getUniformLocation(lp, name)) };
+
+      laptop = { prog: lp, vao, buf: lb, tex, count, u: uniformLookup(lp) };
       return laptop;
     };
     // (0.3.10) The tablet and its books (tabletShader.js), on portrait
@@ -472,8 +485,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TABLET_TEX.w, TABLET_TEX.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, tabletTexels());
       gl.generateMipmap(gl.TEXTURE_2D);
       gl.activeTexture(gl.TEXTURE0);
-      const TU = {};
-      tablet = { prog: tp, vao, buf: tb, tex, count, u: name => (TU[name] ??= gl.getUniformLocation(tp, name)) };
+
+      tablet = { prog: tp, vao, buf: tb, tex, count, u: uniformLookup(tp) };
       return tablet;
     };
     // (0.3.11) The desk lamp (lampShader.js): no texture; its mesh rebuilt
@@ -498,8 +511,8 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const MU = {};
-      lamp = { prog: mp, vao, buf: mb, count, pose, u: name => (MU[name] ??= gl.getUniformLocation(mp, name)) };
+
+      lamp = { prog: mp, vao, buf: mb, count, pose, u: uniformLookup(mp) };
       dirty = true;
       kickRef.current();
       return lamp;
@@ -525,13 +538,13 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const PU = {};
-      props = { prog: pp, vao, buf: pb, count, u: name => (PU[name] ??= gl.getUniformLocation(pp, name)) };
+
+      props = { prog: pp, vao, buf: pb, count, u: uniformLookup(pp) };
       return props;
     };
     // (0.4.0) The house on the hill and its pool (houseShader.js; in 3D
-    // from 0.4.1): one mesh, built once. (0.4.13) Built in a worker
-    // (houseWorker.js) from the page's load, as it takes seconds; null
+    // from 0.4.1): one mesh, built once. Built in a worker
+    // (houseWorker.js) on approach or direct entry; null
     // until it's back, then the program and buffers on first use.
     let house = null;
     let houseWorker = null;
@@ -583,7 +596,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const here = () => {
         const raw = houseMesh();
         tagLampFittings(raw.data);
-        houseBuilt = { house: packHouseMesh(raw, { uniqueParts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] }), curtains: packCurtainMesh(curtainMesh()) };
+        houseBuilt = { house: packHouseMesh(raw), curtains: packCurtainMesh(curtainMesh()) };
         if (!houseComplete) setHouseReadiness('mesh-ready');
         updateHouseBuffer();
         if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
@@ -639,7 +652,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       hm.vertices = null;
       hm.indices = null;
-      const HU = {};
+
       // (0.4.4) The curtains: their own buffer, both their shapes.
       const cm = houseBuilt.curtains;
       const cb = gl.createBuffer();
@@ -678,7 +691,7 @@ export default function MistCanvas({ recipe, onFail }) {
         chunks: hm.chunks,
         panes: hm.glass,
         curtains: { vao: cvao, buf: cb, ibo: cib, count: cm.count },
-        u: name => (HU[name] ??= gl.getUniformLocation(hp, name)),
+        u: uniformLookup(hp),
       };
       return house;
     };
@@ -734,8 +747,8 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const GU = {};
-      glass = { prog: gp, vao, buf: gb, mesh, tex: gl.createTexture(), size: [0, 0], u: name => (GU[name] ??= gl.getUniformLocation(gp, name)) };
+
+      glass = { prog: gp, vao, buf: gb, mesh, tex: gl.createTexture(), size: [0, 0], u: uniformLookup(gp) };
       return glass;
     };
     // (0.4.2) The house's depth along the view, at the canvas's size, for its
@@ -750,8 +763,8 @@ export default function MistCanvas({ recipe, onFail }) {
         const h = startDepthAsync();
         const dp = readyProgram(h, wait);
         if (!dp) return h?.failed ? (aoPass = false) : null;
-        const AU = {};
-        aoPass = { prog: dp, u: name => (AU[name] ??= gl.getUniformLocation(dp, name)), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
+
+        aoPass = { prog: dp, u: uniformLookup(dp), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
       }
       if (!aoPass) return null;
       const size = [canvas.width, canvas.height];
@@ -874,7 +887,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const Y1 = Math.min(canvas.height, canvas.height - Math.floor(y0 * k) + 4);
       return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : null;
     };
-    const copyFrame = (g, full = false) => {
+    const prepareFrameCopy = g => {
       gl.activeTexture(gl.TEXTURE11);
       gl.bindTexture(gl.TEXTURE_2D, g.tex);
       if (g.size[0] !== canvas.width || g.size[1] !== canvas.height) {
@@ -886,6 +899,12 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
+      gl.activeTexture(gl.TEXTURE0);
+    };
+    const copyFrame = (g, full = false) => {
+      prepareFrameCopy(g);
+      gl.activeTexture(gl.TEXTURE11);
+      gl.bindTexture(gl.TEXTURE_2D, g.tex);
       const r = full ? [0, 0, canvas.width, canvas.height] : houseRect();
       if (r) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, r[0], r[1], r[0], r[1], r[2], r[3]);
       gl.activeTexture(gl.TEXTURE0);
@@ -922,8 +941,8 @@ export default function MistCanvas({ recipe, onFail }) {
         return { name, kind, vao, mb, ib, count, joints: name === 'firefly' ? { shoulder: [0, 0, 0], wrist: 0 } : jointsOf(name) };
       });
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      const BU = {};
-      birdPass = { prog: bp, kinds, u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
+
+      birdPass = { prog: bp, kinds, u: uniformLookup(bp) };
       return birdPass;
     };
     // (0.4.26) `glow`: the fireflies alone, added on after the sky's pass
@@ -981,8 +1000,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const h = startSteamAsync();
       const sp = readyProgram(h, wait);
       if (!sp) return h?.failed ? (steam = false) : null;
-      const SU = {};
-      steam = { prog: sp, vao: gl.createVertexArray(), u: name => (SU[name] ??= gl.getUniformLocation(sp, name)) };
+
+      steam = { prog: sp, vao: gl.createVertexArray(), u: uniformLookup(sp) };
       return steam;
     };
     const DEPTH_AB = (() => {
@@ -1200,6 +1219,7 @@ export default function MistCanvas({ recipe, onFail }) {
           if (!glassAsync && !canStartCompile()) return 'pending';
           startGlassAsync();
           const gp = glassProgram(false);
+          if (gp) prepareFrameCopy(gp);
           return gp === null ? 'pending' : 'done';
         },
         () => {
@@ -1215,11 +1235,14 @@ export default function MistCanvas({ recipe, onFail }) {
         },
         () => {
           if (!noMirror) reflectTarget();
-          waterSim();
+          waterSim()?.prepare();
           return 'done';
         },
         () => {
-          bloom ??= makeBloom(gl, 14) || false;
+          if (!noBloom) {
+            bloom ??= makeBloom(gl, 14) || false;
+            if (bloom) bloom.prepare(canvas.width, canvas.height);
+          }
           return 'done';
         },
         shadowNow,
@@ -1285,8 +1308,8 @@ export default function MistCanvas({ recipe, onFail }) {
         const h = starter();
         const prog = readyProgram(h, wait);
         if (!prog) return h?.failed ? false : null;
-        const U = {};
-        return { prog, u: name => (U[name] ??= gl.getUniformLocation(prog, name)) };
+
+        return { prog, u: uniformLookup(prog) };
       };
       if (meadowPaint === null) {
         const res = make(startMeadowPaintAsync, meadowPaintAsync);
@@ -1470,14 +1493,14 @@ export default function MistCanvas({ recipe, onFail }) {
     if (params.get('crest') !== 'cpu' && gl.getExtension('EXT_color_buffer_float')) {
       try {
         const cprog = createProgram(gl, CREST_VERTEX, CREST_FRAGMENT);
-        const CU = {};
+
         gl.useProgram(cprog);
         gl.activeTexture(gl.TEXTURE3);
         const hashTex = texture(gl, gl.NEAREST);
         gl.uniform1i(gl.getUniformLocation(cprog, 'uHash'), 3);
         crestGpu = {
           prog: cprog,
-          u: name => (CU[name] ??= gl.getUniformLocation(cprog, name)),
+          u: uniformLookup(cprog),
           hashTex,
           fbo: gl.createFramebuffer(),
           table: null,
@@ -2354,8 +2377,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const h = startProbeBackdropAsync();
       const bp = readyProgram(h, wait);
       if (!bp) return h?.failed ? (backdrop = false) : null;
-      const BU = {};
-      backdrop = { prog: bp, vao: gl.createVertexArray(), u: name => (BU[name] ??= gl.getUniformLocation(bp, name)) };
+
+      backdrop = { prog: bp, vao: gl.createVertexArray(), u: uniformLookup(bp) };
       return backdrop;
     };
     const probesStale = () => probeSet?.some(m => m.faces < 6 || Math.abs(m.night - houseNight()) > 0.03);
@@ -2418,8 +2441,9 @@ export default function MistCanvas({ recipe, onFail }) {
     }
 
     function syncHouseReadiness() {
-      if (stopped || noHouse || !houseWarmed || houseComplete) return;
+      if (stopped || noHouse || !houseWarmed || houseComplete || houseFailed) return;
       if (house === false) {
+        houseFailed = true;
         setHouseReadiness('failed');
         if (loadingRef.current) loadingRef.current.dataset.active = 'false';
         onFail?.(new Error('house shader unavailable'));
@@ -2428,6 +2452,22 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!house || !houseBuilt || shadow === null || (!noGlass && glass === null) ||
           (!noAO && aoPass === null) || water === undefined || (!noBloom && bloom === undefined)) return;
       if (!noMirror && houseBuilt.house.mirrors?.length && (!probeSet || probesStale())) return;
+      // Cover all submitted uploads/probe/warm-up work without gl.finish or a
+      // blocking wait. A resize before initial readiness needs a fresh fence.
+      if (glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
+        prepareFrameCopy(glass);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+      if (bloom) bloom.prepare(canvas.width, canvas.height);
+      const completion = houseCompletion.poll(`${canvas.width}x${canvas.height}`);
+      if (completion === 'pending') return;
+      if (completion === 'failed') {
+        houseFailed = true;
+        setHouseReadiness('failed');
+        if (loadingRef.current) loadingRef.current.dataset.active = 'false';
+        onFail?.(new Error('house GPU preparation unavailable'));
+        return;
+      }
       houseComplete = true;
       setHouseReadiness('ready');
       if (canvas.parentElement) canvas.parentElement.dataset.houseReady = 'true';
@@ -2565,7 +2605,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthMask(true);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
-        drawHouse(true);
+        if (profiler) profiler.measure('pool-reflection', () => drawHouse(true)); else drawHouse(true);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.activeTexture(gl.TEXTURE12);
@@ -2805,7 +2845,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.18, 0.4.36) Mirror probes: warmed in idle queue; at rest, step if any face is still needed.
         probing = !dirty && settled() && !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep(false);
         // (0.4.2) The house's depth first, for its ambient occlusion.
-        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && drawHouseDepth();
+        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && (profiler ? profiler.measure('house-depth-ao', drawHouseDepth) : drawHouseDepth());
         const grassOn = !!grassAt && !!grassProgram(true);
         // (0.3.5) The trees show as soon as the meadow's paint does.
         const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram(true);
@@ -2831,7 +2871,9 @@ export default function MistCanvas({ recipe, onFail }) {
         if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
         if (deskOn && !noLamp) drawLamp();
         if (deskOn && !noProps) drawProps();
-        if (deskOn && !noHouse && houseSeen) drawHouse();
+        if (deskOn && !noHouse && houseSeen) {
+          if (profiler) profiler.measure('house-colour-depth', drawHouse); else drawHouse();
+        }
         if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
         if (deskOn) drawDesk(false);
         if (grassOn) {
@@ -2866,7 +2908,8 @@ export default function MistCanvas({ recipe, onFail }) {
           bloom ??= makeBloom(gl, 14) || false;
           if (bloom) {
             copyFrame(glass, true);
-            bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
+            if (profiler) profiler.measure('bloom', () => bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night));
+            else bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
             gl.useProgram(prog);
           }
         }
@@ -2961,6 +3004,7 @@ export default function MistCanvas({ recipe, onFail }) {
         resize();
       }
       if (busy) rebuild();
+      profiler?.frame({ gapMs: gap, poolSeen, houseSeen, ready: houseComplete, ...getDescent() });
       const tick = !busy && now - lastIdleAt >= 1000 / IDLE_HZ;
       let windMoved = false;
       if (tick) {
@@ -2980,9 +3024,11 @@ export default function MistCanvas({ recipe, onFail }) {
       const vs = veils(dt);
       // (0.4.2) The pool's water steps while it's in view.
       if (poolSeen && !motion.matches && !frozen && waterSim()) {
-        water.step(dt);
+        if (profiler) profiler.measure('water', () => water.step(dt)); else water.step(dt);
         // (0.4.2) And the sun's caustics on its floor from the new surface.
-        if (meadowAt && !noCaustics) causticsReady = water.caustics(lightDir(meadowAt.colours.dir), 10, skyT);
+        if (meadowAt && !noCaustics) causticsReady = profiler
+          ? profiler.measure('caustics', () => water.caustics(lightDir(meadowAt.colours.dir), 10, skyT))
+          : water.caustics(lightDir(meadowAt.colours.dir), 10, skyT);
         gl.useProgram(prog);
       }
       if (busy || crestMoved || windMoved || living || probing || (tick && changed(vs))) draw(vs);
@@ -2990,7 +3036,8 @@ export default function MistCanvas({ recipe, onFail }) {
       syncHouseReadiness();
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
-      if ((moving || drifting || living || probing) && visible && onScreen) raf = requestAnimationFrame(frame);
+      const preparingHouse = houseWarmed && !houseComplete && !houseFailed;
+      if ((moving || drifting || living || probing || preparingHouse) && visible && onScreen) raf = requestAnimationFrame(frame);
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is
@@ -3042,6 +3089,7 @@ export default function MistCanvas({ recipe, onFail }) {
       dirty = true;
       kick();
     });
+    if (profiler) window.__houseProfile = () => profiler.snapshot();
     window.__houseCam = setFreeCam;
     window.__pinDescent = pinDescent;
     window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
@@ -3066,6 +3114,8 @@ export default function MistCanvas({ recipe, onFail }) {
       stopped = true;
       setHouseReadiness('failed');
       preparation.dispose();
+      houseCompletion.reset();
+      if (profiler) { profiler.dispose(); delete window.__houseProfile; }
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();
       cancelAnimationFrame(raf);
@@ -3111,6 +3161,8 @@ export default function MistCanvas({ recipe, onFail }) {
       stopped = true;
       setHouseReadiness('failed');
       preparation.dispose();
+      houseCompletion.reset();
+      if (profiler) { profiler.dispose(); delete window.__houseProfile; }
       cancelAnimationFrame(raf);
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();

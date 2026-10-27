@@ -1,4 +1,11 @@
-# 0.4.38 — smooth camera movement at full scene quality
+# 0.4.38 — sharing, preparation and readiness batch
+
+**Release decision (2026-10-27):** the owner requested publishing the
+completed batch as 0.4.38, explicitly moving the known image differences,
+remaining pool-climb optimization and clean performance measurements to
+[0.4.39](optimization-0.4.39.md). The progress notes below preserve the
+investigation history; this decision supersedes earlier no-push/WIP status.
+No claim of complete visual parity or a proven FPS gain accompanies it.
 
 Agreed 2026-10-27. The owner requested a local commit of the current
 0.4.37 work, documentation updates, then `/compact` before implementation
@@ -82,6 +89,134 @@ does not prove a particular process-RAM reduction.
   second climb toward the pool after earlier smooth movement. No current
   percentage FPS gain has been established. Historical 120 FPS results
   are not evidence for this checkpoint. Real-phone checks remain pending.
+
+## Investigation history — 2026-10-27 (before release decision)
+
+The owner resumed implementation after checkpoint `2bc08b1`. No new commit,
+tag or push has been made. Package metadata remains at the committed 0.4.37
+until the next release is ready.
+
+**Performance evidence is provisional:** Roblox was running throughout this
+session (process start 02:45 local); a later process check reported ~87% CPU
+for that process alongside substantial WindowServer activity. No other app
+was stopped. All FPS tables/experiments below were collected on a shared,
+non-isolated machine and must not be used to claim a speedup or regression.
+The owner has been asked whether to defer clean benchmarks or pause the
+game themselves. No answer is assumed. Geometry counts and deterministic
+image comparisons remain applicable.
+
+Implemented and checked in the working tree:
+
+- Removed the failed `uniqueParts` exceptions in both build paths. Recount:
+  980,381 house vertices; 51,584,364 house bytes + 3,565,872 curtain bytes =
+  **55,150,236 bytes combined**, 15,740,676 fewer than the checkpoint
+  (22.2% smaller than the checkpoint; 65.8% below the original raw buffers).
+  No geometry or attribute precision was removed.
+- Prepare the scene-copy texture and bloom targets in the house queue,
+  at their existing sizes. Cache bloom/caustics uniform locations.
+  Water drop/step programs now warm on a zero field, then restore both
+  fields without changing clocks, queued pointer drops or random state.
+  A zero-timeout GPU fence covers submitted preparation before release;
+  pending initial resizes replace the fence, and failure releases the hold
+  through the failure path. Frozen/reduced-motion frames keep polling until
+  completion. This still does not exercise every future caustics/reflection/
+  bloom draw path in advance; complete first-use preparation remains open.
+  Uniform caches also retain null (optimized-out) locations.
+- Added opt-in `?profile=1` CPU/asynchronous GPU pass diagnostics;
+  `profilegpu=0` gives the CPU-only control. Queries are sampled every
+  17 measurements, bounded to eight pending queries, never synchronously
+  waited on; disjoint results are discarded. Ordinary visits create no
+  profiler. Dense per-pass GPU queries noticeably perturb the test and
+  must not be used as the FPS benchmark.
+- Candidate image captures now wait for `ready` and completed probes,
+  plus a compositor opportunity, rather than just house existence.
+- Added `scripts/pool-profile.mjs` and `scripts/pool-sweep.mjs`. The latter
+  compares production builds sequentially, three paired runs, first/reverse/
+  repeat travel, without GPU queries. It pins the camera from contact .35
+  to .80; it is not a native-scroll, startup or complete-journey benchmark.
+- Unit suite: **61/61 pass**, adaptive suite **9/9 pass**; production build
+  succeeds. Browser readiness integration passes wheel, touch emulation and
+  reduced motion: deferred hero, reverse travel and release after GPU ready.
+- Eight candidate-to-candidate controls (approach/pool, desktop/phone,
+  both themes) are **bit-identical, max 0/255**, before/after water warm-up
+  and GPU completion. This does not waive the 0.4.35 reference failures.
+
+First paired sweep (1440x900@2, night, Apple M4/ANGLE Metal, native drawing
+buffer 2880x1800; medians of three, all at adapt=0):
+
+| Segment | Checkpoint FPS | Candidate FPS | Checkpoint p95 ms | Candidate p95 ms | Checkpoint / candidate frames >20 ms |
+|---|---:|---:|---:|---:|---:|
+| First forward | 33.85 | 35.21 | 66.6 | 58.4 | 89 / 92 |
+| Reverse | 28.55 | 29.68 | 83.1 | 75.1 | 86 / 91 |
+| Repeat forward | 34.60 | 35.35 | 58.3 | 57.2 | 96 / 92 |
+
+These provisional paired numbers do not establish an improvement; both
+versions miss the target under the test conditions.
+Some tail metrics regress: reverse worst-frame median 83.9 → 84.2 ms;
+repeat-forward worst-frame median 75.1 → 83.0 ms. No broad performance
+success or statistical significance is claimed. No console warnings/errors
+occurred. Evidence: `scripts/out/pool-sweep/results.json` (ignored).
+Reference production server 3110 was freshly built from an archive of
+`2bc08b1`; candidate 3109 uses `.next-038b` (sharing/target/cache changes,
+profiling disabled). User server 3000 was not touched.
+
+Visual checks against 0.4.35: pool-above and foyer night at 1440x900@2
+remain max 1/255; contact .50 retains max 7/255 and 34 pixels above limit.
+An additional contact .64 control reveals **max 38/255, 37 pixels above
+limit**, mean 0.000117348251/255. This is present without the reflection
+experiment, not introduced by that experiment. Full 104 views remain
+pending and these failures still block a verified release.
+
+Additional visual coverage against 0.4.35 (not a complete matrix):
+
+| View | Theme | Viewport | Maximum /255 | Pixels above 2/255 |
+|---|---|---|---:|---:|
+| contact .50 | day | 1440x900@2 | 22 | 36 |
+| contact .50 | night | 1440x900@2 | 7 | 34 |
+| contact .50 | day | 393x852@2 | 23 | 26 |
+| contact .50 | night | 393x852@2 | 8 | 24 |
+| contact .64 | night | 1440x900@2 | 38 | 37 |
+
+Pool-above passes at both sizes: day max 0, night max 1. Foyer desktop
+night max 1. All four .50 failures are identical before/after the warm-up
+changes. Evidence: `scripts/out/house-parity-038-readiness/` and
+`house-parity-038-readiness-control/`. No thresholds were changed.
+
+Experiments removed from the working tree:
+
+- Reflection depth prepass: pool-above night max 2/255, .64 byte-identical
+  to control; provisional timing mixed, not enough to promote it.
+- `WEBGL_provoking_vertex` first-vertex mode: material/variant values match
+  across every triangle in the complete house and curtains; lamp IDs also
+  match. Extension supported on the test M4. It did not fix the .50/.64
+  image failures; provisional timings were mixed. Revisit only with quiet
+  benchmarks. No change to the default provoking convention remains.
+- Position-only unindexed shadow stream: .50/.64 retain exactly the same
+  failures. This rules out that isolated shadow-drawing change as a fix.
+  Removed the diagnostic and its extra buffer allocation.
+
+Latest retained-candidate paired sweep (same night desktop case, **confounded
+by other application load**, not an accepted performance result):
+
+| Segment | Checkpoint FPS | Candidate FPS | Checkpoint p95 ms | Candidate p95 ms |
+|---|---:|---:|---:|---:|
+| First forward | 26.17 | 29.44 | 75.4 | 74.9 |
+| Reverse | 18.72 | 23.04 | 108.3 | 91.8 |
+| Repeat forward | 23.38 | 29.83 | 83.3 | 71.2 |
+
+First-forward median worst frame regresses 99.8 → 100.9 ms; reverse and
+repeat counts over 20 ms rise 66 → 75 and 65 → 82 (frame counts differ as
+FPS changes). Full rows, raw gaps and long tasks are retained in
+`scripts/out/pool-sweep-038-retained/results.json`; do not cherry-pick FPS.
+
+At the end of the investigation, retained code was served by production 3113 (`.next-038e`);
+checkpoint baseline 3110 (`/private/tmp/portfolio-v0437-checkpoint`, archive
+of `2bc08b1`, `.next-checkpoint`). Other builds on 3108/3109/3111/3112/3114
+are intermediate experiments and must not be mistaken for current source.
+The user's 3000 server remains untouched. This preceded the owner's release
+decision recorded at the top. Clean performance validation, full house
+visual parity and remaining GPU cost/first-use work move to 0.4.39. Final
+0.4.38 release QA is recorded in CHANGELOG.md.
 
 ## Implementation order after compact
 
@@ -187,7 +322,17 @@ first-use stalls; it does not remove recurring per-frame rendering cost.
 
 ## Research references
 
+- [Flat-shading provoking vertex convention](https://registry.khronos.org/webgl/extensions/WEBGL_provoking_vertex/)
 - [WebGL GPU timer queries](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/)
 - [Non-blocking shader completion](https://registry.khronos.org/webgl/extensions/KHR_parallel_shader_compile/)
 - [WebGL 2 buffer and drawing APIs](https://registry.khronos.org/webgl/specs/latest/2.0/)
 - [WebGL performance practices](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices)
+
+
+### Last isolation checks before 0.4.38 packaging
+
+Using an expanded drawArrays stream only for AO depth, or only for house
+colour/probe rendering, leaves .50/.64 night failures unchanged (max 7/38).
+The expanded-shadow experiment also did not fix them. The main depth
+prepass is the next unisolated path. These temporary extra-buffer options
+were removed before packaging. See the 0.4.39 plan.
