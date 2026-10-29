@@ -6,6 +6,71 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.39 — 2026-10-30
+
+The house matches the 0.4.35 reference again, and the pool climb is drawn
+once a frame, with only the plants the camera can see. Detail and every
+measurement: [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md).
+
+- **The fitting glow, per pixel where it must be (`houseLights.js`,
+  `houseShader.js`).** Since 0.4.36 each lamp triangle took one fitting's
+  glow (its centre's nearest). In 705 of 22,964 lamp triangles, the stair's
+  tread strips mostly, the nearest fitting changes inside the triangle, so
+  parts of them glowed as a neighbouring strip: the five night failures of
+  the first full comparison (living room max 8/255, porch 5, two single
+  pixels). Those 705 are now tagged `FITTING_PER_PIXEL` and run 0.4.35's
+  per-pixel search; every other one keeps its single tag, which matches the
+  per-pixel rule at every sampled point. A triangle is sampled only when the
+  winner's lead is under twice its radius: tagging costs 168 ms in the
+  worker.
+- **Each frame drawn once (`MistCanvas.jsx`).** `frame()` cleared `raf` on
+  entry; a `kick()` during the frame (readiness and preparation callbacks)
+  scheduled the next frame, and the end of `frame()` scheduled another over
+  it. Two callbacks a vsync, each drawing the whole scene: 33 million
+  vertices a frame at contact .6. 0.4.38 had it too. The water's and sky's
+  clocks had run ~3% fast at 30 fps (the second callback's clamped 1 ms);
+  they keep real time now.
+- **Grass and flowers culled to the view (`grassShader.js` `ringRanges`,
+  `flowerShader.js`).** All 196,608 blades and 15,360 flowers were drawn
+  every frame. Each ring's rows are now tested in chunks against `boxSeen`,
+  padded by a cell and the plant's reach, and the surviving runs drawn in
+  their original order with a `uFirst` offset: the same instances, ids and
+  picture.
+- **Codex's work, kept:** the owner-approved prepared 0.4.35 reference
+  (`scripts/prepare-house-reference.mjs`, now checking each insertion point),
+  `house-parity.mjs --prepared-reference`, Float32 mirror uniforms reused,
+  one contiguous AO depth draw, and frozen/reduced-motion views polling only
+  an outstanding GPU fence.
+- **Real phones measured (`devices --climb`).** `scripts/devices.mjs
+  --climb [--theme] [--query]` times the pool climb on BrowserStack's real
+  devices against each screen's rate (read on a blank page), with the CPU
+  time inside the frame callbacks. `?dpr=` caps the pixel ratio and
+  `?profileevery=` samples the pass profiler more often (profiling only).
+- **Measured, image:** the full 104-view matrix against the prepared 0.4.35
+  reference, 104/104, worst channel 1/255, worst mean 0.00002/255, no console
+  errors (`house-parity-039-full-cull`). Unit 65/65 (three new), adaptive 9/9.
+- **Measured, Mac** (pool climb `.35`–`.80`, median of three interleaved
+  runs against 0.4.38 in the same session, M4, quiet machine):
+
+  | Climb | 0.4.38 | 0.4.39 | >20 ms frames |
+  |---|---:|---:|---|
+  | Night 1440×900@2 | 40.4 fps | 75.8 | 855 → 317 |
+  | Night 1728×1117@2 | 28.4 | 57.2 | 754 → 567 |
+  | Night 393×852@2 | 61.7 | 112.9 | 491 → 0 |
+  | Day 1440×900@2 | 46.5 | 88.0 | 690 → 235 |
+  | Day 1728×1117@2 | 36.7 | 73.8 | 820 → 395 |
+  | Day 393×852@2 | 71.5 | 117.3 | 205 → 0 |
+
+- **Measured, real phones** (night, three sweeps; before the culling, after
+  the single-frame fix): OnePlus 11R (Adreno 730, 90 Hz) ~30 → 36.7 / 31.5 /
+  37.2 fps; Pixel 7 (Mali-G710, 90 Hz) ~14 → 25.2 / 23.9 / 24.6; Moto G71
+  (Adreno 619, 60 Hz) 3.9 → 4.5 / 1.2 / 3.3. All GPU-bound (CPU 4–9 ms a
+  frame on the newer two, 15–21 on the Moto). **Not the goal:** the owner's
+  target is the screen's rate on normal phones, and 120 fps on the M4 with
+  headroom. That is 0.4.40.
+- **Pushed on the owner's call before `npm run qa`**, which runs straight
+  after.
+
 ## 0.4.38 — 2026-10-27
 
 - Restored full vertex sharing: house/curtain buffers total 55.15 MB,

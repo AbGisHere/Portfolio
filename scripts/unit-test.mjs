@@ -8,6 +8,8 @@
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
 import { test } from 'node:test';
+import './grass-ranges-test.mjs';
+import './house-fitting-test.mjs';
 import './house-pack-test.mjs';
 import './house-readiness-test.mjs';
 import './pass-preparation-test.mjs';

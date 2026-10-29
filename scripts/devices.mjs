@@ -9,6 +9,7 @@
  *
  *   node --import ./scripts/lib/resolve-js.mjs scripts/devices.mjs
  *        [--base URL] [--path /?…] [--only <name,…>] [--list] [--quiet]
+ *        [--climb [--theme day|night] [--query k=v&…]]
  *
  * Per device it opens the site at `--path` (default the house by night,
  * `/?contact=0.6&theme=night`; `&theme=day` for the day), then in the
@@ -27,6 +28,15 @@
  * (exit 0). Devices run one at a time (the plan has one parallel).
  * Detail (results.json, screenshots) goes to scripts/out/devices/; `--quiet`
  * prints only failures and the summary line. See scripts/README.md.
+ *
+ * `--climb` (0.4.39) times the pool climb instead, on each real device: it
+ * reads the screen's refresh rate from a rAF loop on a blank page, opens the
+ * house at `contact=0.35`, waits until the house is ready, then sweeps the camera
+ * 0.35 → 0.80 → 0.35 → 0.80 (4 s each, like scripts/pool-sweep.mjs) and
+ * records each frame's gap: fps, p95, p99, the worst, and the frames that
+ * missed the screen's budget (over 1.5 refreshes). A device meets the goal
+ * when its median sweep holds the screen's rate (60 on 60 Hz, 120 on
+ * 120 Hz) within 5%. Detail goes to scripts/out/devices-climb/.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -95,7 +105,11 @@ const BASE = String(args.base ?? 'http://localhost:3001').replace(/\/$/, '');
 const PATH = args.path ? String(args.path) : '/?contact=0.6&theme=night';
 const QUIET = !!args.quiet;
 const ONLY = args.only ? String(args.only).toLowerCase().split(',') : null;
-const OUT = join('scripts', 'out', 'devices');
+const CLIMB = !!args.climb;
+const THEME = args.theme === 'day' ? 'day' : 'night';
+// Extra URL flags for the climb (profiling: `mirror=0`, `dpr=1`, …).
+const QUERY = args.query ? `&${String(args.query).replace(/^[?&]/, '')}` : '';
+const OUT = join('scripts', 'out', CLIMB ? 'devices-climb' : 'devices');
 
 // The keys: the environment first, then .env.local.
 const env = { ...process.env };
@@ -165,6 +179,56 @@ function probe(programs) {
   return out;
 }
 
+// In the page (async: the last argument is the callback): the screen's
+// rate, then the climb's frame gaps.
+function climb(done) {
+  const frames = (ms, each) => new Promise(resolve => {
+    const gaps = []; const start = performance.now(); let last;
+    function step(now) {
+      if (last !== undefined) gaps.push(now - last);
+      last = now;
+      const t = Math.min(1, (now - start) / ms);
+      each?.(t);
+      if (t < 1) requestAnimationFrame(step); else resolve(gaps);
+    }
+    requestAnimationFrame(step);
+  });
+  const median = a => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+  // Main-thread time inside the page's frame callbacks (the renderer re-asks
+  // each frame, so it takes the wrapped one from the next frame on).
+  const raf = window.requestAnimationFrame.bind(window);
+  let cpu = 0;
+  window.requestAnimationFrame = cb => raf(t => {
+    const s = performance.now();
+    try { cb(t); } finally { cpu += performance.now() - s; }
+  });
+  (async () => {
+    const sweeps = [];
+    for (const [from, to] of [[0.35, 0.8], [0.8, 0.35], [0.35, 0.8]]) {
+      cpu = 0;
+      const gaps = await frames(4000, t => window.__pinDescent({ about: 1, desk: 1, contact: from + (to - from) * t }));
+      sweeps.push({ from, to, gaps, cpuPerFrame: cpu / gaps.length });
+    }
+    // With `profile=1` (MistCanvas's pass profiler), each pass's GPU time.
+    const passes = {};
+    for (const x of window.__houseProfile?.().samples ?? []) {
+      if (x.name === 'frame' || x.gpuMs == null) continue;
+      (passes[x.name] ??= []).push(x.gpuMs);
+    }
+    for (const k in passes) passes[k] = { n: passes[k].length, median: median(passes[k]) };
+    done({ sweeps, passes, errors: (window.__errors || []).slice(0, 5) });
+  })().catch(e => done({ error: String(e) }));
+}
+const stats = (gaps, hz) => {
+  const s = [...gaps].sort((a, b) => a - b);
+  const budget = 1000 / hz;
+  return {
+    fps: gaps.length * 1000 / gaps.reduce((a, b) => a + b, 0),
+    p95: s[Math.floor(s.length * 0.95)], p99: s[Math.floor(s.length * 0.99)], max: s.at(-1),
+    missed: s.filter(g => g > budget * 1.5).length, frames: s.length,
+  };
+};
+
 const devices = DEVICES.filter(d => !ONLY || ONLY.some(o => d.deviceName.toLowerCase().includes(o) || d.chip.toLowerCase().includes(o)));
 const local = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
 const localIdentifier = local ? `portfolio-${randomUUID().slice(0, 8)}` : undefined;
@@ -210,6 +274,53 @@ try {
       console.log(`n/a  ${d.deviceName} (${d.osVersion}): ${row.note}`);
       continue;
     }
+    if (CLIMB) {
+      try {
+        if (d.expect === 'layers') {
+          row.status = 'unavailable';
+          row.note = 'no WebGL2 (layered fallback)';
+          continue;
+        }
+        await driver.manage().setTimeouts({ script: 60000 });
+        // The screen's rate, on a blank page: the site renders continuously
+        // at the climb (wind, water), so its own frames can't show it.
+        await driver.get('about:blank');
+        const hz = await driver.executeAsyncScript(`const done = arguments[arguments.length - 1];
+          const gaps = []; let last; const t0 = performance.now();
+          (function step(now) { if (last !== undefined) gaps.push(now - last); last = now;
+            if (now - t0 < 1500) requestAnimationFrame(step);
+            else { gaps.sort((a, b) => a - b); done(Math.round(1000 / gaps[Math.floor(gaps.length / 2)])); } })(performance.now());`);
+        await driver.get(`${BASE}/?contact=0.35&adapt=0&theme=${THEME}${QUERY}`);
+        // The house builds and compiles on the device: up to three minutes.
+        const ready = await driver.wait(async () =>
+          driver.executeScript('return !!(window.__debugHouse && window.__debugHouse().ready);').catch(() => false), 180000).catch(() => false);
+        if (!ready) throw new Error('house never ready');
+        const r = await driver.executeAsyncScript(`(${climb.toString()})(arguments[arguments.length - 1]);`);
+        if (r.error) throw new Error(r.error);
+        row.gpu = await driver.executeScript(`const gl = document.createElement('canvas').getContext('webgl2');
+          const x = gl && gl.getExtension('WEBGL_debug_renderer_info'); return gl ? gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER) : null;`);
+        row.hz = hz;
+        row.sweeps = r.sweeps.map(sw => ({ from: sw.from, to: sw.to, cpuPerFrame: sw.cpuPerFrame, ...stats(sw.gaps, hz) }));
+        row.gaps = r.sweeps.map(sw => sw.gaps.map(g => Math.round(g * 10) / 10));
+        row.passes = r.passes;
+        const fps = [...row.sweeps.map(sw => sw.fps)].sort((a, b) => a - b)[1];
+        row.fps = fps;
+        for (const e of r.errors) row.failed.push(`page error: ${e}`);
+        if (fps < hz * 0.95) row.failed.push(`${fps.toFixed(1)} fps on a ${hz} Hz screen`);
+        row.status = row.failed.length ? 'FAIL' : 'pass';
+      } catch (err) {
+        row.note = String(err.message ?? err).split('\n')[0].slice(0, 160);
+        row.failed.push(`run: ${row.note}`);
+      } finally {
+        await driver.quit().catch(() => {});
+        results.push(row);
+        const sw = row.sweeps?.map(x => `${x.fps.toFixed(1)}fps cpu ${x.cpuPerFrame.toFixed(1)}ms p95 ${x.p95.toFixed(0)}ms missed ${x.missed}/${x.frames}`).join(' | ') ?? row.note;
+        console.log(`${row.status === 'pass' ? 'ok  ' : row.status === 'unavailable' ? 'n/a ' : 'FAIL'} ${d.deviceName.padEnd(26)} ${String(row.hz ?? '-').padStart(3)} Hz · ${sw} · ${row.gpu ?? ''}`);
+        const ranked = Object.entries(row.passes ?? {}).sort((a, b) => b[1].median - a[1].median);
+        if (ranked.length) console.log(`       GPU ms (median): ${ranked.map(([k, v]) => `${k} ${v.median.toFixed(1)} (n${v.n})`).join(' · ')}`);
+      }
+      continue;
+    }
     try {
       const url = `${BASE}${PATH.startsWith('/') ? PATH : `/${PATH}`}`;
       await driver.get(url);
@@ -251,7 +362,7 @@ try {
 }
 
 const file = join(OUT, 'results.json');
-writeFileSync(file, JSON.stringify({ base: BASE, build, results }, null, 2));
+writeFileSync(file, JSON.stringify({ base: BASE, build, ...(CLIMB ? { climb: true, theme: THEME, query: QUERY } : {}), results }, null, 2));
 const passed = results.filter(r => r.status === 'pass').length;
 const failed = results.filter(r => r.status === 'FAIL').length;
 const na = results.filter(r => r.status === 'unavailable').length;

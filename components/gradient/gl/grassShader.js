@@ -53,6 +53,63 @@ export const GRASS = {
 export const GRASS_INSTANCES = GRASS.rings * GRASS.side * GRASS.side * GRASS.blades;
 export const GRASS_VERTS = GRASS.segments * 2 + 1;
 
+// (0.4.39) The instances of a ring layout (`{ rings, side, cell }`, `each`
+// per cell: the grass's blades, the flowers' slots) the camera can see, as
+// [first, count] runs of instance ids in their own order: drawing the runs
+// one after another draws the same instances as one draw of them all
+// (opaque, depth-tested: the same picture). Each ring's rows are tested in
+// chunks of CHUNK cells, padded by a cell (the CPU's floor may differ from
+// the GPU's at a cell's edge) and by `reach`, the farthest a plant reaches
+// from its root (height, and bending keeps its length), from the ground up
+// to the top of the house's hill. `seen(lo, hi)` is the camera's box test
+// (deskCamera.js boxSeen, which only rejects a box all of whose corners lie
+// past one edge of the frame). Gaps under MERGE chunks are drawn through: a
+// draw costs more than a few instances that are culled at once.
+const CHUNK = 4;
+const MERGE = 2;
+const HILL_TOP = 3.2;
+export function ringRanges({ rings, side, cell }, each, reach, cam, seen) {
+  const per = side * side * each;
+  const runs = [];
+  let open = null;
+  let gap = 0;
+  const close = () => {
+    if (open) runs.push(open);
+    open = null;
+  };
+  for (let ring = 0; ring < rings; ring++) {
+    const c = cell * 2 ** ring;
+    const bx = Math.floor(cam.x / c) - side / 2;
+    const bz = Math.floor(cam.z / c) - side / 2;
+    for (let row = 0; row < side; row++) {
+      for (let col = 0; col < side; col += CHUNK) {
+        const lo = [(bx + col - 1) * c - reach, -0.2, (bz + row - 1) * c - reach];
+        const hi = [(bx + col + CHUNK + 1) * c + reach, HILL_TOP + reach, (bz + row + 2) * c + reach];
+        const first = ring * per + (row * side + col) * each;
+        const count = Math.min(CHUNK, side - col) * each;
+        if (seen(lo, hi)) {
+          if (open && first === open[0] + open[1] + gap) open[1] += gap + count;
+          else {
+            close();
+            open = [first, count];
+          }
+          gap = 0;
+        } else if (open) {
+          gap += count;
+          if (gap > MERGE * CHUNK * each) {
+            close();
+            gap = 0;
+          }
+        }
+      }
+    }
+  }
+  close();
+  return runs;
+}
+// A blade is at most 0.42 m tall.
+export const grassRanges = (cam, seen) => ringRanges(GRASS, GRASS.blades, 0.6, cam, seen);
+
 /**
  * The footprints' push on whatever grows from the meadow (the grass, and
  * from 0.3.5 the flowers): the prints' uniforms, the boot (bootPrint.js),
@@ -107,6 +164,7 @@ precision highp int;
 uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform int uFirst;     // (0.4.39) the first blade of this draw (grassRanges)
 uniform vec2 uYaw;      // (0.4.0) cos, sin of the camera's yaw
 uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
 uniform float uT;       // the wind's clock, seconds
@@ -153,8 +211,9 @@ ${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
 ${MOUND_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
-  int ring = gl_InstanceID / per;
-  int r = gl_InstanceID - ring * per;
+  int id = gl_InstanceID + uFirst;
+  int ring = id / per;
+  int r = id - ring * per;
   int cell = r / ${GRASS.blades};
   int bi = r - cell * ${GRASS.blades};
   float c = ${f(GRASS.cell)} * exp2(float(ring));

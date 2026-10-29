@@ -23,18 +23,25 @@ not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
 ## Current release and follow-up
 
-The owner selected **0.4.38** for the completed sharing/preparation/readiness
-batch and explicitly requested its push on 2026-10-27, accepting the known
-image-parity failures and provisional performance evidence as follow-up work.
-The local 0.4.37 checkpoint is `2bc08b1`. Evidence and experiments are in
-[`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md).
+**0.4.39** (2026-10-30) restored image parity (104/104 views within 2/255
+of the prepared 0.4.35 reference) and made the pool climb ~1.9× faster on the
+M4 (each frame drawn once; grass and flowers culled to the view). It was
+pushed on the owner's call before `npm run qa`, which runs after. Its record,
+with every measurement and the method: [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md);
+0.4.38's: [`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md).
 
-The owner selected **0.4.39** for the remainder: resolve existing image
-differences, finish pool-climb optimization and obtain clean performance
-measurements. Read [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md)
-before continuing. This release exception does not waive future gates or
-unrelated new functional failures. Do not ask for the already-selected
-version again.
+**Next: 0.4.40**, the pool climb at the screen's rate: 60 fps on 60 Hz
+phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
+(`ROADMAP.md`, the 0.4.40 row). Measure real phones with
+`npm run devices -- --climb` (BrowserStack, authorised by the owner for
+this) and the owner's phone; phone GPU timers aren't available to web pages,
+so isolate costs with URL flags (`?dpr=`, `?grass=0`, `?hao=0`, …).
+
+On 2026-10-29 the owner approved fully preparing the 0.4.35 reference
+mirrors before strict comparisons. Use `scripts/prepare-house-reference.mjs`
+in a separate reference worktree and `house-parity.mjs --prepared-reference`.
+Keep original pixel limits and document untouched-reference differences.
+This does not authorize other reference geometry/shader changes.
 
 Full quality remains mandatory: retain wardrobe contents, all intended
 geometry and plant variation; no reduced precision, resolution, samples or
@@ -201,7 +208,7 @@ npm run perf           # frame timing, fps gate, tile dropout (local, GPU); `-- 
 npm run switch         # no cut in a day/night switch, frame by frame (local, GPU)
 npm run qa             # runs the checks above, one table; before every push (local, GPU)
 npm run sharp          # 5K/6K crest and grain crops, capped vs uncapped (local, GPU; not in qa)
-npm run devices        # every shader on 31 real phones and tablets (BrowserStack; keys in .env.local; not in qa, on the owner's call)
+npm run devices        # every shader on 31 real phones and tablets (BrowserStack; keys in .env.local; not in qa, on the owner's call); `-- --climb` times the pool climb on them
 ```
 
 ## Tech Stack
@@ -346,7 +353,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; next `0.4.39` resolves image differences, remaining pool-climb work and clean measurements (`docs/optimization-0.4.39.md`); then remaining walk/contact work |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; `0.4.39` image parity and a ~1.9× faster pool climb (`docs/optimization-0.4.39.md`); next `0.4.40` the climb at the screen's rate on real phones; then remaining walk/contact work |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

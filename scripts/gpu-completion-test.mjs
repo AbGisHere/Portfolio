@@ -15,9 +15,11 @@ function mock() {
 test('GPU completion stays pending until signalled without a blocking timeout', () => {
   const m = mock();
   assert.equal(m.gate.poll('size-a'), 'pending');
+  assert.equal(m.gate.pending, true);
   assert.equal(m.gate.poll('size-a'), 'pending');
   m.status(3);
   assert.equal(m.gate.poll('size-a'), 'ready');
+  assert.equal(m.gate.pending, false);
   assert.equal(m.gate.poll('size-a'), 'ready');
   assert.deepEqual(m.counts(), { created: 1, deleted: 1, flushed: 1 });
 });
@@ -35,5 +37,6 @@ test('failed fence waits release resources instead of holding forever', () => {
   assert.equal(m.gate.poll('a'), 'failed');
   assert.equal(m.counts().deleted, 1);
   m.gate.reset();
+  assert.equal(m.gate.pending, false);
   assert.equal(m.gate.poll('a'), 'pending');
 });

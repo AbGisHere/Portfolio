@@ -31,11 +31,11 @@ import { MOON_SIZE, moonFace } from '../moonFace';
 import { GEO, beginOrbit, ease, orbitScene } from '../orbit';
 import { sceneAt } from '../scene';
 import { DEPTH, boxSeen, cameraMetres, deskWidest, groundAt, pitchSpan, planeAt, toVirtual } from '../deskCamera';
-import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_INSTANCES, GRASS_VERTEX, GRASS_VERTS } from './grassShader';
+import { GRASS, GRASS_FRAGMENT, GRASS_HAZE, GRASS_VERTEX, GRASS_VERTS, grassRanges } from './grassShader';
 import { MAX_PRINTS, REACH, createWalker } from './footsteps';
 import { bootOf, seeded } from './bootPrint';
 import { MEADOW_SIZE, meadowTexels } from './meadowTexture';
-import { FLOWERS, FLOWER_FRAGMENT, FLOWER_INSTANCES, FLOWER_VERTEX, FLOWER_VERTS } from './flowerShader';
+import { FLOWERS, FLOWER_FRAGMENT, FLOWER_VERTEX, FLOWER_VERTS, flowerRanges } from './flowerShader';
 import { LONE_SHADOW, TREE_FRAGMENT, TREE_STRIDE, TREE_VERTEX, treeLayout } from './treeShader';
 import { DESK_FRAGMENT, DESK_STRIDE, DESK_VERTEX, deskLayout } from './deskShader';
 import { LAPTOP_FRAGMENT, LAPTOP_STRIDE, LAPTOP_TEX, LAPTOP_VERTEX, laptopMesh, laptopTexels } from './laptopShader';
@@ -206,6 +206,9 @@ export default function MistCanvas({ recipe, onFail }) {
     const noMirror = params.get('mirror') === '0';
     const noCaustics = params.get('caustics') === '0';
     const noBloom = params.get('bloom') === '0';
+    // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
+    // cost from geometry on a device (0.4.39).
+    const dprCap = Number(params.get('dpr')) || Infinity;
     const indexedHouse = params.get('houseindexed') !== '0';
     let gl;
     let prog;
@@ -225,7 +228,12 @@ export default function MistCanvas({ recipe, onFail }) {
       return undefined;
     }
 
-    const profiler = params.get('profile') === '1' ? createPassProfiler(gl, { gpu: params.get('profilegpu') !== '0' }) : null;
+    const profiler = params.get('profile') === '1'
+      ? createPassProfiler(gl, { gpu: params.get('profilegpu') !== '0', sampleEvery: Number(params.get('profileevery')) || 17 })
+      : null;
+    // (0.4.39) A pass, timed when profiling (every pass of the frame, for
+    // phones: `?profile=1&profileevery=1`).
+    const timed = (name, fn) => (profiler ? profiler.measure(name, fn) : fn());
     const houseCompletion = createGpuCompletion(gl);
 
     const uniformLookup = program => {
@@ -1471,7 +1479,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const nh = Math.round(rect.height);
       if (!nw || !nh) return;
       const cap = Math.sqrt(pixelCap / (nw * nh));
-      const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR, cap) * QUALITY[level()];
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR, cap, dprCap) * QUALITY[level()];
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
       grainOut = !noGrain && dpr < (window.devicePixelRatio || 1) - 1e-3;
@@ -1998,7 +2006,11 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, GRASS_INSTANCES);
+      // (0.4.39) Only the runs of blades the camera can see, in their order.
+      for (const [first, count] of grassRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi))) {
+        gl.uniform1i(g.u('uFirst'), first);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, count);
+      }
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -2039,7 +2051,11 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, FLOWER_VERTS, FLOWER_INSTANCES);
+      // (0.4.39) Only the runs of flowers the camera can see, in their order.
+      for (const [first, count] of flowerRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi))) {
+        gl.uniform1i(g.u('uFirst'), first);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, FLOWER_VERTS, count);
+      }
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -2296,12 +2312,17 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
       const lawn = g.lawnChunk;
-      if ((part === 'lawn' || part === 'all') && lawn) {
+      if (part === 'all') {
+        // Preserve the original contiguous depth draw, including every triangle.
+        if (g.indexed) gl.drawElements(gl.TRIANGLES, g.indexCount, gl.UNSIGNED_INT, 0);
+        else gl.drawArrays(gl.TRIANGLES, 0, g.indexCount);
+      }
+      if (part === 'lawn' && lawn) {
         if (g.indexed) gl.drawElements(gl.TRIANGLES, lawn.count, gl.UNSIGNED_INT, lawn.offset);
         else gl.drawArrays(gl.TRIANGLES, lawn.offset / 4, lawn.count);
       }
       if (part !== 'lawn') {
-        for (const ch of g.chunks) {
+        if (part !== 'all') for (const ch of g.chunks) {
           if (g.indexed) gl.drawElements(gl.TRIANGLES, ch.count, gl.UNSIGNED_INT, ch.offset);
           else gl.drawArrays(gl.TRIANGLES, ch.offset / 4, ch.count);
         }
@@ -2319,11 +2340,18 @@ export default function MistCanvas({ recipe, onFail }) {
     // the house.
     let probes;
     let probeSet = null;
+    let probeUniformData = null;
     let probing = false;
     const mirrorProbes = () => {
       if (!houseBuilt) return false;
       if (probes === undefined) probes = (!noMirror && houseBuilt.house.mirrors?.length && makeProbes(gl, 15)) || false;
-      if (probes && !probeSet) probeSet = probeLayout(houseBuilt.house.mirrors).map(m => ({ ...m, faces: 0, night: -1 }));
+      if (probes && !probeSet) {
+        probeSet = probeLayout(houseBuilt.house.mirrors).map(m => ({ ...m, faces: 0, night: -1 }));
+        // Positions and bounds never change; only readiness changes on relighting.
+        probeUniformData = Object.fromEntries(['at', 'lo', 'hi', 'c'].map(key =>
+          [key, new Float32Array(probeSet.flatMap(m => m[key]))]));
+        probeUniformData.ready = new Float32Array(probeSet.length);
+      }
       return probes;
     };
     // (0.4.24) The person, for checking its design in place (the walk isn't
@@ -2363,11 +2391,12 @@ export default function MistCanvas({ recipe, onFail }) {
       probes.bind();
       gl.uniform1i(g.u('uProbe'), 15);
       gl.uniform1i(g.u('uProbeN'), set.length);
-      gl.uniform3fv(g.u('uProbeAt'), set.flatMap(m => m.at));
-      gl.uniform3fv(g.u('uProbeLo'), set.flatMap(m => m.lo));
-      gl.uniform3fv(g.u('uProbeHi'), set.flatMap(m => m.hi));
-      gl.uniform3fv(g.u('uMirrorAt'), set.flatMap(m => m.c));
-      gl.uniform1fv(g.u('uProbeReady'), set.map(m => (m.faces >= 6 || m.night >= 0 ? 1 : 0)));
+      gl.uniform3fv(g.u('uProbeAt'), probeUniformData.at);
+      gl.uniform3fv(g.u('uProbeLo'), probeUniformData.lo);
+      gl.uniform3fv(g.u('uProbeHi'), probeUniformData.hi);
+      gl.uniform3fv(g.u('uMirrorAt'), probeUniformData.c);
+      for (let i = 0; i < set.length; i++) probeUniformData.ready[i] = set[i].faces >= 6 || set[i].night >= 0 ? 1 : 0;
+      gl.uniform1fv(g.u('uProbeReady'), probeUniformData.ready);
     }
     // One face of the probe most in need of it, if any is (true: drawn).
     let backdrop = null;
@@ -2868,37 +2897,39 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthFunc(gl.LESS);
         // (0.3.10) The device before the desk, so the desk's top isn't shaded
         // behind it.
-        if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
-        if (deskOn && !noLamp) drawLamp();
-        if (deskOn && !noProps) drawProps();
+        timed('desk-things', () => {
+          if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
+          if (deskOn && !noLamp) drawLamp();
+          if (deskOn && !noProps) drawProps();
+        });
         if (deskOn && !noHouse && houseSeen) {
           if (profiler) profiler.measure('house-colour-depth', drawHouse); else drawHouse();
         }
         if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
-        if (deskOn) drawDesk(false);
+        if (deskOn) timed('desk', () => drawDesk(false));
         if (grassOn) {
-          drawGrass(prints);
-          drawFlowers(prints);
+          timed('grass', () => drawGrass(prints));
+          timed('flowers', () => drawFlowers(prints));
         }
-        if (treesOn) drawTrees(false);
-        if (birdWeight > 0 && meadowAt) drawBirds();
+        if (treesOn) timed('trees', () => drawTrees(false));
+        if (birdWeight > 0 && meadowAt) timed('birds', drawBirds);
         gl.useProgram(prog);
         gl.bindVertexArray(null);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        timed('scene', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         gl.depthMask(true);
         gl.depthFunc(gl.LESS);
-        if (deskOn) drawDesk(true);
-        if (treesOn) drawTrees(true);
-        if (deskOn && !noHouse && lawnSeen) drawHouse(false, true);
+        if (deskOn) timed('shadows', () => drawDesk(true));
+        if (treesOn) timed('shadows', () => drawTrees(true));
+        if (deskOn && !noHouse && lawnSeen) timed('lawn', () => drawHouse(false, true));
         // Then the meadow over the ground the blades leave uncovered (the
         // depth test skips the rest), writing no depth.
         gl.depthMask(false);
-        drawMeadow(prints);
+        timed('meadow', () => drawMeadow(prints));
         if (deskOn && !noProps) drawSteam();
         gl.depthMask(true);
-        if (deskOn && !noHouse && !noGlass && houseSeen) drawGlass();
+        if (deskOn && !noHouse && !noGlass && houseSeen) timed('glass', drawGlass);
         // (0.4.26) The fireflies by night (fireflies.js), added on.
         fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
         if (fliesOn) drawBirds(true);
@@ -3036,8 +3067,13 @@ export default function MistCanvas({ recipe, onFail }) {
       syncHouseReadiness();
       const moving = !settled();
       const drifting = !motion.matches && !frozen;
-      const preparingHouse = houseWarmed && !houseComplete && !houseFailed;
-      if ((moving || drifting || living || probing || preparingHouse) && visible && onScreen) raf = requestAnimationFrame(frame);
+      // The preparation queue wakes us when a resource finishes. While waiting
+      // for CPU work/compilation, frozen and reduced-motion views can sleep.
+      const preparingHouse = houseCompletion.pending;
+      // (0.4.39) Unless a kick during this frame already asked for the next
+      // one: two callbacks a vsync drew the whole scene twice (and stepped the
+      // water twice).
+      if (!raf && (moving || drifting || living || probing || preparingHouse) && visible && onScreen) raf = requestAnimationFrame(frame);
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is

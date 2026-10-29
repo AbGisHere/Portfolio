@@ -772,6 +772,8 @@ house) and `x` (metres across).
   its box, the pool's and the hill's), not merely turned toward.
 - **Flags:** `?house=0` leaves the house and pool out; `?hao=0`,
   `?glass=0`, `?mirror=0`, `?caustics=0`, `?bloom=0` their passes (profiling).
+  (0.4.39) `?dpr=1` caps the pixel ratio, to tell pixel cost from geometry;
+  `?profile=1&profileevery=1` samples every pass in the pass profiler.
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

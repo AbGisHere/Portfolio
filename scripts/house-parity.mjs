@@ -39,7 +39,7 @@ const args = parseArgs();
 const base = String(args.base ?? 'http://localhost:3001');
 const reference = args.reference;
 if (args.help || args.list) {
-  console.log('House parity: --base URL --reference URL [--room-base URL --reference-room-base URL] [--reference-dir PATH] [--reference-revision REF] [--views names] [--viewports WxH@dpr] [--themes day,night] [--settle ms] [--timeout ms] [--out PATH] [--headed] [--quiet]');
+  console.log('House parity: --base URL --reference URL [--room-base URL --reference-room-base URL] [--reference-dir PATH] [--reference-revision REF] [--views names] [--viewports WxH@dpr] [--themes day,night] [--settle ms] [--timeout ms] [--out PATH] [--candidate-query QUERY --reference-query QUERY] [--reference-ready] [--prepared-reference] [--headed] [--quiet]');
   console.log(views.map(v => v.name).join(','));
   process.exit(0);
 }
@@ -64,10 +64,13 @@ const metadata = {
   candidateDiffSha256: createHash('sha256').update(git('.', 'diff', 'HEAD') ?? '').digest('hex'),
   referenceRevision, referenceHash: git(referenceDir, 'rev-parse', referenceRevision),
   referenceCheckoutHash: args['reference-dir'] ? git(referenceDir, 'rev-parse', 'HEAD') : null,
+  referenceDiffSha256: args['reference-dir'] ? createHash('sha256').update(git(referenceDir, 'diff', 'HEAD') ?? '').digest('hex') : null,
   revisionNote: 'Hashes identify local source; server revisions must be verified by the operator.',
   thresholds: { maxChannel: 2, meanExclusive: .2, amplification: 32 }, seed: '0x9e3779b9', settle,
   expectedCases: selectedViews.length * vps.length * themes.length,
-  fullMatrix: selectedViews.length === 26 && vps.length === 2 && vps.some(v => v.name === '1440x900@2') && vps.some(v => v.name === '393x852@2') && themes.includes('day') && themes.includes('night'),
+  referencePreparation: args['prepared-reference'] ? 'all mirrors prepared; owner-approved 2026-10-29' : 'original',
+  diagnostic: !!(args['candidate-query'] || args['reference-query']),
+  fullMatrix: !args['candidate-query'] && !args['reference-query'] && selectedViews.length === 26 && vps.length === 2 && vps.some(v => v.name === '1440x900@2') && vps.some(v => v.name === '393x852@2') && themes.includes('day') && themes.includes('night'),
 };
 function deterministic() {
   let t = 0x9e3779b9;
@@ -79,7 +82,9 @@ async function capture(browser, side, vp, theme, view, file) {
   const url = new URL(view.cam ? '/house' : '/', origin);
   const query = { renderer: 'gl', freeze: '1', grain: '0', adapt: '0', skyt: '0', boot: '1', theme, ...view.query };
   if (view.cam) query.cam = view.cam.join(',');
-  if (side === 'candidate' && args['candidate-query']) Object.assign(query, Object.fromEntries(new URLSearchParams(String(args['candidate-query']))));
+  if (side === 'reference' && args['prepared-reference']) query.warmprobes = '1';
+  const extraQuery = args[`${side}-query`];
+  if (extraQuery) Object.assign(query, Object.fromEntries(new URLSearchParams(String(extraQuery))));
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
   const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: vp.dpr });
   try {
@@ -92,7 +97,7 @@ async function capture(browser, side, vp, theme, view, file) {
     // Freeze hides the grain; keep this image restricted to the renderer, excluding dev HUD/readiness UI.
     await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important}body *{visibility:hidden!important}canvas{visibility:visible!important}' });
     await page.waitForTimeout(settle);
-    if (side === 'candidate') {
+    if (side === 'candidate' || args['reference-ready'] || args['prepared-reference']) {
       await page.waitForFunction(() => {
         const state = window.__debugHouse?.();
         return state?.house && state.houseBuilt && state.ready && !state.probesStale;

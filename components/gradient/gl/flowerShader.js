@@ -23,7 +23,7 @@
  *   through from behind), hazed with distance, grain on top.
  */
 
-import { PRINTS_GLSL, PUSH_SUM } from './grassShader';
+import { PRINTS_GLSL, PUSH_SUM, ringRanges } from './grassShader';
 import { TREE_SHADE_GLSL } from './treeShader';
 import { DESK_SHADE_GLSL } from './deskShader';
 import { MOUND_GLSL } from './houseShape';
@@ -52,6 +52,9 @@ export const FLOWER_INSTANCES = FLOWERS.rings * FLOWERS.side * FLOWERS.side * FL
 // Three stem segments (two triangles each), then the head's two.
 const STEM_SEGS = 3;
 export const FLOWER_VERTS = STEM_SEGS * 6 + 6;
+// (0.4.39) The flowers the camera can see (grassShader.js ringRanges): at
+// most 0.56 m tall, with a head and a bend.
+export const flowerRanges = (cam, seen) => ringRanges(FLOWERS, FLOWERS.slots, 0.8, cam, seen);
 
 export const FLOWER_VERTEX = `#version 300 es
 precision highp float;
@@ -60,6 +63,7 @@ precision highp int;
 uniform vec4 uPitch;    // cos, sin of the pitch, focal length (CSS px), zoom
 uniform vec4 uScreen;   // optical centre on screen (xy), frame size (zw), CSS px
 uniform vec3 uCam;      // the camera, metres from the desk's centre (y up, z forward)
+uniform int uFirst;     // (0.4.39) the first flower of this draw (flowerRanges)
 uniform vec2 uYaw;      // (0.4.0) cos, sin of the camera's yaw
 uniform vec2 uDepthAB;  // perspective depth: A, B (metres)
 uniform float uT;       // the wind's clock, seconds
@@ -123,8 +127,9 @@ vec4 project(vec3 w) {
 ${MOUND_GLSL}
 void main() {
   int per = ${FLOWERS.side * FLOWERS.side * FLOWERS.slots};
-  int ring = gl_InstanceID / per;
-  int r = gl_InstanceID - ring * per;
+  int id = gl_InstanceID + uFirst;
+  int ring = id / per;
+  int r = id - ring * per;
   int cell = r / ${FLOWERS.slots};
   int fi = r - cell * ${FLOWERS.slots};
   float c = ${f(FLOWERS.cell)} * exp2(float(ring));

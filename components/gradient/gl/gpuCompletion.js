@@ -6,6 +6,7 @@ export function createGpuCompletion(gl) {
     fence = null; key = null; state = 'idle';
   };
   return {
+    get pending() { return state === 'pending'; },
     poll(nextKey) {
       if (gl.isContextLost()) { reset(); return 'failed'; }
       if (key !== nextKey) reset();

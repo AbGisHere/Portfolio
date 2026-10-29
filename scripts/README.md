@@ -278,6 +278,8 @@ npm run devices                       # against http://localhost:3001, via a Bro
 npm run devices -- --base https://abgupta.me
 npm run devices -- --only pixel,iphone
 npm run devices -- --list             # Automate's real devices (exact names for DEVICES)
+npm run devices -- --climb --only oneplus,pixel\ 7,moto   # the pool climb's frame times (0.4.39)
+npm run devices -- --climb --query dpr=1                   # …with a profiling flag
 ```
 
 Per device: the site at the desk's end (`?desk=0.6`), then, in the page,
@@ -423,3 +425,17 @@ The house-parity harness now waits for candidate readiness and completed
 mirror probes before capture. It retains the strict max 2/255, mean
 <0.2/255 gate against 0.4.35; passing candidate-to-candidate controls does
 not waive inherited failures against that reference.
+
+### Prepared 0.4.35 house reference (0.4.39)
+
+The owner approved preparing all reference mirrors before strict comparisons
+(2026-10-29). In a separate worktree at `v0.4.35`, run
+`node scripts/prepare-house-reference.mjs /path/to/reference` from the current
+checkout. The helper refuses unrelated renderer edits and changes only
+query-gated probe preparation plus a readiness observer. Build/start that
+reference separately; use `--prepared-reference --settle 0` with
+`house-parity.mjs`. Production serves root views; dev servers serve `/house`.
+The reference geometry, shaders, resolution and strict pixel limits stay
+unchanged. Raw-reference differences remain documented in
+`docs/optimization-0.4.39.md`. Arbitrary `--candidate-query`/`--reference-query`
+overrides are diagnostic and cannot label a report as a full acceptance matrix.

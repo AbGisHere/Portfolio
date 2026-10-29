@@ -13,7 +13,7 @@
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_PART, PLAN, POOL, MATCH_AXES, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
-import { LIGHTS, LIGHT_RANGE, ROOM_CONSTANT_FILLS, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
+import { FITTING_PER_PIXEL, LIGHTS, LIGHT_RANGE, ROOM_CONSTANT_FILLS, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
@@ -360,7 +360,34 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
 // light's colour and strength, a strip's within a few centimetres), so
 // one that's off is dark and a dimmed one dim, by night and by day.
 // (0.4.36) Tagged per fitting in aST.x: $O(1)$ direct lookup without 209-light loops.
+// (0.4.39) A triangle whose nearest fitting changes inside it
+// (FITTING_PER_PIXEL) finds it per pixel, as before 0.4.36.
+vec3 fittingGlowAt(vec3 p, int room) {
+  float best = 1.0;
+  vec3 glow = ROOM_C(room);
+  float w = uNight + (room == 0 ? 0.0 : ROOM_DAY(room)) * (1.0 - uNight);
+  for (int i = 0; i < ${LIGHTS.length}; i++) {
+    float r = length(L_P(i).xyz - p);
+    if (r < best) {
+      best = r;
+      glow = L_C(i) * L_W(i).w;
+      w = L_W(i).x * nightOn(L_W(i).y) + L_K(i).w * (1.0 - uNight);
+    }
+  }
+  for (int i = 0; i < ${STRIPS.length}; i++) {
+    vec3 a = S_A(i);
+    vec3 ab = S_B(i) - a;
+    float r = length(a + ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0) - p);
+    if (r < min(best, 0.08)) {
+      best = r;
+      glow = S_C(i) * S_W(i).w;
+      w = S_W(i).y * nightOn(S_W(i).z) + S_W(i).x * (1.0 - uNight);
+    }
+  }
+  return glow * w;
+}
 vec3 fittingGlow(int fitting, vec3 p, int room) {
+  if (fitting == ${FITTING_PER_PIXEL}) return fittingGlowAt(p, room);
   if (fitting < 0) {
     vec3 glow = ROOM_C(room);
     float w = uNight + (room == 0 ? 0.0 : ROOM_DAY(room)) * (1.0 - uNight);

@@ -124,36 +124,105 @@ export function tagLampFittings(data) {
     }
   });
 
+  // A fitting's distance from p (a light's, or a strip's nearest point).
+  const distance = (item, x, y, z) => {
+    if (item.type === 'light') return Math.hypot(item.p[0] - x, item.p[1] - y, item.p[2] - z);
+    const ax = item.a[0], ay = item.a[1], az = item.a[2];
+    const abx = item.b[0] - ax, aby = item.b[1] - ay, abz = item.b[2] - az;
+    const ab2 = abx * abx + aby * aby + abz * abz;
+    const t = Math.max(0, Math.min(1, ((x - ax) * abx + (y - ay) * aby + (z - az) * abz) / ab2));
+    return Math.hypot(ax + abx * t - x, ay + aby * t - y, az + abz * t - z);
+  };
+  const tagOf = item => (item.type === 'light' ? item.idx : 1000 + item.idx);
+  // How near a fitting must be to count: a light within a metre, a strip 8 cm.
+  const reachOf = item => (item.type === 'light' ? 1.0 : 0.08);
+  // The fitting nearest p, by the shader's rule: lights first, then a strip
+  // only if nearer still and within its reach; else none (-1).
+  const nearestAt = (x, y, z) => {
+    const items = grid.get(key(Math.floor(x), Math.floor(y), Math.floor(z)));
+    let best = 1.0;
+    let match = -1;
+    if (items) {
+      for (const item of items) {
+        if (item.type !== 'light') continue;
+        const d = distance(item, x, y, z);
+        if (d < best) {
+          best = d;
+          match = item.idx;
+        }
+      }
+      for (const item of items) {
+        if (item.type === 'light') continue;
+        const d = distance(item, x, y, z);
+        if (d < Math.min(best, 0.08)) {
+          best = d;
+          match = 1000 + item.idx;
+        }
+      }
+    }
+    return match;
+  };
+  // Whether the nearest fitting can't change across a triangle within R of
+  // its centre c: every distance moves by at most R over it, so a winner
+  // more than 2R ahead of the rest, and further than R inside its reach,
+  // wins everywhere (and with no winner, none comes within reach).
+  // Every fitting any point of the triangle could find: those listed in each
+  // cell its bounds touch (each point's own cell is one of them).
+  const candidates = i => {
+    const lo = [0, 1, 2].map(k => Math.floor(Math.min(data[i + k], data[i + 9 + k], data[i + 18 + k])));
+    const hi = [0, 1, 2].map(k => Math.floor(Math.max(data[i + k], data[i + 9 + k], data[i + 18 + k])));
+    const found = new Set();
+    for (let gx = lo[0]; gx <= hi[0]; gx++) {
+      for (let gy = lo[1]; gy <= hi[1]; gy++) {
+        for (let gz = lo[2]; gz <= hi[2]; gz++) {
+          for (const item of grid.get(key(gx, gy, gz)) ?? []) found.add(item);
+        }
+      }
+    }
+    return found;
+  };
+  const stable = (items, cx, cy, cz, R, match) => {
+    let win = Infinity;
+    for (const item of items) {
+      if (tagOf(item) !== match) continue;
+      win = distance(item, cx, cy, cz);
+      if (win + R >= reachOf(item)) return false;
+    }
+    for (const item of items) {
+      if (tagOf(item) === match) continue;
+      const d = distance(item, cx, cy, cz);
+      if (d - R < reachOf(item) && d - R <= win + R) return false;
+    }
+    return true;
+  };
+
+  // (0.4.39) One fitting per triangle where every point of it has the same
+  // nearest one; where that changes inside a triangle (705 of 22,964, the
+  // stair's tread strips mostly), FITTING_PER_PIXEL, and the shader finds it
+  // per pixel as 0.4.35 did everywhere.
+  const N = FITTING_SAMPLES;
   const lampPart = HOUSE_PART.lamp;
   for (let i = 0; i < data.length; i += 27) {
     if (Math.floor(data[i + 6] + 0.001) === lampPart) {
-      const x = (data[i] + data[i + 9] + data[i + 18]) / 3;
-      const y = (data[i + 1] + data[i + 10] + data[i + 19]) / 3;
-      const z = (data[i + 2] + data[i + 11] + data[i + 20]) / 3;
-      const items = grid.get(key(Math.floor(x), Math.floor(y), Math.floor(z)));
-      let best = 1.0;
-      let match = -1;
-      if (items) {
-        for (let j = 0; j < items.length; j++) {
-          const item = items[j];
-          if (item.type === 'light') {
-            const d = Math.hypot(item.p[0] - x, item.p[1] - y, item.p[2] - z);
-            if (d < best) {
-              best = d;
-              match = item.idx;
-            }
-          } else {
-            const ax = item.a[0], ay = item.a[1], az = item.a[2];
-            const bx = item.b[0], by = item.b[1], bz = item.b[2];
-            const abx = bx - ax, aby = by - ay, abz = bz - az;
-            const ab2 = abx * abx + aby * aby + abz * abz;
-            const t = Math.max(0, Math.min(1, ((x - ax) * abx + (y - ay) * aby + (z - az) * abz) / ab2));
-            const cx = ax + abx * t, cy = ay + aby * t, cz = az + abz * t;
-            const d = Math.hypot(cx - x, cy - y, cz - z);
-            if (d < Math.min(best, 0.08)) {
-              best = d;
-              match = 1000 + item.idx;
-            }
+      const at = (u, v) => {
+        const w = 1 - u - v;
+        return nearestAt(
+          data[i] * u + data[i + 9] * v + data[i + 18] * w,
+          data[i + 1] * u + data[i + 10] * v + data[i + 19] * w,
+          data[i + 2] * u + data[i + 11] * v + data[i + 20] * w,
+        );
+      };
+      let match = at(1 / 3, 1 / 3);
+      const cx = (data[i] + data[i + 9] + data[i + 18]) / 3;
+      const cy = (data[i + 1] + data[i + 10] + data[i + 19]) / 3;
+      const cz = (data[i + 2] + data[i + 11] + data[i + 20]) / 3;
+      const R = Math.max(...[0, 9, 18].map(o => Math.hypot(data[i + o] - cx, data[i + o + 1] - cy, data[i + o + 2] - cz)));
+      const sure = stable(candidates(i), cx, cy, cz, R, match);
+      for (let a = 0; a <= N && !sure && match !== FITTING_PER_PIXEL; a++) {
+        for (let b = 0; a + b <= N; b++) {
+          if (at(a / N, b / N) !== match) {
+            match = FITTING_PER_PIXEL;
+            break;
           }
         }
       }
@@ -163,6 +232,11 @@ export function tagLampFittings(data) {
     }
   }
 }
+
+/** The tag of a lamp triangle whose nearest fitting changes inside it. */
+export const FITTING_PER_PIXEL = -2;
+// Barycentric steps per side of the grid each lamp triangle is tested on.
+const FITTING_SAMPLES = 12;
 
 export const HOUSE_STRIDE = 9;
 export const CURTAIN_STRIDE = 15;
