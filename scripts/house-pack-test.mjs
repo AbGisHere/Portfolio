@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { packCurtainMesh, packHouseMesh } from '../components/gradient/gl/houseLights.js';
+import { HOUSE_RUN, houseRanges, houseRuns, packCurtainMesh, packHouseMesh } from '../components/gradient/gl/houseLights.js';
 
 const rawHouse = (data, lawn = 0) => ({ data, count: data.length / 9, lawn, glass: [], mirrors: [] });
 const assertRoundTrip = (source, packed, stride) => {
@@ -129,4 +129,43 @@ test('material exclusions remain unshared after the hash and source tables grow'
   assert.equal(packed.vertexCount, count);
   assert.equal(new Set(packed.indices.subarray(3000)).size, 3000);
   assertRoundTrip(data, packed, 9);
+});
+
+test('house runs split the solid part in order, each bounding its triangles', () => {
+  const tris = HOUSE_RUN / 3 + 2;
+  const lawn = 3;
+  const data = new Float32Array((lawn + tris * 3) * 9);
+  for (let v = 0; v < lawn + tris * 3; v++) {
+    data[v * 9] = v;
+    data[v * 9 + 1] = v % 5;
+    data[v * 9 + 2] = -v;
+  }
+  const runs = houseRuns(data, lawn, lawn + tris * 3);
+  assert.deepEqual([...runs.first], [lawn, lawn + HOUSE_RUN]);
+  assert.deepEqual([...runs.count], [HOUSE_RUN, 6]);
+  assert.deepEqual([...runs.box.subarray(0, 6)], [lawn, 0, -(lawn + HOUSE_RUN - 1), lawn + HOUSE_RUN - 1, 4, -lawn]);
+  assert.deepEqual(packHouseMesh(rawHouse(data, lawn)).runs.first, runs.first);
+});
+
+test('house ranges merge neighbouring runs in view and skip the rest', () => {
+  const runs = {
+    first: Uint32Array.of(3, 13, 23, 33),
+    count: Uint32Array.of(10, 10, 10, 4),
+    box: Float32Array.of(0, 0, 0, 1, 1, 1, 10, 0, 0, 11, 1, 1, 20, 0, 0, 21, 1, 1, 30, -3, 0, 31, -2, 1),
+  };
+  assert.deepEqual(houseRanges(runs, () => true), [[3, 34]]);
+  assert.deepEqual(houseRanges(runs, () => false), []);
+  assert.deepEqual(houseRanges(runs, lo => lo[0] < 5 || lo[0] > 15), [[3, 10], [23, 14]]);
+  // Mirrored about y = -1: the last run lies wholly below it and never shows;
+  // the rest are tested flipped.
+  const flipped = [];
+  assert.deepEqual(houseRanges(runs, (lo, hi) => (flipped.push([lo[1], hi[1]]), true), { mirror: -1, pad: 0, rooms: [] }), [[3, 30]]);
+  assert.deepEqual(flipped[0], [-3, -2]);
+});
+
+test('the reflection skips runs wholly inside a room, as the shader discards them', () => {
+  const runs = { first: Uint32Array.of(0, 3), count: Uint32Array.of(3, 3), box: Float32Array.of(1, 1, 1, 2, 2, 2, 1, 1, 1, 5, 2, 2) };
+  const rooms = [{ lo: [0, 0, 0], hi: [3, 3, 3], id: 1 }];
+  assert.deepEqual(houseRanges(runs, () => true, { mirror: 0, rooms }), [[3, 3]]);
+  assert.deepEqual(houseRanges(runs, () => true, { rooms }), [[0, 6]]);
 });

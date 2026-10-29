@@ -17,7 +17,7 @@ if (typeof self !== 'undefined') {
     const curtains = packCurtainMesh(curtainMesh());
     self.postMessage(
       { house, curtains },
-      [house.vertices.buffer, house.indices.buffer, curtains.vertices.buffer, curtains.indices.buffer],
+      [house.vertices.buffer, house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, curtains.vertices.buffer, curtains.indices.buffer],
     );
   };
 }

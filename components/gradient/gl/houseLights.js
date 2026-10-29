@@ -243,6 +243,99 @@ export const CURTAIN_STRIDE = 15;
 export const HOUSE_BYTES = HOUSE_STRIDE * 4;
 export const CURTAIN_BYTES = CURTAIN_STRIDE * 4;
 
+/** (0.4.40) The edge of a light cell, metres. */
+export const LIGHT_CELL = 1;
+
+/**
+ * (0.4.40) A grid over all of the lights' reach, and which lights and
+ * strips can reach each of its cells: a light where its sphere meets the
+ * cell, a strip where its capsule does (both `pad` wider). The shader walks
+ * a point's cell's lists instead of its room's whole ranges; the ones left
+ * out were out of reach there, so lit nothing. Each list keeps the lights' order, so the
+ * light adds up as it did. `heads` is a texel per cell (first lamp, lamps,
+ * first strip, strips) into `list`: the lamps' entries, then the strips'.
+ */
+export function lightCellGrid(lights = LIGHTS, strips = STRIPS, size = LIGHT_CELL, pad = 0.02) {
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  const grow = (p, r) => {
+    for (let a = 0; a < 3; a++) {
+      lo[a] = Math.min(lo[a], p[a] - r - pad);
+      hi[a] = Math.max(hi[a], p[a] + r + pad);
+    }
+  };
+  for (const l of lights) grow(l.p, l.r);
+  for (const s of strips) { grow(s.a, s.r); grow(s.b, s.r); }
+  if (!lights.length && !strips.length) lo.fill(0), hi.fill(0);
+  return { lo, n: lo.map((x, a) => Math.max(1, Math.ceil((hi[a] - x) / size))), size };
+}
+
+/** (0.4.40) The grid's lists (see lightCellGrid): { lo, n, size, heads, list }. */
+export function lightCells(lights = LIGHTS, strips = STRIPS, size = LIGHT_CELL, pad = 0.02) {
+  const { lo, n } = lightCellGrid(lights, strips, size, pad);
+  const cells = n[0] * n[1] * n[2];
+  // The cells a box (min, max corners) covers, as index ranges per axis.
+  const range = (min, max) => [0, 1, 2].map(a => [
+    Math.max(0, Math.floor((min[a] - lo[a]) / size)),
+    Math.min(n[a] - 1, Math.floor((max[a] - lo[a]) / size)),
+  ]);
+  const lampHits = (l, c) => {
+    const r = l.r + pad;
+    let d2 = 0;
+    for (let a = 0; a < 3; a++) {
+      const v = Math.max(c[a], Math.min(l.p[a], c[a] + size));
+      d2 += (l.p[a] - v) ** 2;
+    }
+    return d2 <= r * r;
+  };
+  // A capsule meets the cell where its segment crosses the cell grown by
+  // its radius (slabs): wider than the capsule's own shape, never narrower.
+  const stripHits = (s, c) => {
+    const r = s.r + pad;
+    let t0 = 0;
+    let t1 = 1;
+    for (let a = 0; a < 3; a++) {
+      const d = s.b[a] - s.a[a];
+      const min = c[a] - r - s.a[a];
+      const max = c[a] + size + r - s.a[a];
+      if (Math.abs(d) < 1e-9) {
+        if (min > 0 || max < 0) return false;
+        continue;
+      }
+      let u = min / d;
+      let v = max / d;
+      if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u);
+      t1 = Math.min(t1, v);
+      if (t0 > t1) return false;
+    }
+    return true;
+  };
+  const each = (min, max, fn) => {
+    const [[x0, x1], [y0, y1], [z0, z1]] = range(min, max);
+    for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      fn(x + n[0] * (y + n[1] * z), [lo[0] + x * size, lo[1] + y * size, lo[2] + z * size]);
+    }
+  };
+  const lampBox = l => [l.p.map(v => v - l.r - pad), l.p.map(v => v + l.r + pad)];
+  const stripBox = s => [s.a.map((v, a) => Math.min(v, s.b[a]) - s.r - pad), s.a.map((v, a) => Math.max(v, s.b[a]) + s.r + pad)];
+  // Counted, then filled in the lights' order.
+  const lampN = new Uint32Array(cells);
+  const stripN = new Uint32Array(cells);
+  lights.forEach(l => each(...lampBox(l), (k, c) => { if (lampHits(l, c)) lampN[k]++; }));
+  strips.forEach(s => each(...stripBox(s), (k, c) => { if (stripHits(s, c)) stripN[k]++; }));
+  const heads = new Float32Array(cells * 4);
+  let at = 0;
+  for (let k = 0; k < cells; k++) { heads[k * 4] = at; heads[k * 4 + 1] = lampN[k]; at += lampN[k]; }
+  for (let k = 0; k < cells; k++) { heads[k * 4 + 2] = at; heads[k * 4 + 3] = stripN[k]; at += stripN[k]; }
+  const list = new Float32Array(at);
+  const fill = new Uint32Array(cells);
+  lights.forEach((l, i) => each(...lampBox(l), (k, c) => { if (lampHits(l, c)) list[heads[k * 4] + fill[k]++] = i; }));
+  fill.fill(0);
+  strips.forEach((s, i) => each(...stripBox(s), (k, c) => { if (stripHits(s, c)) list[heads[k * 4 + 2] + fill[k]++] = i; }));
+  return { lo, n, size, heads, list };
+}
+
 /** Room index (1..8) of point (x, y, z) matching houseShader.js roomOf(), or 0 outside. */
 export function roomOfPoint(x, y, z) {
   for (let i = 0; i < ZONE_BOXES.length; i++) {
@@ -369,7 +462,78 @@ export function packHouseMesh(raw, { uniqueParts = [] } = {}) {
     return { name, room: 0, mirrorSkip: false, lo, hi, offset: start * 4, count: end - start };
   };
   const solid = chunk('solid', lawn, count);
-  return { ...packed, indexCount: count, lawnChunk: chunk('lawn', 0, lawn), chunks: solid ? [solid] : [], glass, mirrors };
+  return { ...packed, indexCount: count, lawnChunk: chunk('lawn', 0, lawn), chunks: solid ? [solid] : [], runs: houseRuns(data, lawn, count), glass, mirrors };
+}
+
+// (0.4.40) Triangles per run: the solid part split, in its own order, for
+// culling to the view.
+export const HOUSE_RUN = 3 * 2048;
+
+/**
+ * (0.4.40) The solid part as consecutive runs of HOUSE_RUN indices, each
+ * with its bounds ({ first, count, box: lo xyz, hi xyz per run }). Drawn in
+ * order and skipped only when wholly out of view, so what's drawn is drawn
+ * exactly as before, overlaps and all.
+ */
+export function houseRuns(data, start, end) {
+  const n = Math.ceil((end - start) / HOUSE_RUN);
+  const first = new Uint32Array(n);
+  const count = new Uint32Array(n);
+  const box = new Float32Array(n * 6);
+  for (let r = 0; r < n; r++) {
+    const a = start + r * HOUSE_RUN;
+    const b = Math.min(end, a + HOUSE_RUN);
+    first[r] = a;
+    count[r] = b - a;
+    const o = r * 6;
+    box.set([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity], o);
+    for (let i = a; i < b; i++) {
+      const off = i * HOUSE_STRIDE;
+      for (let axis = 0; axis < 3; axis++) {
+        const v = data[off + axis];
+        if (v < box[o + axis]) box[o + axis] = v;
+        if (v > box[o + 3 + axis]) box[o + 3 + axis] = v;
+      }
+    }
+  }
+  return { first, count, box };
+}
+
+// (0.4.40) Whether a run's box lies wholly in one room's box, as the
+// shader's roomOf() grows them: every point in it is in a room.
+const indoors = (box, o, rooms) => rooms.some(({ lo, hi }) =>
+  [0, 1, 2].every(a => box[o + a] >= lo[a] - 0.03 && box[o + 3 + a] <= hi[a] + 0.03));
+
+/**
+ * (0.4.40) The house's runs to draw for one view, merged: [first, count]
+ * index ranges in order. `seen(lo, hi)` tells a box in view; boxes are
+ * padded by `pad` metres first. `mirror` (the water's height), for the
+ * pool's reflection: drawn flipped about it, and nothing below it or in a
+ * room shows (the shader discards both), so a run wholly there is skipped.
+ */
+export function houseRanges(runs, seen, { pad = 0.1, mirror = null, rooms = ZONE_BOXES } = {}) {
+  const out = [];
+  const lo = [0, 0, 0];
+  const hi = [0, 0, 0];
+  const { first, count, box } = runs;
+  for (let r = 0; r < first.length; r++) {
+    const o = r * 6;
+    for (let axis = 0; axis < 3; axis++) {
+      lo[axis] = box[o + axis] - pad;
+      hi[axis] = box[o + 3 + axis] + pad;
+    }
+    if (mirror !== null) {
+      if (hi[1] < mirror || indoors(box, o, rooms)) continue;
+      const y = lo[1];
+      lo[1] = 2 * mirror - hi[1];
+      hi[1] = 2 * mirror - y;
+    }
+    if (!seen(lo, hi)) continue;
+    const last = out[out.length - 1];
+    if (last && last[0] + last[1] === first[r]) last[1] += count[r];
+    else out.push([first[r], count[r]]);
+  }
+  return out;
 }
 
 /** All 15 curtain attributes, including both morph poses, stay bit-exact. */

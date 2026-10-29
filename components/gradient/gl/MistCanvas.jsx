@@ -44,8 +44,8 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_LIGHT_DATA, HOUSE_STRIDE, HOUSE_VERTEX, houseMesh } from './houseShader';
-import { CURTAIN_BYTES, HOUSE_BYTES, packCurtainMesh, packHouseMesh, tagLampFittings } from './houseLights';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh } from './houseShader';
+import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, tagLampFittings } from './houseLights';
 import { curtainMesh } from './houseRooms';
 import { FLOOR, HOUSE_BOUNDS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
@@ -75,7 +75,7 @@ import {
   veilAt,
 } from '../camera';
 import { getDescent, pinDescent, subscribeDescent } from '../../scroll/descent';
-import { setHouseReadiness } from '../../scroll/houseReadiness';
+import { getHouseTimes, setHouseReadiness } from '../../scroll/houseReadiness';
 import { getFreeCam, setFreeCam, subscribeFreeCam } from '../freeCam';
 import { publishSunSpot } from '../sunSpot';
 import { publishLampSpot } from '../lampSpot';
@@ -206,6 +206,11 @@ export default function MistCanvas({ recipe, onFail }) {
     const noMirror = params.get('mirror') === '0';
     const noCaustics = params.get('caustics') === '0';
     const noBloom = params.get('bloom') === '0';
+    // (0.4.40) `?housecull=0` draws all of the house in every view, and
+    // `?earlyz=0` keeps the colour pass writing depth: the 0.4.39 way, to
+    // compare against.
+    const noHouseCull = params.get('housecull') === '0';
+    const noEarlyZ = params.get('earlyz') === '0';
     // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
     // cost from geometry on a device (0.4.39).
     const dprCap = Number(params.get('dpr')) || Infinity;
@@ -595,6 +600,7 @@ export default function MistCanvas({ recipe, onFail }) {
       house.indexCount = hm.indexCount;
       house.lawnChunk = hm.lawnChunk;
       house.chunks = hm.chunks;
+      house.runs = hm.runs;
       house.panes = hm.glass;
       dirty = true;
       kickRef.current();
@@ -685,7 +691,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, HOUSE_LIGHT_DATA.width, HOUSE_LIGHT_DATA.height, 0, gl.RGBA, gl.FLOAT, HOUSE_LIGHT_DATA.data);
+      const ld = houseLightData();
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ld.width, ld.height, 0, gl.RGBA, gl.FLOAT, ld.data);
       gl.activeTexture(gl.TEXTURE0);
       house = {
         prog: hp,
@@ -697,6 +704,7 @@ export default function MistCanvas({ recipe, onFail }) {
         indexCount: hm.indexCount,
         lawnChunk: hm.lawnChunk,
         chunks: hm.chunks,
+        runs: hm.runs,
         panes: hm.glass,
         curtains: { vao: cvao, buf: cb, ibo: cib, count: cm.count },
         u: uniformLookup(hp),
@@ -2308,24 +2316,39 @@ export default function MistCanvas({ recipe, onFail }) {
 
     // Indexed storage preserves the original drawing order and full geometry in
     // every pass, including hidden garments, reflections and shadow casters.
-    function houseGeometry(g, u, part = 'solid') {
+    // (0.4.40) With `ctx` (a camera: { P, c, fw, fh, mirror, view }), the
+    // solid part only in runs that can be in its view (houseRanges), in
+    // their order; a mirror's probe draws it all.
+    const drawRange = (g, first, count) => {
+      if (g.indexed) gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, first * 4);
+      else gl.drawArrays(gl.TRIANGLES, first, count);
+    };
+    let rangeKey = null;
+    let rangeList = null;
+    const solidRanges = (g, ctx) => {
+      if (!ctx || ctx.view || noHouseCull || !g.runs) return g.chunks.map(ch => [ch.offset / 4, ch.count]);
+      const { P, c, fw, fh, mirror } = ctx;
+      // (The same view's three passes share one list: compared by value, as
+      // the camera's objects may be reused.)
+      const key = [P.cos, P.sin, P.yc, P.ys, P.f, P.zoom, P.sx, P.sy, c.x, c.y, c.z, fw, fh, !!mirror];
+      if (rangeKey && rangeList.runs === g.runs && key.every((v, i) => v === rangeKey[i])) return rangeList;
+      rangeKey = key;
+      rangeList = houseRanges(g.runs, (lo, hi) => boxSeen(P, c, fw, fh, lo, hi), { mirror: mirror ? POOL.at[1] : null });
+      rangeList.runs = g.runs;
+      return rangeList;
+    };
+    function houseGeometry(g, u, part = 'solid', ctx = null) {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
       const lawn = g.lawnChunk;
       if (part === 'all') {
-        // Preserve the original contiguous depth draw, including every triangle.
-        if (g.indexed) gl.drawElements(gl.TRIANGLES, g.indexCount, gl.UNSIGNED_INT, 0);
-        else gl.drawArrays(gl.TRIANGLES, 0, g.indexCount);
+        // The lawn, then the solid part: every triangle in view, in order.
+        if (lawn) drawRange(g, lawn.offset / 4, lawn.count);
+        for (const [first, count] of solidRanges(g, ctx)) drawRange(g, first, count);
       }
-      if (part === 'lawn' && lawn) {
-        if (g.indexed) gl.drawElements(gl.TRIANGLES, lawn.count, gl.UNSIGNED_INT, lawn.offset);
-        else gl.drawArrays(gl.TRIANGLES, lawn.offset / 4, lawn.count);
-      }
+      if (part === 'lawn' && lawn) drawRange(g, lawn.offset / 4, lawn.count);
       if (part !== 'lawn') {
-        if (part !== 'all') for (const ch of g.chunks) {
-          if (g.indexed) gl.drawElements(gl.TRIANGLES, ch.count, gl.UNSIGNED_INT, ch.offset);
-          else gl.drawArrays(gl.TRIANGLES, ch.offset / 4, ch.count);
-        }
+        if (part !== 'all') for (const [first, count] of solidRanges(g, ctx)) drawRange(g, first, count);
         gl.uniform1f(u('uMorph'), houseNight());
         gl.bindVertexArray(g.curtains.vao);
         if (g.indexed) gl.drawElements(gl.TRIANGLES, g.curtains.count, gl.UNSIGNED_INT, 0);
@@ -2608,7 +2631,12 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.colorMask(true, true, true, true);
         gl.useProgram(g.prog);
         gl.depthFunc(gl.LEQUAL);
+        // (0.4.40) The depth is already there, exactly: written again, the
+        // shader's discard costs phone GPUs their early test, so hidden
+        // pixels were shaded in full and then covered.
+        if (!noEarlyZ) gl.depthMask(false);
         houseGeometry(g, g.u, 'solid', ctx);
+        gl.depthMask(true);
         gl.depthFunc(gl.LESS);
       } else houseGeometry(g, g.u, 'solid', ctx);
       gl.useProgram(prog);
@@ -3128,7 +3156,7 @@ export default function MistCanvas({ recipe, onFail }) {
     if (profiler) window.__houseProfile = () => profiler.snapshot();
     window.__houseCam = setFreeCam;
     window.__pinDescent = pinDescent;
-    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
+    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
     window.__warmAllProbes = () => {
       buildHouse();
       if (!houseBuilt) return false;

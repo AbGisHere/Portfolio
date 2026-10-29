@@ -774,6 +774,8 @@ house) and `x` (metres across).
   `?glass=0`, `?mirror=0`, `?caustics=0`, `?bloom=0` their passes (profiling).
   (0.4.39) `?dpr=1` caps the pixel ratio, to tell pixel cost from geometry;
   `?profile=1&profileevery=1` samples every pass in the pass profiler.
+  (0.4.40) `?housecull=0` draws all of the house in every view and
+  `?earlyz=0` has its colour pass write depth again: 0.4.39's drawing.
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

@@ -13,7 +13,7 @@
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_PART, PLAN, POOL, MATCH_AXES, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
-import { FITTING_PER_PIXEL, LIGHTS, LIGHT_RANGE, ROOM_CONSTANT_FILLS, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
+import { FITTING_PER_PIXEL, LIGHTS, LIGHT_RANGE, lightCellGrid, lightCells, ROOM_CONSTANT_FILLS, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
@@ -27,16 +27,30 @@ const v2 = a => `vec2(${a.map(f).join(', ')})`;
 /** The house's opaque mesh (`{ data, count, glass }`), built once. */
 export const houseMesh = houseLayout;
 
+// (0.4.40) The light cells' grid (houseLights.js lightCellGrid), and where
+// their heads and lists start in the lights' data.
+const CELLS = lightCellGrid();
+const CELL_COUNT = CELLS.n[0] * CELLS.n[1] * CELLS.n[2];
+const LD_WIDTH = 1024;
+const CELL_ROW = 17;
+const LIST_ROW = CELL_ROW + Math.ceil(CELL_COUNT / LD_WIDTH);
+
 /** (0.4.30) The lights' data as the house shader reads it (uLightData): an
- * RGBA32F texture, a row per array, a texel per light, strip or room. */
-export const HOUSE_LIGHT_DATA = (() => {
+ * RGBA32F texture, a row per array, a texel per light, strip or room.
+ * (0.4.40) Then the light cells' heads and lists, LD_WIDTH to a row; built
+ * when first asked for, with the house. */
+let lightData = null;
+export function houseLightData() {
+  if (lightData) return lightData;
   const zones = LIGHT_RANGE.length;
-  const width = Math.max(LIGHTS.length, STRIPS.length, zones, ROOM_GLOW_TONE.length);
+  const width = LD_WIDTH;
+  if (Math.max(LIGHTS.length, STRIPS.length, zones, ROOM_GLOW_TONE.length) > width) throw new RangeError('More lights than a row');
+  const front = new Set(FRONT_LAMPS);
   const rows = [
     LIGHTS.map(l => [...l.p, l.r]),
     LIGHTS.map(l => [l.k, l.kind, l.zone, l.day]),
     LIGHTS.map(l => [l.night, l.cat, l.cone ?? 0, l.glow]),
-    LIGHTS.map(l => [...(l.dir ?? [0, -1, 0]), 0]),
+    LIGHTS.map((l, i) => [...(l.dir ?? [0, -1, 0]), front.has(i) ? 1 : 0]),
     LIGHTS.map(l => [...l.tone, 0]),
     STRIPS.map(s => [...s.a, s.fill]),
     STRIPS.map(s => [...s.b, 0]),
@@ -51,10 +65,16 @@ export const HOUSE_LIGHT_DATA = (() => {
     ROOM_CONSTANT_FILLS.map(f => [...f.cats[1], 0]),
     ROOM_CONSTANT_FILLS.map(f => [...f.cats[2], 0]),
   ];
-  const data = new Float32Array(width * rows.length * 4);
+  if (rows.length !== CELL_ROW) throw new RangeError('The cells start after the rows');
+  const { heads, list } = lightCells();
+  const height = LIST_ROW + Math.ceil(list.length / 4 / width);
+  const data = new Float32Array(width * height * 4);
   rows.forEach((row, y) => row.forEach((t, x) => data.set(t.map(Number), (y * width + x) * 4)));
-  return { width, height: rows.length, data };
-})();
+  data.set(heads, CELL_ROW * width * 4);
+  data.set(list, LIST_ROW * width * 4);
+  lightData = { width, height, data };
+  return lightData;
+}
 
 export const HOUSE_VERTEX = `#version 300 es
 precision highp float;
@@ -238,8 +258,20 @@ uniform highp sampler2D uLightData;
 #define ROOM_FILL_CAT0(z) LD(14, z).xyz
 #define ROOM_FILL_CAT1(z) LD(15, z).xyz
 #define ROOM_FILL_CAT2(z) LD(16, z).xyz
-const int FRONT_LAMP_N = ${FRONT_LAMPS.length};
-const int FRONT_LAMPS[${FRONT_LAMPS.length}] = int[](${FRONT_LAMPS.join(', ')});
+// (0.4.40) A point's light cell: its head (first lamp, lamps, first strip,
+// strips) in the lists; none outside the grid, where nothing reaches.
+const int LD_W = ${LD_WIDTH};
+vec4 ldAt(int row0, int k) { return texelFetch(uLightData, ivec2(k % LD_W, row0 + k / LD_W), 0); }
+vec4 cellOf(vec3 p) {
+  ivec3 c = ivec3(floor((p - ${v3(CELLS.lo)}) * ${f(1 / CELLS.size)}));
+  if (any(lessThan(c, ivec3(0))) || any(greaterThanEqual(c, ivec3(${CELLS.n.join(', ')})))) return vec4(0.0);
+  return ldAt(${CELL_ROW}, c.x + ${CELLS.n[0]} * (c.y + ${CELLS.n[1]} * c.z));
+}
+int listAt(int j) {
+  vec4 t = ldAt(${LIST_ROW}, j >> 2);
+  int k = j & 3;
+  return int((k == 0 ? t.x : k == 1 ? t.y : k == 2 ? t.z : t.w) + 0.5);
+}
 
 // (0.4.28) How far on a light is by night as the house turns to it: the
 // coves and lamps first, the accents next, the facade and the garden last
@@ -308,7 +340,15 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   vec3 sum = roomFill(room);
   float dayOn = 1.0 - uNight;
   ivec2 lr = L_RANGE(room);
-  for (int i = lr.x; i < lr.y; i++) {
+  // (0.4.40) Only the lights that reach p's cell, in their order: the
+  // room's among them, then (outside) the front rooms'.
+  vec4 cell = cellOf(p);
+  int c0 = int(cell.x + 0.5);
+  int cn = int(cell.y + 0.5);
+  for (int j = 0; j < cn; j++) {
+    int i = listAt(c0 + j);
+    if (i >= lr.y) break;
+    if (i < lr.x) continue;
     vec4 lk = L_K(i);
     if (lk.x <= 0.0) continue;
     vec4 lw = L_W(i);
@@ -316,8 +356,9 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
   }
   if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
-    for (int idx = 0; idx < FRONT_LAMP_N; idx++) {
-      int i = FRONT_LAMPS[idx];
+    for (int j = 0; j < cn; j++) {
+      int i = listAt(c0 + j);
+      if (LD(3, i).w < 0.5) continue;
       vec4 lk = L_K(i);
       if (lk.x <= 0.0) continue;
       vec4 lw = L_W(i);
@@ -329,7 +370,12 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   // from its nearest point. (0.4.35) Outside strips end at maxStripZ.
   if (room != 0 || p.z <= ${f(OUTDOOR_STRIPS_MAX_Z + 0.01)}) {
     ivec2 sr = S_RANGE(room);
-    for (int i = sr.x; i < sr.y; i++) {
+    int s0 = int(cell.z + 0.5);
+    int sn = int(cell.w + 0.5);
+    for (int j = 0; j < sn; j++) {
+      int i = listAt(s0 + j);
+      if (i >= sr.y) break;
+      if (i < sr.x) continue;
       float w = S_W(i).y * nightOn(S_W(i).z) + S_W(i).x * dayOn;
       if (S_K(i).y <= 0.0 || w <= 0.0) continue;
       vec3 a = S_A(i);

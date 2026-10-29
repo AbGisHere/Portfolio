@@ -23,19 +23,23 @@ not an OS. `CHANGELOG.md` holds what each release changed and measured.
 
 ## Current release and follow-up
 
-**0.4.39** (2026-10-30) restored image parity (104/104 views within 2/255
-of the prepared 0.4.35 reference) and made the pool climb ~1.9× faster on the
-M4 (each frame drawn once; grass and flowers culled to the view). It was
-pushed on the owner's call before `npm run qa`, which runs after. Its record,
-with every measurement and the method: [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md);
-0.4.38's: [`docs/optimization-0.4.38.md`](docs/optimization-0.4.38.md).
+**0.4.40** (2026-10-30) made the pool climb faster on real phones with the
+same picture: light cells (each pixel walks only the lights reaching its
+1 m cell), no depth written twice, and the house culled to each view in
+runs. OnePlus 11R 36 → 51 fps (90 Hz), Moto G71 5 → 6.7 (60 Hz). It was
+pushed on the owner's call after the house parity matrix, before
+`npm run qa`, which runs after. Its record, with every measurement, the
+phones' profiling and the method: [`docs/optimization-0.4.40.md`](docs/optimization-0.4.40.md);
+0.4.39's: [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md).
 
-**Next: 0.4.40**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**Next: 0.4.41**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
-(`ROADMAP.md`, the 0.4.40 row). Measure real phones with
-`npm run devices -- --climb` (BrowserStack, authorised by the owner for
-this) and the owner's phone; phone GPU timers aren't available to web pages,
-so isolate costs with URL flags (`?dpr=`, `?grass=0`, `?hao=0`, …).
+(`ROADMAP.md`, the 0.4.41 row). The base scene (sky, meadow, the house's
+shape) now costs about a whole 90 Hz frame on the OnePlus by itself. Measure
+real phones with `npm run devices -- --climb` (BrowserStack, authorised by
+the owner for this; it also prints the two loading holds) and the owner's
+phone; phone GPU timers aren't available to web pages, so isolate costs with
+URL flags (`?dpr=`, `?grass=0`, `?hao=0`, `?housecull=0`, `?earlyz=0`, …).
 
 On 2026-10-29 the owner approved fully preparing the 0.4.35 reference
 mirrors before strict comparisons. Use `scripts/prepare-house-reference.mjs`
@@ -353,7 +357,7 @@ The invariants any change must keep, whatever part it touches:
 |---|
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
-| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; `0.4.39` image parity and a ~1.9× faster pool climb (`docs/optimization-0.4.39.md`); next `0.4.40` the climb at the screen's rate on real phones; then remaining walk/contact work |
+| `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; `0.4.39` image parity and a ~1.9× faster pool climb (`docs/optimization-0.4.39.md`); `0.4.40` light cells and culling, faster on real phones (`docs/optimization-0.4.40.md`); next `0.4.41` the climb at the screen's rate on real phones; then remaining walk/contact work |
 | `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |

@@ -3,13 +3,18 @@ import { CONTACT_STOPS, DESK_STOPS } from './stops';
 
 let status = 'idle';
 const listeners = new Set();
+// (0.4.40) When each status was first reached (ms since the page opened),
+// for the harness to time the two holds.
+const times = {};
 
 export const getHouseReadiness = () => status;
+export const getHouseTimes = () => ({ ...times });
 
 export function setHouseReadiness(next) {
   if (!['idle', 'loading', 'mesh-ready', 'ready', 'failed'].includes(next)) return;
   if (next === status) return;
   status = next;
+  if (typeof performance !== 'undefined' && !(next in times)) times[next] = Math.round(performance.now());
   for (const fn of listeners) fn(status);
 }
 

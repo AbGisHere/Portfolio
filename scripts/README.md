@@ -278,7 +278,7 @@ npm run devices                       # against http://localhost:3001, via a Bro
 npm run devices -- --base https://abgupta.me
 npm run devices -- --only pixel,iphone
 npm run devices -- --list             # Automate's real devices (exact names for DEVICES)
-npm run devices -- --climb --only oneplus,pixel\ 7,moto   # the pool climb's frame times (0.4.39)
+npm run devices -- --climb --only oneplus,pixel\ 7,moto   # the pool climb's frame times (0.4.39), and the house's load holds (0.4.40)
 npm run devices -- --climb --query dpr=1                   # …with a profiling flag
 ```
 

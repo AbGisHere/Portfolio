@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.39](https://img.shields.io/badge/version-0.4.39-informational)
+![Version 0.4.40](https://img.shields.io/badge/version-0.4.40-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -19,12 +19,12 @@ site is being rebuilt one layer at a time. `0.1.x` built the atmosphere,
 the desk. The current `0.4.x` line adds the house and pool; the contact
 form, project screen and real content are still to come (see [Versioning](#versioning)).
 
-**0.4.39:** the house matches the 0.4.35 reference again (104/104 views
-within 2/255), and the pool climb draws each frame once, not twice, with the
-grass and flowers culled to what the camera sees: about 1.9× the frame rate
-on an M4, with no visible change. Real phones are still well short of their
-screens' rates; **0.4.40** continues (baking the house's unchanging light,
-and more). See the [0.4.39 record](docs/optimization-0.4.39.md).
+**0.4.40:** the pool climb on real phones, with the same picture: each
+pixel checks only the lights that can reach it, hidden house pixels are no
+longer shaded, and the house is drawn only where a view can see it. The
+OnePlus 11R goes from 36 to 51 fps on its 90 Hz screen; slower phones are
+still well short. **0.4.41** continues. See the
+[0.4.40 record](docs/optimization-0.4.40.md).
 
 ## Contents
 

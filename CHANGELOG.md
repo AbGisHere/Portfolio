@@ -6,6 +6,49 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.40 — 2026-10-30
+
+The pool climb on real phones: each pixel walks only the lights that can
+reach it, hidden house pixels are no longer shaded, and the house is drawn
+only where a view can see it. Same picture. Detail and every measurement:
+[`docs/optimization-0.4.40.md`](docs/optimization-0.4.40.md).
+
+- **Light cells (`houseLights.js`, `houseShader.js`).** A 1 m grid over all
+  of the lights' reach lists, per cell, the lamps and strips that meet it;
+  a pixel walks its cell's lists (still by its room, in the lights' order)
+  instead of its room's whole ranges (up to 29 lamps and 36 strips). 1.2 MB
+  in the light data texture, built in ~16 ms when the house's program is
+  made. Light baking per vertex wasn't built: it couldn't hold 2/255 on
+  large triangles, for 12–24 MB.
+- **No depth written twice (`MistCanvas.jsx`).** The colour pass reuses the
+  pre-pass's depth instead of writing it again, so phone GPUs keep their
+  early depth test despite the shader's `discard`.
+- **The house culled to each view in runs (`houseLights.js`).** 2,048
+  triangles a run, in the mesh's own order, each pass drawing only the runs
+  in its view; the pool's reflection also skips runs below the water or
+  inside a room, which it discarded anyway.
+- **Load timing.** `__debugHouse().times`, and `devices --climb` prints the
+  house's build and its GPU preparation.
+- **Flags:** `?housecull=0` and `?earlyz=0` restore 0.4.39's drawing.
+
+Measured:
+
+| Phone (night climb, fps) | 0.4.39 | 0.4.40 |
+|---|---|---|
+| OnePlus 11R (90 Hz) | 36.1 / 30.4 / 36.1 | 51.2 / 47.6 / 51.5 |
+| Moto G71 (60 Hz) | 5.0 / 1.4 / 3.6 | 6.7 / 4.3 / 6.9 |
+
+Load: build 6.7 s and GPU preparation 5.7 s on the OnePlus; 10.1 s and
+15.5 s on the Moto. The M4's paired sweeps (before the light cells) showed
+no change beyond noise. Image parity: 104/104 views within 2/255 of the prepared 0.4.35 reference (worst 1/255, worst mean 0.00002), and 10/10 again after the profiling flag was removed. Not yet at the screens' rates
+(90 and 60): the base scene (sky, meadow, the house's shape) costs ~11 ms a
+frame on the OnePlus by itself.
+
+QA: 0.4.39's full run was stopped after parity passed (46/46, worst mean
+0.96, p99 3), on the owner's call, superseded by 0.4.40's. 0.4.40 was pushed
+on the owner's call after the house parity matrix and the unit tests (69/69);
+`npm run qa` follows.
+
 ## 0.4.39 — 2026-10-30
 
 The house matches the 0.4.35 reference again, and the pool climb is drawn

@@ -36,7 +36,8 @@
  * records each frame's gap: fps, p95, p99, the worst, and the frames that
  * missed the screen's budget (over 1.5 refreshes). A device meets the goal
  * when its median sweep holds the screen's rate (60 on 60 Hz, 120 on
- * 120 Hz) within 5%. Detail goes to scripts/out/devices-climb/.
+ * 120 Hz) within 5%. It also prints how long the house took to build and
+ * to prepare on the GPU (0.4.40). Detail goes to scripts/out/devices-climb/.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -295,6 +296,10 @@ try {
         const ready = await driver.wait(async () =>
           driver.executeScript('return !!(window.__debugHouse && window.__debugHouse().ready);').catch(() => false), 180000).catch(() => false);
         if (!ready) throw new Error('house never ready');
+        // (0.4.40) The two holds a visitor waits at: the house's build (the
+        // closed laptop) and its GPU preparation (the open one), ms.
+        const t = await driver.executeScript('return window.__debugHouse().times;');
+        row.load = t?.loading !== undefined ? { build: t['mesh-ready'] - t.loading, prepare: t.ready - t['mesh-ready'], ready: t.ready } : null;
         const r = await driver.executeAsyncScript(`(${climb.toString()})(arguments[arguments.length - 1]);`);
         if (r.error) throw new Error(r.error);
         row.gpu = await driver.executeScript(`const gl = document.createElement('canvas').getContext('webgl2');
@@ -317,6 +322,7 @@ try {
         const sw = row.sweeps?.map(x => `${x.fps.toFixed(1)}fps cpu ${x.cpuPerFrame.toFixed(1)}ms p95 ${x.p95.toFixed(0)}ms missed ${x.missed}/${x.frames}`).join(' | ') ?? row.note;
         console.log(`${row.status === 'pass' ? 'ok  ' : row.status === 'unavailable' ? 'n/a ' : 'FAIL'} ${d.deviceName.padEnd(26)} ${String(row.hz ?? '-').padStart(3)} Hz · ${sw} · ${row.gpu ?? ''}`);
         const ranked = Object.entries(row.passes ?? {}).sort((a, b) => b[1].median - a[1].median);
+        if (row.load) console.log(`       load: build ${(row.load.build / 1000).toFixed(1)} s · GPU preparation ${(row.load.prepare / 1000).toFixed(1)} s · ready ${(row.load.ready / 1000).toFixed(1)} s after opening`);
         if (ranked.length) console.log(`       GPU ms (median): ${ranked.map(([k, v]) => `${k} ${v.median.toFixed(1)} (n${v.n})`).join(' · ')}`);
       }
       continue;
