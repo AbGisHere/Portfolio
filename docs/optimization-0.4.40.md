@@ -114,7 +114,21 @@ before the push.
 0.4.39's full QA was stopped after parity (46/46, worst mean 0.96, p99 3) on
 the owner's call: 0.4.40's supersedes it. 0.4.40 was pushed on the owner's
 call ("just push to git, I'll test it on my phone") after the house parity
-matrix and the unit tests; `npm run qa` follows.
+matrix and the unit tests. `npm run qa` (full tier, M4) after the push:
+parity 46/46 (worst mean 0.96, p99 3), switch 12/12 (worst step ×2.9),
+perf **failed** its gate 0/6 (dropout 6/6 clean):
+
+| Viewport | Renderer | Scroll fps | Frames > 20 ms |
+|---|---|---|---|
+| 1440×900@2 | gl | 116.1 | 3 |
+| 1728×1117@2 | gl | 88.4 | 66 |
+| 393×852@2 | gl | 118.1 | 6 |
+| 1440×900@2 | layers | 95.4 | 118 |
+| 1792×1120@2 | layers | 94.6 | 158 |
+| 393×852@2 | layers | 97.4 | 106 |
+
+0.4.40 doesn't touch the layered renderer, yet it failed too, so part of
+this is the machine's state during the run; it was not re-run.
 
 ## Next
 

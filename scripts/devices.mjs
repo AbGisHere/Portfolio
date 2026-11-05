@@ -331,7 +331,14 @@ try {
       const url = `${BASE}${PATH.startsWith('/') ? PATH : `/${PATH}`}`;
       await driver.get(url);
       await driver.sleep(8000);
-      const r = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS);
+      // (0.4.41) A house view is screenshotted once the house is drawn, so a
+      // phone GPU's lighting can be checked by eye (0.4.40's Adreno bug).
+      if (await driver.executeScript('return !!window.__debugHouse;').catch(() => false)) {
+        await driver.wait(async () =>
+          driver.executeScript('return !!window.__debugHouse().ready;').catch(() => false), 180000).catch(() => false);
+        await driver.sleep(2000);
+      }
+      const r =await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS);
       row.gpu = r.gpu;
       row.renderer = r.renderer;
       row.programs = r.programs;

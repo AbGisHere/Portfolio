@@ -32,9 +32,16 @@ pushed on the owner's call after the house parity matrix, before
 phones' profiling and the method: [`docs/optimization-0.4.40.md`](docs/optimization-0.4.40.md);
 0.4.39's: [`docs/optimization-0.4.39.md`](docs/optimization-0.4.39.md).
 
-**Next: 0.4.41**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.41** (2026-11-06) fixed 0.4.40's dark garden on phones: by night
+the front wall, steps and garden were unlit on Adreno and Mali (the house's
+fragment shaders had no `precision highp int`, so the light cells' indices,
+past 32,767, overflowed in 16 bits). The parity matrix runs only on the M4,
+which can't show it, so `devices` (now screenshotting once the house is
+ready) checks a night house view on an Adreno and a Mali phone too.
+
+**Next: 0.4.42**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
-(`ROADMAP.md`, the 0.4.41 row). The base scene (sky, meadow, the house's
+(`ROADMAP.md`, the 0.4.42 row). The base scene (sky, meadow, the house's
 shape) now costs about a whole 90 Hz frame on the OnePlus by itself. Measure
 real phones with `npm run devices -- --climb` (BrowserStack, authorised by
 the owner for this; it also prints the two loading holds) and the owner's

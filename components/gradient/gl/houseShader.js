@@ -456,6 +456,7 @@ vec3 fittingGlow(int fitting, vec3 p, int room) {
  * (houseShader's own vertex stage; R16F). */
 export const HOUSE_DEPTH_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 ${CAMERA_GLSL}
 uniform vec2 uMirror;
 in vec3 vWorld;
@@ -478,6 +479,7 @@ void main() {
 
 export const HOUSE_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec3 uSun;

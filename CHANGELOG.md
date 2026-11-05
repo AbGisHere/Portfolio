@@ -6,6 +6,24 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.41 — 2026-11-06
+
+The garden lit again by night on phones. 0.4.40 left the front wall, the
+steps and the garden dark on Adreno and Mali GPUs (found by the owner on a
+Xiaomi 12 Pro): the house's fragment shaders declared no
+`precision highp int`, so their ints were 16-bit on phones and the light
+cells' indices (to ~58,000) overflowed. The M4 keeps them 32-bit, so the
+parity matrix couldn't show it.
+
+- `houseShader.js`: `precision highp int` in both house fragment shaders.
+- `devices.mjs`: the screenshot waits until the house is ready, so a phone
+  GPU's lighting can be checked by eye.
+- Checked: BrowserStack night screenshots against 0.4.40 on the OnePlus 11R
+  (Adreno 730) and Pixel 7 (Mali-G710): wall, steps and stepping stones lit
+  on both. Unit tests 69/69. `npm run qa` was skipped on the owner's call;
+  0.4.40's full QA result (perf 0/6, the layered renderer failing as well)
+  is now in `docs/optimization-0.4.40.md`.
+
 ## 0.4.40 — 2026-10-30
 
 The pool climb on real phones: each pixel walks only the lights that can
