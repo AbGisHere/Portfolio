@@ -39,14 +39,19 @@ past 32,767, overflowed in 16 bits). The parity matrix runs only on the M4,
 which can't show it, so `devices` (now screenshotting once the house is
 ready) checks a night house view on an Adreno and a Mali phone too.
 
-**Next: 0.4.42**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.42** (2026-11-06) planned the speed work (`ROADMAP.md`, 0.4.43–0.4.48:
+the path's visible set, the house shipped prebuilt, baked lighting,
+deferred shading, frame reuse) and added `?skip=<pass,…>` to cost passes on
+phones.
+
+**Next: 0.4.43**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
-(`ROADMAP.md`, the 0.4.42 row). The base scene (sky, meadow, the house's
+(`ROADMAP.md`, the 0.4.43 row). The base scene (sky, meadow, the house's
 shape) now costs about a whole 90 Hz frame on the OnePlus by itself. Measure
 real phones with `npm run devices -- --climb` (BrowserStack, authorised by
 the owner for this; it also prints the two loading holds) and the owner's
 phone; phone GPU timers aren't available to web pages, so isolate costs with
-URL flags (`?dpr=`, `?grass=0`, `?hao=0`, `?housecull=0`, `?earlyz=0`, …).
+URL flags (`?dpr=`, `?grass=0`, `?hao=0`, `?housecull=0`, `?earlyz=0`, `?skip=scene,meadow`, …).
 
 On 2026-10-29 the owner approved fully preparing the 0.4.35 reference
 mirrors before strict comparisons. Use `scripts/prepare-house-reference.mjs`

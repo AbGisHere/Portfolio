@@ -776,6 +776,10 @@ house) and `x` (metres across).
   `?profile=1&profileevery=1` samples every pass in the pass profiler.
   (0.4.40) `?housecull=0` draws all of the house in every view and
   `?earlyz=0` has its colour pass write depth again: 0.4.39's drawing.
+  `?skip=<pass,…>` (0.4.42) leaves named passes out of the frame, to cost
+  them on phones: `scene`, `meadow`, `house-colour-depth`, `house-depth-ao`,
+  `pool-reflection`, `lawn`, `glass`, `trees`, `shadows`, `desk`,
+  `desk-things` (the device and the house), `grass`, `flowers`, `birds`.
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

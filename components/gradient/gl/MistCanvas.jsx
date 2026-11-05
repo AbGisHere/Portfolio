@@ -238,7 +238,10 @@ export default function MistCanvas({ recipe, onFail }) {
       : null;
     // (0.4.39) A pass, timed when profiling (every pass of the frame, for
     // phones: `?profile=1&profileevery=1`).
-    const timed = (name, fn) => (profiler ? profiler.measure(name, fn) : fn());
+    // (0.4.42) `?skip=scene,meadow` leaves those passes out, to cost them on
+    // phones, where GPU timers aren't available (profiling only).
+    const skipped = new Set((params.get('skip') ?? '').split(',').filter(Boolean));
+    const timed = (name, fn) => (skipped.has(name) ? undefined : profiler ? profiler.measure(name, fn) : fn());
     const houseCompletion = createGpuCompletion(gl);
 
     const uniformLookup = program => {
@@ -2662,7 +2665,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthMask(true);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
-        if (profiler) profiler.measure('pool-reflection', () => drawHouse(true)); else drawHouse(true);
+        timed('pool-reflection', () => drawHouse(true));
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.activeTexture(gl.TEXTURE12);
@@ -2902,7 +2905,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.18, 0.4.36) Mirror probes: warmed in idle queue; at rest, step if any face is still needed.
         probing = !dirty && settled() && !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep(false);
         // (0.4.2) The house's depth first, for its ambient occlusion.
-        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && (profiler ? profiler.measure('house-depth-ao', drawHouseDepth) : drawHouseDepth());
+        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && timed('house-depth-ao', drawHouseDepth);
         const grassOn = !!grassAt && !!grassProgram(true);
         // (0.3.5) The trees show as soon as the meadow's paint does.
         const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram(true);
@@ -2931,7 +2934,7 @@ export default function MistCanvas({ recipe, onFail }) {
           if (deskOn && !noProps) drawProps();
         });
         if (deskOn && !noHouse && houseSeen) {
-          if (profiler) profiler.measure('house-colour-depth', drawHouse); else drawHouse();
+          timed('house-colour-depth', drawHouse);
         }
         if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
         if (deskOn) timed('desk', () => drawDesk(false));

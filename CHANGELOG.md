@@ -6,6 +6,20 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.42 — 2026-11-06
+
+The plan for the rest of the speed work, and a flag to cost it on phones.
+
+- `ROADMAP.md`: 0.4.44–0.4.48, after 0.4.43's smaller steps: the camera's
+  path's visible set, the house shipped prebuilt with its shader compiled
+  early, baked lighting in textures, deferred shading, reuse of the last
+  frame, and WebGPU later as an added path.
+- `MistCanvas.jsx`: `?skip=<pass,…>` leaves named passes out of the frame
+  (the house's passes now go through the same timer), since phone GPU
+  timers aren't available to web pages. Off by default: no visible change.
+- The sky is already drawn after the solid things and only where none
+  stands (since 0.3.7), so that step of the plan is left to the meadow.
+
 ## 0.4.41 — 2026-11-06
 
 The garden lit again by night on phones. 0.4.40 left the front wall, the
