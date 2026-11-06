@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.43 — 2026-11-06
+
+The house drawn only where the camera can see it from its path, with the
+same picture. Record: `docs/optimization-0.4.43.md`.
+
+- Profiled with `?skip=` on the phones: the house is ~6 ms of the OnePlus
+  11R's frame, every other pass ~1 ms; the Moto G71 is slow every frame.
+- `scripts/house-pvs.mjs` (new): for 401 points of the contact path per
+  device, which of the house's 659 runs can be seen, any way the camera
+  looks; only large surfaces occlude, so leaves and slivers are kept.
+  Writes `components/gradient/gl/housePvs.js` (~11 KB); rerun when the
+  house changes (`scripts/house-pvs-test.mjs` fails otherwise).
+- `MistCanvas.jsx`, `houseLights.js`: the AO depth, pre-pass and colour pass
+  skip runs outside the set on the contact path (`?pvs=0` off); the house
+  counts as seen by its built extent too, which reaches the stepping stones.
+- Checked: 140/140 equal with and without the set (14 points, 5 screens
+  including 6K and the iPad both ways, day and night). OnePlus 11R
+  48.8 → 53.6 fps, Moto G71 unchanged, loading unchanged. `npm run qa`
+  skipped on the owner's call.
+
 ## 0.4.42 — 2026-11-06
 
 The plan for the rest of the speed work, and a flag to cost it on phones.

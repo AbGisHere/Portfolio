@@ -780,6 +780,8 @@ house) and `x` (metres across).
   them on phones: `scene`, `meadow`, `house-colour-depth`, `house-depth-ao`,
   `pool-reflection`, `lawn`, `glass`, `trees`, `shadows`, `desk`,
   `desk-things` (the device and the house), `grass`, `flowers`, `birds`.
+  `?pvs=0` (0.4.43) draws the whole house on the contact path, not only
+  the runs in its visible set (`housePvs.js`, from `scripts/house-pvs.mjs`).
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

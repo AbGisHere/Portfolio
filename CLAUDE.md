@@ -44,14 +44,22 @@ the path's visible set, the house shipped prebuilt, baked lighting,
 deferred shading, frame reuse) and added `?skip=<pass,…>` to cost passes on
 phones.
 
-**Next: 0.4.43**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.43** (2026-11-06) draws only the house runs that can be seen from
+the camera's point on the contact path (`scripts/house-pvs.mjs` →
+`housePvs.js`, made offline; `?pvs=0` off; rerun it whenever the house's
+mesh changes, or the unit test fails). OnePlus 11R 48.8 → 53.6 fps, Moto
+unchanged; 140/140 equal with and without it. Profiling showed the house
+is the OnePlus's cost (~6 ms) and the Moto is slow every frame. Record:
+[`docs/optimization-0.4.43.md`](docs/optimization-0.4.43.md).
+
+**Next: 0.4.44**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
-(`ROADMAP.md`, the 0.4.43 row). The base scene (sky, meadow, the house's
-shape) now costs about a whole 90 Hz frame on the OnePlus by itself. Measure
+(`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
+Moto G71 is slow every frame (its GPU, at full resolution). Measure
 real phones with `npm run devices -- --climb` (BrowserStack, authorised by
 the owner for this; it also prints the two loading holds) and the owner's
 phone; phone GPU timers aren't available to web pages, so isolate costs with
-URL flags (`?dpr=`, `?grass=0`, `?hao=0`, `?housecull=0`, `?earlyz=0`, `?skip=scene,meadow`, …).
+URL flags (`?dpr=`, `?grass=0`, `?hao=0`, `?housecull=0`, `?earlyz=0`, `?skip=scene,meadow`, `?pvs=0`, …).
 
 On 2026-10-29 the owner approved fully preparing the 0.4.35 reference
 mirrors before strict comparisons. Use `scripts/prepare-house-reference.mjs`

@@ -511,12 +511,22 @@ const indoors = (box, o, rooms) => rooms.some(({ lo, hi }) =>
  * pool's reflection: drawn flipped about it, and nothing below it or in a
  * room shows (the shader discards both), so a run wholly there is skipped.
  */
-export function houseRanges(runs, seen, { pad = 0.1, mirror = null, rooms = ZONE_BOXES } = {}) {
+// (0.4.44) The runs' bounds, summed to the millimetre: housePvs.js is used
+// only for the mesh it was made from.
+export const runsChecksum = runs => {
+  let sum = runs.first.length;
+  for (let i = 0; i < runs.box.length; i++) sum += Math.round(runs.box[i] * 1000) * ((i % 7) + 1);
+  return sum;
+};
+
+export function houseRanges(runs, seen, { pad = 0.1, mirror = null, rooms = ZONE_BOXES, keep = null } = {}) {
   const out = [];
   const lo = [0, 0, 0];
   const hi = [0, 0, 0];
   const { first, count, box } = runs;
   for (let r = 0; r < first.length; r++) {
+    // (0.4.44) A run the path's visible set leaves out.
+    if (keep && !keep[r]) continue;
     const o = r * 6;
     for (let axis = 0; axis < 3; axis++) {
       lo[axis] = box[o + axis] - pad;

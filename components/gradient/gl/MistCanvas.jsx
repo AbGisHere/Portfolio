@@ -45,7 +45,8 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh } from './houseShader';
-import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, tagLampFittings } from './houseLights';
+import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, runsChecksum, tagLampFittings } from './houseLights';
+import { HOUSE_PVS } from './housePvs';
 import { curtainMesh } from './houseRooms';
 import { FLOOR, HOUSE_BOUNDS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
@@ -211,6 +212,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // compare against.
     const noHouseCull = params.get('housecull') === '0';
     const noEarlyZ = params.get('earlyz') === '0';
+    const noPvs = params.get('pvs') === '0';
     // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
     // cost from geometry on a device (0.4.39).
     const dprCap = Number(params.get('dpr')) || Infinity;
@@ -834,7 +836,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
       gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
       gl.uniform2f(a.u('uMirror'), 0, 0);
-      houseGeometry(g, a.u, 'all', { P, c, fw: w, fh: h });
+      houseGeometry(g, a.u, 'all', { P, c, fw: w, fh: h, keep: pathKeep(g) });
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE13);
@@ -1878,7 +1880,11 @@ export default function MistCanvas({ recipe, onFail }) {
         // none of their passes run.
         const seen = (lo, hi) => boxSeen(pitch, cm, w, h, lo, hi);
         poolSeen = !!frame.grass && cm.y > POOL.at[1] + 0.05 && seen(POOL_BOX[0], POOL_BOX[1]);
-        houseSeen = !!frame.grass && seen(HOUSE_BOUNDS.lo, HOUSE_BOUNDS.hi);
+        // (0.4.44) By the built solid's own bounds once there: HOUSE_BOUNDS
+        // stops short of the stepping stones nearest the desk, which popped
+        // in all at once as the house's box came into the frame.
+        const solidBox = houseBuilt?.house?.chunks?.[0];
+        houseSeen = !!frame.grass && (seen(HOUSE_BOUNDS.lo, HOUSE_BOUNDS.hi) || (!!solidBox && seen(solidBox.lo, solidBox.hi)));
         lawnSeen = !!frame.grass && seen(MOUND_BOX[0], MOUND_BOX[1]);
         if (about > 0.35 || desk > 0 || contact > 0 || houseSeen || lawnSeen) {
           ensureWarmHouse();
@@ -1886,6 +1892,7 @@ export default function MistCanvas({ recipe, onFail }) {
         meadowAt = frame.grass
           ? {
               pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid, device: frame.device,
+              contact: free ? 0 : contact,
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
               // (0.3.5) How far the meadow runs to the mountains' foot down
@@ -2328,15 +2335,42 @@ export default function MistCanvas({ recipe, onFail }) {
     };
     let rangeKey = null;
     let rangeList = null;
+    // (0.4.44) The path's visible set (housePvs.js): on the contact path, the
+    // runs that can be seen from where the camera is, looking any way; null
+    // off it (the desk, the /house route), with `?pvs=0`, or for another mesh.
+    let pvsOk = null;
+    let keepKey = null;
+    let keepList = null;
+    const pathKeep = g => {
+      const s = meadowAt?.contact ?? 0;
+      if (noPvs || !g.runs || s <= 0) return null;
+      if (pvsOk === null || pvsOk.runs !== g.runs) {
+        pvsOk = { runs: g.runs, ok: HOUSE_PVS.runs === g.runs.first.length && HOUSE_PVS.checksum === runsChecksum(g.runs) };
+      }
+      const ranges = pvsOk.ok && HOUSE_PVS[meadowAt.device];
+      if (!ranges) return null;
+      const i = s * HOUSE_PVS.steps;
+      const a = Math.floor(i), b = Math.ceil(i);
+      const key = `${meadowAt.device} ${a} ${b}`;
+      if (key === keepKey) return keepList;
+      const keep = new Uint8Array(ranges.length);
+      ranges.forEach((list, r) => {
+        for (let k = 0; k < list.length; k += 2) if (list[k] <= b && a <= list[k + 1]) { keep[r] = 1; break; }
+      });
+      keepKey = key;
+      keepList = keep;
+      return keep;
+    };
     const solidRanges = (g, ctx) => {
       if (!ctx || ctx.view || noHouseCull || !g.runs) return g.chunks.map(ch => [ch.offset / 4, ch.count]);
       const { P, c, fw, fh, mirror } = ctx;
       // (The same view's three passes share one list: compared by value, as
       // the camera's objects may be reused.)
-      const key = [P.cos, P.sin, P.yc, P.ys, P.f, P.zoom, P.sx, P.sy, c.x, c.y, c.z, fw, fh, !!mirror];
+      const keep = ctx.keep ?? null;
+      const key = [P.cos, P.sin, P.yc, P.ys, P.f, P.zoom, P.sx, P.sy, c.x, c.y, c.z, fw, fh, !!mirror, keep];
       if (rangeKey && rangeList.runs === g.runs && key.every((v, i) => v === rangeKey[i])) return rangeList;
       rangeKey = key;
-      rangeList = houseRanges(g.runs, (lo, hi) => boxSeen(P, c, fw, fh, lo, hi), { mirror: mirror ? POOL.at[1] : null });
+      rangeList = houseRanges(g.runs, (lo, hi) => boxSeen(P, c, fw, fh, lo, hi), { mirror: mirror ? POOL.at[1] : null, keep });
       rangeList.runs = g.runs;
       return rangeList;
     };
@@ -2609,7 +2643,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
       gl.uniform1f(g.u('uResY'), canvas.height);
       mirrorUniforms(g, !view && !mirror);
-      const ctx = { mirror, view, P, c, fw, fh };
+      const ctx = { mirror, view, P, c, fw, fh, keep: mirror || view ? null : pathKeep(g) };
       if (who) {
         const pb = personBuffer();
         gl.uniform1f(g.u('uAOOn'), 0);
