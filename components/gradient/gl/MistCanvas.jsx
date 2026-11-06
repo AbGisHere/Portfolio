@@ -327,7 +327,11 @@ export default function MistCanvas({ recipe, onFail }) {
     let warmHouse = null;
     let buildHouse = null;
 
-    const startHouseAsync = () => (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, HOUSE_FRAGMENT) : null);
+    // (0.4.44, profiling) `?hskip=lamps,shadow,ao,env,mat,lspec` compiles the house's
+    // shader without that part of its shading, to cost it on phones.
+    const hskip = (params.get('hskip') ?? '').split(',').filter(w => /^[a-z]+$/.test(w));
+    const houseFragment = hskip.length ? HOUSE_FRAGMENT.replace('precision highp int;\n', `precision highp int;\n${hskip.map(w => `#define HS_${w.toUpperCase()}\n`).join('')}`) : HOUSE_FRAGMENT;
+    const startHouseAsync = () => (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, houseFragment) : null);
     const startShadowAsync = () => (shadowAsync ??= !noHouse ? startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT) : null);
     const startGlassAsync = () => (glassAsync ??= !noHouse && !noGlass ? startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null);
     const startDepthAsync = () => (depthAsync ??= !noHouse && !noAO && gl.getExtension('EXT_color_buffer_float') ? startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT) : null);
@@ -624,11 +628,13 @@ export default function MistCanvas({ recipe, onFail }) {
       };
       try {
         houseWorker = new Worker(new URL('./houseWorker.js', import.meta.url));
-        houseWorker.onmessage = e => {
-          if (stopped) return;
+        const worker = houseWorker;
+        worker.onmessage = e => {
+          // (0.4.44) Its second message: the browser's copy is written.
+          if (e.data?.stored) return worker.terminate();
+          if (stopped) return worker.terminate();
           houseBuilt = e.data;
           if (!houseComplete) setHouseReadiness('mesh-ready');
-          houseWorker?.terminate();
           houseWorker = null;
           updateHouseBuffer();
           if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
@@ -642,7 +648,7 @@ export default function MistCanvas({ recipe, onFail }) {
           houseWorker = null;
           here();
         };
-        houseWorker.postMessage(null);
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0' });
       } catch {
         here();
       }

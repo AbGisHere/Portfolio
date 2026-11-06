@@ -782,6 +782,14 @@ house) and `x` (metres across).
   `desk-things` (the device and the house), `grass`, `flowers`, `birds`.
   `?pvs=0` (0.4.43) draws the whole house on the contact path, not only
   the runs in its visible set (`housePvs.js`, from `scripts/house-pvs.mjs`).
+  `?hskip=<part,…>` (0.4.44, profiling) compiles the house's shader
+  without parts of its shading, to cost them on phones: `lamps`, `shadow`
+  (the sun's shadow map), `ao` (the corner shading), `env` (what surfaces
+  reflect), `mat` (every material's pattern; all flat grey) and `lspec`
+  (only the lamps' highlights).
+  `?housecache=0` (0.4.44) builds the house afresh instead of reading the
+  copy the worker keeps in IndexedDB after the first visit (keyed by the
+  worker's content-hashed URL, so any change to the house rebuilds it).
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

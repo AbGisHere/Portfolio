@@ -6,6 +6,25 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.44 — 2026-11-07
+
+The built house kept in the browser for return visits, and the house's
+shading costed on phones. Record: `docs/optimization-0.4.44.md`.
+
+- `houseWorker.js`: stores the built house and curtains in IndexedDB,
+  keyed by the worker's content-hashed URL (a changed house rebuilds;
+  older entries dropped; any failure just builds; `?housecache=0` off).
+  M4 return visit: ready 7.8 → 1.6 s. Cached against uncached: 8/8 equal.
+- `houseShader.js`, `MistCanvas.jsx`: `?hskip=lamps,shadow,ao,env,mat,lspec`
+  compiles the house's shader without that part, for profiling (off by
+  default). On the OnePlus 11R the house's shading is ~4.6 ms (lamps
+  ~2.9); with all of it off, 69 fps of 90; the Moto G71 11 of 60.
+- The lamps' highlights can't be baked: without them, 2/26 night views
+  hold 2/255 (max 188). They need the walk over the lamps that a bake was
+  to remove, so no lossless lamp bake; 0.4.45 doesn't bake.
+- Checked: unit 71/71, adaptive 9/9; `devices --climb` on the OnePlus 11R
+  and Moto G71. `npm run qa` skipped on the owner's call.
+
 ## 0.4.43 — 2026-11-06
 
 The house drawn only where the camera can see it from its path, with the

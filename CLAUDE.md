@@ -52,7 +52,14 @@ unchanged; 140/140 equal with and without it. Profiling showed the house
 is the OnePlus's cost (~6 ms) and the Moto is slow every frame. Record:
 [`docs/optimization-0.4.43.md`](docs/optimization-0.4.43.md).
 
-**Next: 0.4.44**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.44** (2026-11-07) keeps the built house in the browser (IndexedDB,
+keyed by the worker's content-hashed URL; `?housecache=0` off), so a return
+visit skips the build (M4 ready 7.8 → 1.6 s), and adds `?hskip=<part,…>`
+to cost the house's shading on phones. Turning off only the lamps'
+highlights (`lspec`) fails 2/255 by night, so lamp light can't be baked
+without them. Record: [`docs/optimization-0.4.44.md`](docs/optimization-0.4.44.md).
+
+**Next: 0.4.45**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

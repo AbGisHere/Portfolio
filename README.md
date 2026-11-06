@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.43](https://img.shields.io/badge/version-0.4.43-informational)
+![Version 0.4.44](https://img.shields.io/badge/version-0.4.44-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -23,7 +23,7 @@ form, project screen and real content are still to come (see [Versioning](#versi
 pixel checks only the lights that can reach it, hidden house pixels are no
 longer shaded, and the house is drawn only where a view can see it. The
 OnePlus 11R goes from 36 to 51 fps on its 90 Hz screen; slower phones are
-still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans the next steps and adds a profiling flag; **0.4.43** skips the parts of the house the camera can never see from where it is (OnePlus 49 → 54 fps); **0.4.44** continues. See the [0.4.43 record](docs/optimization-0.4.43.md). See the
+still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans the next steps and adds a profiling flag; **0.4.43** skips the parts of the house the camera can never see from where it is (OnePlus 49 → 54 fps); **0.4.44** keeps the built house in the browser for return visits (ready 7.8 → 1.6 s on the M4) and costs the house's shading on phones. See the [0.4.44 record](docs/optimization-0.4.44.md). See the
 [0.4.40 record](docs/optimization-0.4.40.md).
 
 ## Contents

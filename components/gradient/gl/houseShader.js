@@ -327,7 +327,11 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own,
   }
   if (fall <= 0.0) return vec3(0.0);
   vec3 H = normalize(Ld + V);
+#ifdef HS_LSPEC
+  float spec = 0.0;
+#else
   float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
+#endif
   // (With a share of its light bounced round the room, from every side.)
   return L_C(i) * k * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));
 }
@@ -599,6 +603,7 @@ void main() {
   float f0 = 0.04;
   float metal = 0.0;
   vec3 emit = vec3(0.0);
+#ifndef HS_MAT
   if (vPart == ${P.lawn}) {
     // At its foot the mound frays into the meadow (which shows where it's
     // left out), so there's no line round it. (0.4.12) Over its first metre
@@ -1258,6 +1263,7 @@ void main() {
     f0 = 0.02;
     N = normalize(N + vec3(noise2(vWorld.xz * 300.0) - 0.5, 0.0, noise2(vWorld.xz * 300.0 + 7.0) - 0.5) * 0.35);
   }
+#endif
 
   // (0.4.26) Where the normal turns within a pixel (a brass rail or a
   // frame's slip seen from the desk), one sample of it would flash the
@@ -1274,7 +1280,11 @@ void main() {
 
   // ---- The light.
   int room = roomOf(vWorld);
+#ifdef HS_SHADOW
+  float shade = 1.0;
+#else
   float shade = sunShadow(vLight);
+#endif
   float sun = max(dot(N, L), 0.0) * shade;
   // The sky's light: from above outside; inside, what comes in at the glass,
   // falling off toward the room's back.
@@ -1299,8 +1309,16 @@ void main() {
   // a slot of window; they were dim), less than by night. (0.4.27) And
   // every room in use its lamps (ROOM_DAY; houseLights.js each light's
   // \`day\`).
+#ifdef HS_LAMPS
+  vec3 lamps = vec3(0.0);
+#else
   vec3 lamps = lampsAt(vWorld, N, V, rough, room);
+#endif
+#ifdef HS_AO
+  float ao = 1.0;
+#else
   float ao = ambientAt(room);
+#endif
   open *= ao;
   lamps *= mix(1.0, ao, 0.7);
   vec3 col;
@@ -1322,6 +1340,9 @@ void main() {
     vec3 spec = Fs * ggx(max(dot(N, H), 0.0), a) * 0.25 / max(lh * lh, 0.1) * sun;
     vec3 Fv = F0 + (1.0 - F0) * pow(1.0 - nv, 5.0) * (1.0 - rough * 0.7);
     vec3 R = reflect(-V, N);
+#ifdef HS_ENV
+    vec3 env = uEnvTop * open * dim;
+#else
     vec3 env = mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, rough * 0.85) * open * dim;
     // Inside, what a surface mirrors is the room: the glass and the sky
     // past it toward the front, the walls and their light elsewhere.
@@ -1329,6 +1350,7 @@ void main() {
       vec3 walls = vec3(0.92, 0.9, 0.86) * (skyLight * 0.35 * dim + lamps * 0.35);
       env = mix(walls, mix(envAt(R), (uEnvTop + uEnvLow) * 0.5, rough * 0.85) * dim, smoothstep(0.1, 0.6, R.z));
     }
+#endif
     // The sun on the pool's floor is focused by the water (the caustics
     // map), and by night the pool's own light is down there.
     vec3 sunCol = uSun;
