@@ -76,12 +76,36 @@ const turn = (dir, ang, az) => {
  *   z, spin
  * - c, for all: kind, seed, the tree's foot x, z
  */
+export function treeRanges(runs, seen) {
+  const out = [];
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i];
+    if (!seen(r.lo, r.hi)) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev[0] + prev[1] === r.first) prev[1] += r.count;
+    else out.push([r.first, r.count]);
+  }
+  return out;
+}
+
 export function treeLayout(seed = null) {
   let rnd = seeded(0x7ee5);
-  const woods = [];
-  const leafs = [];
-  const shadows = [];
+  const woodSec = [];
+  const leafSec = [];
+  const shadowSec = [];
+  let sec = 0;
+  const ensureSec = s => {
+    while (woodSec.length <= s) {
+      woodSec.push([]);
+      leafSec.push([]);
+      shadowSec.push([]);
+    }
+  };
   const tree = ({ x, z, h, spread, depth, leaves, leafSize, y: footY = 0, shadow = true }) => {
+    ensureSec(sec);
+    const woods = woodSec[sec];
+    const leafs = leafSec[sec];
+    const shadows = shadowSec[sec];
     const bark = rnd();
     const wood = (a, b, wa, wb) => woods.push([...a, wa, ...b, wb, 0, bark, x, z]);
     const leaf = (p, n) => leafs.push([...p, leafSize * (0.8 + 0.4 * rnd()), ...n, rnd() * Math.PI * 2, 3, rnd(), x, z]);
@@ -184,6 +208,7 @@ export function treeLayout(seed = null) {
     return [Math.sign(cx) * Math.max(18, Math.abs(x)), Math.min(72, Math.max(34, cz + (jit() - 0.5) * 10)), Math.min(6, Math.max(2, n + Math.floor(jit() * 3) - 1))];
   });
   for (const [cx, cz, n] of copses) {
+    sec++;
     for (let i = 0; i < n; i++) {
       const a = rnd() * Math.PI * 2;
       const d = 6 * Math.sqrt(rnd());
@@ -194,9 +219,12 @@ export function treeLayout(seed = null) {
   // (0.4.2) A few trees round the house on its mound, from a fixed seed
   // (its own plants are houseMesh.js's).
   rnd = seeded(0x40a5e);
+  const houseSecBase = sec + 1;
   for (const [x, z, h] of [[-17, -63, 7], [15, -66, 6], [-14, -86, 8], [18, -82, 7.5], [-24, -74, 6.5]]) {
+    sec = houseSecBase + (x < 0 ? 0 : 1);
     tree({ x, z, y: moundY(x, z) - 0.1, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 0.9, shadow: false });
   }
+  sec = houseSecBase + 1;
   // (0.4.16) The land behind the house, so it doesn't stand on a bare
   // horizon: an irregular grove past its hill, in clumps of varied height
   // with gaps between (the house framed between them, their crowns well
@@ -213,7 +241,12 @@ export function treeLayout(seed = null) {
     if (rnd() < 0.2) continue;
     belt.push([x, -175 - 45 * rnd(), 5 + Math.floor(rnd() * 4), 14, 1.35]);
   }
+  const beltSecBase = sec + groves.length + 1;
+  let gi = 0;
   for (const [cx, cz, n, r, tall = 1] of [...groves, ...belt]) {
+    if (gi < groves.length) sec = houseSecBase + 2 + gi;
+    else sec = beltSecBase + Math.min(3, Math.max(0, Math.floor((cx + 200) / 100)));
+    gi++;
     for (let i = 0; i < n; i++) {
       const a = rnd() * Math.PI * 2;
       const d = r * Math.sqrt(rnd());
@@ -223,12 +256,73 @@ export function treeLayout(seed = null) {
       tree({ x, z, y: moundY(x, z) - 0.1, h, spread: h * 0.42, depth: 3, leaves: 18, leafSize: 1.0 });
     }
   }
-  // Nearest first from the closing shot's camera, where the lone tree is
-  // biggest: the depth test then skips the leaves behind before shading them.
+  // Nearest first from the closing shot's camera within each spatial sector,
+  // where the lone tree is biggest: the depth test then skips the leaves
+  // behind before shading them, while keeping sectors contiguous for culling.
   const from = ([a, b, c]) => Math.hypot(a, b - 1, c + 0.7);
-  woods.sort((a, b) => from(a) - from(b));
-  leafs.sort((a, b) => from(a) - from(b));
-  return { data: new Float32Array([...woods, ...leafs, ...shadows].flat()), wood: woods.length, parts: woods.length + leafs.length };
+  const woods = [];
+  const leafs = [];
+  const shadows = [];
+  const woodRuns = [];
+  const leafRuns = [];
+  const shadowRuns = [];
+  for (let s = 0; s < woodSec.length; s++) {
+    const ws = woodSec[s];
+    if (ws.length) {
+      ws.sort((a, b) => from(a) - from(b));
+      const lo = [Infinity, Infinity, Infinity];
+      const hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < ws.length; i++) {
+        const w = ws[i];
+        const pad = Math.max(w[3], w[7]) + 0.5;
+        for (let k = 0; k < 3; k++) {
+          lo[k] = Math.min(lo[k], w[k] - pad, w[k + 4] - pad);
+          hi[k] = Math.max(hi[k], w[k] + pad, w[k + 4] + pad);
+        }
+      }
+      woodRuns.push({ first: woods.length, count: ws.length, lo, hi });
+      woods.push(...ws);
+    }
+    const ls = leafSec[s];
+    if (ls.length) {
+      ls.sort((a, b) => from(a) - from(b));
+      const lo = [Infinity, Infinity, Infinity];
+      const hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < ls.length; i++) {
+        const l = ls[i];
+        const pad = l[3] * 2.2 + 0.3;
+        for (let k = 0; k < 3; k++) {
+          lo[k] = Math.min(lo[k], l[k] - pad);
+          hi[k] = Math.max(hi[k], l[k] + pad);
+        }
+      }
+      leafRuns.push({ first: leafs.length, count: ls.length, lo, hi });
+      leafs.push(...ls);
+    }
+    const ss = shadowSec[s];
+    if (ss.length) {
+      const lo = [Infinity, -0.2, Infinity];
+      const hi = [-Infinity, 0.2, -Infinity];
+      for (let i = 0; i < ss.length; i++) {
+        const sh = ss[i];
+        const pad = sh[4] * 1.4 + sh[3] + 0.5;
+        lo[0] = Math.min(lo[0], sh[0] - pad);
+        hi[0] = Math.max(hi[0], sh[0] + pad);
+        lo[2] = Math.min(lo[2], sh[2] - pad);
+        hi[2] = Math.max(hi[2], sh[2] + pad);
+      }
+      shadowRuns.push({ first: shadows.length, count: ss.length, lo, hi });
+      shadows.push(...ss);
+    }
+  }
+  return {
+    data: new Float32Array([...woods, ...leafs, ...shadows].flat()),
+    wood: woods.length,
+    parts: woods.length + leafs.length,
+    woodRuns,
+    leafRuns,
+    shadowRuns,
+  };
 }
 
 /** The lone tree's shadow on the grass and flowers (the copses' are past

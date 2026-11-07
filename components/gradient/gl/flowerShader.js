@@ -54,7 +54,7 @@ const STEM_SEGS = 3;
 export const FLOWER_VERTS = STEM_SEGS * 6 + 6;
 // (0.4.39) The flowers the camera can see (grassShader.js ringRanges): at
 // most 0.56 m tall, with a head and a bend.
-export const flowerRanges = (cam, seen) => ringRanges(FLOWERS, FLOWERS.slots, 0.8, cam, seen);
+export const flowerRanges = (cam, seen, cull = false) => ringRanges(FLOWERS, FLOWERS.slots, 0.8, cam, seen, cull, FLOWERS.fade[1]);
 
 export const FLOWER_VERTEX = `#version 300 es
 precision highp float;
@@ -201,7 +201,13 @@ ${PUSH_SUM}
   // that would have to widen past three times its own is left out (far off
   // it's thinner than a pixel and only the head reads).
   float sw = max(0.0035, pxM * 0.9);
-  if (sw > 0.0105) sw = 0.0;
+  if (sw > 0.0105) {
+    if (v < ${STEM_SEGS * 6}) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      return;
+    }
+    sw = 0.0;
+  }
   vec3 w;
   vFront = 1.0;
   vLit = 0.0;

@@ -76,11 +76,18 @@ export function glassMesh(glass) {
 
   for (const rail of [false, true]) {
     const from = out.length / 9;
+    const bLo = [Infinity, Infinity, Infinity];
+    const bHi = [-Infinity, -Infinity, -Infinity];
     for (const [lo, hi, r] of glass) {
       if (r !== rail) continue;
       pane(out, lo, hi, rail);
+      for (let k = 0; k < 3; k++) {
+        bLo[k] = Math.min(bLo[k], lo[k] - 0.05);
+        bHi[k] = Math.max(bHi[k], hi[k] + 0.05);
+      }
     }
     mark(rail ? 'rails' : 'windows', from);
+    ranges[rail ? 'railsBox' : 'windowsBox'] = [bLo, bHi];
   }
   const from = out.length / 9;
   grid(out, 180, 76, (u, w) => ({ p: [PMIN[0] + 0.02 + u * (POOL.w - 0.04), POOL.at[1], PMIN[1] + 0.02 + w * (POOL.d - 0.04)], part: 4, s: u, t: w }));

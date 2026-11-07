@@ -19,7 +19,7 @@ import { LIGHTMAP_PROGRAMS } from '../../components/gradient/gl/houseLightmap.js
 import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/houseGlass.js';
 import { PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX } from '../../components/gradient/gl/mirrorProbe.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
-import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
+import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
 export const PROGRAMS = [
   ['scene', VERTEX, FRAGMENT],
@@ -43,6 +43,7 @@ export const PROGRAMS = [
   ['birds', BIRD_VERTEX, BIRD_FRAGMENT],
   ['steam', STEAM_VERTEX, STEAM_FRAGMENT],
   ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
+  ['meadow paint flat', MEADOW_VERTEX, MEADOW_PAINT_FLAT],
   ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],
   ['foot mist', MEADOW_VERTEX, MEADOW_FOOT],
 ];

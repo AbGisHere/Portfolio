@@ -65,7 +65,15 @@ each light cell only the lamps that can light it, with the same picture
 (104/104, and mid-switch). Moto G71 ~+0.5 fps, OnePlus 11R unchanged.
 Record: [`docs/optimization-0.4.45.md`](docs/optimization-0.4.45.md).
 
-**Next: 0.4.46**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.46** (2026-11-08) skips work the frame never shows, with the same
+picture: material patterns only where `detail()` is above 0, the meadow's
+hill test only with the lawn in view (`MEADOW_PAINT_FLAT`), grass, flowers,
+trees and glass culled to the frame, the off-screen passes before the
+frame's own, and the lightmap's programs compiled in parallel. OnePlus 11R
+~53 → 57.5 fps (p95 33 → 22 ms), Moto G71 ~7 → 7.5.
+Record: [`docs/optimization-0.4.46.md`](docs/optimization-0.4.46.md).
+
+**Next: 0.4.47**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

@@ -28,7 +28,7 @@ import { MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 import { TREE_SHADE_GLSL } from './treeShader';
 import { DESK_SHADE_GLSL } from './deskShader';
-import { MOUND_GLSL } from './houseShape';
+import { MOUND, MOUND_GLSL, moundY } from './houseShape';
 
 const f = v => v.toFixed(6);
 
@@ -68,7 +68,9 @@ export const GRASS_VERTS = GRASS.segments * 2 + 1;
 const CHUNK = 4;
 const MERGE = 2;
 const HILL_TOP = 3.2;
-export function ringRanges({ rings, side, cell }, each, reach, cam, seen) {
+const chunkUnderHouse = (x0, x1, z0, z1) =>
+  x0 > -9.59 && x1 < 9.59 && z0 > -81.09 && (z1 < -57.46 || (x0 > -1.79 && x1 < 1.79 && z1 < -55.76));
+export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull = false, maxD = Infinity) {
   const per = side * side * each;
   const runs = [];
   let open = null;
@@ -77,17 +79,43 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen) {
     if (open) runs.push(open);
     open = null;
   };
+  const half = side / 2;
   for (let ring = 0; ring < rings; ring++) {
     const c = cell * 2 ** ring;
-    const bx = Math.floor(cam.x / c) - side / 2;
-    const bz = Math.floor(cam.z / c) - side / 2;
+    const bx = Math.floor(cam.x / c) - half;
+    const bz = Math.floor(cam.z / c) - half;
+    const innerHole = ring > 0 ? half * 0.5 * 0.9 * c - 1e-3 : -1;
     for (let row = 0; row < side; row++) {
+      const maxAz = Math.max(Math.abs(row - half - 1), Math.abs(row + 2 - half)) * c;
       for (let col = 0; col < side; col += CHUNK) {
-        const lo = [(bx + col - 1) * c - reach, -0.2, (bz + row - 1) * c - reach];
-        const hi = [(bx + col + CHUNK + 1) * c + reach, HILL_TOP + reach, (bz + row + 2) * c + reach];
+        const cols = Math.min(CHUNK, side - col);
+        const x0 = (bx + col - 1) * c;
+        const x1 = (bx + col + cols + 1) * c;
+        const z0 = (bz + row - 1) * c;
+        const z1 = (bz + row + 2) * c;
         const first = ring * per + (row * side + col) * each;
-        const count = Math.min(CHUNK, side - col) * each;
-        if (seen(lo, hi)) {
+        const count = cols * each;
+        let dead = false;
+        let topY = HILL_TOP;
+        if (cull) {
+          const maxAx = Math.max(Math.abs(col - half - 1), Math.abs(col + cols + 1 - half)) * c;
+          if ((ring > 0 && maxAx <= innerHole && maxAz <= innerHole) || chunkUnderHouse(x0, x1, z0, z1)) {
+            dead = true;
+          } else {
+            const mx = Math.max(x0, Math.min(x1, MOUND.at[0]));
+            const mz = Math.max(z0, Math.min(z1, MOUND.at[1]));
+            topY = moundY(mx, mz);
+            if (maxD < Infinity) {
+              const dx = cam.x < x0 ? x0 - cam.x : cam.x > x1 ? cam.x - x1 : 0;
+              const dz = cam.z < z0 ? z0 - cam.z : cam.z > z1 ? cam.z - z1 : 0;
+              const dy = cam.y < 0 ? -cam.y : cam.y > topY ? cam.y - topY : 0;
+              if (dx * dx + dy * dy + dz * dz >= maxD * maxD) dead = true;
+            }
+          }
+        }
+        const lo = [x0 - reach, -0.2, z0 - reach];
+        const hi = [x1 + reach, topY + reach, z1 + reach];
+        if (!dead && seen(lo, hi)) {
           if (open && first === open[0] + open[1] + gap) open[1] += gap + count;
           else {
             close();
@@ -108,7 +136,7 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen) {
   return runs;
 }
 // A blade is at most 0.42 m tall.
-export const grassRanges = (cam, seen) => ringRanges(GRASS, GRASS.blades, 0.6, cam, seen);
+export const grassRanges = (cam, seen, cull = false) => ringRanges(GRASS, GRASS.blades, 0.6, cam, seen, cull, GRASS.reach);
 
 /**
  * The footprints' push on whatever grows from the meadow (the grass, and

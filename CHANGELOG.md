@@ -6,6 +6,30 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.46 — 2026-11-08
+
+Less drawn and shaded on the pool climb, with the same picture. Record:
+`docs/optimization-0.4.46.md`.
+
+- **Patterns only where seen:** the house's sub-centimetre material detail
+  is computed only where its `detail()` fade is above 0.
+- **The meadow's hill test only with the lawn in view:** `MEADOW_PAINT_FLAT`
+  skips the mound's ray march and `gl_FragDepth`, keeping early depth; the
+  painted flowers are scissored to the rows past the 3D flowers' fade.
+- **Culled to the frame:** grass and flower chunks inside the finer ring,
+  under the house or out of reach; trees in 18 sectors (`treeRanges`); the
+  windows, water and rails each by its box.
+- **Pass order for tiled GPUs:** the sun's shadow map and the pool's
+  reflection before the frame's own pass, the lawn before the ground's
+  shadows; the lightmap's programs compiled in parallel.
+- **Phones** (BrowserStack, night, two alternating runs): OnePlus 11R
+  ~52.5/49/53 → 57.5/53.7/57.4 fps, p95 33 → 22 ms; Moto G71 7.1/4.1/6.7 →
+  7.5/4.0/7.4; GPU preparation 0.5–0.9 s shorter on both.
+- **Checks:** house parity against 0.4.45 104/104 (the owner's
+  52/52, and 52/52 at 393×852@2); night
+  screenshots on Adreno and Mali match but for what moves; `npm run qa`
+  full tier passed (parity 46/46, perf 6/6 at min 119.4 fps, switch 12/12).
+
 ## 0.4.45 — 2026-11-07
 
 The lamps' light on the lawn and the roof baked on the device, and tighter

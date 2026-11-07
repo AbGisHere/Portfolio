@@ -36,14 +36,14 @@ float noise2(vec2 p) {
 }
 `;
 
-const ATLAS_VERTEX = `#version 300 es
+export const ATLAS_VERTEX = `#version 300 es
 void main() {
   vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   gl_Position = vec4(p, 0.0, 1.0);
 }
 `;
 
-const LAWN_MESH_VERTEX = `#version 300 es
+export const LAWN_MESH_VERTEX = `#version 300 es
 precision highp float;
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -60,7 +60,7 @@ void main() {
 }
 `;
 
-const ATLAS_FRAGMENT = `#version 300 es
+export const ATLAS_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
 uniform float uNight;
@@ -98,7 +98,7 @@ void main() {
 }
 `;
 
-const LAWN_MESH_FRAGMENT = `#version 300 es
+export const LAWN_MESH_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
 uniform float uNight;
@@ -150,12 +150,14 @@ function compile(gl, vsSrc, fsSrc) {
  * Bake the static lightmap texture on `gl` at texture `unit` (17). Returns
  * `{ tex, dispose }` or `null` if half-float rendering is unavailable.
  */
-export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0) {
+export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0, progs = null) {
   if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return null;
   gl.getExtension('OES_texture_half_float_linear');
   const prevVp = gl.getParameter(gl.VIEWPORT);
-  let atlasProg = null;
-  let lawnProg = null;
+  let atlasProg = progs?.atlas ?? null;
+  let lawnProg = progs?.lawn ?? null;
+  const ownAtlas = !atlasProg;
+  const ownLawn = !lawnProg;
   let fbo = null;
   let emptyVao = null;
   const tex = gl.createTexture();
@@ -175,8 +177,8 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0)
       throw new Error('lightmap fbo incomplete');
     }
 
-    atlasProg = compile(gl, ATLAS_VERTEX, ATLAS_FRAGMENT);
-    lawnProg = houseVao && lawnCount > 0 ? compile(gl, LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT) : null;
+    if (!atlasProg) atlasProg = compile(gl, ATLAS_VERTEX, ATLAS_FRAGMENT);
+    if (!lawnProg && houseVao && lawnCount > 0) lawnProg = compile(gl, LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT);
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -195,7 +197,7 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0)
 
     // 2. Exact lawn mesh pass over the lawn viewport so triangle-interpolated
     // normals and positions match the live mesh.
-    if (lawnProg) {
+    if (lawnProg && houseVao && lawnCount > 0) {
       gl.viewport(0, 0, W, lawn.h);
       gl.useProgram(lawnProg);
       gl.uniform1i(gl.getUniformLocation(lawnProg, 'uLightData'), 16);
@@ -210,8 +212,8 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0)
     if (prevVp) gl.viewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
     gl.deleteFramebuffer(fbo);
     gl.deleteVertexArray(emptyVao);
-    gl.deleteProgram(atlasProg);
-    if (lawnProg) gl.deleteProgram(lawnProg);
+    if (ownAtlas && atlasProg) gl.deleteProgram(atlasProg);
+    if (ownLawn && lawnProg) gl.deleteProgram(lawnProg);
     return {
       tex,
       dispose() {
@@ -225,8 +227,8 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0)
     if (prevVp) gl.viewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
     if (fbo) gl.deleteFramebuffer(fbo);
     if (emptyVao) gl.deleteVertexArray(emptyVao);
-    if (atlasProg) gl.deleteProgram(atlasProg);
-    if (lawnProg) gl.deleteProgram(lawnProg);
+    if (ownAtlas && atlasProg) gl.deleteProgram(atlasProg);
+    if (ownLawn && lawnProg) gl.deleteProgram(lawnProg);
     gl.deleteTexture(tex);
     return null;
   }

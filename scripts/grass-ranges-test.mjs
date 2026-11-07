@@ -34,3 +34,38 @@ test('flower runs use the same layout rules', async () => {
   assert.deepEqual(flowerRanges(cam, () => false), []);
   assert.ok(ordered(flowerRanges(cam, (lo, hi) => (lo[0] + hi[0]) / 2 > cam.x)));
 });
+
+test('grass and flower cull=true drops under-house, phantom-mound, and beyond-reach chunks in order', async () => {
+  const { FLOWER_INSTANCES, flowerRanges } = await import('../components/gradient/gl/flowerShader.js');
+  // Over the house ([-9.59, 9.59] x [-81.09, -57.46]): inner rings under the house are skipped.
+  const houseCam = { x: 0, y: 8, z: -69 };
+  const hRuns = grassRanges(houseCam, () => true, true);
+  assert.ok(ordered(hRuns));
+  const hCount = hRuns.reduce((n, [, count]) => n + count, 0);
+  assert.ok(hCount > 0 && hCount < GRASS_INSTANCES);
+
+  // Away from the house mound (z = 0), tight moundY bounds keep hi[1] below 1 m instead of 3.8 m.
+  const flatCam = { x: 0, y: 4, z: 0 };
+  const aboveGround = (lo, hi) => hi[1] > 2.0 && hi[2] > -20;
+  assert.deepEqual(grassRanges(flatCam, aboveGround, true), []);
+
+  const fRuns = flowerRanges(cam, () => true, true);
+  assert.ok(ordered(fRuns));
+  const fCount = fRuns.reduce((n, [, count]) => n + count, 0);
+  assert.ok(fCount > 0 && fCount < FLOWER_INSTANCES);
+});
+
+test('treeRanges merges visible sectors in order and covers every instance when all seen', async () => {
+  const { TREE_STRIDE, treeLayout, treeRanges } = await import('../components/gradient/gl/treeShader.js');
+  const t = treeLayout(0.42);
+  assert.deepEqual(treeRanges(t.woodRuns, () => true), [[0, t.wood]]);
+  assert.deepEqual(treeRanges(t.leafRuns, () => true), [[0, t.parts - t.wood]]);
+  assert.deepEqual(treeRanges(t.shadowRuns, () => true), [[0, t.data.length / TREE_STRIDE - t.parts]]);
+  assert.deepEqual(treeRanges(t.woodRuns, () => false), []);
+  // Viewing only the south meadow (z > 0) drops all house-mound and rear-grove tree sectors (z < -60).
+  const southWood = treeRanges(t.woodRuns, (lo, hi) => hi[2] > 0);
+  assert.ok(ordered(southWood));
+  const southCount = southWood.reduce((n, [, count]) => n + count, 0);
+  assert.ok(southCount > 0 && southCount < t.wood);
+});
+

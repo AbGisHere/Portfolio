@@ -680,11 +680,14 @@ void main() {
     float joint = 1.0 - smoothstep(0.0015, 0.0035 + px, min(e.x, e.y));
     float tone = hash2(cell);
     vec3 base = mix(vec3(0.7, 0.66, 0.58), vec3(0.6, 0.58, 0.53), tone) * (0.94 + 0.08 * hash2(cell + 9.0));
-    float bed = 0.5 + 0.5 * sin((q.y * 0.4 + q.x * 0.1 + noise2(q * 1.3 + cell) * 0.6) * 40.0);
+    float dBed = detail(0.01, q);
+    float bed = dBed > 0.0 ? (0.5 + 0.5 * sin((q.y * 0.4 + q.x * 0.1 + noise2(q * 1.3 + cell) * 0.6) * 40.0)) * dBed : 0.0;
     float mott = noise2(q * 3.0 + cell * 5.0) * 0.6 + noise2(q * 11.0) * 0.4;
-    float pits = step(0.92, noise2(q * 55.0 + cell)) * detail(0.004, q);
-    alb = base * (0.93 + 0.07 * mott) * (0.97 + 0.04 * bed * detail(0.01, q)) * (1.0 - 0.35 * pits);
-    alb = mix(alb, vec3(0.28, 0.26, 0.23), joint * detail(0.008, q));
+    float dPits = detail(0.004, q);
+    float pits = dPits > 0.0 ? step(0.92, noise2(q * 55.0 + cell)) * dPits : 0.0;
+    alb = base * (0.93 + 0.07 * mott) * (0.97 + 0.04 * bed) * (1.0 - 0.35 * pits);
+    float dJoint = detail(0.008, q);
+    if (dJoint > 0.0) alb = mix(alb, vec3(0.28, 0.26, 0.23), joint * dJoint);
     // Each slab's own tilt, and its arrises eased at the joint.
     vec2 tilt = (vec2(hash2(cell + 3.0), hash2(cell + 7.0)) - 0.5) * 0.012;
     if (abs(N.y) > 0.5) N = normalize(N + vec3(tilt.x, 0.0, tilt.y) + vec3(sign(fract(g.x) - 0.5) * (1.0 - smoothstep(0.0, 0.01, e.x)), 0.0, sign(fract(g.y) - 0.5) * (1.0 - smoothstep(0.0, 0.01, e.y))) * 0.25);
@@ -721,21 +724,28 @@ void main() {
     float joint = 1.0 - smoothstep(0.002, 0.006, min(along, 2.4 - along));
     vec2 id = vec2(b.x, jn);
     float across = fract(st.y / 0.145);
-    float wob = noise2(vec2(run * 0.7, across * 3.0 + id.x)) * 1.6 + noise2(vec2(run * 3.0, across * 9.0)) * 0.25;
-    float grain = 0.5 + 0.5 * sin((across * 26.0 + wob * 4.0) * 3.14159);
-    grain = mix(0.3, pow(grain, 3.0), detail(0.01, st));
+    float dGrain = detail(0.01, st);
+    float grain = 0.3;
+    if (dGrain > 0.0) {
+      float wob = noise2(vec2(run * 0.7, across * 3.0 + id.x)) * 1.6 + noise2(vec2(run * 3.0, across * 9.0)) * 0.25;
+      float g0 = 0.5 + 0.5 * sin((across * 26.0 + wob * 4.0) * 3.14159);
+      grain = mix(0.3, pow(g0, 3.0), dGrain);
+    }
     vec3 tone = mix(vec3(0.42, 0.29, 0.19), vec3(0.56, 0.4, 0.27), hash2(id));
     tone = mix(tone, vec3(0.5, 0.47, 0.42), 0.18 + 0.2 * noise2(vec2(run * 0.3, b.x)));
     alb = tone * (0.86 + 0.18 * grain) * (0.93 + 0.1 * noise2(vec2(run * 0.4, across * 1.5 + id.x)));
-    float screw = 0.0;
-    for (int jj = -1; jj <= 1; jj++) {
-      float jx = (floor(st.x / 0.6) + float(jj)) * 0.6;
-      for (int sc = 0; sc < 2; sc++) {
-        vec2 sp = vec2(jx, b.x * 0.145 + (sc == 0 ? 0.03 : 0.115));
-        screw = max(screw, 1.0 - smoothstep(0.003, 0.0045, length(vec2(st.x, st.y) - sp)));
+    float dScrew = detail(0.02, st);
+    if (dScrew > 0.0) {
+      float screw = 0.0;
+      for (int jj = -1; jj <= 1; jj++) {
+        float jx = (floor(st.x / 0.6) + float(jj)) * 0.6;
+        for (int sc = 0; sc < 2; sc++) {
+          vec2 sp = vec2(jx, b.x * 0.145 + (sc == 0 ? 0.03 : 0.115));
+          screw = max(screw, 1.0 - smoothstep(0.003, 0.0045, length(vec2(st.x, st.y) - sp)));
+        }
       }
+      alb = mix(alb, vec3(0.12, 0.11, 0.1), screw * dScrew);
     }
-    alb = mix(alb, vec3(0.12, 0.11, 0.1), screw * detail(0.02, st));
     alb *= 1.0 - 0.75 * b.y;
     alb *= 1.0 - 0.35 * joint;
     // Each board cups a little, its edges up: the light catches its middle.
@@ -775,9 +785,10 @@ void main() {
     // Upholstery: woven, so a fine basket of threads, and a soft sheen
     // that rises toward the edges as cloth's fibres catch the light there.
     alb = k < 2.0 ? vec3(0.56, 0.53, 0.49) : k < 3.5 ? vec3(0.2, 0.27, 0.35) : k < 5.0 ? vec3(0.52, 0.33, 0.24) : k < 7.0 ? vec3(0.33, 0.37, 0.3) : k < 8.7 ? vec3(0.9, 0.9, 0.88) : vec3(0.88, 0.88, 0.86);
+    float dWeave = detail(0.009, vWorld.xy + vWorld.zz);
     vec3 wq = vWorld * 700.0;
-    float weave = mix(0.5, 0.5 + 0.5 * sin(wq.x + wq.y) * sin(wq.z - wq.y), detail(0.009, vWorld.xy + vWorld.zz));
-    alb *= (0.94 + 0.08 * weave) * (0.95 + 0.08 * noise2(vWorld.xz * 40.0 + vWorld.y * 30.0));
+    float weave = dWeave > 0.0 ? mix(0.5, 0.5 + 0.5 * sin(wq.x + wq.y) * sin(wq.z - wq.y), dWeave) : 0.5;
+    alb *= (0.94 + 0.08 * weave) * (0.95 + 0.08 * noise2(vWorld.xz * 40.0 + vWorld.y * 20.0 * 1.5));
     emit = alb * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.12 * (1.0 - uNight * 0.7);
     rough = 1.0;
     f0 = 0.02;
@@ -794,17 +805,25 @@ void main() {
     float along = q.x;
     float across = q.y;
     // The rings unevenly spaced, wandering as a sawn board's do.
-    float wav = noise2(vec2(along * 0.8, across * 3.0)) * 0.06 + noise2(vec2(along * 4.0, across * 9.0)) * 0.01 + noise2(vec2(along * 0.15, across * 1.3)) * 0.05;
-    float ring = across + wav + 0.05 * pow(abs(fract(along * 0.35) - 0.5), 2.0) * 8.0 * smoothstep(0.3, 0.7, noise2(vec2(floor(along * 0.35), 3.0)));
-    float lines = 0.5 + 0.5 * sin(ring * 260.0);
-    lines = mix(0.5, pow(lines, 4.0), detail(0.006, q));
+    float dLines = detail(0.006, q);
+    float lines = 0.5;
+    if (dLines > 0.0) {
+      float wav = noise2(vec2(along * 0.8, across * 3.0)) * 0.06 + noise2(vec2(along * 4.0, across * 9.0)) * 0.01 + noise2(vec2(along * 0.15, across * 1.3)) * 0.05;
+      float ring = across + wav + 0.05 * pow(abs(fract(along * 0.35) - 0.5), 2.0) * 8.0 * smoothstep(0.3, 0.7, noise2(vec2(floor(along * 0.35), 3.0)));
+      float l0 = 0.5 + 0.5 * sin(ring * 260.0);
+      lines = mix(0.5, pow(l0, 4.0), dLines);
+    }
     float streak = smoothstep(0.55, 0.85, noise2(vec2(along * 0.25, across * 14.0)));
     // (0.4.27) Its pores long along the grain and fine across it (they
     // were the other way: close to, dashes cut across it), each tapered,
     // staggered row by row.
-    vec2 pc = vec2(along * 160.0 + hash2(vec2(floor(across * 900.0), 7.0)), across * 900.0);
-    float pore = step(0.93, hash2(floor(pc))) * smoothstep(0.5, 0.2, abs(fract(pc.x) - 0.5)) * smoothstep(0.5, 0.25, abs(fract(pc.y) - 0.5));
-    float pores = pore * detail(0.0015, q);
+    float dPores = detail(0.0015, q);
+    float pores = 0.0;
+    if (dPores > 0.0) {
+      vec2 pc = vec2(along * 160.0 + hash2(vec2(floor(across * 900.0), 7.0)), across * 900.0);
+      float pore = step(0.93, hash2(floor(pc))) * smoothstep(0.5, 0.2, abs(fract(pc.x) - 0.5)) * smoothstep(0.5, 0.25, abs(fract(pc.y) - 0.5));
+      pores = pore * dPores;
+    }
     vec3 heart = vec3(0.23, 0.145, 0.09);
     vec3 light = vec3(0.4, 0.27, 0.17);
     alb = mix(heart, light, 0.22 + 0.25 * lines + 0.35 * streak) * (1.0 - 0.35 * pores);
@@ -821,7 +840,8 @@ void main() {
     // up it) gilt rules near the head and the tail and a title block, a
     // shade off the cloth, between.
     alb = BOOKS[int(k + 0.5) % 10] * (0.9 + 0.15 * hash2(floor(vVar * 977.0) + vec2(3.0)));
-    float wv = mix(0.5, 0.5 + 0.5 * sin(vWorld.x * 2200.0) * sin(vWorld.y * 2200.0 + vWorld.z * 2200.0), detail(0.002, vWorld.xy + vWorld.zz));
+    float dBookWv = detail(0.002, vWorld.xy + vWorld.zz);
+    float wv = dBookWv > 0.0 ? mix(0.5, 0.5 + 0.5 * sin(vWorld.x * 2200.0) * sin(vWorld.y * 2200.0 + vWorld.z * 2200.0), dBookWv) : 0.5;
     alb *= 0.93 + 0.08 * wv;
     rough = 0.7;
     float sp = st.y;
@@ -833,7 +853,6 @@ void main() {
       float id = floor(vVar * 977.0);
       float kind = hash2(vec2(id, 7.0));
       float across = abs(st.x - 0.5);
-      float rules = step(abs(sp - 0.06), 0.006) + step(abs(sp - 0.085), 0.003) + step(abs(sp - 0.94), 0.006) + step(abs(sp - 0.915), 0.003);
       vec3 gold = vec3(0.86, 0.69, 0.35);
       float cy = 0.55 + 0.1 * (hash2(vec2(id, 2.0)) - 0.5);
       float lh = 0.18 + 0.1 * hash2(vec2(id, 3.0));
@@ -841,25 +860,29 @@ void main() {
       vec3 ink = gold;
       if (kind < 0.35) alb = mix(alb, alb * 0.35, inLabel);
       else if (kind < 0.6) { alb = mix(alb, vec3(0.86, 0.82, 0.72), inLabel); ink = vec3(0.12, 0.1, 0.08); }
-      // Letters: short strokes in lines down the label, set across.
-      float row = (sp - (cy - lh * 0.4)) / (lh * 0.8);
-      float letters = step(0.35, fract(sp * 110.0)) * step(hash2(vec2(id, floor(sp * 110.0))), 0.8);
-      float title = letters * step(0.0, row) * step(row, 1.0) * step(across, 0.22) * (kind < 0.6 ? 1.0 : 0.0);
-      float author = step(0.4, fract(sp * 140.0)) * step(abs(sp - 0.3), 0.06) * step(across, 0.16);
-      float mark = step(length(vec2(across * 3.0, (sp - 0.82) * 12.0)), 0.25);
       float detailSeen = detail(0.003, st * vec2(0.03, 0.25));
-      alb = mix(alb, ink, (title + author * 0.8 + mark) * detailSeen);
-      alb = mix(alb, gold, rules * detailSeen);
-      float shiny = (title + rules + mark) * detailSeen * (ink == gold ? 1.0 : 0.0);
-      rough = mix(rough, 0.28, shiny);
-      f0 = mix(0.04, 0.6, shiny);
+      if (detailSeen > 0.0) {
+        float rules = step(abs(sp - 0.06), 0.006) + step(abs(sp - 0.085), 0.003) + step(abs(sp - 0.94), 0.006) + step(abs(sp - 0.915), 0.003);
+        // Letters: short strokes in lines down the label, set across.
+        float row = (sp - (cy - lh * 0.4)) / (lh * 0.8);
+        float letters = step(0.35, fract(sp * 110.0)) * step(hash2(vec2(id, floor(sp * 110.0))), 0.8);
+        float title = letters * step(0.0, row) * step(row, 1.0) * step(across, 0.22) * (kind < 0.6 ? 1.0 : 0.0);
+        float author = step(0.4, fract(sp * 140.0)) * step(abs(sp - 0.3), 0.06) * step(across, 0.16);
+        float mark = step(length(vec2(across * 3.0, (sp - 0.82) * 12.0)), 0.25);
+        alb = mix(alb, ink, (title + author * 0.8 + mark) * detailSeen);
+        alb = mix(alb, gold, rules * detailSeen);
+        float shiny = (title + rules + mark) * detailSeen * (ink == gold ? 1.0 : 0.0);
+        rough = mix(rough, 0.28, shiny);
+        f0 = mix(0.04, 0.6, shiny);
+      }
       // The spine's round darkens toward its edges.
       alb *= 0.8 + 0.2 * sin(st.x * 3.14159);
     }
   } else if (vPart == ${P.pages}) {
     // The page block's edges: the leaves' fine lines, cream, a little
     // uneven, darker toward the boards.
-    float lines = mix(0.6, 0.5 + 0.5 * sin((vWorld.x + vWorld.z) * 4200.0 + vWorld.y * 300.0), detail(0.0015, vWorld.xz));
+    float dPageLines = detail(0.0015, vWorld.xz);
+    float lines = dPageLines > 0.0 ? mix(0.6, 0.5 + 0.5 * sin((vWorld.x + vWorld.z) * 4200.0 + vWorld.y * 300.0), dPageLines) : 0.6;
     alb = vec3(0.9, 0.86, 0.76) * (0.88 + 0.12 * lines) * (0.95 + 0.06 * noise2(vWorld.xy * 90.0));
     rough = 0.9;
   } else if (vPart == ${P.leaf}) {
@@ -926,8 +949,9 @@ void main() {
     // little sheen at a glance; the light behind them comes through
     // (below, with the light).
     if (!gl_FrontFacing) N = -N;
+    float dCurtainWv = detail(0.007, st);
     vec2 wq = vec2(st.x * 900.0, st.y * 900.0);
-    float weave = mix(0.5, 0.5 + 0.25 * sin(wq.x) + 0.25 * sin(wq.y), detail(0.007, st));
+    float weave = dCurtainWv > 0.0 ? mix(0.5, 0.5 + 0.25 * sin(wq.x) + 0.25 * sin(wq.y), dCurtainWv) : 0.5;
     float slub = noise2(vec2(st.x * 60.0, st.y * 2.0)) * 0.6 + noise2(vec2(st.x * 4.0, st.y * 140.0)) * 0.4;
     alb = vec3(0.93, 0.91, 0.86) * (0.95 + 0.05 * weave) * (0.95 + 0.07 * slub);
     emit = alb * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.1 * (1.0 - uNight * 0.7);
@@ -1183,7 +1207,8 @@ void main() {
     alb = ink;
     if (canvas) {
       // Paint on linen: matte, its weave in it close to.
-      alb *= 0.96 + 0.07 * (hash2(floor((vWorld.xy + vWorld.zy) * 700.0)) - 0.5) * detail(0.0014, vWorld.xy + vWorld.zy);
+      float dCanvas = detail(0.0014, vWorld.xy + vWorld.zy);
+      alb *= 0.96 + (dCanvas > 0.0 ? 0.07 * (hash2(floor((vWorld.xy + vWorld.zy) * 700.0)) - 0.5) * dCanvas : 0.0);
       rough = 0.82;
       f0 = 0.03;
     } else {
@@ -1198,12 +1223,15 @@ void main() {
       // Board-formed concrete: the planks' marks across it (15 cm), each
       // board's grain printed faintly, a tie hole now and then, warm grey.
       vec2 q = abs(N.y) > 0.5 ? vWorld.xz : st;
+      float dPlanter = detail(0.02, q);
       float plank = floor(q.y / 0.15);
-      float seam = 1.0 - smoothstep(0.0, 0.004, abs(fract(q.y / 0.15) - 0.5) * 0.15 - 0.071);
       float grainB = noise2(vec2(q.x * 3.0, q.y * 60.0 + plank * 5.0));
-      alb = vec3(0.52, 0.5, 0.47) * (0.88 + 0.1 * hash2(vec2(plank, 3.0)) + 0.08 * grainB) * (1.0 - 0.25 * seam * detail(0.02, q));
-      float tie = step(length(vec2(fract(q.x / 0.6) - 0.5, fract(q.y / 0.45) - 0.5) * vec2(0.6, 0.45)), 0.012);
-      alb *= 1.0 - 0.5 * tie * detail(0.02, q);
+      alb = vec3(0.52, 0.5, 0.47) * (0.88 + 0.1 * hash2(vec2(plank, 3.0)) + 0.08 * grainB);
+      if (dPlanter > 0.0) {
+        float seam = 1.0 - smoothstep(0.0, 0.004, abs(fract(q.y / 0.15) - 0.5) * 0.15 - 0.071);
+        float tie = step(length(vec2(fract(q.x / 0.6) - 0.5, fract(q.y / 0.45) - 0.5) * vec2(0.6, 0.45)), 0.012);
+        alb *= (1.0 - 0.25 * seam * dPlanter) * (1.0 - 0.5 * tie * dPlanter);
+      }
     } else alb = vec3(0.42, 0.4, 0.38) * (0.92 + 0.1 * noise2(st * 3.0));
     rough = 0.85;
   } else if (vPart == ${P.person}) {
@@ -1245,11 +1273,13 @@ void main() {
       float tone = hash2(id + 3.0);
       alb = vec3(0.76, 0.74, 0.7) * (0.9 + 0.12 * tone) * (0.95 + 0.06 * noise2(vWorld.xz * 9.0 + id * 3.1));
       alb *= 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.12, min(e.x, e.y)));
-      alb *= 0.96 + 0.06 * mix(0.5, hash2(floor(vWorld.xz * 160.0)), detail(0.01, vWorld.xz));
+      float dRoofAgg = detail(0.01, vWorld.xz);
+      alb *= 0.96 + 0.06 * (dRoofAgg > 0.0 ? mix(0.5, hash2(floor(vWorld.xz * 160.0)), dRoofAgg) : 0.5);
       alb = mix(alb, vec3(0.1, 0.1, 0.1), joint * 0.9);
       rough = 0.78;
     } else {
-      alb = vec3(0.24, 0.24, 0.25) * (0.75 + 0.45 * mix(0.5, hash2(floor(vWorld.xz * 90.0)), detail(0.02, vWorld.xz)) + 0.1 * noise2(vWorld.xz * 8.0));
+      float dGravel = detail(0.02, vWorld.xz);
+      alb = vec3(0.24, 0.24, 0.25) * (0.75 + 0.45 * (dGravel > 0.0 ? mix(0.5, hash2(floor(vWorld.xz * 90.0)), dGravel) : 0.5) + 0.1 * noise2(vWorld.xz * 8.0));
       rough = 0.95;
     }
   } else if (vPart == ${P.soil}) {

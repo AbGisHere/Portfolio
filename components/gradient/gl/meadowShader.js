@@ -121,6 +121,7 @@ bool groundHit(out vec2 gm, out float dist) {
   // crossing then halved down onto it: the hill's slope can be steeper
   // than the ray.)
   float hy = 0.0;
+#ifndef MEADOW_FLAT
   vec2 c0 = (uCamM.xz - vec2(${f(MOUND.at[0])}, ${f(MOUND.at[1])})) / vec2(${f(MOUND.r[0])}, ${f(MOUND.r[1])});
   vec2 dd = dir.xz * ${f(WORLD_M)} / vec2(${f(MOUND.r[0])}, ${f(MOUND.r[1])});
   float qa = dot(dd, dd);
@@ -132,9 +133,9 @@ bool groundHit(out vec2 gm, out float dist) {
     float above = uEye.x * ${f(WORLD_M)};
     float lo = s0;
     float hi = -1.0;
-    for (int i = 1; i <= 24 && s1 > s0; i++) {
+    for (int i = 1; i <= 24; i++) {
       float tt = s0 + (s1 - s0) * float(i) / 24.0;
-      if (above + dir.y * tt * ${f(WORLD_M)} <= moundY(uCamM.xz + dir.xz * tt * ${f(WORLD_M)})) {
+      if (tt > s0 && above + dir.y * tt * ${f(WORLD_M)} <= moundY(uCamM.xz + dir.xz * tt * ${f(WORLD_M)})) {
         hi = tt;
         break;
       }
@@ -158,6 +159,7 @@ bool groundHit(out vec2 gm, out float dist) {
     float zp = max(-q.y * uPitch.y + q.z * uPitch.x, 1e-3);
     hitDepth = clamp(0.5 + 0.5 * (uDepthAB.x + uDepthAB.y / zp) - 1e-5, 0.0, 1.0);
   }
+#endif
   dist = t * length(dir) * ${f(WORLD_M)};
   if (!(dir.y < 0.0 && (v.y > uFront || face < 0.5))) return false;
   return true;
@@ -236,7 +238,9 @@ void main() {
   vec2 gm;
   float dist;
   bool hit = groundHit(gm, dist);
+#ifndef MEADOW_FLAT
   gl_FragDepth = hitDepth;
+#endif
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
   if (!hit) discard;
@@ -263,7 +267,9 @@ void main() {
   vec2 gm;
   float dist;
   bool hit = groundHit(gm, dist);
+#ifndef MEADOW_FLAT
   gl_FragDepth = hitDepth;
+#endif
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
   float px = length(abs(gx) + abs(gy));
@@ -287,6 +293,8 @@ void main() {
   outColor = vec4(max(fc - base, 0.0) * a, 1.0);
 }
 `;
+
+export const MEADOW_PAINT_FLAT = MEADOW_PAINT.replace('#version 300 es\n', '#version 300 es\n#define MEADOW_FLAT\n');
 
 // The mist at the mountains' foot, blended over (premultiplied): where the
 // front ridge's fill met the ground in a ruled line, the ridges now stand in
