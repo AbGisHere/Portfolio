@@ -65,6 +65,7 @@ import { butterfliesAt, butterflyMesh } from './butterflies';
 import { firefliesAt, fireflyMesh } from './fireflies';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
+import { makeLightmap } from './houseLightmap';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -705,12 +706,15 @@ export default function MistCanvas({ recipe, onFail }) {
       const ld = houseLightData();
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ld.width, ld.height, 0, gl.RGBA, gl.FLOAT, ld.data);
       gl.activeTexture(gl.TEXTURE0);
+      const lm = params.get('lightmap') === '0' ? null : makeLightmap(gl, 17, lt, vao, hm.lawnChunk ? hm.lawnChunk[1] : 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       house = {
         prog: hp,
         vao,
         buf: hb,
         ibo: hib,
         lightTex: lt,
+        lightmap: lm,
         indexed: indexedHouse,
         indexCount: hm.indexCount,
         lawnChunk: hm.lawnChunk,
@@ -2635,8 +2639,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(g.u('uShadow'), 9);
       gl.activeTexture(gl.TEXTURE16);
       gl.bindTexture(gl.TEXTURE_2D, g.lightTex);
+      if (g.lightmap) {
+        gl.activeTexture(gl.TEXTURE17);
+        gl.bindTexture(gl.TEXTURE_2D, g.lightmap.tex);
+      }
       gl.activeTexture(gl.TEXTURE0);
       gl.uniform1i(g.u('uLightData'), 16);
+      gl.uniform1i(g.u('uLightmap'), 17);
+      gl.uniform1f(g.u('uLightmapOn'), g.lightmap ? 1 : 0);
       gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
       gl.uniform1i(g.u('uCaustics'), 10);
       gl.uniform1f(g.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);
@@ -3199,7 +3209,7 @@ export default function MistCanvas({ recipe, onFail }) {
     if (profiler) window.__houseProfile = () => profiler.snapshot();
     window.__houseCam = setFreeCam;
     window.__pinDescent = pinDescent;
-    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
+    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, lightmap: !!house?.lightmap, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
     window.__warmAllProbes = () => {
       buildHouse();
       if (!houseBuilt) return false;
@@ -3307,6 +3317,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (glass) gl.deleteTexture(glass.tex);
       if (house) {
         gl.deleteTexture(house.lightTex);
+        house.lightmap?.dispose();
         if (house.ibo) gl.deleteBuffer(house.ibo);
         gl.deleteBuffer(house.curtains.buf);
         if (house.curtains.ibo) gl.deleteBuffer(house.curtains.ibo);

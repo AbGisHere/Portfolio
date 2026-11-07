@@ -59,7 +59,13 @@ to cost the house's shading on phones. Turning off only the lamps'
 highlights (`lspec`) fails 2/255 by night, so lamp light can't be baked
 without them. Record: [`docs/optimization-0.4.44.md`](docs/optimization-0.4.44.md).
 
-**Next: 0.4.45**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.45** (2026-11-07) bakes the lamps' light on the lawn and the roof's
+deck on the device (`houseLightmap.js`, `?lightmap=0` off) and lists in
+each light cell only the lamps that can light it, with the same picture
+(104/104, and mid-switch). Moto G71 ~+0.5 fps, OnePlus 11R unchanged.
+Record: [`docs/optimization-0.4.45.md`](docs/optimization-0.4.45.md).
+
+**Next: 0.4.46**, the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

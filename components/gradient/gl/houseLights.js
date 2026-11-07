@@ -25,7 +25,7 @@
  * and those seen through the front glass).
  */
 
-import { HOUSE_PART, ZONES } from './houseShape';
+import { FLOOR, HOUSE_PART, PLAN, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { lightPlan } from './houseLightPlan';
 
 const look = lightPlan();
@@ -279,18 +279,95 @@ export function lightCells(lights = LIGHTS, strips = STRIPS, size = LIGHT_CELL, 
     Math.max(0, Math.floor((min[a] - lo[a]) / size)),
     Math.min(n[a] - 1, Math.floor((max[a] - lo[a]) / size)),
   ]);
-  const lampHits = (l, c) => {
+  // (0.4.45) Which room IDs (0..8) occur inside cell [c, c + size]^3 under
+  // roomOf()'s ordered ZONE_BOXES chain: a later room or outdoors (0) is only
+  // reached if an earlier box does not cover the entire cell.
+  const cellRooms = c => {
+    const out = new Set();
+    let covered = false;
+    for (let i = 0; i < ZONE_BOXES.length; i++) {
+      const { lo: rLo, hi: rHi, id } = ZONE_BOXES[i];
+      const bLo = [rLo[0] - 0.03, rLo[1] - 0.03, rLo[2] - 0.03];
+      const bHi = [rHi[0] + 0.03, rHi[1] + 0.03, rHi[2] + 0.03];
+      if ([0, 1, 2].every(a => c[a] + size >= bLo[a] && c[a] <= bHi[a])) {
+        out.add(id);
+        if ([0, 1, 2].every(a => c[a] >= bLo[a] && c[a] + size <= bHi[a])) {
+          covered = true;
+          break;
+        }
+      }
+    }
+    if (!covered) out.add(0);
+    return out;
+  };
+  // Upper bound of dot(p - ref, u) for p in [c, c + size]^3 and unit vector u.
+  const maxDot = (c, ref, u) => {
+    let s = 0;
+    for (let a = 0; a < 3; a++) {
+      const corner = u[a] >= 0 ? c[a] + size : c[a];
+      s += (corner - ref[a]) * u[a];
+    }
+    return s;
+  };
+  // Upper bound of dot(p - ref, u) / |p - ref| for p in [c, c + size]^3.
+  const maxCosToBox = (c, ref, u) => {
+    let dMin2 = 0;
+    let dMax2 = 0;
+    for (let a = 0; a < 3; a++) {
+      const near = Math.max(c[a], Math.min(ref[a], c[a] + size));
+      const far = Math.abs(c[a] - ref[a]) > Math.abs(c[a] + size - ref[a]) ? c[a] : c[a] + size;
+      dMin2 += (near - ref[a]) ** 2;
+      dMax2 += (far - ref[a]) ** 2;
+    }
+    if (dMin2 < 1e-6) return 1;
+    const md = maxDot(c, ref, u);
+    return md >= 0 ? md / Math.sqrt(dMin2) : md / Math.sqrt(dMax2);
+  };
+  const top = FLOOR + STOREY - 0.35;
+  const utop = TERRACE + STOREY - 0.35;
+  const open0 = [-7.4, 4.6, FLOOR, top, PLAN.ground.z[1]];
+  const open1 = [-7.2, 2.6, TERRACE, utop, PLAN.upper.z[1]];
+  const frontZones = new Set(ZONE_BOXES.filter(z => z.light === 1).map(z => z.id));
+  const lampHits = (l, c, rooms) => {
+    if ((l.k !== undefined && l.k <= 0) || (l.day === 0 && l.night === 0)) return false;
     const r = l.r + pad;
     let d2 = 0;
     for (let a = 0; a < 3; a++) {
       const v = Math.max(c[a], Math.min(l.p[a], c[a] + size));
       d2 += (l.p[a] - v) ** 2;
     }
-    return d2 <= r * r;
+    if (d2 > r * r) return false;
+    if (l.zone !== undefined && !rooms.has(l.zone)) {
+      // Indoor front-room lamps also reach outdoors (room == 0) through their
+      // storey's front glass opening (houseShader.js lampSees).
+      if (!(frontZones.has(l.zone) && rooms.has(0))) return false;
+      const o = l.p[1] > TERRACE ? open1 : open0;
+      const gz = o[4];
+      if (l.p[2] + l.r <= gz || c[2] + size <= gz - pad) return false;
+      const dz = gz - l.p[2];
+      if (dz > 1e-4) {
+        const s0 = Math.max(1, (Math.max(c[2], gz) - l.p[2]) / dz);
+        const s1 = Math.max(s0, (c[2] + size - l.p[2]) / dz);
+        const xLo = l.p[0] + Math.min((o[0] - l.p[0]) * s0, (o[0] - l.p[0]) * s1) - pad;
+        const xHi = l.p[0] + Math.max((o[1] - l.p[0]) * s0, (o[1] - l.p[0]) * s1) + pad;
+        const yLo = l.p[1] + Math.min((o[2] - l.p[1]) * s0, (o[2] - l.p[1]) * s1) - pad;
+        const yHi = l.p[1] + Math.max((o[3] - l.p[1]) * s0, (o[3] - l.p[1]) * s1) + pad;
+        if (c[0] + size < xLo || c[0] > xHi || c[1] + size < yLo || c[1] > yHi) return false;
+      }
+    }
+    if (l.kind === 4 && maxCosToBox(c, l.p, [0, 1, 0]) <= 0.55) return false;
+    if (l.kind === 5 && maxCosToBox(c, l.p, [0, -1, 0]) <= 0.93) return false;
+    if ((l.kind === 6 || l.kind === 7) && l.dir && l.cone !== undefined) {
+      const edge = l.kind === 6 ? 2 * l.cone - 1 : l.cone;
+      if (maxCosToBox(c, l.p, l.dir) <= edge) return false;
+    }
+    return true;
   };
   // A capsule meets the cell where its segment crosses the cell grown by
-  // its radius (slabs): wider than the capsule's own shape, never narrower.
-  const stripHits = (s, c) => {
+  // its radius (slabs), in its room and in front of its emission plane.
+  const stripHits = (s, c, rooms) => {
+    if ((s.k !== undefined && s.k <= 0) || (s.day === 0 && s.night === 0)) return false;
+    if (s.zone !== undefined && !rooms.has(s.zone)) return false;
     const r = s.r + pad;
     let t0 = 0;
     let t1 = 1;
@@ -309,12 +386,19 @@ export function lightCells(lights = LIGHTS, strips = STRIPS, size = LIGHT_CELL, 
       t1 = Math.min(t1, v);
       if (t0 > t1) return false;
     }
+    if (s.d && Math.max(maxDot(c, s.a, s.d), maxDot(c, s.b, s.d)) <= 0) return false;
     return true;
   };
+  const cellRoomSet = new Array(cells);
+  for (let z = 0; z < n[2]; z++) for (let y = 0; y < n[1]; y++) for (let x = 0; x < n[0]; x++) {
+    const k = x + n[0] * (y + n[1] * z);
+    cellRoomSet[k] = cellRooms([lo[0] + x * size, lo[1] + y * size, lo[2] + z * size]);
+  }
   const each = (min, max, fn) => {
     const [[x0, x1], [y0, y1], [z0, z1]] = range(min, max);
     for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      fn(x + n[0] * (y + n[1] * z), [lo[0] + x * size, lo[1] + y * size, lo[2] + z * size]);
+      const k = x + n[0] * (y + n[1] * z);
+      fn(k, [lo[0] + x * size, lo[1] + y * size, lo[2] + z * size], cellRoomSet[k]);
     }
   };
   const lampBox = l => [l.p.map(v => v - l.r - pad), l.p.map(v => v + l.r + pad)];
@@ -322,17 +406,17 @@ export function lightCells(lights = LIGHTS, strips = STRIPS, size = LIGHT_CELL, 
   // Counted, then filled in the lights' order.
   const lampN = new Uint32Array(cells);
   const stripN = new Uint32Array(cells);
-  lights.forEach(l => each(...lampBox(l), (k, c) => { if (lampHits(l, c)) lampN[k]++; }));
-  strips.forEach(s => each(...stripBox(s), (k, c) => { if (stripHits(s, c)) stripN[k]++; }));
+  lights.forEach(l => each(...lampBox(l), (k, c, rooms) => { if (lampHits(l, c, rooms)) lampN[k]++; }));
+  strips.forEach(s => each(...stripBox(s), (k, c, rooms) => { if (stripHits(s, c, rooms)) stripN[k]++; }));
   const heads = new Float32Array(cells * 4);
   let at = 0;
   for (let k = 0; k < cells; k++) { heads[k * 4] = at; heads[k * 4 + 1] = lampN[k]; at += lampN[k]; }
   for (let k = 0; k < cells; k++) { heads[k * 4 + 2] = at; heads[k * 4 + 3] = stripN[k]; at += stripN[k]; }
   const list = new Float32Array(at);
   const fill = new Uint32Array(cells);
-  lights.forEach((l, i) => each(...lampBox(l), (k, c) => { if (lampHits(l, c)) list[heads[k * 4] + fill[k]++] = i; }));
+  lights.forEach((l, i) => each(...lampBox(l), (k, c, rooms) => { if (lampHits(l, c, rooms)) list[heads[k * 4] + fill[k]++] = i; }));
   fill.fill(0);
-  strips.forEach((s, i) => each(...stripBox(s), (k, c) => { if (stripHits(s, c)) list[heads[k * 4 + 2] + fill[k]++] = i; }));
+  strips.forEach((s, i) => each(...stripBox(s), (k, c, rooms) => { if (stripHits(s, c, rooms)) list[heads[k * 4 + 2] + fill[k]++] = i; }));
   return { lo, n, size, heads, list };
 }
 

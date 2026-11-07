@@ -161,6 +161,13 @@ const OUTDOOR_STRIPS_MAX_Z = (() => {
   return maxZ;
 })();
 
+/** (0.4.45) Bounds and atlas layout for the on-device baked lightmap (houseLightmap.js). */
+export const LIGHTMAP_BOUNDS = {
+  size: [1024, 1024],
+  lawn: { x0: -29.0, x1: 25.5, z0: -79.5, z1: -40.5, h: 896 },
+  roof: { x0: -9.0, x1: 9.0, z0: -80.0, z1: -68.5, y: TERRACE + STOREY + 0.06, px: [2, 898, 124, 124] },
+};
+
 /** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
  * the lamps by night. Needs METAL_GLSL's ggx. */
 export const HOUSE_LIGHT_GLSL = `
@@ -326,52 +333,19 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own,
     if (kind == 7) fall *= mix(0.2, 1.0, smoothstep(0.4, 0.62, noise2(p.xz * 1.4 + l.xz))) * (0.75 + 0.25 * noise2(p.xz * 6.0));
   }
   if (fall <= 0.0) return vec3(0.0);
-  vec3 H = normalize(Ld + V);
 #ifdef HS_LSPEC
   float spec = 0.0;
 #else
-  float spec = ggx(max(dot(N, H), 0.0), max(a * a, 0.02)) * 0.05;
+  float spec = a >= 1.0 ? ${f(0.05 / 3.14159)} : ggx(max(dot(N, normalize(Ld + V)), 0.0), max(a * a, 0.02)) * 0.05;
 #endif
   // (With a share of its light bounced round the room, from every side.)
   return L_C(i) * k * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));
 }
 
-// The lamps' light at p (normal N, to the eye V): diffuse and a soft
-// highlight of roughness a. (0.4.27) Each as on as it is by night and by
-// day (its \`day\` share, only in its own room). (0.4.28) Only p's room's,
-// and outside the garden's and the front rooms' through the glass.
-vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
-  vec3 sum = roomFill(room);
-  float dayOn = 1.0 - uNight;
-  ivec2 lr = L_RANGE(room);
-  // (0.4.40) Only the lights that reach p's cell, in their order: the
-  // room's among them, then (outside) the front rooms'.
-  vec4 cell = cellOf(p);
-  int c0 = int(cell.x + 0.5);
-  int cn = int(cell.y + 0.5);
-  for (int j = 0; j < cn; j++) {
-    int i = listAt(c0 + j);
-    if (i >= lr.y) break;
-    if (i < lr.x) continue;
-    vec4 lk = L_K(i);
-    if (lk.x <= 0.0) continue;
-    vec4 lw = L_W(i);
-    float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
-    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
-  }
-  if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
-    for (int j = 0; j < cn; j++) {
-      int i = listAt(c0 + j);
-      if (LD(3, i).w < 0.5) continue;
-      vec4 lk = L_K(i);
-      if (lk.x <= 0.0) continue;
-      vec4 lw = L_W(i);
-      float w = lw.x * nightOn(lw.y);
-      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
-    }
-  }
-  // (0.4.6) The LED strips: each lights what's before it along its way,
-  // from its nearest point. (0.4.35) Outside strips end at maxStripZ.
+// (0.4.6) The LED strips: each lights what's before it along its way,
+// from its nearest point. (0.4.35) Outside strips end at maxStripZ.
+vec3 stripsAt(vec3 p, vec3 N, int room, float dayOn, vec4 cell) {
+  vec3 sum = vec3(0.0);
   if (room != 0 || p.z <= ${f(OUTDOOR_STRIPS_MAX_Z + 0.01)}) {
     ivec2 sr = S_RANGE(room);
     int s0 = int(cell.z + 0.5);
@@ -402,6 +376,45 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
       }
     }
   }
+  return sum;
+}
+
+// The lamps' light at p (normal N, to the eye V): diffuse and a soft
+// highlight of roughness a. (0.4.27) Each as on as it is by night and by
+// day (its \`day\` share, only in its own room). (0.4.28) Only p's room's,
+// and outside the garden's and the front rooms' through the glass.
+vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
+  if (room == 0 && uNight <= 0.0) return vec3(0.0);
+  vec3 sum = roomFill(room);
+  float dayOn = 1.0 - uNight;
+  ivec2 lr = L_RANGE(room);
+  // (0.4.40) Only the lights that reach p's cell, in their order: the
+  // room's among them, then (outside) the front rooms'.
+  vec4 cell = cellOf(p);
+  int c0 = int(cell.x + 0.5);
+  int cn = int(cell.y + 0.5);
+  for (int j = 0; j < cn; j++) {
+    int i = listAt(c0 + j);
+    if (i >= lr.y) break;
+    if (i < lr.x) continue;
+    vec4 lk = L_K(i);
+    if (lk.x <= 0.0) continue;
+    vec4 lw = L_W(i);
+    float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
+    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
+  }
+  if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
+    for (int j = 0; j < cn; j++) {
+      int i = listAt(c0 + j);
+      if (LD(3, i).w < 0.5) continue;
+      vec4 lk = L_K(i);
+      if (lk.x <= 0.0) continue;
+      vec4 lw = L_W(i);
+      float w = lw.x * nightOn(lw.y);
+      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
+    }
+  }
+  sum += stripsAt(p, N, room, dayOn, cell);
   // (0.4.28) A fifth down, by night most (overexposed: the owner).
   return sum * mix(1.35, 1.08, uNight);
 }
@@ -506,6 +519,8 @@ uniform sampler2D uGrain;
 uniform float uGrainA;
 uniform float uCssPerPx;
 uniform float uResY;
+uniform highp sampler2D uLightmap;
+uniform float uLightmapOn;
 ${PROBE_GLSL}
 in vec3 vWorld;
 in vec3 vNorm;
@@ -518,6 +533,22 @@ out vec4 outColor;
 
 ${METAL_GLSL}
 ${HOUSE_LIGHT_GLSL}
+
+// (0.4.45) On-device baked lightmap lookups (houseLightmap.js): the lawn's
+// mound and the roof's deck.
+vec3 lawnLightmapAt(vec3 p) {
+  if (uNight <= 0.0 || p.x < ${f(LIGHTMAP_BOUNDS.lawn.x0)} || p.x > ${f(LIGHTMAP_BOUNDS.lawn.x1)} || p.z < ${f(LIGHTMAP_BOUNDS.lawn.z0)} || p.z > ${f(LIGHTMAP_BOUNDS.lawn.z1)}) return vec3(0.0);
+  vec2 uv = vec2((p.x - ${f(LIGHTMAP_BOUNDS.lawn.x0)}) * ${f(1 / (LIGHTMAP_BOUNDS.lawn.x1 - LIGHTMAP_BOUNDS.lawn.x0))},
+                 (p.z - ${f(LIGHTMAP_BOUNDS.lawn.z0)}) * ${f(0.875 / (LIGHTMAP_BOUNDS.lawn.z1 - LIGHTMAP_BOUNDS.lawn.z0))});
+  return texture(uLightmap, uv).rgb * (nightOn(2.0) * mix(1.35, 1.08, uNight));
+}
+
+vec3 roofLightmapAt(vec3 p) {
+  if (uNight <= 0.0) return vec3(0.0);
+  vec2 u = clamp((p.xz - vec2(${f(LIGHTMAP_BOUNDS.roof.x0)}, ${f(LIGHTMAP_BOUNDS.roof.z0)})) / vec2(${f(LIGHTMAP_BOUNDS.roof.x1 - LIGHTMAP_BOUNDS.roof.x0)}, ${f(LIGHTMAP_BOUNDS.roof.z1 - LIGHTMAP_BOUNDS.roof.z0)}), 0.0, 1.0);
+  vec2 uv = (vec2(2.0, 898.0) + u * 124.0) * ${f(1 / 1024)};
+  return texture(uLightmap, uv).rgb * (nightOn(2.0) * mix(1.35, 1.08, uNight));
+}
 
 // (0.4.26) Five octaves of noise2: the marble's folded layers.
 float fbm5(vec2 p) {
@@ -1309,20 +1340,32 @@ void main() {
   // a slot of window; they were dim), less than by night. (0.4.27) And
   // every room in use its lamps (ROOM_DAY; houseLights.js each light's
   // \`day\`).
+  int mirrorK = vPart == ${P.mirror} && uProbeOn > 0.5 ? probeOf(vWorld) : -1;
+  bool mirrored = mirrorK >= 0;
 #ifdef HS_LAMPS
   vec3 lamps = vec3(0.0);
 #else
-  vec3 lamps = lampsAt(vWorld, N, V, rough, room);
+  vec3 lamps;
+  if (mirrored || (metal >= 1.0 && room == 0)) {
+    lamps = vec3(0.0);
+#ifndef HS_LSPEC
+  } else if (uLightmapOn > 0.5 && vPart == ${P.lawn}) {
+    lamps = lawnLightmapAt(vWorld);
+  } else if (uLightmapOn > 0.5 && vPart == ${P.roof} && N.y > 0.5 && room == 0) {
+    lamps = roofLightmapAt(vWorld);
+#endif
+  } else {
+    lamps = lampsAt(vWorld, N, V, rough, room);
+  }
 #endif
 #ifdef HS_AO
   float ao = 1.0;
 #else
-  float ao = ambientAt(room);
+  float ao = mirrored ? 1.0 : ambientAt(room);
 #endif
   open *= ao;
   lamps *= mix(1.0, ao, 0.7);
   vec3 col;
-  bool mirrored = false;
   if (vPart == ${P.lawn}) {
     // The lawn lit like the meadow round it, the house's shadow and the
     // lamps' spill on top.
@@ -1364,12 +1407,8 @@ void main() {
     col = alb * (1.0 - metal) * diffuse * (1.0 - Fv * 0.5) + Fv * env + spec * sunCol * dim * 3.0 + emit;
     // (0.4.18) A mirror shows its room, from its probe (mirrorProbe.js),
     // a touch darker and greener than what it sees, as silvered glass is.
-    if (vPart == ${P.mirror} && uProbeOn > 0.5) {
-      int k = probeOf(vWorld);
-      if (k >= 0) {
-        col = probeLook(vWorld, R, k) * vec3(0.9, 0.93, 0.91) + spec * sunCol * dim;
-        mirrored = true;
-      }
+    if (mirrored) {
+      col = probeLook(vWorld, R, mirrorK) * vec3(0.9, 0.93, 0.91) + spec * sunCol * dim;
     }
     // A curtain lets the light behind it through: the day at the glass,
     // the lamps in the room by night.

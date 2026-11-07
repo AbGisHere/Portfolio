@@ -790,6 +790,8 @@ house) and `x` (metres across).
   `?housecache=0` (0.4.44) builds the house afresh instead of reading the
   copy the worker keeps in IndexedDB after the first visit (keyed by the
   worker's content-hashed URL, so any change to the house rebuilds it).
+  `?lightmap=0` (0.4.45) lights the lawn and the roof's deck live instead
+  of from the lightmap baked as the house is prepared (`houseLightmap.js`).
   `/house` (dev only) flies a free camera through it.
 
 ## Adding a scene

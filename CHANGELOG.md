@@ -6,6 +6,25 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.45 — 2026-11-07
+
+The lamps' light on the lawn and the roof baked on the device, and tighter
+light cells, with the same picture. Record: `docs/optimization-0.4.45.md`.
+
+- `houseLightmap.js` (new): a 1024² RGBA16F lightmap drawn on the GPU as the
+  house is prepared (the lawn from its own triangles, the roof's deck); by
+  night they read it instead of walking their lamps (`?lightmap=0` off).
+- `houseShader.js`: the lamps' highlight in closed form at roughness 1
+  (exact, so the lawn can be baked); mirrors and outdoor metal skip the
+  lamps (their result was never seen); the strips' loop in its own function.
+- `houseLights.js`: a cell lists a lamp only where it can light: its room
+  (front rooms outdoors only through their glass), inside its cone, in
+  front of a strip; lamps switched off dropped.
+- Checked: 104/104 against 0.4.44 at 2/255; mid-switch (night 0.3, 0.5,
+  0.7) on 11 path and garden views; OnePlus 11R and Pixel 7 night
+  screenshots. Moto G71 6.5/3.3/6.1 → 6.7/4.1/6.9 fps, OnePlus 11R
+  unchanged; the Moto's GPU preparation +0.7 s (the bake).
+
 ## 0.4.44 — 2026-11-07
 
 The built house kept in the browser for return visits, and the house's
