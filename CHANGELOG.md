@@ -6,6 +6,14 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.50 — 2026-11-19
+
+- The frame target's colour is a texture (`aoTarget`'s `frame.tex`): by night the bloom reads it in place of a full-screen copy of the canvas (`?earlyz=0` keeps the copy).
+- The pool's reflection is culled to the water's part of the screen, padded a tenth of the frame each way for the ripples (`poolRect`; `?housecull=0` off).
+- The path's visible set covers the leaves' runs too (`HOUSE_PVS.leaf`, by each run's box). It keeps 58–61 of 61 runs: the runs follow the order leaves are made, so they span the house; grouping them by place is a later step.
+- Uniforms are sent only when a location's value changes (`uniformCache.js`; `?ucache=0` off).
+- Same picture: house parity against 0.4.49. Pushed on the owner's call before `npm run qa` and the phones.
+
 ## 0.4.49 — 2026-11-19
 
 The house's depth drawn once a frame, not twice.

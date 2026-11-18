@@ -23,7 +23,7 @@ import { cpus } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { houseLayout } from '../components/gradient/gl/houseMesh.js';
-import { HOUSE_RUN, packHouseMesh, tagLampFittings, runsChecksum } from '../components/gradient/gl/houseLights.js';
+import { HOUSE_RUN, packHouseMesh, tagLampFittings, runsChecksum, leafChecksum } from '../components/gradient/gl/houseLights.js';
 import { contactCameraAt, cameraMetres } from '../components/gradient/deskCamera.js';
 import moonlit from '../components/gradient/recipes/moonlit.js';
 
@@ -104,12 +104,13 @@ if (!isMainThread) {
   };
   // A triangle in the face's axes (right, up, ahead), clipped to the near
   // plane, as projected triangles; null when it's wholly behind.
-  const clipped = (v, f, u, r) => {
+  const clipped = (v, f, u, r) => clippedAt(k => { const o = (v + k) * 9; return [data[o], data[o + 1], data[o + 2]]; }, f, u, r);
+  const clippedAt = (at, f, u, r) => {
     const q = [];
     let behind = 0;
     for (let k = 0; k < 3; k++) {
-      const o = (v + k) * 9;
-      const x = data[o] - eye[0], y = data[o + 1] - eye[1], z = data[o + 2] - eye[2];
+      const [X, Y, Z] = at(k);
+      const x = X - eye[0], y = Y - eye[1], z = Z - eye[2];
       const p = [x * r[0] + y * r[1] + z * r[2], x * u[0] + y * u[1] + z * u[2], x * f[0] + y * f[1] + z * f[2]];
       if (p[2] < NEAR) behind++;
       q.push(p);
@@ -130,11 +131,17 @@ if (!isMainThread) {
     for (let k = 1; k + 1 < T.length; k++) tris.push([T[0], T[k], T[k + 1]]);
     return tris;
   };
+  // (0.4.50) The leaves' runs (instances, leafInstances.js), by their
+  // boxes: a box's faces hidden, all inside it is.
+  const leafBoxes = raw.leaves.flatMap(L => Array.from({ length: L.runs.first.length }, (_, k) => L.runs.box.slice(k * 6, k * 6 + 6)));
+  const BOX_TRIS = [[0, 1, 3], [0, 3, 2], [4, 6, 7], [4, 7, 5], [0, 4, 5], [0, 5, 1], [2, 3, 7], [2, 7, 6], [0, 2, 6], [0, 6, 4], [1, 5, 7], [1, 7, 3]];
+  const corner = (b, k) => [b[k & 1 ? 3 : 0], b[k & 2 ? 4 : 1], b[k & 4 ? 5 : 2]];
   let eye = null;
   for (const job of jobs) {
     const { device, i } = job;
     eye = job.eye;
     const vis = new Uint8Array(nRuns);
+    const leafVis = new Uint8Array(leafBoxes.length);
     for (const [f, u] of faces) {
       const r = cross(f, u);
       depth.fill(Infinity);
@@ -147,14 +154,21 @@ if (!isMainThread) {
         if (vis[id]) continue;
         for (const [a, b, c] of clipped(v, f, u, r) ?? []) if (test(a, b, c)) { vis[id] = 1; break; }
       }
+      leafBoxes.forEach((b, id) => {
+        if (leafVis[id]) return;
+        for (const t of BOX_TRIS) {
+          for (const [A, B, C] of clippedAt(k => corner(b, t[k]), f, u, r) ?? []) if (test(A, B, C)) { leafVis[id] = 1; return; }
+        }
+      });
     }
-    parentPort.postMessage({ device, i, vis });
+    parentPort.postMessage({ device, i, vis, leafVis });
   }
   parentPort.close();
 } else {
   const res = Number(process.argv[process.argv.indexOf('--res') + 1]) || 1024;
-  const { runs } = build();
+  const { raw, runs } = build();
   const nRuns = runs.first.length;
+  const nLeafRuns = raw.leaves.reduce((n, L) => n + L.runs.first.length, 0);
   const jobs = [];
   for (const device of DEVICES) for (let i = 0; i <= STEPS; i++) {
     const cm = cameraMetres(contactCameraAt(i / STEPS, moonlit, { device }));
@@ -162,40 +176,48 @@ if (!isMainThread) {
   }
   const n = Math.max(1, cpus().length - 1);
   const seen = Object.fromEntries(DEVICES.map(d => [d, Array.from({ length: STEPS + 1 }, () => null)]));
+  const leafSeen = Object.fromEntries(DEVICES.map(d => [d, Array.from({ length: STEPS + 1 }, () => null)]));
   const t0 = Date.now();
   let done = 0;
   await Promise.all(Array.from({ length: n }, (_, k) => new Promise((resolve, reject) => {
     const w = new Worker(fileURLToPath(import.meta.url), { workerData: { res, jobs: jobs.filter((_, j) => j % n === k) }, execArgv: process.execArgv });
-    w.on('message', ({ device, i, vis }) => {
+    w.on('message', ({ device, i, vis, leafVis }) => {
       seen[device][i] = vis;
+      leafSeen[device][i] = leafVis;
       if (++done % 80 === 0) console.log(`house-pvs: ${done}/${jobs.length} · ${((Date.now() - t0) / 1000).toFixed(0)} s`);
     });
     w.on('error', reject);
     w.on('exit', resolve);
   })));
   // Per device and run, the samples it's seen at as [from, to] ranges, widened.
-  const out = {};
-  for (const device of DEVICES) {
-    out[device] = [];
+  const rangesOf = (vis, n, label) => {
+    const list = [];
     let total = 0;
-    for (let r = 0; r < nRuns; r++) {
+    for (let r = 0; r < n; r++) {
       const ranges = [];
       for (let i = 0; i <= STEPS; i++) {
-        if (!seen[device][i][r]) continue;
+        if (!vis[i][r]) continue;
         const a = Math.max(0, i - PAD), b = Math.min(STEPS, i + PAD);
         const last = ranges[ranges.length - 1];
         if (last && a <= last[1] + 1) last[1] = Math.max(last[1], b);
         else ranges.push([a, b]);
       }
       for (const [a, b] of ranges) total += b - a + 1;
-      out[device].push(ranges.flat());
+      list.push(ranges.flat());
     }
-    console.log(`house-pvs: ${device}: on average ${(total / (STEPS + 1)).toFixed(0)} of ${nRuns} runs kept`);
+    console.log(`house-pvs: ${label}: on average ${(total / (STEPS + 1)).toFixed(0)} of ${n} kept`);
+    return list;
+  };
+  const out = {};
+  const leaf = { runs: nLeafRuns, checksum: leafChecksum(raw.leaves) };
+  for (const device of DEVICES) {
+    out[device] = rangesOf(seen[device], nRuns, `${device} runs`);
+    leaf[device] = rangesOf(leafSeen[device], nLeafRuns, `${device} leaf runs`);
   }
   const file = fileURLToPath(new URL('../components/gradient/gl/housePvs.js', import.meta.url));
   writeFileSync(file, `// Generated by scripts/house-pvs.mjs (0.4.44): do not edit. Rerun when the
 // house's mesh changes; the checksum turns it off on a mismatch.
-export const HOUSE_PVS = ${JSON.stringify({ steps: STEPS, runs: nRuns, checksum: runsChecksum(runs), res, ...out })};
+export const HOUSE_PVS = ${JSON.stringify({ steps: STEPS, runs: nRuns, checksum: runsChecksum(runs), res, ...out, leaf })};
 `);
   console.log(`house-pvs: wrote ${file.split('/').slice(-4).join('/')} in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }

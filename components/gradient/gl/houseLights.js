@@ -621,6 +621,9 @@ export const runsChecksum = runs => {
   return sum;
 };
 
+// (0.4.50) The same for the leaves' runs (leafInstances.js), all templates.
+export const leafChecksum = leaves => leaves.reduce((sum, L) => sum + runsChecksum(L.runs) * (L.template + 1), 0);
+
 export function houseRanges(runs, seen, { pad = 0.1, mirror = null, rooms = ZONE_BOXES, keep = null } = {}) {
   const out = [];
   const lo = [0, 0, 0];

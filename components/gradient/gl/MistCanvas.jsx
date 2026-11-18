@@ -45,8 +45,9 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh, houseVariant } from './houseShader';
-import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, runVariant, runsChecksum, tagLampFittings } from './houseLights';
+import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, leafChecksum, packCurtainMesh, packHouseMesh, runVariant, runsChecksum, tagLampFittings } from './houseLights';
 import { HOUSE_PVS } from './housePvs';
+import { cacheUniforms } from './uniformCache';
 import { curtainMesh } from './houseRooms';
 import { FLOOR, HOUSE_BOUNDS, HOUSE_PART, HOUSE_VARIANTS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
@@ -230,6 +231,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // fullscreen pass only writes it under the desk camera).
       gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: true, stencil: false });
       if (!gl) throw new Error('webgl2 unavailable');
+      // (0.4.50) Uniforms sent only when they change (uniformCache.js).
+      if (params.get('ucache') !== '0') cacheUniforms(gl);
       extParallel = gl.getExtension('KHR_parallel_shader_compile');
       // Profiling (harness only): `?off=grain,veil` compiles those features
       // out of the shader (mistShader.js OFF_FLAGS).
@@ -922,14 +925,22 @@ export default function MistCanvas({ recipe, onFail }) {
         // canvas at the frame's end. The lawn goes into the AO over a copy
         // of it (`lawn`), as the frame's lawn comes after the grass.
         if (ok && !noEarlyZ) {
-          aoPass.frame ??= { fbo: gl.createFramebuffer(), color: gl.createRenderbuffer(), lawnFbo: gl.createFramebuffer(), lawnDepth: gl.createRenderbuffer() };
+          // (0.4.50) Its colour a texture, so the bloom reads it in place
+          // of a copy of the canvas.
+          aoPass.frame ??= { fbo: gl.createFramebuffer(), tex: gl.createTexture(), lawnFbo: gl.createFramebuffer(), lawnDepth: gl.createRenderbuffer() };
           const f = aoPass.frame;
-          gl.bindRenderbuffer(gl.RENDERBUFFER, f.color);
-          gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, size[0], size[1]);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, f.tex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size[0], size[1], 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.bindTexture(gl.TEXTURE_2D, null);
           gl.bindRenderbuffer(gl.RENDERBUFFER, f.lawnDepth);
           gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, size[0], size[1]);
           gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo);
-          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, f.color);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, f.tex, 0);
           gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
           let fine = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
           gl.bindFramebuffer(gl.FRAMEBUFFER, f.lawnFbo);
@@ -996,14 +1007,16 @@ export default function MistCanvas({ recipe, onFail }) {
     let houseDepthIn = false;
     const frameTarget = () => (houseDepthIn ? aoPass.frame.fbo : null);
     // The frame onto the canvas.
+    // (0.4.50) Returns the frame's texture if it was drawn in it.
     function showFrame() {
-      if (!houseDepthIn) return;
+      if (!houseDepthIn) return null;
       const [fw, fh] = aoPass.size;
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, aoPass.frame.fbo);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
       gl.blitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       houseDepthIn = false;
+      return aoPass.frame.tex;
     }
     // (0.4.2) The pool's mirror image's target: a quarter of the canvas (the
     // water's ripples blur it anyway), its depth.
@@ -1080,6 +1093,42 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
       gl.activeTexture(gl.TEXTURE0);
+    };
+    // (0.4.50) Where the water is on screen (CSS px, [x0, y0, x1, y1]),
+    // padded a tenth of the frame each way for its ripples' nudge (the
+    // reflection is read only there), or null for the whole frame.
+    const poolRect = () => {
+      const { pitch: P, cm: c } = meadowAt;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        const p = [POOL.at[0] + (i & 1 ? 0.5 : -0.5) * POOL.w, POOL.at[1] + (i & 2 ? 0.1 : -0.1), POOL.at[2] + (i & 4 ? 0.5 : -0.5) * POOL.d];
+        const dx = p[0] - c.x;
+        const dz = p[2] - c.z;
+        const q = [dx * P.yc - dz * P.ys, p[1] - c.y, dx * P.ys + dz * P.yc];
+        const zp = -q[1] * P.sin + q[2] * P.cos;
+        if (zp <= 0.05) return null;
+        const vp = -q[1] * P.cos - q[2] * P.sin;
+        const sx = P.sx + (P.zoom * P.f * q[0]) / zp;
+        const sy = P.sy + (P.zoom * P.f * vp) / zp;
+        x0 = Math.min(x0, sx);
+        x1 = Math.max(x1, sx);
+        y0 = Math.min(y0, sy);
+        y1 = Math.max(y1, sy);
+      }
+      const r = [Math.max(0, x0 - 0.1 * w), Math.max(0, y0 - 0.1 * h), Math.min(w, x1 + 0.1 * w), Math.min(h, y1 + 0.1 * h)];
+      return r[2] > r[0] && r[3] > r[1] ? r : null;
+    };
+    let mirrorRect = null;
+    // A box in a view, or (the pool's reflection) in the water's part of it.
+    const seenFor = ctx => {
+      const { P, c, fw, fh } = ctx;
+      const R = ctx.mirror && mirrorRect;
+      if (!R) return (lo, hi) => boxSeen(P, c, fw, fh, lo, hi);
+      const Q = { ...P, sx: P.sx - R[0], sy: P.sy - R[1] };
+      return (lo, hi) => boxSeen(Q, c, R[2] - R[0], R[3] - R[1], lo, hi);
     };
     const copyFrame = (g, full = false) => {
       prepareFrameCopy(g);
@@ -2541,16 +2590,40 @@ export default function MistCanvas({ recipe, onFail }) {
       keepList = keep;
       return keep;
     };
+    // (0.4.50) The same for the leaves' runs, all templates in a row (null
+    // where the solid part's set isn't used).
+    let leafKeepKey = null;
+    let leafKeepList = null;
+    let leafPvsOk = null;
+    const leafKeep = g => {
+      const L = HOUSE_PVS.leaf;
+      if (!L || !g.leaves?.length || !keepKey) return null;
+      if (leafPvsOk === null || leafPvsOk.leaves !== g.leaves) {
+        leafPvsOk = { leaves: g.leaves, ok: L.runs === g.leaves.reduce((n, l) => n + l.runs.first.length, 0) && L.checksum === leafChecksum(g.leaves) };
+      }
+      const ranges = leafPvsOk.ok && L[meadowAt.device];
+      if (!ranges) return null;
+      if (leafKeepKey === keepKey) return leafKeepList;
+      const [, a, b] = keepKey.split(' ').map(Number);
+      const keep = new Uint8Array(ranges.length);
+      ranges.forEach((list, r) => {
+        for (let k = 0; k < list.length; k += 2) if (list[k] <= b && a <= list[k + 1]) { keep[r] = 1; break; }
+      });
+      leafKeepKey = keepKey;
+      leafKeepList = keep;
+      return keep;
+    };
     const solidRanges = (g, ctx) => {
       if (!ctx || ctx.view || noHouseCull || !g.runs) return g.chunks.map(ch => [ch.offset / 4, ch.count]);
       const { P, c, fw, fh, mirror } = ctx;
       // (The same view's three passes share one list: compared by value, as
       // the camera's objects may be reused.)
       const keep = ctx.keep ?? null;
-      const key = [P.cos, P.sin, P.yc, P.ys, P.f, P.zoom, P.sx, P.sy, c.x, c.y, c.z, fw, fh, !!mirror, keep];
+      const R = (mirror && mirrorRect) || [];
+      const key = [P.cos, P.sin, P.yc, P.ys, P.f, P.zoom, P.sx, P.sy, c.x, c.y, c.z, fw, fh, !!mirror, keep, R[0], R[1], R[2], R[3]];
       if (rangeKey && rangeList.runs === g.runs && key.every((v, i) => v === rangeKey[i])) return rangeList;
       rangeKey = key;
-      rangeList = houseRanges(g.runs, (lo, hi) => boxSeen(P, c, fw, fh, lo, hi), { mirror: mirror ? POOL.at[1] : null, keep });
+      rangeList = houseRanges(g.runs, seenFor(ctx), { mirror: mirror ? POOL.at[1] : null, keep });
       rangeList.runs = g.runs;
       return rangeList;
     };
@@ -2578,9 +2651,14 @@ export default function MistCanvas({ recipe, onFail }) {
       const at = leafU ?? (vp ? vp.u : u)('uLeaf');
       gl.uniform1f(at, 1);
       const cull = ctx && !ctx.view && !noHouseCull;
+      // (0.4.50) The path's visible set, where the solid part uses it.
+      const keepAll = cull && ctx.keep ? leafKeep(g) : null;
+      let at0 = 0;
       for (const L of g.leaves) {
+        const keep = keepAll && keepAll.subarray(at0, at0 + L.runs.first.length);
+        at0 += L.runs.first.length;
         const list = cull
-          ? houseRanges(L.runs, (lo, hi) => boxSeen(ctx.P, ctx.c, ctx.fw, ctx.fh, lo, hi), { mirror: ctx.mirror ? POOL.at[1] : null })
+          ? houseRanges(L.runs, seenFor(ctx), { mirror: ctx.mirror ? POOL.at[1] : null, keep })
           : [[0, L.count]];
         if (!list.length) continue;
         gl.bindVertexArray(L.vao);
@@ -2942,7 +3020,9 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.depthMask(true);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.depthFunc(gl.LESS);
+      mirrorRect = noHouseCull ? null : poolRect();
       timed('pool-reflection', () => drawHouse(true));
+      mirrorRect = null;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE12);
@@ -3267,15 +3347,17 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.26) The fireflies by night (fireflies.js), added on.
         fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
         if (fliesOn) drawBirds(true);
-        showFrame();
+        const frameTex = showFrame();
         // (0.4.6) By night round the house, the bright spills a glow.
         const night = houseNight();
         if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
           bloom ??= makeBloom(gl, 14) || false;
           if (bloom) {
-            copyFrame(glass, true);
-            if (profiler) profiler.measure('bloom', () => bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night));
-            else bloom.apply(glass.tex, canvas.width, canvas.height, 0.7 * night);
+            // (0.4.50) The frame's own texture when it has one (showFrame).
+            if (!frameTex) copyFrame(glass, true);
+            const src = frameTex || glass.tex;
+            if (profiler) profiler.measure('bloom', () => bloom.apply(src, canvas.width, canvas.height, 0.7 * night));
+            else bloom.apply(src, canvas.width, canvas.height, 0.7 * night);
             gl.useProgram(prog);
           }
         }
@@ -3582,6 +3664,12 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.deleteTexture(aoPass.tex);
         gl.deleteRenderbuffer(aoPass.depth);
         gl.deleteFramebuffer(aoPass.fbo);
+        if (aoPass.frame) {
+          gl.deleteTexture(aoPass.frame.tex);
+          gl.deleteRenderbuffer(aoPass.frame.lawnDepth);
+          gl.deleteFramebuffer(aoPass.frame.fbo);
+          gl.deleteFramebuffer(aoPass.frame.lawnFbo);
+        }
       }
       if (reflect) {
         gl.deleteTexture(reflect.tex);

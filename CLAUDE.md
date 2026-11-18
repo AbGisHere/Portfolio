@@ -92,7 +92,13 @@ off. Same picture (house parity). Measured on the Moto G71 first: skipping
 the scene, meadow or shadows gains nothing, the house's colour ~+4.5 fps,
 the lamps ~+2, the trees and grass ~+1.3, `dpr=1` ~+5.
 
-**Next: 0.4.50**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.50** (2026-11-19) has the bloom read the frame target as a
+texture, culls the pool's reflection to the water on screen, puts the
+leaves' runs in the path's visible set (`HOUSE_PVS.leaf`; little culled
+until they're grouped by place) and sends uniforms only on change
+(`uniformCache.js`, `?ucache=0` off). Same picture (house parity).
+
+**Next: 0.4.51**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
