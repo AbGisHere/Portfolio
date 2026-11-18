@@ -916,6 +916,28 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aoPass.tex, 0);
         gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
         const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+        // (0.4.49) The frame's own target, sharing that depth: the AO pass
+        // leaves the house's solid depth in it (drawHouseDepth), so the
+        // colour pass needn't draw it again (frameTarget); copied onto the
+        // canvas at the frame's end. The lawn goes into the AO over a copy
+        // of it (`lawn`), as the frame's lawn comes after the grass.
+        if (ok && !noEarlyZ) {
+          aoPass.frame ??= { fbo: gl.createFramebuffer(), color: gl.createRenderbuffer(), lawnFbo: gl.createFramebuffer(), lawnDepth: gl.createRenderbuffer() };
+          const f = aoPass.frame;
+          gl.bindRenderbuffer(gl.RENDERBUFFER, f.color);
+          gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, size[0], size[1]);
+          gl.bindRenderbuffer(gl.RENDERBUFFER, f.lawnDepth);
+          gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, size[0], size[1]);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, f.color);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
+          let fine = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, f.lawnFbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aoPass.tex, 0);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, f.lawnDepth);
+          fine &&= gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+          aoPass.frameOk = fine;
+        }
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.activeTexture(gl.TEXTURE0);
         if (!ok) {
@@ -948,7 +970,18 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
       gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
       gl.uniform2f(a.u('uMirror'), 0, 0);
-      houseGeometry(g, a.u, 'all', { P, c, fw: w, fh: h, keep: pathKeep(g) });
+      const ctx = { P, c, fw: w, fh: h, keep: pathKeep(g) };
+      if (a.frameOk) {
+        // (0.4.49) The solid part's depth stays for the frame (aoTarget);
+        // the lawn over a copy of it.
+        houseGeometry(g, a.u, 'solid', ctx);
+        const [sw, sh] = a.size;
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, a.fbo);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, a.frame.lawnFbo);
+        gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, a.frame.lawnFbo);
+        houseGeometry(g, a.u, 'lawn', ctx);
+      } else houseGeometry(g, a.u, 'all', ctx);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE13);
@@ -958,6 +991,20 @@ export default function MistCanvas({ recipe, onFail }) {
       return true;
     }
     let aoReady = false;
+    // (0.4.49) Whether this frame is drawn into the AO pass's frame target
+    // (aoTarget), over the house's depth already in it.
+    let houseDepthIn = false;
+    const frameTarget = () => (houseDepthIn ? aoPass.frame.fbo : null);
+    // The frame onto the canvas.
+    function showFrame() {
+      if (!houseDepthIn) return;
+      const [fw, fh] = aoPass.size;
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, aoPass.frame.fbo);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      gl.blitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      houseDepthIn = false;
+    }
     // (0.4.2) The pool's mirror image's target: a quarter of the canvas (the
     // water's ripples blur it anyway), its depth.
     let reflect = null;
@@ -2790,7 +2837,10 @@ export default function MistCanvas({ recipe, onFail }) {
       const [fw, fh] = view ? [view.size, view.size] : [w, h];
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const sh = houseShadow();
-      if (sh && !mirror && !lawn && !view) houseShadowMap(g, sh, colours);
+      if (sh && !mirror && !lawn && !view) {
+        houseShadowMap(g, sh, colours);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameTarget());
+      }
       // (0.4.47) The same uniforms on each of its variants, the house's own
       // program last (left in use).
       const setUniforms = p => {
@@ -2847,7 +2897,9 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.bindVertexArray(pb.vao);
         gl.drawArrays(gl.TRIANGLES, 0, pb.count);
         gl.bindVertexArray(null);
-      } else if (lawn) houseGeometry(g, g.u, 'lawn', ctx); else if (!mirror && !view && aoReady) {
+      } else if (lawn) {
+        houseGeometry(g, g.u, 'lawn', ctx);
+      } else if (!mirror && !view && aoReady) {
         // (0.4.2) Its depth first, colour off (the depth pass's program,
         // which shades nothing), then each pixel shaded once.
         const a = aoPass;
@@ -2859,9 +2911,11 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
         gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
         gl.uniform2f(a.u('uMirror'), 0, 0);
-        gl.colorMask(false, false, false, false);
-        houseGeometry(g, a.u, 'solid', ctx);
-        gl.colorMask(true, true, true, true);
+        if (!houseDepthIn) {
+          gl.colorMask(false, false, false, false);
+          houseGeometry(g, a.u, 'solid', ctx);
+          gl.colorMask(true, true, true, true);
+        }
         gl.useProgram(g.prog);
         gl.depthFunc(gl.LEQUAL);
         // (0.4.40) The depth is already there, exactly: written again, the
@@ -3168,7 +3222,12 @@ export default function MistCanvas({ recipe, onFail }) {
         // shader never runs under them; then the shadows multiplied into it.
         gl.enable(gl.DEPTH_TEST);
         gl.depthMask(true);
-        gl.clear(gl.DEPTH_BUFFER_BIT);
+        // (0.4.49) Over the house's depth, already drawn for its AO (the
+        // lawn, the solid part and the leaves: what the colour pass's own
+        // depth pass drew again), where the frame target is there.
+        houseDepthIn = !!(aoReady && deskOn && !noHouse && houseSeen && aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height);
+        if (houseDepthIn) gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+        else gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
         // (0.3.10) The device before the desk, so the desk's top isn't shaded
         // behind it.
@@ -3208,6 +3267,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.26) The fireflies by night (fireflies.js), added on.
         fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
         if (fliesOn) drawBirds(true);
+        showFrame();
         // (0.4.6) By night round the house, the bright spills a glow.
         const night = houseNight();
         if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
@@ -3222,6 +3282,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.disable(gl.DEPTH_TEST);
         lastDrawn = vs;
       } finally {
+        showFrame();
         requiredPass = wasRequired;
       }
     }

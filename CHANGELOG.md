@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.49 — 2026-11-19
+
+The house's depth drawn once a frame, not twice.
+
+- The house was drawn three times a frame: its depth for the AO, its depth
+  again on the canvas (so the colour pass shades each pixel once), then
+  its colour. The canvas's depth can't be copied into (the M4 refuses the
+  blit: its format isn't exposed), so the frame now draws into its own
+  colour target sharing the AO pass's depth, copied onto the canvas at the
+  end (`showFrame`, before the bloom, which reads it there).
+- The AO pass draws the solid part into that depth, then the lawn into the
+  AO over a copy of it, since the frame's lawn is drawn after the grass
+  (with the lawn's depth in first, blade roots moved by a pixel).
+- `?earlyz=0` keeps the old path. Same picture: house parity against
+  0.4.48, max 0.
+- The Moto G71's climb costed by pass first (0.4.48, `--query`): skipping
+  the scene, the meadow or the shadows gains nothing; the house's colour
+  7.5 → 12 fps; the lamps (`hskip=lamps`) → 9.5; the trees, grass and
+  flowers → 8.8; `dpr=1` → 12.7; no AO (`hao=0`) is slower (5.3).
+
 ## 0.4.48 — 2026-11-19
 
 The house's plants' leaves as instances, as the meadow's trees are drawn.

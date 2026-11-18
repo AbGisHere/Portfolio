@@ -84,7 +84,15 @@ four templates (`leafInstances.js`, 0.84 MB in place of 21.6 MB of mesh),
 the same leaves to float rounding, through every pass (`uLeaf`).
 Committed before parity and the phones, on the owner's call.
 
-**Next: 0.4.49**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.49** (2026-11-19) draws the house's depth once a frame, not twice:
+the frame draws into its own target (`aoTarget`'s `frame`), sharing the
+depth the AO pass leaves (the solid part; the lawn goes into the AO over
+a copy), copied onto the canvas at the end (`showFrame`); `?earlyz=0`
+off. Same picture (house parity). Measured on the Moto G71 first: skipping
+the scene, meadow or shadows gains nothing, the house's colour ~+4.5 fps,
+the lamps ~+2, the trees and grass ~+1.3, `dpr=1` ~+5.
+
+**Next: 0.4.50**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

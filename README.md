@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.48](https://img.shields.io/badge/version-0.4.48-informational)
+![Version 0.4.49](https://img.shields.io/badge/version-0.4.49-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -23,7 +23,7 @@ form, project screen and real content are still to come (see [Versioning](#versi
 pixel checks only the lights that can reach it, hidden house pixels are no
 longer shaded, and the house is drawn only where a view can see it. The
 OnePlus 11R goes from 36 to 51 fps on its 90 Hz screen; slower phones are
-still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans the next steps and adds a profiling flag; **0.4.43** skips the parts of the house the camera can never see from where it is (OnePlus 49 → 54 fps); **0.4.44** keeps the built house in the browser for return visits (ready 7.8 → 1.6 s on the M4) and costs the house's shading on phones; **0.4.45** bakes the lamps' light on the lawn and roof on the device, with the same picture (Moto G71 ~6.4 → 6.9 fps, OnePlus unchanged). See the [0.4.45 record](docs/optimization-0.4.45.md). **0.4.46** skips work the frame never shows (fine patterns too small to see, grass, trees and glass out of frame) and orders the passes for phone GPUs, with the same picture (OnePlus 11R ~53 → 57.5 fps, Moto G71 ~7 → 7.5). See the [0.4.46 record](docs/optimization-0.4.46.md). **0.4.48** draws the house's 15,000 leaves as instances of four leaf shapes (0.84 MB in place of 21.6 MB of mesh), with the same leaves. **0.4.47** compiles the house's shader again for runs of only the lawn or only leaves, so those draws skip every other material, and takes out the curtains and the clothes (the owner is making new ones). See the
+still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans the next steps and adds a profiling flag; **0.4.43** skips the parts of the house the camera can never see from where it is (OnePlus 49 → 54 fps); **0.4.44** keeps the built house in the browser for return visits (ready 7.8 → 1.6 s on the M4) and costs the house's shading on phones; **0.4.45** bakes the lamps' light on the lawn and roof on the device, with the same picture (Moto G71 ~6.4 → 6.9 fps, OnePlus unchanged). See the [0.4.45 record](docs/optimization-0.4.45.md). **0.4.46** skips work the frame never shows (fine patterns too small to see, grass, trees and glass out of frame) and orders the passes for phone GPUs, with the same picture (OnePlus 11R ~53 → 57.5 fps, Moto G71 ~7 → 7.5). See the [0.4.46 record](docs/optimization-0.4.46.md). **0.4.49** draws the house's depth once a frame instead of twice (the frame now draws into a target that shares its depth with the house's shading pass), with the same picture. **0.4.48** draws the house's 15,000 leaves as instances of four leaf shapes (0.84 MB in place of 21.6 MB of mesh), with the same leaves. **0.4.47** compiles the house's shader again for runs of only the lawn or only leaves, so those draws skip every other material, and takes out the curtains and the clothes (the owner is making new ones). See the
 [0.4.40 record](docs/optimization-0.4.40.md).
 
 ## Contents
