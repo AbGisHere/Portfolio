@@ -10,6 +10,7 @@
  * after, over these (houseGlass.js).
  */
 
+import { LEAF_GLSL } from './leafInstances';
 import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_PART, PLAN, POOL, MATCH_AXES, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
@@ -86,6 +87,7 @@ layout(location = 3) in vec2 aST;
 layout(location = 4) in vec3 aPos2;   // (0.4.4) the curtains' other shape
 layout(location = 5) in vec3 aNorm2;
 
+${LEAF_GLSL}
 ${CAMERA_GLSL}
 uniform mat4 uLightVP;
 uniform vec2 uMirror;   // (0.4.2) on, and the water's height: drawn mirrored in it
@@ -100,14 +102,25 @@ flat out int vFitting;
 
 ${PROJECT_GLSL}
 void main() {
-  vec3 pos = mix(aPos, aPos2, uMorph);
-  vec3 nrm = uMorph > 0.0 ? normalize(mix(aNorm, aNorm2, uMorph) + 1e-5) : aNorm;
+  vec3 pos0 = aPos, nrm0 = aNorm;
+  float part = aPart;
+  vec2 st = aST;
+  // (0.4.48) A leaf: an instance of its template (leafInstances.js).
+  if (uLeaf > 0.5) {
+    vec3 face = leafFace();
+    pos0 = leafPos(face);
+    nrm0 = leafNorm(face);
+    part = aLeafPart;
+    st = aLeafAt.xy;
+  }
+  vec3 pos = mix(pos0, aPos2, uMorph);
+  vec3 nrm = uMorph > 0.0 ? normalize(mix(nrm0, aNorm2, uMorph) + 1e-5) : nrm0;
   vWorld = pos;
   vNorm = nrm;
-  vST = aST;
-  vPart = int(floor(aPart + 0.001));
-  vVar = aPart - float(vPart);
-  vFitting = int(floor(aST.x + 0.5));
+  vST = st;
+  vPart = int(floor(part + 0.001));
+  vVar = part - float(vPart);
+  vFitting = int(floor(st.x + 0.5));
   // Looked up a little off the surface, so it never shades itself; further
   // off where the light grazes it, where the map's texels stretch.
   vec3 Lv = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));

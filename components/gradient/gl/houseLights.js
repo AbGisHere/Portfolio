@@ -527,7 +527,7 @@ function indexMesh(data, count, stride, uniqueParts = []) {
  * it preserves the same full index stream and Float32 attributes.
  */
 export function packHouseMesh(raw, { uniqueParts = [] } = {}) {
-  const { data, count, lawn, glass, mirrors } = raw;
+  const { data, count, lawn, glass, mirrors, leaves = [] } = raw;
   if (!Number.isSafeInteger(lawn) || lawn < 0 || lawn > count || lawn % 3 || count % 3) {
     throw new RangeError('House ranges must contain complete triangles');
   }
@@ -546,7 +546,7 @@ export function packHouseMesh(raw, { uniqueParts = [] } = {}) {
     return { name, room: 0, mirrorSkip: false, lo, hi, offset: start * 4, count: end - start };
   };
   const solid = chunk('solid', lawn, count);
-  return { ...packed, indexCount: count, lawnChunk: chunk('lawn', 0, lawn), chunks: solid ? [solid] : [], runs: houseRuns(data, lawn, count), glass, mirrors };
+  return { ...packed, indexCount: count, lawnChunk: chunk('lawn', 0, lawn), chunks: solid ? [solid] : [], runs: houseRuns(data, lawn, count), glass, mirrors, leaves };
 }
 
 // (0.4.40) Triangles per run: the solid part split, in its own order, for

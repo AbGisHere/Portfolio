@@ -23,6 +23,7 @@
 
 import { HOUSE_PART } from './houseShape';
 import { add, ball, cross, grid, scale, soft, sweep, tube, unit } from './meshKit';
+import { LEAF_SHAPES, templateOf } from './leafInstances';
 
 const LEAF = HOUSE_PART.leaf;
 const BARK = HOUSE_PART.bark;
@@ -31,6 +32,14 @@ function seeded(seed) {
   let s = seed % 2147483647 || 1;
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
+
+// (0.4.48) Where the leaves go, when set (houseMesh.js `houseLayout`):
+// a leafInstances.js `leafSink`, each leaf an instance of its shape's
+// template; unset, each is meshed into `out` as before.
+let sink = null;
+export const collectLeaves = s => {
+  sink = s;
+};
 
 /**
  * One leaf from `p` along `dir`, its face toward `up` (both unit): `len`
@@ -44,6 +53,10 @@ function leaf(out, p, dir, up, len, wid, shape, cup, droop, variant) {
   // (0.4.13) A small leaf (a lavender's, a creeping fig's) in fewer
   // pieces: its curve the same, a quarter of the vertices.
   const small = len < 0.08;
+  if (sink) {
+    sink.add(templateOf(SHAPE_NAME.get(shape), small), p, dir, side, len, wid, cup, droop, LEAF + variant);
+    return;
+  }
   grid(out, small ? 3 : 6, small ? 2 : 4, (u, w) => {
     const v = w * 2 - 1;
     const half = wid * 0.5 * shape(u);
@@ -54,14 +67,9 @@ function leaf(out, p, dir, up, len, wid, shape, cup, droop, variant) {
   }, face);
 }
 
-// The species' outlines.
-const lance = u => Math.pow(Math.sin(Math.PI * u), 0.9) * (1 - 0.25 * u);
-const fiddle = u => {
-  const a = Math.sin(Math.PI * Math.pow(u, 0.75));
-  // Waisted below the middle, broadest toward the tip.
-  return Math.max(0.05, a * (0.75 + 0.35 * u) * (1 - 0.18 * Math.exp(-((u - 0.35) ** 2) / 0.01)));
-};
-const oval = u => Math.sin(Math.PI * u);
+// The species' outlines (leafInstances.js, which keys its templates by them).
+const { lance, fiddle, oval } = LEAF_SHAPES;
+const SHAPE_NAME = new Map(Object.entries(LEAF_SHAPES).map(([n, f]) => [f, n]));
 
 /** A direction off `d` by `ang`, turned `az` round it. */
 function turn(d, ang, az) {

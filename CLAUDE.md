@@ -79,7 +79,12 @@ and picture, and takes out the curtains and the clothes on the owner's call
 (the towels stay; new ones to come). Pushed before `npm run qa` and the
 phones, on the owner's call.
 
-**Next: 0.4.48**, the house's plants as instances, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.48** (2026-11-19) draws the house's 15,000 leaves as instances of
+four templates (`leafInstances.js`, 0.84 MB in place of 21.6 MB of mesh),
+the same leaves to float rounding, through every pass (`uLeaf`).
+Committed before parity and the phones, on the owner's call.
+
+**Next: 0.4.49**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

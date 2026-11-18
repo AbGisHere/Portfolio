@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import './grass-ranges-test.mjs';
 import './house-fitting-test.mjs';
 import './house-pack-test.mjs';
+import './leaf-instance-test.mjs';
 import './light-cells-test.mjs';
 import './house-pvs-test.mjs';
 import './house-readiness-test.mjs';

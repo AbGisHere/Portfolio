@@ -6,6 +6,26 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.48 — 2026-11-19
+
+The house's plants' leaves as instances, as the meadow's trees are drawn.
+
+- Every leaf `plantMesh.js` made (15,000: the olive, fig, lavender,
+  coneflowers, trailing plants, bouquet) is now an instance of one of four
+  templates, its shape cut as before (`leafInstances.js`): 0.84 MB of
+  instances in place of 21.6 MB of the packed house (15.4 MB vertices,
+  6.2 MB indices), so less to build, send from the worker, keep in
+  IndexedDB and hold on the GPU.
+- The house's vertex shader and the shadow map's compute each leaf vertex
+  and `grid`'s normal from its instance (`LEAF_GLSL`, behind `uLeaf`), so
+  every pass draws them with its own program: colour (the leaf variant),
+  depth, reflection, probes and the sun's shadow. Checked on the CPU against
+  the meshed leaves: all 723,600 vertices within float32 rounding (3.8 µm,
+  normals 4e-8); everything else unchanged (`scripts/leaf-instance-test.mjs`).
+- Leaves draw after the solid runs, culled in runs of 256 to the view (not
+  by the path's visible set); `housePvs.js` regenerated (359 runs).
+- Committed before house parity and the phones, on the owner's call.
+
 ## 0.4.47 — 2026-11-19
 
 Shader variants for the house, and the curtains and clothes taken out on

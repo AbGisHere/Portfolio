@@ -45,10 +45,10 @@ import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
 import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh, houseVariant } from './houseShader';
-import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, runsChecksum, tagLampFittings } from './houseLights';
+import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, runVariant, runsChecksum, tagLampFittings } from './houseLights';
 import { HOUSE_PVS } from './housePvs';
 import { curtainMesh } from './houseRooms';
-import { FLOOR, HOUSE_BOUNDS, HOUSE_VARIANTS, MOUND, POOL, TERRACE, moundY } from './houseShape';
+import { FLOOR, HOUSE_BOUNDS, HOUSE_PART, HOUSE_VARIANTS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
 // (0.4.13) The pool's and the hill's boxes (metres), for whether they're in
 // the frame.
@@ -65,6 +65,7 @@ import { butterfliesAt, butterflyMesh } from './butterflies';
 import { firefliesAt, fireflyMesh } from './fireflies';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
+import { LEAF_INSTANCE_STRIDE, LEAF_TEMPLATES, LEAF_TEMPLATE_STRIDE, leafTemplate } from './leafInstances';
 import { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, makeLightmap } from './houseLightmap';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from './meadowShader';
@@ -85,6 +86,9 @@ import { getLampPose, subscribeLampPose } from '../lampPose';
 import { treeSeed } from '../treeSeed';
 import { grainTile, layGrain } from '../grainLayer';
 import styles from './MistCanvas.module.css';
+
+// (0.4.48) The shader variant the leaves are drawn with.
+const LEAF_VARIANT = runVariant([HOUSE_PART.leaf]);
 
 const SKY_TEXELS = 1024;
 // (0.2.4) The shader's cost grows with device pixels, so past a 4K frame
@@ -628,6 +632,15 @@ export default function MistCanvas({ recipe, onFail }) {
         }
       }
     };
+    // (0.4.48) A leaf template's instances from `first` on (WebGL2 has no
+    // base instance), its VAO bound.
+    const LEAF_ATTRIBS = [[6, 3, 0], [7, 3, 3], [8, 3, 6], [9, 4, 9], [10, 1, 13]];
+    const pointLeaves = (L, first) => {
+      if (L.at === first) return;
+      L.at = first;
+      gl.bindBuffer(gl.ARRAY_BUFFER, L.ibuf);
+      for (const [i, n, at] of LEAF_ATTRIBS) gl.vertexAttribPointer(i, n, gl.FLOAT, false, LEAF_INSTANCE_STRIDE * 4, (first * LEAF_INSTANCE_STRIDE + at) * 4);
+    };
     const updateHouseBuffer = () => {
       if (!house || !houseBuilt) return;
       const hm = houseBuilt.house;
@@ -645,6 +658,15 @@ export default function MistCanvas({ recipe, onFail }) {
       house.chunks = hm.chunks;
       house.runs = hm.runs;
       house.panes = hm.glass;
+      // (0.4.48) Its leaves, into the templates' instance buffers.
+      for (const l of hm.leaves ?? []) {
+        const L = house.leaves.find(k => k.template === l.template);
+        if (!L) continue;
+        gl.bindBuffer(gl.ARRAY_BUFFER, L.ibuf);
+        gl.bufferData(gl.ARRAY_BUFFER, l.data, gl.STATIC_DRAW);
+        Object.assign(L, { count: l.count, runs: l.runs });
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       dirty = true;
       kickRef.current();
     };
@@ -744,6 +766,34 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       cm.vertices = null;
       cm.indices = null;
+      // (0.4.48) The plants' leaves: each template's grid, and its leaves
+      // as instances (leafInstances.js), drawn by the same programs.
+      const leaves = (hm.leaves ?? []).map(l => {
+        const tpl = leafTemplate(...LEAF_TEMPLATES[l.template]);
+        const lvao = gl.createVertexArray();
+        gl.bindVertexArray(lvao);
+        const tb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, tb);
+        gl.bufferData(gl.ARRAY_BUFFER, tpl.data, gl.STATIC_DRAW);
+        for (const [i, n, at] of [[11, 3, 0], [12, 4, 3], [13, 2, 7]]) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribPointer(i, n, gl.FLOAT, false, LEAF_TEMPLATE_STRIDE * 4, at * 4);
+        }
+        const ib = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, ib);
+        gl.bufferData(gl.ARRAY_BUFFER, l.data, gl.STATIC_DRAW);
+        for (const [i] of LEAF_ATTRIBS) {
+          gl.enableVertexAttribArray(i);
+          gl.vertexAttribDivisor(i, 1);
+        }
+        const L = { template: l.template, vao: lvao, tbuf: tb, ibuf: ib, ebo: gl.createBuffer(), n: tpl.indices.length, count: l.count, runs: l.runs, at: -1 };
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, L.ebo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tpl.indices, gl.STATIC_DRAW);
+        pointLeaves(L, 0);
+        gl.bindVertexArray(null);
+        return L;
+      });
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       // (0.4.30) The lights' data, a texel each, on unit 16 for good (0–15
       // are taken; WebGL2 gives at least 32).
       const lt = gl.createTexture();
@@ -772,6 +822,7 @@ export default function MistCanvas({ recipe, onFail }) {
         runs: hm.runs,
         panes: hm.glass,
         curtains: { vao: cvao, buf: cb, ibo: cib, count: cm.count },
+        leaves,
         u: uniformLookup(hp),
         variants,
       };
@@ -801,7 +852,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!sp) return h?.failed ? (shadow = false) : null;
       const map = makeShadow(gl, 9);
       if (!map) return (shadow = false);
-      shadow = { prog: sp, map, u: gl.getUniformLocation(sp, 'uLightVP') };
+      shadow = { prog: sp, map, u: gl.getUniformLocation(sp, 'uLightVP'), leaf: gl.getUniformLocation(sp, 'uLeaf') };
       return shadow;
     };
     // (0.4.2) The glass and the water (houseGlass.js): their mesh and the
@@ -2471,6 +2522,31 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       if (cur !== g) gl.useProgram(g.prog);
     };
+    // (0.4.48) The leaves, after the solid part, by the program in use (or
+    // its leaf variant, for the house's own): each template's runs in view.
+    const drawLeaves = (g, u, ctx, leafU = null) => {
+      if (!g.leaves?.length || (!u && !leafU)) return;
+      const vp = !leafU && u === g.u ? g.variants?.[LEAF_VARIANT] : null;
+      if (vp) gl.useProgram(vp.prog);
+      const at = leafU ?? (vp ? vp.u : u)('uLeaf');
+      gl.uniform1f(at, 1);
+      const cull = ctx && !ctx.view && !noHouseCull;
+      for (const L of g.leaves) {
+        const list = cull
+          ? houseRanges(L.runs, (lo, hi) => boxSeen(ctx.P, ctx.c, ctx.fw, ctx.fh, lo, hi), { mirror: ctx.mirror ? POOL.at[1] : null })
+          : [[0, L.count]];
+        if (!list.length) continue;
+        gl.bindVertexArray(L.vao);
+        for (const [first, count] of list) {
+          pointLeaves(L, first);
+          gl.drawElementsInstanced(gl.TRIANGLES, L.n, gl.UNSIGNED_SHORT, 0, count);
+        }
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.uniform1f(at, 0);
+      if (vp) gl.useProgram(g.prog);
+      gl.bindVertexArray(g.vao);
+    };
     function houseGeometry(g, u, part = 'solid', ctx = null) {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
@@ -2479,6 +2555,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // The lawn, then the solid part: every triangle in view, in order.
         if (lawn) drawRange(g, lawn.offset / 4, lawn.count);
         drawSolid(g, u, ctx);
+        drawLeaves(g, u, ctx);
       }
       if (part === 'lawn' && lawn) {
         const lv = u === g.u && g.variants?.[0];
@@ -2487,7 +2564,10 @@ export default function MistCanvas({ recipe, onFail }) {
         if (lv) gl.useProgram(g.prog);
       }
       if (part !== 'lawn') {
-        if (part !== 'all') drawSolid(g, u, ctx);
+        if (part !== 'all') {
+          drawSolid(g, u, ctx);
+          drawLeaves(g, u, ctx);
+        }
         gl.uniform1f(u('uMorph'), houseNight());
         gl.bindVertexArray(g.curtains.vao);
         if (g.indexed) gl.drawElements(gl.TRIANGLES, g.curtains.count, gl.UNSIGNED_INT, 0);
@@ -2680,6 +2760,7 @@ export default function MistCanvas({ recipe, onFail }) {
             else gl.drawArrays(gl.TRIANGLES, ch.offset / 4, ch.count);
           }
         }
+        drawLeaves(g, null, null, sh.leaf);
       }, lightDir(colours.dir));
       gl.viewport(0, 0, canvas.width, canvas.height);
       sh.map.bind();

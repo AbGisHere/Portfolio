@@ -14,7 +14,8 @@ import { ball, barPull, box, grid, lathe, soft, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
 import { drapedTowel, robeHook } from './garments';
 import { groundRooms, upperRooms } from './houseRooms';
-import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
+import { coneflower, fig, grassClump, lavender, olive, trailing, collectLeaves } from './plantMesh';
+import { leafSink } from './leafInstances';
 import { miniBar } from './homeDetails';
 
 // (0.4.16) A seeded stream for the planting's drifts.
@@ -129,8 +130,11 @@ function holed(out, lo, hi, [hx0, hz0, hx1, hz1], part) {
 /** The mound, the house, its rooms and its terrace: `{ data, count }`,
  * plus `glass` (the panes: [lo, hi, rail] boxes, `rail` the terrace's
  * and the balustrades') for houseGlass.js. */
-export function houseLayout() {
+export function houseLayout(leaves = leafSink()) {
   MIRRORS.length = 0;
+  // (0.4.48) Its plants' leaves as instances (leafInstances.js), not in
+  // `data` (`leaves`: a sink, for the tests).
+  collectLeaves(leaves);
   const out = [];
   const glass = [];
   const pane = (lo, hi, rail = false) => glass.push([lo, hi, rail]);
@@ -485,5 +489,6 @@ export function houseLayout() {
   // (0.4.28) The lighting brief's fittings.
   lightFixtures(out);
   const data = new Float32Array(out);
-  return { data, count: data.length / 9, lawn, glass, mirrors: MIRRORS.map(m => ({ c: [...m.c], n: [...m.n] })) };
+  collectLeaves(null);
+  return { data, count: data.length / 9, lawn, glass, leaves: leaves.pack(), mirrors: MIRRORS.map(m => ({ c: [...m.c], n: [...m.n] })) };
 }

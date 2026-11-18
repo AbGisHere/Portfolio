@@ -6,15 +6,17 @@
  */
 
 import { HOUSE_BOUNDS } from './houseShape';
+import { LEAF_GLSL } from './leafInstances';
 
 /** The map's size (texels a side). */
 export const SHADOW_SIZE = 2048;
 
 export const SHADOW_VERTEX = `#version 300 es
 layout(location = 0) in vec3 aPos;
+${LEAF_GLSL}
 uniform mat4 uLightVP;
 void main() {
-  gl_Position = uLightVP * vec4(aPos, 1.0);
+  gl_Position = uLightVP * vec4(uLeaf > 0.5 ? leafPos(leafFace()) : aPos, 1.0);
 }
 `;
 
