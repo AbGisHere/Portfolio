@@ -1,10 +1,11 @@
 {
   "name": "portfolio",
-  "version": "0.4.54",
+  "version": "0.4.55",
   "description": "Abhinav Gupta's personal site: one continuous, scroll-driven scene.",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node --import ./scripts/lib/resolve-js.mjs scripts/house-prebuild.mjs",
     "build": "next build",
     "postbuild": "node scripts/strip-empty-maps.mjs",
     "start": "next start",

@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.55 — 2026-11-19
+
+- The house's fragment shader holds its directions (normal, sun) and its material (albedo, roughness, F0, metal, its own light) at mediump: fewer registers on phone GPUs. Positions, depth, shadow lookups, hashes, the lights' sums and every int stay highp (0.4.41).
+- Same picture: house parity 22/24 against 0.4.49 (the two desk views differ by the new MacBook only); night screenshots fine on the OnePlus 11R (Adreno), Pixel 7 (Mali) and Moto G71. Moto G71 climb 7.2 fps (within noise of 0.4.48's 7.5): kept on the owner's call, as one of many small gains.
+
 ## 0.4.54 — 2026-11-19
 
 - The MacBook remeasured off Apple's straight-on and side product images of the 14-inch PROLED model (0.4.53's photo read the lid too wide off its edge's highlight): the lid's corners 11 mm, the screen's 6.6 mm (concentric), bezels 4.4 mm at the sides and 4.8 at the top, the Dynamic Island a pill 11.8 × 5.9 mm, its middle 4.8 mm under the screen's top; the base 10.7 mm thick, its top edge near sharp and its underside rounded under (5.5 mm), the lid 3.5 mm.

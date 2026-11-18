@@ -634,19 +634,22 @@ void main() {
   // (Only what stands above the water is mirrored in it, and never the
   // rooms behind the glass: too dim to show in it.)
   if (uMirror.x > 0.5 && (vWorld.y < uMirror.y || roomOf(vWorld) != 0)) discard;
-  vec3 N = normalize(vNorm);
+  // (0.4.55) Directions, the material and its own light at mediump (phone
+  // GPUs: fewer registers); positions, depth, shadow lookups, hashes and
+  // the lights' sums stay highp, and so do ints (0.4.41).
+  mediump vec3 N = normalize(vNorm);
   vec3 V = normalize(uCam - vWorld);
   if (uMirror.x > 0.5) V = normalize(vec3(uCam.x, 2.0 * uMirror.y - uCam.y, uCam.z) - vWorld);
-  vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
+  mediump vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
   vec2 st = vST;
   float k = vVar * 10.0;
   // The material: albedo, roughness, F0 (metals take their albedo), light
   // of its own.
-  vec3 alb = vec3(0.8);
-  float rough = 0.8;
-  float f0 = 0.04;
-  float metal = 0.0;
-  vec3 emit = vec3(0.0);
+  mediump vec3 alb = vec3(0.8);
+  mediump float rough = 0.8;
+  mediump float f0 = 0.04;
+  mediump float metal = 0.0;
+  mediump vec3 emit = vec3(0.0);
 #ifndef HS_MAT
   if (vPart == ${P.lawn}) {
     // At its foot the mound frays into the meadow (which shows where it's
