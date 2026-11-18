@@ -6,6 +6,12 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.51 — 2026-11-19
+
+- Fixes 0.4.50: making the frame's texture left texture unit 0 unbound, so a later upload failed and the night's picture was wrong (house parity 0/24 on 0.4.50; 24/24 with the fix). The unit's texture is restored.
+- Three more house shader variants (`HOUSE_VARIANTS`): fabrics, cushions and rugs; books with their pages, spines and ceramics; and the walnut, brass, steel and lamp fittings, the commonest runs after the leaves.
+- Measured and dropped: skipping runs under a pixel (0–5 of ~24,000 run views on the contact path are). Moved to the quality-rule list: baking the paving's lamp light (its roughness varies, so its highlight depends on the view).
+
 ## 0.4.50 — 2026-11-19
 
 - The frame target's colour is a texture (`aoTarget`'s `frame.tex`): by night the bloom reads it in place of a full-screen copy of the canvas (`?earlyz=0` keeps the copy).

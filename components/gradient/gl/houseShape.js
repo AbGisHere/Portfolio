@@ -33,6 +33,11 @@ export const HOUSE_PART = {
 export const HOUSE_VARIANTS = [
   [HOUSE_PART.lawn],
   [HOUSE_PART.leaf, HOUSE_PART.bark],
+  // (0.4.51) The soft things, the shelves' books, and the wood-and-metal
+  // fittings: the runs most common after the leaves.
+  [HOUSE_PART.fabric, HOUSE_PART.cushion, HOUSE_PART.rug],
+  [HOUSE_PART.book, HOUSE_PART.pages, HOUSE_PART.spine, HOUSE_PART.ceramic],
+  [HOUSE_PART.walnut, HOUSE_PART.cord, HOUSE_PART.brass, HOUSE_PART.steel, HOUSE_PART.lamp, HOUSE_PART.ceramic, HOUSE_PART.fabric, HOUSE_PART.cushion],
 ];
 
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */
