@@ -2,15 +2,17 @@
  * (0.3.8) The laptop's size, where it sits on the desk and the shadow it
  * casts: shared by its own shader (laptopShader.js), whose deck the open lid
  * shades, and the desk's (deskShader.js), whose top the whole laptop shades.
- * Metres; the size of a 14-inch MacBook Pro.
+ * Metres; the size of the 14-inch MacBook Pro with the PROLED XDR display
+ * (2026: 310.8 × 216.3 × 15 mm, thinner bezels, a Dynamic Island for the
+ * camera in place of the notch; 0.4.52).
  */
 import { DESK_BOX } from '../deskCamera';
 
 export const LAPTOP = {
-  w: 0.3126, // width (x)
-  d: 0.2212, // depth (z)
-  base: 0.0105, // the base's thickness
-  lid: 0.0048, // the lid's
+  w: 0.3108, // width (x)
+  d: 0.2163, // depth (z)
+  base: 0.0102, // the base's thickness
+  lid: 0.0046, // the lid's
   corner: 0.011, // the corners' radius, seen from above
   hingeIn: 0.004, // the hinge, in from the base's back edge
   gap: 0.0004, // between the shut lid and the deck
@@ -18,8 +20,10 @@ export const LAPTOP = {
   // touch), a little toward the camera's side of the desk's middle.
   at: [0, DESK_BOX.h + 0.0012, -0.02],
   // The screen on the lid's face: its size, and how far down from the lid's
-  // free edge it starts.
-  screen: { w: 0.2965, h: 0.1925, top: 0.0075 },
+  // free edge it starts. (0.4.52) The PROLED panel's 3024 × 1986 shape at
+  // 14.2" (the viewable area, as before ~98% of the stated rectangle),
+  // rounded at all four corners.
+  screen: { w: 0.2955, h: 0.194, top: 0.0058 },
   // (0.3.9) One finish by day and by night, space black: the night only
   // darkens it through its light (the owner, 2026-10-05).
   metal: '#303033',

@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.52 — 2026-11-19
+
+- The desk's laptop is the 14-inch MacBook Pro with the PROLED XDR display (Apple's tech specs): 310.8 × 216.3 × 15 mm (was 312.6 × 221.2 × 15.5), the screen the 3024 × 1986 panel's shape at 14.2" with all four corners rounded, slimmer bezels (top 7.5 → 5.8 mm), and the camera in a Dynamic Island just inside the screen's top edge in place of the notch (its size estimated: Apple doesn't give it). Space Black as before.
+- A deliberate change to the desk's look: no parity against 0.4.51 on the desk.
+
 ## 0.4.51 — 2026-11-19
 
 - Fixes 0.4.50: making the frame's texture left texture unit 0 unbound, so a later upload failed and the night's picture was wrong (house parity 0/24 on 0.4.50; 24/24 with the fix). The unit's texture is restored.

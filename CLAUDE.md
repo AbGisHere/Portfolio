@@ -101,7 +101,11 @@ until they're grouped by place) and sends uniforms only on change
 **0.4.51** (2026-11-19) fixes 0.4.50's night (texture unit 0 left
 unbound) and adds three shader variants (fabrics, books, fittings).
 
-**Next: 0.4.52**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.52** (2026-11-19) makes the desk's laptop the 14-inch PROLED XDR
+MacBook Pro: its size, slimmer bezels, and a Dynamic Island in place of
+the notch (`laptopShape.js`, `laptopShader.js`).
+
+**Next: 0.4.53**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

@@ -554,13 +554,14 @@ void main() {
     gSat = 1.0;
   } else if (vPart > 0.5 && vLocalN.y < -0.9) {
     // The lid's face: a thin rubber rim, then black glass, the screen
-    // behind it with the camera's notch at its top; the glass mirrors the
+    // behind it with the camera's Dynamic Island, a pill just inside its
+    // top edge (0.4.52; the notch before); the glass mirrors the
     // sky and the body over it all.
     float rim = smoothstep(-0.0012, -0.0008, laptopBox(vLocal.xz, vec2(${f(W / 2)}, ${f(D / 2)}), ${f(RC)}));
     vec2 s = vec2(vLocal.x, vLocal.z + ${f(D / 2 - SCREEN.top - SCREEN.h / 2)});
     float in_ = 1.0 - smoothstep(-0.0003, 0.0003, laptopBox(s, vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)}), 0.0025));
-    vec2 nc = s - vec2(0.0, ${f(-SCREEN.h / 2)});
-    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.0155, 0.0058), 0.0016));
+    vec2 nc = s - vec2(0.0, ${f(-SCREEN.h / 2)}) - vec2(0.0, 0.0042);
+    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.0068, 0.0019), 0.0019));
     in_ *= 1.0 - notch;
     float down = clamp(0.5 + s.y / ${f(SCREEN.h)}, 0.0, 1.0);
     vec3 glow = mix(uScreenTop, uScreenFoot, smoothstep(0.0, 1.0, down));
@@ -568,8 +569,8 @@ void main() {
     // The panel's light falls off a little toward its edges, as an LCD's does.
     vec2 ed = abs(s) / vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)});
     glow *= 1.0 - 0.08 * smoothstep(0.7, 1.0, max(ed.x, ed.y));
-    // The camera: a dark lens with a blue glint, in the notch.
-    vec2 cm = nc - vec2(0.0, 0.0026);
+    // The camera: a dark lens with a blue glint, in the island's right end.
+    vec2 cm = nc - vec2(0.0042, 0.0);
     float lens = 1.0 - smoothstep(0.0006, 0.0008, length(cm));
     float glint = (1.0 - smoothstep(0.0, 0.00025, length(cm - vec2(0.0002, 0.0002)))) * lens;
     vec3 glass = vec3(0.008) + glow * uWake * in_;
