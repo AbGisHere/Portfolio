@@ -169,3 +169,26 @@ test('the reflection skips runs wholly inside a room, as the shader discards the
   assert.deepEqual(houseRanges(runs, () => true, { mirror: 0, rooms }), [[3, 3]]);
   assert.deepEqual(houseRanges(runs, () => true, { rooms }), [[0, 6]]);
 });
+
+test('(0.4.47) shader variants drop only the other materials\' branches', async () => {
+  const { HOUSE_FRAGMENT, houseVariant } = await import('../components/gradient/gl/houseShader.js');
+  const { HOUSE_VARIANTS } = await import('../components/gradient/gl/houseShape.js');
+  // Every material test is written `vPart == <id>`, so the variant sees them all.
+  assert.equal(HOUSE_FRAGMENT.match(/vPart\s*[!<>]=?|vPart\s*==(?! \d)/g), null);
+  for (const parts of HOUSE_VARIANTS) {
+    const left = [...houseVariant(HOUSE_FRAGMENT, parts).matchAll(/vPart == (\d+)/g)].map(m => +m[1]);
+    assert.ok(left.length > 0 && left.every(id => parts.includes(id)));
+  }
+});
+
+test('(0.4.47) runs pick the first variant holding all their materials, and merge only within one', async () => {
+  const { runVariant } = await import('../components/gradient/gl/houseLights.js');
+  const { HOUSE_PART: P } = await import('../components/gradient/gl/houseShape.js');
+  assert.equal(runVariant(new Set([P.leaf])), 1);
+  assert.equal(runVariant(new Set([P.leaf, P.bark])), 1);
+  assert.equal(runVariant(new Set([P.brass])), -1);
+  assert.equal(runVariant(new Set([P.leaf, P.clothes])), -1);
+  assert.equal(runVariant(new Set([P.lawn])), -1);
+  const runs = { first: Uint32Array.of(0, 3, 6, 9), count: Uint32Array.of(3, 3, 3, 3), box: new Float32Array(24), variant: Int8Array.of(1, 1, -1, 1) };
+  assert.deepEqual(houseRanges(runs, () => true, { rooms: [] }), [[0, 6, 1], [6, 3, -1], [9, 3, 1]]);
+});

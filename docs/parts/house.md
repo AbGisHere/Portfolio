@@ -127,8 +127,8 @@ Interior: x −7.72 … 7.72, z −78.72 … −71.28; the terrace in front.
 - **Wardrobe** (x −4.5 … 2.6, z −76.5 … −78.72): a walk-in, a run of
   walnut cabinetry along the back wall (`wardrobeRun`, `0.4.21`): bays of
   long hanging, double hanging and shelves over drawers, brass rails, a
-  light strip under each shelf over a rail; garments of every kind on
-  hangers and folded knitwear (`garments.js`).
+  light strip under each shelf over a rail, empty for now (`0.4.47`: the
+  garments and folded knitwear taken out; the owner is making new ones).
 - **En-suite** (x 2.6 … 7.72, z −71.28 … −75.5): marble throughout, the
   vanity's wall bookmatched (`0.4.23`); a double vanity on the door's wall
   under a 3 : 1 mirror, a freestanding tub by the front wall, a toilet on
@@ -150,7 +150,9 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   One stands open on each floor, in the middle: the ground floor's third
   panel slid over the second (open x −1.0 … 1.6), the upper floor's middle
   panel over the first (open in the bedroom, x −3.2 … −0.7).
-- **Curtains** (`curtainMesh()`): linen on ceiling tracks before the front
+- **Curtains** (`curtainMesh()`): none since `0.4.47` (the owner's call;
+  something else will go there). `CURTAINS` is empty, so the mesh is too;
+  the code stays for now. Before: linen on ceiling tracks before the front
   glass, two shapes in one buffer, morphed by the switch (`uMorph`). By day
   each is tied back at its end by a slim braided jute cord wrapped snug
   round its gathered waist from the hook, a small tassel at the knot
@@ -304,8 +306,8 @@ brass lever on a rose each side (`lever()` in `meshKit.js`).
   glaze, rolled lip, soil inside it), its uplight on the deck beside it.
   By the loungers (`garments.js`, `0.4.26`): a navy-and-white striped towel
   thrown over the far one's foot (`drapedTowel`), white towels rolled on
-  the table between (`rolledTowels`), and a white towelling robe on a
-  brass hook on the timber wall past the bar, its belt tied (`robe`).
+  the table between (`rolledTowels`), and a brass hook on the timber wall
+  past the bar (`robeHook`; its robe taken out in `0.4.47`).
 - **The bar** (`homeDetails.js`, `0.4.22`): against the timber wall
   beside the bedroom's glass, facing the pool: a walnut counter with a
   stone top, doors with brass pulls and a glass-fronted wine fridge, two

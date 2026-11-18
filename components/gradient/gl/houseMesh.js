@@ -12,7 +12,7 @@ import { LIGHTS, STRIPS } from './houseLights';
 import { lightFixtures } from './lightFixtures';
 import { ball, barPull, box, grid, lathe, soft, tube } from './meshKit';
 import { MIRRORS, lounger } from './furniture';
-import { drapedTowel, robe } from './garments';
+import { drapedTowel, robeHook } from './garments';
 import { groundRooms, upperRooms } from './houseRooms';
 import { coneflower, fig, grassClump, lavender, olive, trailing } from './plantMesh';
 import { miniBar } from './homeDetails';
@@ -366,7 +366,8 @@ export function houseLayout() {
     lathe(out, [tx, gy + 0.39, tz], [0, 1, 0], [[0, 0], [0.032, 0], [0.035, 0.082], [0.032, 0.082], [0.028, 0.006], [0, 0.006]], v(P.ceramic, 0.3), 18);
     soft(out, [tx + 0.012, gy + 0.45, tz], [0.012, 0.008, 0.016], P.fruit, { e1: 0.8, e2: 0.5 });
   }
-  robe(out, [7.15, gy + 1.78, PLAN.upper.z[1] + 0.04], 0);
+  // (0.4.47) The robe taken off its hook (new clothes to come); the hook stays.
+  robeHook(out, [7.15, gy + 1.78, PLAN.upper.z[1] + 0.04], 0);
   // (0.4.17) The olive's pot: thrown stoneware in a dark glaze, wide at
   // the shoulder, a rolled lip, tapering to a foot that lifts it off the
   // deck; the soil 6 cm down inside the lip (it was a plain box).

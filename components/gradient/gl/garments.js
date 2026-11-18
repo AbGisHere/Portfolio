@@ -182,6 +182,14 @@ export function scarf(out, at, yaw, len, k) {
   for (let b = -2; b <= 2; b++) sweep(out, ring.map(p => add(p, ax[2], b * 0.0)).map(p => add(p, [0, 0, 0], 0)).map((p, i) => add(p, ax[0], 0)), 0.006, part, { seg: 5 });
 }
 
+/** (0.4.47) The robe's brass hook alone, as `robe` draws it. */
+export function robeHook(out, hook, yaw) {
+  const ax = axes(0, yaw);
+  const pt = (x, y, z) => add(add(add(hook, ax[0], x), ax[1], y), ax[2], z);
+  tube(out, pt(0, 0, 0), pt(0, 0, 0.05), 0.007, P.brass, 10);
+  ball(out, pt(0, 0.012, 0.055), 0.011, P.brass, 10, 6);
+}
+
 /** (0.4.26) The robe on a brass hook at `hook` on a wall facing yaw: hung
  * by its loop, its belt tied round the waist, the ends hanging. */
 export function robe(out, hook, yaw) {

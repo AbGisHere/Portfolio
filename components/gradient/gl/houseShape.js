@@ -22,6 +22,19 @@ export const HOUSE_PART = {
   oak: 10, fabric: 11, walnut: 12, steel: 13, book: 14, leaf: 15, planter: 16, soil: 17, lamp: 18, cushion: 19, rug: 20, bark: 21, screen: 22, art: 23, ceramic: 24, mirror: 25, brass: 26, clothes: 27, paper: 28, fruit: 29, curtain: 30, marble: 31, cord: 32, pages: 33, spine: 34, rope: 35, paver: 36, roof: 37, person: 38,
 };
 
+/**
+ * (0.4.47) The house's shader variants: its fragment shader compiled again
+ * for runs holding only these materials, every other material's branch
+ * dropped at compile time (houseShader.js `houseVariant`). The same maths
+ * for what they draw, fewer registers on phone GPUs. A run is drawn with
+ * the first variant holding all its materials, else the full shader, in
+ * the same order (houseLights.js `houseRuns`). [0]: the lawn's pass.
+ */
+export const HOUSE_VARIANTS = [
+  [HOUSE_PART.lawn],
+  [HOUSE_PART.leaf, HOUSE_PART.bark],
+];
+
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */
 export const MOUND = { at: [0, -72], r: [40, 32], h: 3.2 };
 

@@ -6,6 +6,25 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.47 — 2026-11-19
+
+Shader variants for the house, and the curtains and clothes taken out on
+the owner's call.
+
+- **Shader variants (`houseShape.js` `HOUSE_VARIANTS`, `houseShader.js`
+  `houseVariant`):** the house's fragment shader is compiled again for the
+  lawn's pass and for runs of only leaves and bark, every other material's
+  branch dropped at compile time, so phone GPUs need fewer registers there.
+  Each run carries its variant (`houseRuns`), ranges merge only within one,
+  and the draw order is unchanged. `?variants=0` draws all with the full
+  shader. Variants on and off: 24/24 path views equal.
+- **Removed (the owner, 2026-11-19):** the curtains and their tracks, the
+  garments on the hall's hooks and in the wardrobe, its folded stacks, and
+  the pool's robe (its hook stays). The towels stay. Mesh 659 → 476 runs;
+  `housePvs.js` remade.
+- **Pushed before the full checks** (the owner's call, to try it on their
+  phone at once); `npm run qa` and the phones follow.
+
 ## 0.4.46 — 2026-11-08
 
 Less drawn and shaded on the pool climb, with the same picture. Record:

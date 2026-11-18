@@ -73,7 +73,13 @@ frame's own, and the lightmap's programs compiled in parallel. OnePlus 11R
 ~53 → 57.5 fps (p95 33 → 22 ms), Moto G71 ~7 → 7.5.
 Record: [`docs/optimization-0.4.46.md`](docs/optimization-0.4.46.md).
 
-**Next: 0.4.47**, the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.47** (2026-11-19) compiles the house's shader again for the lawn and
+for leaf runs (`HOUSE_VARIANTS`, `?variants=0` off), with the same order
+and picture, and takes out the curtains and the clothes on the owner's call
+(the towels stay; new ones to come). Pushed before `npm run qa` and the
+phones, on the owner's call.
+
+**Next: 0.4.48**, the house's plants as instances, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

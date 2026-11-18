@@ -25,7 +25,7 @@
  * and those seen through the front glass).
  */
 
-import { FLOOR, HOUSE_PART, PLAN, STOREY, TERRACE, WALL, ZONES } from './houseShape';
+import { FLOOR, HOUSE_PART, HOUSE_VARIANTS, PLAN, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { lightPlan } from './houseLightPlan';
 
 const look = lightPlan();
@@ -559,11 +559,26 @@ export const HOUSE_RUN = 3 * 2048;
  * order and skipped only when wholly out of view, so what's drawn is drawn
  * exactly as before, overlaps and all.
  */
+// (0.4.47) The first shader variant holding every material in `parts`
+// (houseShape.js HOUSE_VARIANTS), or -1: the full shader. The lawn's
+// variant (0) is for its own pass only.
+export function runVariant(parts) {
+  for (let v = 1; v < HOUSE_VARIANTS.length; v++) {
+    const has = HOUSE_VARIANTS[v];
+    let all = true;
+    for (const p of parts) if (!has.includes(p)) { all = false; break; }
+    if (all) return v;
+  }
+  return -1;
+}
+
 export function houseRuns(data, start, end) {
   const n = Math.ceil((end - start) / HOUSE_RUN);
   const first = new Uint32Array(n);
   const count = new Uint32Array(n);
   const box = new Float32Array(n * 6);
+  const variant = new Int8Array(n);
+  const parts = new Set();
   for (let r = 0; r < n; r++) {
     const a = start + r * HOUSE_RUN;
     const b = Math.min(end, a + HOUSE_RUN);
@@ -571,6 +586,7 @@ export function houseRuns(data, start, end) {
     count[r] = b - a;
     const o = r * 6;
     box.set([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity], o);
+    parts.clear();
     for (let i = a; i < b; i++) {
       const off = i * HOUSE_STRIDE;
       for (let axis = 0; axis < 3; axis++) {
@@ -578,9 +594,11 @@ export function houseRuns(data, start, end) {
         if (v < box[o + axis]) box[o + axis] = v;
         if (v > box[o + 3 + axis]) box[o + 3 + axis] = v;
       }
+      parts.add(Math.floor(data[off + 6] + 0.001));
     }
+    variant[r] = runVariant(parts);
   }
-  return { first, count, box };
+  return { first, count, box, variant };
 }
 
 // (0.4.40) Whether a run's box lies wholly in one room's box, as the
@@ -623,9 +641,12 @@ export function houseRanges(runs, seen, { pad = 0.1, mirror = null, rooms = ZONE
       hi[1] = 2 * mirror - y;
     }
     if (!seen(lo, hi)) continue;
+    // (0.4.47) Merged only with a neighbour drawn by the same shader; the
+    // shader's variant third when the runs carry one.
+    const v = runs.variant ? runs.variant[r] : null;
     const last = out[out.length - 1];
-    if (last && last[0] + last[1] === first[r]) last[1] += count[r];
-    else out.push([first[r], count[r]]);
+    if (last && last[0] + last[1] === first[r] && last[2] === (v ?? undefined)) last[1] += count[r];
+    else out.push(v === null ? [first[r], count[r]] : [first[r], count[r], v]);
   }
   return out;
 }

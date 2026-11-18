@@ -7,7 +7,6 @@
 
 import { FLOOR, HOUSE_PART, MATCH_AXES, STOREY, TERRACE } from './houseShape';
 import { add, axes, ball, barPull, box, grid, lathe, obox, soft, sweep, tube } from './meshKit';
-import { foldedStack, garment, scarf } from './garments';
 import { homeDisplay, lightSwitch, socket } from './homeDetails';
 import { clad, longVanity, toilet, walkInShower } from './washrooms';
 import { bouquet } from './plantMesh';
@@ -281,9 +280,7 @@ export function groundRooms(out, ix, iz, glass) {
     sweep(out, [[ix[1] - 0.022, B + 1.76, z], [ix[1] - 0.07, B + 1.755, z], [ix[1] - 0.085, B + 1.78, z]], 0.005, P.brass, { seg: 6 });
     ball(out, [ix[1] - 0.085, B + 1.78, z], 0.007, P.brass, 8, 4);
   }
-  garment(out, [ix[1] - 0.1, B + 1.68, -63.85], -Math.PI / 2, 'coat', 0.05, 3);
-  garment(out, [ix[1] - 0.1, B + 1.68, -64.65], -Math.PI / 2, 'coat', 0.45, 7);
-  scarf(out, [ix[1] - 0.075, B + 1.775, -64.25], -Math.PI / 2, 0.62, 2);
+  // (0.4.47) The coats and the scarf taken off: the owner is making new clothes.
   rug(out, [5.0, -66.6], [7.5, -63.6], y, 0.5);
 
   // ---- The living room: the sofa facing the glass and the view, two
@@ -454,10 +451,8 @@ export function groundRooms(out, ix, iz, glass) {
     tube(out, [ix[0] + 0.005, p[1] - 0.06, p[2]], [p[0], p[1] - 0.02, p[2]], 0.007, P.steel, 6);
   }
 
-  // ---- Curtains at the glass: stacked at the ends and between the rooms.
-  const cz = -63.42;
-  for (const [x0, x1, to] of [[-7.35, -4.4, -1], [-4.4, -1.45, 1], [-1.35, 1.6, -1], [1.6, 4.55, 1]]) CURTAINS.push([x0, x1, cz, CEIL_G - 0.02, B + 0.01, to, 3 + CURTAINS.length * 7]);
-  track(out, -7.35, 4.55, cz, CEIL_G - 0.03);
+  // (0.4.47) No curtains at the glass for now, nor their tracks (the
+  // owner's call: something else goes here).
 }
 
 /** The upper floor's rooms. `jx`, `jz`: its inside's x and z; `glass`
@@ -547,10 +542,7 @@ export function upperRooms(out, glass, jx, jz) {
   socket(out, [6.26, y + 0.72, jz[0] + 0.115], [0, 0, 1]);
   socket(out, [jx[1], y + 0.86, -76.55], [-1, 0, 0]);
 
-  // ---- Curtains at the glass.
-  const cz = -71.42;
-  for (const [x0, x1, to] of [[-7.1, -2.35, -1], [-2.35, 2.5, 1]]) CURTAINS.push([x0, x1, cz, CEIL_U - 0.02, T + 0.08, to, 11 + CURTAINS.length * 7]);
-  track(out, -7.1, 2.5, cz, CEIL_U - 0.03);
+  // (0.4.47) No curtains at the glass for now (see the ground floor's).
 }
 
 /**
@@ -581,17 +573,8 @@ function wardrobeRun(out, y, back, [x0, x1]) {
   const strip = (a, b, sy) => box(out, [a + 0.02, sy - 0.002, front - 0.06], [b - 0.02, sy + 0.01, front - 0.035], P.lamp + 0.5);
   const shelf = (a, b, sy) => box(out, [a, sy, back + 0.012], [b, sy + t, front - 0.01], W);
   const hangRow = (a, b, ry, pick) => {
+    // (0.4.47) The rail only: its garments taken off for the owner's new ones.
     rail(a, b, ry);
-    let gx = a + 0.07;
-    let i = 0;
-    while (gx < b - 0.06) {
-      const [kind, col] = pick(i, seed);
-      garment(out, [gx, ry - 0.085, back + D / 2], Math.PI / 2 + (((seed * 7) % 10) - 5) * 0.01, kind, col, seed);
-      seed += 3;
-      gx += kind === 'coat' ? 0.11 : kind === 'knit' ? 0.09 : 0.075;
-      gx += ((seed * 13) % 10) * 0.003;
-      i++;
-    }
   };
   kinds.forEach((kind, bay) => {
     const a = x;
@@ -637,7 +620,6 @@ function wardrobeRun(out, y, back, [x0, x1]) {
         shelf(a + t, b, sy);
         if (r > 0) strip(a + t, b, sy);
         const mid = (a + b) / 2;
-        for (const [dx, n] of [[-0.17, 3 + ((r + bay) % 3)], [0.17, 2 + ((r * 2 + bay) % 3)]]) foldedStack(out, [mid + dx, sy + t, back + 0.32], 0, n, 60 + bay * 7 + r * 3 + dx * 10);
       }
     }
     x = b;

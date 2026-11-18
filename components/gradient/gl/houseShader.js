@@ -1466,3 +1466,14 @@ void main() {
   outColor = vec4(col, 1.0);
 }
 `;
+
+/**
+ * (0.4.47) The fragment shader for a run of only these materials
+ * (houseShape.js HOUSE_VARIANTS): each test of another material is false,
+ * so the compiler drops its branch. Every material's test is written
+ * `vPart == <id>` in the fragment shader, which the unit test checks.
+ */
+export function houseVariant(src, parts) {
+  const keep = new Set(parts);
+  return src.replace(/vPart == (\d+)\b/g, (m, id) => (keep.has(+id) ? m : 'false'));
+}

@@ -44,11 +44,11 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh } from './houseShader';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh, houseVariant } from './houseShader';
 import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, packCurtainMesh, packHouseMesh, runsChecksum, tagLampFittings } from './houseLights';
 import { HOUSE_PVS } from './housePvs';
 import { curtainMesh } from './houseRooms';
-import { FLOOR, HOUSE_BOUNDS, MOUND, POOL, TERRACE, moundY } from './houseShape';
+import { FLOOR, HOUSE_BOUNDS, HOUSE_VARIANTS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
 // (0.4.13) The pool's and the hill's boxes (metres), for whether they're in
 // the frame.
@@ -340,6 +340,10 @@ export default function MistCanvas({ recipe, onFail }) {
     const hskip = (params.get('hskip') ?? '').split(',').filter(w => /^[a-z]+$/.test(w));
     const houseFragment = hskip.length ? HOUSE_FRAGMENT.replace('precision highp int;\n', `precision highp int;\n${hskip.map(w => `#define HS_${w.toUpperCase()}\n`).join('')}`) : HOUSE_FRAGMENT;
     const useLightmap = params.get('lightmap') !== '0';
+    // (0.4.47) The house's shader variants (houseShape.js HOUSE_VARIANTS);
+    // `?variants=0` draws everything with the full shader.
+    const useVariants = params.get('variants') !== '0';
+    let houseVariantsAsync = null;
     const startLightmapAtlasAsync = () => (lightmapAtlasAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-atlas', ATLAS_VERTEX, ATLAS_FRAGMENT) : null);
     const startLightmapLawnAsync = () => (lightmapLawnAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-lawn', LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT) : null);
     const startHouseAsync = () => {
@@ -347,6 +351,7 @@ export default function MistCanvas({ recipe, onFail }) {
         startLightmapAtlasAsync();
         startLightmapLawnAsync();
       }
+      if (!noHouse && useVariants) houseVariantsAsync ??= HOUSE_VARIANTS.map((parts, v) => startProgram(`house-variant-${v}`, HOUSE_VERTEX, houseVariant(houseFragment, parts)));
       return (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, houseFragment) : null);
     };
     const startShadowAsync = () => (shadowAsync ??= !noHouse ? startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT) : null);
@@ -701,6 +706,14 @@ export default function MistCanvas({ recipe, onFail }) {
         if ((!lap && !la?.failed) || (!llp && !ll?.failed)) return null;
         if (lap && llp) lmProgs = { atlas: lap, lawn: llp };
       }
+      // (0.4.47) Its variants, compiled beside it: one that fails is left
+      // to the full shader.
+      let variants = null;
+      if (houseVariantsAsync) {
+        const vps = houseVariantsAsync.map(h => readyProgram(h, wait));
+        if (vps.some((vp, i) => !vp && !houseVariantsAsync[i]?.failed)) return null;
+        variants = vps.map(vp => (vp ? { prog: vp, u: uniformLookup(vp) } : null));
+      }
       const hm = houseBuilt.house;
       const hb = gl.createBuffer();
       const hib = gl.createBuffer();
@@ -760,6 +773,7 @@ export default function MistCanvas({ recipe, onFail }) {
         panes: hm.glass,
         curtains: { vao: cvao, buf: cb, ibo: cib, count: cm.count },
         u: uniformLookup(hp),
+        variants,
       };
       return house;
     };
@@ -2442,6 +2456,21 @@ export default function MistCanvas({ recipe, onFail }) {
       rangeList.runs = g.runs;
       return rangeList;
     };
+    // (0.4.47) The solid part's ranges, each with its run's shader variant
+    // when `u` is the house's own (the depth pass draws with its own).
+    const drawSolid = (g, u, ctx) => {
+      const vs = u === g.u ? g.variants : null;
+      let cur = g;
+      for (const [first, count, v = -1] of solidRanges(g, ctx)) {
+        const p = (vs && v >= 0 && vs[v]) || g;
+        if (p !== cur) {
+          gl.useProgram(p.prog);
+          cur = p;
+        }
+        drawRange(g, first, count);
+      }
+      if (cur !== g) gl.useProgram(g.prog);
+    };
     function houseGeometry(g, u, part = 'solid', ctx = null) {
       gl.uniform1f(u('uMorph'), 0);
       gl.bindVertexArray(g.vao);
@@ -2449,11 +2478,16 @@ export default function MistCanvas({ recipe, onFail }) {
       if (part === 'all') {
         // The lawn, then the solid part: every triangle in view, in order.
         if (lawn) drawRange(g, lawn.offset / 4, lawn.count);
-        for (const [first, count] of solidRanges(g, ctx)) drawRange(g, first, count);
+        drawSolid(g, u, ctx);
       }
-      if (part === 'lawn' && lawn) drawRange(g, lawn.offset / 4, lawn.count);
+      if (part === 'lawn' && lawn) {
+        const lv = u === g.u && g.variants?.[0];
+        if (lv) gl.useProgram(lv.prog);
+        drawRange(g, lawn.offset / 4, lawn.count);
+        if (lv) gl.useProgram(g.prog);
+      }
       if (part !== 'lawn') {
-        if (part !== 'all') for (const [first, count] of solidRanges(g, ctx)) drawRange(g, first, count);
+        if (part !== 'all') drawSolid(g, u, ctx);
         gl.uniform1f(u('uMorph'), houseNight());
         gl.bindVertexArray(g.curtains.vao);
         if (g.indexed) gl.drawElements(gl.TRIANGLES, g.curtains.count, gl.UNSIGNED_INT, 0);
@@ -2676,47 +2710,54 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const sh = houseShadow();
       if (sh && !mirror && !lawn && !view) houseShadowMap(g, sh, colours);
-      gl.useProgram(g.prog);
-      gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
-      gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
-      gl.uniform4f(g.u('uScreen'), P.sx, P.sy, fw, fh);
-      gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
-      gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
-      gl.uniform2fv(g.u('uSunDir'), colours.dir);
-      gl.uniform3fv(g.u('uSky'), colours.sky);
-      gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
-      gl.uniform3fv(g.u('uEnvTop'), rgb01(colours.env[0]));
-      gl.uniform3fv(g.u('uEnvLow'), rgb01(colours.env[1]));
-      gl.uniform3fv(g.u('uWood'), rgb01(colours.far));
-      gl.uniform3fv(g.u('uLawn'), rgb01(colours.far));
-      gl.uniform3fv(g.u('uLawnNear'), rgb01(colours.ground));
-      gl.uniform3fv(g.u('uHaze'), rgb01(colours.env[1]));
-      gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
-      gl.uniform1f(g.u('uNight'), houseNight());
-      gl.uniformMatrix4fv(g.u('uLightVP'), false, sh ? sh.map.matrix : IDENTITY);
-      gl.uniform1i(g.u('uShadow'), 9);
-      gl.activeTexture(gl.TEXTURE16);
-      gl.bindTexture(gl.TEXTURE_2D, g.lightTex);
-      if (g.lightmap) {
-        gl.activeTexture(gl.TEXTURE17);
-        gl.bindTexture(gl.TEXTURE_2D, g.lightmap.tex);
-      }
-      gl.activeTexture(gl.TEXTURE0);
-      gl.uniform1i(g.u('uLightData'), 16);
-      gl.uniform1i(g.u('uLightmap'), 17);
-      gl.uniform1f(g.u('uLightmapOn'), g.lightmap ? 1 : 0);
-      gl.uniform1f(g.u('uShadowOn'), sh ? 1 : 0);
-      gl.uniform1i(g.u('uCaustics'), 10);
-      gl.uniform1f(g.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);
-      gl.uniform2f(g.u('uMirror'), mirror ? 1 : 0, POOL.at[1]);
-      gl.uniform1i(g.u('uAO'), 13);
-      gl.uniform1f(g.u('uAOOn'), aoReady && !mirror && !view ? 1 : 0);
-      gl.uniform2f(g.u('uAORes'), canvas.width, canvas.height);
-      gl.uniform1i(g.u('uGrain'), 2);
-      gl.uniform1f(g.u('uGrainA'), noGrain || grainOut || view ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
-      mirrorUniforms(g, !view && !mirror);
+      // (0.4.47) The same uniforms on each of its variants, the house's own
+      // program last (left in use).
+      const setUniforms = p => {
+        gl.useProgram(p.prog);
+        gl.uniform1f(p.u('uMorph'), 0);
+        gl.uniform4f(p.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
+        gl.uniform2f(p.u('uYaw'), P.yc, P.ys);
+        gl.uniform4f(p.u('uScreen'), P.sx, P.sy, fw, fh);
+        gl.uniform3f(p.u('uCam'), c.x, c.y, c.z);
+        gl.uniform2f(p.u('uDepthAB'), ...DEPTH_AB);
+        gl.uniform2fv(p.u('uSunDir'), colours.dir);
+        gl.uniform3fv(p.u('uSky'), colours.sky);
+        gl.uniform3fv(p.u('uSun'), rgb01(colours.sun));
+        gl.uniform3fv(p.u('uEnvTop'), rgb01(colours.env[0]));
+        gl.uniform3fv(p.u('uEnvLow'), rgb01(colours.env[1]));
+        gl.uniform3fv(p.u('uWood'), rgb01(colours.far));
+        gl.uniform3fv(p.u('uLawn'), rgb01(colours.far));
+        gl.uniform3fv(p.u('uLawnNear'), rgb01(colours.ground));
+        gl.uniform3fv(p.u('uHaze'), rgb01(colours.env[1]));
+        gl.uniform2f(p.u('uHazeAt'), ...GRASS_HAZE);
+        gl.uniform1f(p.u('uNight'), houseNight());
+        gl.uniformMatrix4fv(p.u('uLightVP'), false, sh ? sh.map.matrix : IDENTITY);
+        gl.uniform1i(p.u('uShadow'), 9);
+        gl.activeTexture(gl.TEXTURE16);
+        gl.bindTexture(gl.TEXTURE_2D, g.lightTex);
+        if (g.lightmap) {
+          gl.activeTexture(gl.TEXTURE17);
+          gl.bindTexture(gl.TEXTURE_2D, g.lightmap.tex);
+        }
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(p.u('uLightData'), 16);
+        gl.uniform1i(p.u('uLightmap'), 17);
+        gl.uniform1f(p.u('uLightmapOn'), g.lightmap ? 1 : 0);
+        gl.uniform1f(p.u('uShadowOn'), sh ? 1 : 0);
+        gl.uniform1i(p.u('uCaustics'), 10);
+        gl.uniform1f(p.u('uCausticsOn'), causticsReady && poolSeen ? 1 : 0);
+        gl.uniform2f(p.u('uMirror'), mirror ? 1 : 0, POOL.at[1]);
+        gl.uniform1i(p.u('uAO'), 13);
+        gl.uniform1f(p.u('uAOOn'), aoReady && !mirror && !view ? 1 : 0);
+        gl.uniform2f(p.u('uAORes'), canvas.width, canvas.height);
+        gl.uniform1i(p.u('uGrain'), 2);
+        gl.uniform1f(p.u('uGrainA'), noGrain || grainOut || view ? 0 : grainOpacity(recipeRef.current));
+        gl.uniform1f(p.u('uCssPerPx'), w / canvas.width);
+        gl.uniform1f(p.u('uResY'), canvas.height);
+        mirrorUniforms(p, !view && !mirror);
+      };
+      if (g.variants) for (const vp of g.variants) if (vp) setUniforms(vp);
+      setUniforms(g);
       const ctx = { mirror, view, P, c, fw, fh, keep: mirror || view ? null : pathKeep(g) };
       if (who) {
         const pb = personBuffer();
