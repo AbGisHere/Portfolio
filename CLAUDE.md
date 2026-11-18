@@ -105,7 +105,10 @@ unbound) and adds three shader variants (fabrics, books, fittings).
 MacBook Pro: its size, slimmer bezels, and a Dynamic Island in place of
 the notch (`laptopShape.js`, `laptopShader.js`).
 
-**Next: 0.4.53**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.53** (2026-11-19) measures the new MacBook off Apple's photo:
+even bezels, concentric screen corners, the island's true size.
+
+**Next: 0.4.54**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

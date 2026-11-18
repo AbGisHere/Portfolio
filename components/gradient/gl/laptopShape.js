@@ -13,17 +13,18 @@ export const LAPTOP = {
   d: 0.2163, // depth (z)
   base: 0.0102, // the base's thickness
   lid: 0.0046, // the lid's
-  corner: 0.011, // the corners' radius, seen from above
+  corner: 0.0095, // the corners' radius, seen from above (0.4.53: measured off Apple's photo)
   hingeIn: 0.004, // the hinge, in from the base's back edge
   gap: 0.0004, // between the shut lid and the deck
   // Where the base's foot centre stands: on the planks (its feet lift it a
   // touch), a little toward the camera's side of the desk's middle.
   at: [0, DESK_BOX.h + 0.0012, -0.02],
   // The screen on the lid's face: its size, and how far down from the lid's
-  // free edge it starts. (0.4.52) The PROLED panel's 3024 × 1986 shape at
-  // 14.2" (the viewable area, as before ~98% of the stated rectangle),
-  // rounded at all four corners.
-  screen: { w: 0.2955, h: 0.194, top: 0.0058 },
+  // free edge it starts. (0.4.53) Measured off Apple's straight-on photo
+  // of the PROLED model (the lid's 310.8 mm for scale): the whole 3024 ×
+  // 1986 panel, even bezels (~3.7 mm at the sides, 3.6 at the top), its
+  // corners rounded concentric with the lid's (`r`).
+  screen: { w: 0.3034, h: 0.1982, top: 0.0036, r: 0.0058 },
   // (0.3.9) One finish by day and by night, space black: the night only
   // darkens it through its light (the owner, 2026-10-05).
   metal: '#303033',

@@ -559,9 +559,11 @@ void main() {
     // sky and the body over it all.
     float rim = smoothstep(-0.0012, -0.0008, laptopBox(vLocal.xz, vec2(${f(W / 2)}, ${f(D / 2)}), ${f(RC)}));
     vec2 s = vec2(vLocal.x, vLocal.z + ${f(D / 2 - SCREEN.top - SCREEN.h / 2)});
-    float in_ = 1.0 - smoothstep(-0.0003, 0.0003, laptopBox(s, vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)}), 0.0025));
+    float in_ = 1.0 - smoothstep(-0.0003, 0.0003, laptopBox(s, vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)}), ${f(SCREEN.r)}));
+    // (0.4.53) Measured off Apple's photo: 10 × 5.5 mm, its middle 4.2 mm
+    // under the screen's top edge.
     vec2 nc = s - vec2(0.0, ${f(-SCREEN.h / 2)}) - vec2(0.0, 0.0042);
-    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.0068, 0.0019), 0.0019));
+    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.005, 0.00275), 0.00275));
     in_ *= 1.0 - notch;
     float down = clamp(0.5 + s.y / ${f(SCREEN.h)}, 0.0, 1.0);
     vec3 glow = mix(uScreenTop, uScreenFoot, smoothstep(0.0, 1.0, down));
@@ -570,7 +572,7 @@ void main() {
     vec2 ed = abs(s) / vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)});
     glow *= 1.0 - 0.08 * smoothstep(0.7, 1.0, max(ed.x, ed.y));
     // The camera: a dark lens with a blue glint, in the island's right end.
-    vec2 cm = nc - vec2(0.0042, 0.0);
+    vec2 cm = nc - vec2(0.0023, 0.0);
     float lens = 1.0 - smoothstep(0.0006, 0.0008, length(cm));
     float glint = (1.0 - smoothstep(0.0, 0.00025, length(cm - vec2(0.0002, 0.0002)))) * lens;
     vec3 glass = vec3(0.008) + glow * uWake * in_;

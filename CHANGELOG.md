@@ -6,6 +6,10 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.53 — 2026-11-19
+
+- The desk's MacBook measured off Apple's straight-on product photo (the lid's 310.8 mm for scale): the screen the whole 3024 × 1986 panel (303.4 × 198.2 mm), even bezels (~3.7 mm at the sides, 3.6 at the top), its corners rounded concentric with the lid's (5.8 mm in a 9.5 mm corner), and the Dynamic Island inside the screen: 10 × 5.5 mm, its middle 4.2 mm under the top edge, the camera 2.3 mm right of its middle. Fixes 0.4.52's estimated island (too wide, too thin).
+
 ## 0.4.52 — 2026-11-19
 
 - The desk's laptop is the 14-inch MacBook Pro with the PROLED XDR display (Apple's tech specs): 310.8 × 216.3 × 15 mm (was 312.6 × 221.2 × 15.5), the screen the 3024 × 1986 panel's shape at 14.2" with all four corners rounded, slimmer bezels (top 7.5 → 5.8 mm), and the camera in a Dynamic Island just inside the screen's top edge in place of the notch (its size estimated: Apple doesn't give it). Space Black as before.
