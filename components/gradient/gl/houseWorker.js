@@ -11,9 +11,8 @@
  * dropped. Any failure (private mode, quota, no IndexedDB) just builds.
  * The message `{ cache: false }` (`?housecache=0`) skips it both ways.
  */
-import { houseLayout } from './houseMesh';
-import { curtainMesh } from './houseRooms';
-import { packCurtainMesh, packHouseMesh, tagLampFittings } from './houseLights';
+import { buildHouse } from './houseBuild';
+import { decodeHouse } from './houseBlob';
 
 const DB = 'portfolio-house';
 const STORE = 'mesh';
@@ -45,10 +44,33 @@ const write = (db, key, value) => {
   return done(tx);
 };
 
-const build = () => {
-  const rawHouse = houseLayout();
-  tagLampFittings(rawHouse.data);
-  return { house: packHouseMesh(rawHouse), curtains: packCurtainMesh(curtainMesh()) };
+// (0.4.56) The house built at build time (scripts/house-prebuild.mjs),
+// fetched and unzipped in place of building, where it's quicker: not in
+// dev (its file may be stale), not on Save-Data or a slow link, and only
+// where the browser can unzip a stream. Any failure builds. The query is
+// this worker's own URL (its content hash), so a new house is fetched
+// fresh past any HTTP cache.
+const prebuilt = async () => {
+  if (process.env.NODE_ENV !== 'production' || typeof DecompressionStream === 'undefined') return null;
+  const c = self.navigator?.connection;
+  if (c && (c.saveData || (c.effectiveType && c.effectiveType !== '4g'))) return null;
+  const res = await fetch(`/house/house.bin.gz?w=${encodeURIComponent(self.location.pathname)}`);
+  if (!res.ok || !res.body) return null;
+  const buf = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  const meshes = decodeHouse(buf);
+  return meshes?.house?.vertices && meshes.house.leaves && meshes.curtains?.vertices ? meshes : null;
+};
+
+const build = async () => {
+  if (self.__noPrebuilt !== true) {
+    try {
+      const m = await prebuilt();
+      if (m) return m;
+    } catch {
+      // built below
+    }
+  }
+  return buildHouse();
 };
 
 const send = ({ house, curtains }, cached) => self.postMessage(
@@ -75,7 +97,8 @@ if (typeof self !== 'undefined') {
         db = null;
       }
     }
-    const meshes = build();
+    self.__noPrebuilt = e.data?.prebuilt === false;
+    const meshes = await build();
     let stored = null;
     if (db) {
       try {

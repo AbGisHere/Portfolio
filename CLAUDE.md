@@ -114,7 +114,10 @@ images and turns CI green again (the variant test predated 0.4.51).
 **0.4.55** (2026-11-19) runs the house shader's directions and material
 at mediump (positions, depth, shadows, hashes, light sums, ints highp).
 
-**Next: 0.4.56**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.56** (2026-11-19) ships the house prebuilt (`scripts/house-prebuild.mjs`,
+run by `npm run build`; `public/house/`, not committed; `?prebuilt=0` off).
+
+**Next: 0.4.57**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

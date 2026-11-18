@@ -707,7 +707,7 @@ export default function MistCanvas({ recipe, onFail }) {
           houseWorker = null;
           here();
         };
-        houseWorker.postMessage({ cache: params.get('housecache') !== '0' });
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: params.get('prebuilt') !== '0' });
       } catch {
         here();
       }

@@ -13,3 +13,6 @@ out/
 test-results/
 playwright-report/
 scripts/out/
+
+# (0.4.56) The prebuilt house, made by every build (scripts/house-prebuild.mjs)
+/public/house/

@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.56 — 2026-11-19
+
+- The house ships prebuilt: `npm run build`'s prebuild (`scripts/house-prebuild.mjs`) builds the same meshes the worker would (`houseBuild.js`) into one blob (`houseBlob.js`, byte for byte, unit-tested), gzipped to `public/house/house.bin.gz` (29.1 → 8.3 MB). Made fresh every build, never committed, so it can't go stale. The worker fetches and unzips it (`DecompressionStream`) in place of building (Moto G71: 7.8 s to build), past any HTTP cache by its own content-hashed URL; it builds instead in dev, on Save-Data or a slower link than 4G, without `DecompressionStream`, on any failure, or with `?prebuilt=0`. The IndexedDB copy (0.4.44) still serves return visits.
+- Deferred: tighter vertex data (quantised positions and normals change every pass's input: the house, depth, shadow, AO, lightmap and the visible set), for a session of its own.
+
 ## 0.4.55 — 2026-11-19
 
 - The house's fragment shader holds its directions (normal, sun) and its material (albedo, roughness, F0, metal, its own light) at mediump: fewer registers on phone GPUs. Positions, depth, shadow lookups, hashes, the lights' sums and every int stay highp (0.4.41).
