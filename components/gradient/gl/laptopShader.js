@@ -91,8 +91,10 @@ export function slab({ h, rt, rb, part, w: W = LAPTOP.w, d: D = LAPTOP.d, rc: RC
  * vertex stage): `{ data, count }`. */
 export function laptopMesh() {
   const data = new Float32Array([
-    ...slab({ h: BASE_H, rt: 0.0022, rb: 0.0045, part: 0 }),
-    ...slab({ h: LID_H, rt: 0.0016, rb: 0.0016, part: 1 }),
+    // (0.4.54) Off Apple's side view: the base's top edge near sharp, its
+    // underside rounded well under; the thin lid's edges just softened.
+    ...slab({ h: BASE_H, rt: 0.0006, rb: 0.0055, part: 0 }),
+    ...slab({ h: LID_H, rt: 0.0012, rb: 0.0012, part: 1 }),
   ]);
   return { data, count: data.length / LAPTOP_STRIDE };
 }
@@ -560,10 +562,10 @@ void main() {
     float rim = smoothstep(-0.0012, -0.0008, laptopBox(vLocal.xz, vec2(${f(W / 2)}, ${f(D / 2)}), ${f(RC)}));
     vec2 s = vec2(vLocal.x, vLocal.z + ${f(D / 2 - SCREEN.top - SCREEN.h / 2)});
     float in_ = 1.0 - smoothstep(-0.0003, 0.0003, laptopBox(s, vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)}), ${f(SCREEN.r)}));
-    // (0.4.53) Measured off Apple's photo: 10 × 5.5 mm, its middle 4.2 mm
-    // under the screen's top edge.
-    vec2 nc = s - vec2(0.0, ${f(-SCREEN.h / 2)}) - vec2(0.0, 0.0042);
-    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.005, 0.00275), 0.00275));
+    // (0.4.54) Measured off Apple's image: a pill 11.8 × 5.9 mm, its middle
+    // 4.8 mm under the screen's top edge.
+    vec2 nc = s - vec2(0.0, ${f(-SCREEN.h / 2)}) - vec2(0.0, 0.0048);
+    float notch = 1.0 - smoothstep(-0.0002, 0.0002, laptopBox(nc, vec2(0.0059, 0.00295), 0.00295));
     in_ *= 1.0 - notch;
     float down = clamp(0.5 + s.y / ${f(SCREEN.h)}, 0.0, 1.0);
     vec3 glow = mix(uScreenTop, uScreenFoot, smoothstep(0.0, 1.0, down));
@@ -572,7 +574,7 @@ void main() {
     vec2 ed = abs(s) / vec2(${f(SCREEN.w / 2)}, ${f(SCREEN.h / 2)});
     glow *= 1.0 - 0.08 * smoothstep(0.7, 1.0, max(ed.x, ed.y));
     // The camera: a dark lens with a blue glint, in the island's right end.
-    vec2 cm = nc - vec2(0.0023, 0.0);
+    vec2 cm = nc - vec2(0.0028, 0.0);
     float lens = 1.0 - smoothstep(0.0006, 0.0008, length(cm));
     float glint = (1.0 - smoothstep(0.0, 0.00025, length(cm - vec2(0.0002, 0.0002)))) * lens;
     vec3 glass = vec3(0.008) + glow * uWake * in_;

@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.54 — 2026-11-19
+
+- The MacBook remeasured off Apple's straight-on and side product images of the 14-inch PROLED model (0.4.53's photo read the lid too wide off its edge's highlight): the lid's corners 11 mm, the screen's 6.6 mm (concentric), bezels 4.4 mm at the sides and 4.8 at the top, the Dynamic Island a pill 11.8 × 5.9 mm, its middle 4.8 mm under the screen's top; the base 10.7 mm thick, its top edge near sharp and its underside rounded under (5.5 mm), the lid 3.5 mm.
+- CI green again: the variant unit test expected brass in no variant; since 0.4.51 the fittings' variant holds it.
+
 ## 0.4.53 — 2026-11-19
 
 - The desk's MacBook measured off Apple's straight-on product photo (the lid's 310.8 mm for scale): the screen the whole 3024 × 1986 panel (303.4 × 198.2 mm), even bezels (~3.7 mm at the sides, 3.6 at the top), its corners rounded concentric with the lid's (5.8 mm in a 9.5 mm corner), and the Dynamic Island inside the screen: 10 × 5.5 mm, its middle 4.2 mm under the top edge, the camera 2.3 mm right of its middle. Fixes 0.4.52's estimated island (too wide, too thin).

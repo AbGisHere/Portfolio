@@ -11,20 +11,21 @@ import { DESK_BOX } from '../deskCamera';
 export const LAPTOP = {
   w: 0.3108, // width (x)
   d: 0.2163, // depth (z)
-  base: 0.0102, // the base's thickness
-  lid: 0.0046, // the lid's
-  corner: 0.0095, // the corners' radius, seen from above (0.4.53: measured off Apple's photo)
+  base: 0.0107, // (0.4.54) off Apple's side view: 10.7 mm, the lid 3.5 // the base's thickness
+  lid: 0.0035, // the lid's
+  corner: 0.011, // the corners' radius, seen from above (0.4.54: measured off Apple's photo)
   hingeIn: 0.004, // the hinge, in from the base's back edge
   gap: 0.0004, // between the shut lid and the deck
   // Where the base's foot centre stands: on the planks (its feet lift it a
   // touch), a little toward the camera's side of the desk's middle.
   at: [0, DESK_BOX.h + 0.0012, -0.02],
   // The screen on the lid's face: its size, and how far down from the lid's
-  // free edge it starts. (0.4.53) Measured off Apple's straight-on photo
-  // of the PROLED model (the lid's 310.8 mm for scale): the whole 3024 ×
-  // 1986 panel, even bezels (~3.7 mm at the sides, 3.6 at the top), its
-  // corners rounded concentric with the lid's (`r`).
-  screen: { w: 0.3034, h: 0.1982, top: 0.0036, r: 0.0058 },
+  // free edge it starts. (0.4.54) Measured off Apple's straight-on
+  // product image of the 14-inch PROLED model (the lid's 310.8 mm for
+  // scale, 0.37 mm a pixel): the whole 3024 × 1986 panel, bezels ~4.4 mm
+  // at the sides and 4.8 at the top, its corners (`r`) concentric with the
+  // lid's 11 mm.
+  screen: { w: 0.3023, h: 0.1979, top: 0.0048, r: 0.0066 },
   // (0.3.9) One finish by day and by night, space black: the night only
   // darkens it through its light (the owner, 2026-10-05).
   metal: '#303033',

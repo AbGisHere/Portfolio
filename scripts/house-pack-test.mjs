@@ -186,7 +186,9 @@ test('(0.4.47) runs pick the first variant holding all their materials, and merg
   const { HOUSE_PART: P } = await import('../components/gradient/gl/houseShape.js');
   assert.equal(runVariant(new Set([P.leaf])), 1);
   assert.equal(runVariant(new Set([P.leaf, P.bark])), 1);
-  assert.equal(runVariant(new Set([P.brass])), -1);
+  // (0.4.51) The fittings' variant holds brass; a mirror is in none.
+  assert.equal(runVariant(new Set([P.brass])), 4);
+  assert.equal(runVariant(new Set([P.mirror])), -1);
   assert.equal(runVariant(new Set([P.leaf, P.clothes])), -1);
   assert.equal(runVariant(new Set([P.lawn])), -1);
   const runs = { first: Uint32Array.of(0, 3, 6, 9), count: Uint32Array.of(3, 3, 3, 3), box: new Float32Array(24), variant: Int8Array.of(1, 1, -1, 1) };
