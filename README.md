@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.4.68](https://img.shields.io/badge/version-0.4.68-informational)
+![Version 0.4.69](https://img.shields.io/badge/version-0.4.69-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -13,18 +13,13 @@ page of stacked sections.
 
 The whole site sits on a single full-bleed scene: mountain ridges under
 drifting haze, with a sun (or at night, a moon) in the sky. Every scroll delta
-stages the next beat of that scene instead of paging through sections. The
-site is being rebuilt one layer at a time. `0.1.x` built the atmosphere,
-`0.2.x` built the camera pull-back, and `0.3.x` built the descent onto
-the desk. The current `0.4.x` line adds the house and pool; the contact
-form, project screen and real content are still to come (see [Versioning](#versioning)).
+stages the next beat of that scene instead of paging through sections.
 
-**0.4.40:** the pool climb on real phones, with the same picture: each
-pixel checks only the lights that can reach it, hidden house pixels are no
-longer shaded, and the house is drawn only where a view can see it. The
-OnePlus 11R goes from 36 to 51 fps on its 90 Hz screen; slower phones are
-still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans the next steps and adds a profiling flag; **0.4.43** skips the parts of the house the camera can never see from where it is (OnePlus 49 → 54 fps); **0.4.44** keeps the built house in the browser for return visits (ready 7.8 → 1.6 s on the M4) and costs the house's shading on phones; **0.4.45** bakes the lamps' light on the lawn and roof on the device, with the same picture (Moto G71 ~6.4 → 6.9 fps, OnePlus unchanged). See the [0.4.45 record](docs/optimization-0.4.45.md). **0.4.46** skips work the frame never shows (fine patterns too small to see, grass, trees and glass out of frame) and orders the passes for phone GPUs, with the same picture (OnePlus 11R ~53 → 57.5 fps, Moto G71 ~7 → 7.5). See the [0.4.46 record](docs/optimization-0.4.46.md). **0.4.68** records the session's open items and moves the hills in 3D to 0.5.x (docs). **0.4.67** halves sceneAt's per-frame cost (colours kept, hex without allocations). **0.4.66** fetches the lamp lists once per four entries and adds two shell shader variants. **0.4.65** indexes the caustics grid, links the water's and bloom's programs in parallel, and drops per-frame allocations and sky uploads. **0.4.64** skips the house shader's dead work: shadows on back-lit faces, the lawn's AO by day, a second reflection lookup, eight room tests outside; and behind-the-eye grass. **0.4.63** skips the normal and ST tables in the depth pass and gives the night's frame its own texture unit. **0.4.62** runs the lightmap's lawn mesh pass, which had never run since 0.4.45, with the same picture. **0.4.61** gets the house ready sooner: its shader variants compile right after the first frame's programs, the mirrors' probe faces are drawn back to back, and readiness waits only on the mirrors the path can see (M4 cached ~9.5 → 3.3 s to ready). **0.4.60** packs the house's vertices from 36 to 20 bytes with every value the shader reads unchanged (normals, parts and texture coordinates as indices into tables), with the same picture. **0.4.59** keeps the house's baked lightmap in the browser, so a return visit uploads it instead of compiling two programs and baking it. **0.4.58** draws the lawn into the house's AO pass without a second depth buffer or its per-frame copy, with the same picture. **0.4.57** builds the house on desktops again (the prebuilt one on phones only), lets phone GPUs drop buffers nothing reads again, writes the frame and the night's glow in one pass, and makes house parity ~15× faster. **0.4.56** ships the house prebuilt: made at build time and fetched gzipped (8.3 MB) in place of building it on the phone (7.8 s on the Moto G71). **0.4.55** runs the house shader's directions and material at mediump on phone GPUs, with the same picture. **0.4.54** remeasures the MacBook off Apple's front and side product images (corners, bezels, the island, the base's and lid's thickness and edges). **0.4.53** measures the new MacBook off Apple's own photo: even bezels, rounded screen corners and the Dynamic Island's true size. **0.4.52** makes the desk's laptop the 14-inch MacBook Pro with the PROLED XDR display: thinner, slimmer bezels, and a Dynamic Island in place of the notch. **0.4.51** fixes 0.4.50's night picture (a texture left unbound) and compiles the house's shader for its fabrics, books and fittings too. **0.4.50** has the night's bloom read the frame directly (no full-screen copy), draws the pool's reflection only for the water's part of the screen, and sends shader settings only when they change, with the same picture. **0.4.49** draws the house's depth once a frame instead of twice (the frame now draws into a target that shares its depth with the house's shading pass), with the same picture. **0.4.48** draws the house's 15,000 leaves as instances of four leaf shapes (0.84 MB in place of 21.6 MB of mesh), with the same leaves. **0.4.47** compiles the house's shader again for runs of only the lawn or only leaves, so those draws skip every other material, and takes out the curtains and the clothes (the owner is making new ones). See the
-[0.4.40 record](docs/optimization-0.4.40.md).
+**Where it stands (0.4.69):** the atmosphere, the camera pull-back, the desk
+and the house with its pool are built. Next is `0.5.x`, the opening hills
+rebuilt in 3D; the device screen, header navigation and real content follow
+(see [Versioning](#versioning)). What each release changed and measured is in
+[`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Contents
 
@@ -102,9 +97,10 @@ still well short. **0.4.41** fixes its dark garden on phones; **0.4.42** plans t
   contact form will sit.
 - The house is built room by room in 3D, furnished and lit: real glass
   (refraction, dispersion, Fresnel), a pool with simulated water and
-  caustics, sun shadows and ambient occlusion, curtains tied by day and
-  untied by night, lamps and LED strips by night, swallows, kites and
-  geese in 3D. The mesh is built in a worker as the page loads.
+  caustics, sun shadows and ambient occlusion, mirrors, lamps and LED
+  strips by night, swallows, kites, geese, butterflies and fireflies in 3D.
+  Phones fetch the house prebuilt at build time; desktops build it in a
+  worker, and both keep it in the browser for return visits.
 
 ## Tech stack
 
@@ -158,6 +154,7 @@ Chromium isn't installed yet, run `npx playwright install chromium` first.
 | `npm run sharp` | Renders 5K and 6K frames at 2× with the 4K pixel cap and without, and compares the crests and grain for softness (not part of `qa`) |
 | `npm run test:adaptive` | Unit tests for the WebGL renderer's adaptive quality, fed synthetic frame timings (no GPU needed) |
 | `npm run test:unit` | Unit tests for the scene's pure maths: the colour conversions, the switch palette's keyframes, and one frame of the scene at rest, scrolled and mid-switch (no GPU needed) |
+| `npm run devices` | Compiles every shader on real phones and tablets through BrowserStack (keys in `.env.local`); `-- --climb` times the pool climb on them (not part of `qa`) |
 | `npm run hygiene` | Checks a running production server for the basics: `lang`, titles, descriptions, one `<h1>`, alt text, canonical, OG image, JSON-LD, the 404, robots, sitemap, llms.txt and no shipped source maps |
 
 CI (GitHub Actions, `.github/workflows/ci.yml`) runs `test:adaptive`,
@@ -277,14 +274,13 @@ measured numbers behind these choices in [`CHANGELOG.md`](./CHANGELOG.md).
 | Browser | Version |
 |---|---|
 | Chrome / Edge (desktop and Android) | 111 or later |
-| Safari (macOS and iOS/iPadOS) | 16.4 or later |
+| Safari (macOS and iOS/iPadOS) | 13 or later |
 | Firefox | 111 or later |
 
-These are Next.js 16's default targets, which the build compiles for. The
-site's own features fit inside them: WebGL2, `lvh`/`svh` viewport units,
-container query units (`cqh`) for the sun's hit target, CSS masks and
-`OffscreenCanvas`. `requestIdleCallback` is used where it exists, with a timer
-fallback for Safari.
+The build compiles for these (`browserslist` in `package.json`), and
+`instrumentation-client.js` fills in the built-ins older Safari lacks. The
+scene needs WebGL2 for its full look; `requestIdleCallback` is used where it
+exists, with a timer fallback for Safari.
 
 **Renderers.** Any browser with WebGL2 gets the WebGL renderer. Without it, or
 if the shader fails to build or the GL context is lost, the layered fallback

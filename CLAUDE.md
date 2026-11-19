@@ -143,7 +143,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.68** (2026-11-19) records the open items as Planned and makes `0.5.x` the opening hills in 3D (docs).
 
-**Next: 0.5.0, the opening hills in 3D** (`ROADMAP.md`, `0.5.x`). The pool climb work stays open below (and in `ROADMAP.md`, Planned):, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.69** (2026-11-19) trims the README to what's current (docs).
+
+**Next: 0.5.0, the opening hills in 3D** (`ROADMAP.md`, `0.5.x`). The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

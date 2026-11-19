@@ -6,6 +6,10 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.69 — 2026-11-19
+
+Docs: the README trimmed to what's current. The per-release notes (0.4.40–0.4.68) are replaced by a short "Where it stands" section pointing to this changelog; the house's features no longer list the curtains (out since 0.4.47) and name the prebuilt house; the browser table matches `browserslist` (Safari and iOS 13 on); `npm run devices` is listed.
+
 ## 0.4.68 — 2026-11-19
 
 - Docs only. The open items from the 0.4.60–0.4.64 audits as Planned in `ROADMAP.md` (no version yet): the vertex tables on phones, the lawn's edge on Adreno and Mali, cheaper mirror probes (measured first), the lamp loops' second scan.
