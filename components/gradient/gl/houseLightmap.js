@@ -21,6 +21,7 @@
 import { MOUND, MOUND_GLSL } from './houseShape';
 import { HOUSE_LIGHT_GLSL, LIGHTMAP_BOUNDS } from './houseShader';
 import { f32ToF16Exact, hashParts, validLightmap } from './lightmapCache';
+import { HOUSE_VERTEX_GLSL, tableSamplers } from './houseVertices';
 
 const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const [W, H] = LIGHTMAP_BOUNDS.size;
@@ -51,12 +52,12 @@ void main() {
 export const LAWN_MESH_VERTEX = `#version 300 es
 precision highp float;
 layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec3 aNorm;
+${HOUSE_VERTEX_GLSL}
 out vec3 vWorld;
 out vec3 vNorm;
 void main() {
   vWorld = aPos;
-  vNorm = aNorm;
+  vNorm = hvNormal();
   vec2 ndc = vec2(
     (aPos.x - ${f(lawn.x0)}) * ${f(2 / (lawn.x1 - lawn.x0))} - 1.0,
     (aPos.z - ${f(lawn.z0)}) * ${f(2 / (lawn.z1 - lawn.z0))} - 1.0
@@ -196,6 +197,7 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0,
     // normals and positions match the live mesh.
     if (lawnProg && houseVao && lawnCount > 0) {
       gl.viewport(0, 0, W, lawn.h);
+      tableSamplers(gl, lawnProg);
       gl.useProgram(lawnProg);
       gl.uniform1i(gl.getUniformLocation(lawnProg, 'uLightData'), 16);
       gl.uniform1f(gl.getUniformLocation(lawnProg, 'uNight'), 1.0);

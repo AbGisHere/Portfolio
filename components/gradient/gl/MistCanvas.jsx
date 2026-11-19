@@ -44,11 +44,12 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, LIGHTMAP_BOUNDS, houseLightData, houseMesh, houseVariant } from './houseShader';
-import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, leafChecksum, packCurtainMesh, packHouseMesh, runVariant, runsChecksum, tagLampFittings } from './houseLights';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, LIGHTMAP_BOUNDS, houseLightData, houseVariant } from './houseShader';
+import { CURTAIN_STRIDE, houseRanges, leafChecksum, runVariant, runsChecksum } from './houseLights';
+import { buildHouse as buildHouseMeshes } from './houseBuild';
 import { HOUSE_PVS } from './housePvs';
 import { cacheUniforms } from './uniformCache';
-import { curtainMesh } from './houseRooms';
+import { PACKED_WORDS, bindTables, packVertices, pointPacked, tableData, tableSamplers, uploadTables, vertexTables } from './houseVertices';
 import { FLOOR, HOUSE_BOUNDS, HOUSE_PART, HOUSE_VARIANTS, MOUND, POOL, TERRACE, moundY } from './houseShape';
 
 // (0.4.13) The pool's and the hill's boxes (metres), for whether they're in
@@ -629,25 +630,16 @@ export default function MistCanvas({ recipe, onFail }) {
     const uploadVertices = (mesh, stride) => {
       if (indexedHouse) return mesh.vertices;
       const count = mesh.indexCount ?? mesh.count;
-      const expanded = new Float32Array(count * stride);
+      const expanded = new mesh.vertices.constructor(count * stride);
       for (let i = 0; i < count; i++) {
         const from = mesh.indices[i] * stride;
         expanded.set(mesh.vertices.subarray(from, from + stride), i * stride);
       }
       return expanded;
     };
-    const setupHouseAttribs = stride => {
-      for (const [i, n, at] of [[0, 3, 0], [1, 3, 3], [2, 1, 6], [3, 2, 7]]) {
-        gl.enableVertexAttribArray(i);
-        gl.vertexAttribPointer(i, n, gl.FLOAT, false, stride, at * 4);
-      }
-      if (stride === CURTAIN_BYTES) {
-        for (const [i, n, at] of [[4, 3, 9], [5, 3, 12]]) {
-          gl.enableVertexAttribArray(i);
-          gl.vertexAttribPointer(i, n, gl.FLOAT, false, stride, at * 4);
-        }
-      }
-    };
+    // (0.4.57) The house's vertices are packed (houseVertices.js): five
+    // words each, the curtains' with their other shape's six floats after.
+    const CURTAIN_WORDS = PACKED_WORDS + CURTAIN_STRIDE - HOUSE_STRIDE;
     // (0.4.48) A leaf template's instances from `first` on (WebGL2 has no
     // base instance), its VAO bound.
     const LEAF_ATTRIBS = [[6, 3, 0], [7, 3, 3], [8, 3, 6], [9, 4, 9], [10, 1, 13]];
@@ -662,7 +654,9 @@ export default function MistCanvas({ recipe, onFail }) {
       const hm = houseBuilt.house;
       if (hm.vertices && hm.indices) {
         gl.bindBuffer(gl.ARRAY_BUFFER, house.buf);
-        gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(hm, 9), gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(hm, PACKED_WORDS), gl.STATIC_DRAW);
+        uploadTables(gl, hm.tables, house.vtables);
+        hm.tables = null;
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, house.ibo);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, hm.indices, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
@@ -689,9 +683,7 @@ export default function MistCanvas({ recipe, onFail }) {
     buildHouse = () => {
       if (stopped || houseWorker || houseBuilt) return;
       const here = () => {
-        const raw = houseMesh();
-        tagLampFittings(raw.data);
-        houseBuilt = { house: packHouseMesh(raw), curtains: packCurtainMesh(curtainMesh()) };
+        houseBuilt = buildHouseMeshes();
         if (!houseComplete) setHouseReadiness('mesh-ready');
         updateHouseBuffer();
         if (houseWarmed && warmHouse) warmHouse(isDirectHouse);
@@ -772,10 +764,10 @@ export default function MistCanvas({ recipe, onFail }) {
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, hb);
-      gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(hm, 9), gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(hm, PACKED_WORDS), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, hib);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, hm.indices, gl.STATIC_DRAW);
-      setupHouseAttribs(HOUSE_BYTES);
+      pointPacked(gl);
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       hm.vertices = null;
@@ -788,10 +780,10 @@ export default function MistCanvas({ recipe, onFail }) {
       const cvao = gl.createVertexArray();
       gl.bindVertexArray(cvao);
       gl.bindBuffer(gl.ARRAY_BUFFER, cb);
-      gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(cm, 15), gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, uploadVertices(cm, CURTAIN_WORDS), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cib);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cm.indices, gl.STATIC_DRAW);
-      setupHouseAttribs(CURTAIN_BYTES);
+      pointPacked(gl, CURTAIN_WORDS - PACKED_WORDS);
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       cm.vertices = null;
@@ -836,6 +828,11 @@ export default function MistCanvas({ recipe, onFail }) {
       const ld = houseLightData();
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ld.width, ld.height, 0, gl.RGBA, gl.FLOAT, ld.data);
       gl.activeTexture(gl.TEXTURE0);
+      // (0.4.57) The vertices' tables, on units 18 and 19 for good; every
+      // program reading the house's VAO samples them.
+      const vtables = uploadTables(gl, hm.tables);
+      hm.tables = null;
+      for (const p of [hp, ...(variants ?? []).map(v => v?.prog)]) if (p) tableSamplers(gl, p);
       // (0.4.57) The stored bake, uploaded; else baked, and read back once
       // to store (lightmapCache.js), never waiting on the GPU.
       const lmT0 = performance.now();
@@ -870,6 +867,7 @@ export default function MistCanvas({ recipe, onFail }) {
         buf: hb,
         ibo: hib,
         lightTex: lt,
+        vtables,
         lightmap: lm,
         indexed: indexedHouse,
         indexCount: hm.indexCount,
@@ -953,6 +951,7 @@ export default function MistCanvas({ recipe, onFail }) {
         const dp = readyProgram(h, wait);
         if (!dp) return h?.failed ? (aoPass = false) : null;
 
+        tableSamplers(gl, dp);
         aoPass = { prog: dp, u: uniformLookup(dp), tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
       }
       if (!aoPass) return null;
@@ -2813,15 +2812,20 @@ export default function MistCanvas({ recipe, onFail }) {
         const [x, py, z, nx, ny, nz] = data.slice(i, i + 6);
         data.set([personAt.x + c * x + sn * z, y + py, personAt.z - sn * x + c * z, c * nx + sn * nz, ny, -sn * nx + c * nz], i);
       }
+      // (0.4.57) Packed as the house is, against its own tables.
+      const tables = vertexTables();
+      const words = packVertices(data, HOUSE_STRIDE, tables);
       const b = gl.createBuffer();
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, b);
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-      setupHouseAttribs(HOUSE_BYTES);
+      gl.bufferData(gl.ARRAY_BUFFER, words, gl.STATIC_DRAW);
+      pointPacked(gl);
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      return (person = { vao, buf: b, count });
+      const vtables = uploadTables(gl, tableData(tables));
+      if (house) bindTables(gl, house.vtables);
+      return (person = { vao, buf: b, count, vtables });
     };
     function mirrorUniforms(g, on) {
       const set = probes ? probeSet : null;
@@ -3044,9 +3048,11 @@ export default function MistCanvas({ recipe, onFail }) {
         const pb = personBuffer();
         gl.uniform1f(g.u('uAOOn'), 0);
         gl.uniform1f(g.u('uMorph'), 0);
+        bindTables(gl, pb.vtables);
         gl.bindVertexArray(pb.vao);
         gl.drawArrays(gl.TRIANGLES, 0, pb.count);
         gl.bindVertexArray(null);
+        bindTables(gl, g.vtables);
       } else if (lawn) {
         houseGeometry(g, g.u, 'lawn', ctx);
       } else if (!mirror && !view && aoReady) {
@@ -3737,6 +3743,8 @@ export default function MistCanvas({ recipe, onFail }) {
       if (glass) gl.deleteTexture(glass.tex);
       if (house) {
         gl.deleteTexture(house.lightTex);
+        gl.deleteTexture(house.vtables.normals);
+        gl.deleteTexture(house.vtables.scalars);
         house.lightmap?.dispose();
         if (house.ibo) gl.deleteBuffer(house.ibo);
         gl.deleteBuffer(house.curtains.buf);

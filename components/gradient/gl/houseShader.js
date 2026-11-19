@@ -18,6 +18,7 @@ import { FITTING_PER_PIXEL, LIGHTS, LIGHT_RANGE, lightCellGrid, lightCells, ROOM
 import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
+import { HOUSE_VERTEX_GLSL } from './houseVertices';
 
 export const HOUSE_STRIDE = 9;
 
@@ -81,9 +82,7 @@ export const HOUSE_VERTEX = `#version 300 es
 precision highp float;
 
 layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec3 aNorm;
-layout(location = 2) in float aPart;
-layout(location = 3) in vec2 aST;
+${HOUSE_VERTEX_GLSL}
 layout(location = 4) in vec3 aPos2;   // (0.4.4) the curtains' other shape
 layout(location = 5) in vec3 aNorm2;
 
@@ -102,9 +101,9 @@ flat out int vFitting;
 
 ${PROJECT_GLSL}
 void main() {
-  vec3 pos0 = aPos, nrm0 = aNorm;
-  float part = aPart;
-  vec2 st = aST;
+  vec3 pos0 = aPos, nrm0;
+  float part;
+  vec2 st;
   // (0.4.48) A leaf: an instance of its template (leafInstances.js).
   if (uLeaf > 0.5) {
     vec3 face = leafFace();
@@ -112,6 +111,11 @@ void main() {
     nrm0 = leafNorm(face);
     part = aLeafPart;
     st = aLeafAt.xy;
+  } else {
+    // (0.4.57) The rest of the vertex from its tables (houseVertices.js).
+    nrm0 = hvNormal();
+    part = hvPart();
+    st = hvST();
   }
   vec3 pos = mix(pos0, aPos2, uMorph);
   vec3 nrm = uMorph > 0.0 ? normalize(mix(nrm0, aNorm2, uMorph) + 1e-5) : nrm0;

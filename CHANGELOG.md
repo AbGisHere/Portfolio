@@ -6,6 +6,12 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.60 — 2026-11-19
+
+- The house's vertices packed 36 → 20 bytes: positions stay float32; a normal index (20 bits) and part index (12 bits) share a uint32, s and t are uint16 indices, into tables the vertex shader reads with `texelFetch` (141,939 normals, RGB32F; 909 parts and 20,488 st values, R32F; `houseVertices.js`). Every value the shaders read is the same to the bit. The prebuilt house 29.1 → 22.3 MB raw, 8.3 → 7.9 MB gzipped.
+- Measured and dropped first: rounded normals without tables (10-bit 39/104, 16-bit 96/104 on full parity), 16-bit positions, half-float texture coordinates.
+- Same picture: house parity 24/24 and 104/104 against 0.4.59; night screenshots right on the OnePlus 11R (Adreno), Pixel 7 (Mali) and Moto G71. Phone frame rate not yet measured (each vertex now reads four table texels).
+
 ## 0.4.59 — 2026-11-19
 
 - The lamps' lightmap (0.4.45) is read back once after its bake (without waiting on the GPU) and kept in IndexedDB beside the mesh; a return visit uploads it, skipping its two programs and the bake. Keyed by the worker's URL, the lightmap's shaders, bounds and lights, the bake's code, the GPU and the browser; any failure bakes as before; `?lmcache=0` off (`lightmapCache.js`, unit-tested).

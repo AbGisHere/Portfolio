@@ -125,7 +125,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.59** (2026-11-19) keeps the baked lightmap in IndexedDB (`lightmapCache.js`, `?lmcache=0` off).
 
-**Next: 0.4.60**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.60** (2026-11-19) packs the house's vertices 36 → 20 bytes, bit-exact (`houseVertices.js`: indices into tables read in the vertex shader).
+
+**Next: 0.4.61**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

@@ -64,7 +64,7 @@ const prebuilt = async () => {
   if (!res.ok || !res.body) return null;
   const buf = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   const meshes = decodeHouse(buf);
-  return meshes?.house?.vertices && meshes.house.leaves && meshes.curtains?.vertices ? meshes : null;
+  return meshes?.house?.vertices && meshes.house.tables && meshes.house.leaves && meshes.curtains?.vertices ? meshes : null;
 };
 
 const build = async () => {
@@ -81,7 +81,7 @@ const build = async () => {
 
 const send = ({ house, curtains }, cached, key, lightmapData) => self.postMessage(
   { house, curtains, cached, key, lightmapData },
-  [...(lightmapData ? [lightmapData.buffer] : []), house.vertices.buffer,house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, house.runs.variant.buffer, ...house.leaves.flatMap(l => [l.data.buffer, l.runs.first.buffer, l.runs.count.buffer, l.runs.box.buffer]), curtains.vertices.buffer, curtains.indices.buffer],
+  [...(lightmapData ? [lightmapData.buffer] : []), house.vertices.buffer, house.tables.normals.buffer, house.tables.scalars.buffer, house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, house.runs.variant.buffer, ...house.leaves.flatMap(l => [l.data.buffer, l.runs.first.buffer, l.runs.count.buffer, l.runs.box.buffer]), curtains.vertices.buffer, curtains.indices.buffer],
 );
 
 // (Only inside a worker: the unit tests import every module here.)
@@ -96,7 +96,7 @@ if (typeof self !== 'undefined') {
       try {
         db = await open();
         const hit = await read(db, key);
-        if (hit?.house?.vertices && hit.house.leaves && hit?.curtains?.vertices) {
+        if (hit?.house?.vertices && hit.house.tables && hit.house.leaves && hit?.curtains?.vertices) {
           send(hit, true, key, await lightmap);
           self.postMessage({ stored: true });
           return;

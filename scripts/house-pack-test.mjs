@@ -194,3 +194,26 @@ test('(0.4.47) runs pick the first variant holding all their materials, and merg
   const runs = { first: Uint32Array.of(0, 3, 6, 9), count: Uint32Array.of(3, 3, 3, 3), box: new Float32Array(24), variant: Int8Array.of(1, 1, -1, 1) };
   assert.deepEqual(houseRanges(runs, () => true, { rooms: [] }), [[0, 6, 1], [6, 3, -1], [9, 3, 1]]);
 });
+
+test('(0.4.57) packed vertices keep every bit, share one set of tables and refuse overflow', async () => {
+  const { PACKED_WORDS, PART_SLOTS, packVertices, tableData, unpackVertices, vertexTables } = await import('../components/gradient/gl/houseVertices.js');
+  const tables = vertexTables();
+  const house = new Float32Array(4 * 9);
+  for (let v = 0; v < 4; v++) for (let w = 0; w < 9; w++) house[v * 9 + w] = v * 0.37 + w * 1.1;
+  // Signed zero and NaN payloads stay distinct entries.
+  new Uint32Array(house.buffer)[3] = 0x80000000;
+  new Uint32Array(house.buffer)[9 + 7] = 0x7fc00001;
+  house[2 * 9 + 6] = 12.85;
+  const curtains = new Float32Array(2 * 15).map((_, i) => i * 0.5 - 3);
+  const hw = packVertices(house, 9, tables);
+  const cw = packVertices(curtains, 15, tables);
+  assert.equal(hw.length, 4 * PACKED_WORDS);
+  assert.equal(cw.length, 2 * (PACKED_WORDS + 6));
+  const data = tableData(tables);
+  assert.equal(data.scalars.length, PART_SLOTS + tables.st.size);
+  assert.deepEqual(new Uint32Array(unpackVertices(hw, 9, data).buffer), new Uint32Array(house.buffer));
+  assert.deepEqual(new Uint32Array(unpackVertices(cw, 15, data).buffer), new Uint32Array(curtains.buffer));
+  const many = new Float32Array((PART_SLOTS + 1) * 9);
+  for (let v = 0; v <= PART_SLOTS; v++) many[v * 9 + 6] = v + 0.5;
+  assert.throws(() => packVertices(many, 9, vertexTables()), RangeError);
+});
