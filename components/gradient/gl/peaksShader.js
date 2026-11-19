@@ -47,6 +47,15 @@ uniform float uNear;
 // (0.5.3) Skip 3D terrain raymarching when looking straight down or turned
 // away toward the house: draw analytic meadow plane + real 3D sky only.
 uniform float uSkipGeo;
+// (0.5.7) The day's grade (1 by day, 0 by night): light and clear, not
+// washed out: more colour and contrast on the final picture.
+uniform float uGrade;
+vec3 dayGrade(vec3 c) {
+  float y = dot(c, vec3(.2126, .7152, .0722));
+  vec3 g = mix(vec3(y), c, 1.04);
+  g = (g - .5) * 1.1 + .52;
+  return mix(c, clamp(g, 0., 1.), uGrade);
+}
 // The four bearings the ground's horizon is found for (../peaks.js BEARINGS).
 uniform vec2 uBear[4];
 
@@ -481,6 +490,9 @@ vec3 aces(vec3 x) { return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) 
 vec3 toScreen(vec3 c) {
   float l = dot(c, vec3(.2126, .7152, .0722));
   c = mix(c, l * vec3(.55, .72, 1.18), smoothstep(.3, 1., uNight) * .75);
+  // (0.5.7) A low sun's light balanced warm, never olive: less green,
+  // a touch more red, while it's within ~8° of the horizon.
+  float lowSun = smoothstep(.17, .07, uSunDir.y) * smoothstep(-.08, .0, uSunDir.y);
   vec3 o = aces(c * EXPO);
   float lo = dot(o, vec3(.2126, .7152, .0722));
   return max(mix(vec3(lo), o, 1.18), 0.);
@@ -499,11 +511,20 @@ vec3 skyRaw(vec3 rd) {
   return c;
 }
 // The body's light on the ground and the sky's in the shade, on screen.
-vec3 bodyLight() { return toScreen(reach(uLightDir, uByMoon > .5 ? MOON_I : SUN_I) * (uByMoon > .5 ? 1.7 : .11)) * 1.25; }
+vec3 bodyLight() { return toScreen(reach(uLightDir, uByMoon > .5 ? MOON_I : SUN_I) * (uByMoon > .5 ? .8 : .11)) * 1.25 * (uByMoon > .5 ? vec3(.8, .9, 1.15) : vec3(1.)); }
+vec3 sunLit() { vec3 b = bodyLight(); if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .45) * vec3(1.06, 1., .93); }
 vec3 skyLight() { return toScreen(skyRaw(normalize(vec3(0., 1., 0.) + uLightDir * .3)) * .55); }
 
 vec3 sky(vec3 rd) {
   vec3 c = skyRaw(rd);
+  // (0.5.7) As in the references: deep blue overhead and away from the
+  // sun, gold only toward it and along the horizon.
+  float toward = pow(max(dot(rd, uSunDir), 0.), 3.);
+  c *= mix(vec3(1.), vec3(.62, .9, 1.45), smoothstep(-.02, .45, rd.y) * (1. - toward) * (1. - uNight));
+  // The sun melting into the sky round it: the air near it pales to its
+  // own warm white, wide and soft.
+  float near = pow(max(dot(rd, uSunDir), 0.), 60.) * .9 + pow(max(dot(rd, uSunDir), 0.), 12.) * .35;
+  c = mix(c, max(c, vec3(dot(c, vec3(.33))) * vec3(1.55, 1.32, .9)), near * smoothstep(-.05, .02, uSunDir.y));
   // High cloud on a layer 9 km up, so it crowds toward the horizon as real
   // cloud does: patches of fibrous cirrus and soft altocumulus with clear
   // sky between, combed (not smeared) by the wind, sweeping across through
@@ -512,17 +533,19 @@ vec3 sky(vec3 rd) {
   // burns orange and pink after the ground has gone into shadow.
   if (rd.y > .005) {
     vec2 sp = rd.xz * (9000. / rd.y) / 9000.;
-    vec2 q = mat2(.94, .34, -.34, .94) * sp + vec2(uLapse * 1.6, uLapse * .3);
+    // (0.5.7) A switch sweeps the clouds across and back: at rest they're
+    // always the first load's.
+    vec2 q = mat2(.94, .34, -.34, .94) * sp + vec2(1.6, .3) * .6 * sin(uLapse * 3.14159265);
     float cover = smoothstep(.42, .7, tn(q * .05 + .3));
     vec2 w = q + .6 * (texture(uFlow, q * .15 + .7).rg - .5) * 2.;
     float fib = tn2(vec2(w.x * .17, w.y * .5));
     float soft = tn2(w * .3 + .45);
     float dens = smoothstep(.48, .78, mix(fib, soft, .35)) * cover;
     dens *= smoothstep(.005, .06, rd.y);
-    float a = clamp(dens * .75, 0., .8) * (1. - .75 * smoothstep(.3, 1., uNight));
+    float a = clamp(dens * .75, 0., .8);
     vec3 Lhi = normalize(uSunDir + vec3(0., .05, 0.));
-    float fwd = pow(max(dot(rd, uSunDir), 0.), 5.);
-    vec3 lit = reach(Lhi, SUN_I) * (.055 + .35 * fwd) * (.75 + .25 * soft) + reach(uMoonDir, MOON_I) * .12;
+    float fwd = pow(max(dot(rd, uSunDir), 0.), 14.);
+    vec3 lit = reach(Lhi, SUN_I) * (.05 + .9 * fwd) * (.75 + .25 * soft) * vec3(1.1, .95, .8) + reach(uMoonDir, MOON_I) * .12;
     vec3 cc = lit + skyRaw(vec3(0., 1., 0.)) * .5;
     c = mix(c, cc, a);
   }
@@ -540,19 +563,6 @@ vec3 stars(vec3 rd) {
     vec3 tint = mix(vec3(1., .82, .66), vec3(.75, .84, 1.), hash3(id + 5.5));
     c += tint * b * 1.4 * (smoothstep(.08, 0., d) + (l == 0 ? .25 * exp(-d * 14.) : 0.));
   }
-  // The Milky Way: a band across the sky, mottled, its dark lanes down it.
-  vec3 ax = normalize(vec3(.85, .32, .18));
-  float lat = dot(rd, ax);
-  float band = exp(-pow(lat * 5.5, 2.));
-  // Coordinates along the band and across it (so the noise lies in it
-  // evenly, not in streaks from a pole).
-  vec3 e1 = normalize(cross(ax, vec3(0., 1., 0.))), e2 = cross(ax, e1);
-  float along = atan(dot(rd, e2), dot(rd, e1));
-  vec2 bp = vec2(along * 14., lat * 14.);
-  float m = tn2(bp * .34);
-  float lanes = smoothstep(.36, .62, tn2(bp * vec2(.085, .2) + .6));
-  float grain = tn(bp * .7 + .3);
-  c += mix(vec3(.5, .55, .75), vec3(.85, .78, .7), m) * .13 * band * (.2 + m) * (.2 + .8 * lanes) * (.6 + .8 * grain);
   // Fewer near the moon (its glow outshines them) and down low (the air).
   return c * smoothstep(.02, .22, rd.y) * (1. - .8 * pow(max(dot(rd, uMoonDir), 0.), 20.));
 }
@@ -560,9 +570,14 @@ vec3 stars(vec3 rd) {
 // The haze between the eye and the far ranges: the horizon's colours, the
 // way the 2D ridges fade layer by layer.
 vec3 haze(vec3 c, vec3 rd, float t) {
-  float k = 1. - exp(-max(t - 2000., 0.) / 30000.);
-  vec3 to = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, .02), rd.z))));
-  return mix(c, to, clamp(k, 0., .85));
+  // (0.5.7) By day, aerial perspective, not fog: a thinner, bluer veil, so
+  // far ranges go blue, not white.
+  float k = 1. - exp(-max(t - 2500., 0.) / mix(30000., 46000., uGrade));
+  vec3 to = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, mix(.02, .16, 1. - uNight)), rd.z))));
+  // Toward a low sun the veil is lit gold.
+  float sunward = pow(max(dot(normalize(rd.xz), normalize(uSunDir.xz)), 0.), 6.) * smoothstep(.25, .02, uSunDir.y) * smoothstep(-.06, .01, uSunDir.y);
+  to = mix(to, to * vec3(1.12, 1.04, .95), sunward);
+  return mix(c, to, clamp(k + .1 * sunward, 0., mix(.85, .5, 1. - uNight)));
 }
 
 // Exact meadow palette matching mistShader.js & grassShader.js (in linear light),
@@ -622,14 +637,17 @@ vec3 ground(G g, vec3 rd) {
   lawn = max(lawn, shf);
   vec3 grass = mix(vec3(.11, .19, .065), vec3(.16, .25, .08), noise(p.xz / 120.) * .6 + noise(p.xz / 420.) * .4);
   rock = mix(rock, grass, lawn * (1. - shf));
-  vec3 alb = mix(rock, vec3(.88, .89, .91), g.snow);
+  vec3 alb = mix(rock, mix(vec3(.88, .89, .91), vec3(.97, .97, .98), 1. - uNight), g.snow);
   float dif = max(dot(n, uLightDir), 0.);
   float sh = dif > 0. ? shadow(g) : 0.;
   // Shaded snow takes the sky's light paler than rock does (it scatters
   // inside itself): a soft grey-blue, not a saturated blue.
   vec3 sk = skyLight();
   vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.35;
-  vec3 c = alb * (bodyLight() * dif * sh + mix(sk, skSnow, g.snow) * (.55 + .45 * n.y) * g.ao);
+  // (0.5.7) By day the sun carries the scene: stronger direct light against
+  // a cooler, lower sky fill, so lit faces glow warm and shade goes blue.
+  vec3 amb = mix(sk, skSnow, g.snow) * (.55 + .45 * n.y) * g.ao * mix(vec3(1.), vec3(.5, .64, 1.), 1. - uNight);
+  vec3 c = alb * (sunLit() * dif * sh * mix(1., 2., 1. - uNight) + amb);
   // Bounce: with the body ahead, faces toward the viewer are backlit, so
   // sunlit mist and snowfields throw warm luminous light back onto them,
   // giving sculpted 3D relief even when viewed from the meadow below.
@@ -671,11 +689,11 @@ vec3 mistLit(G g, vec3 rd) {
   // (light through it).
   float fwd = pow(max(dot(rd, uLightDir), 0.), 5.);
   vec3 bl = bodyLight();
-  vec3 sun = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .4);
+  vec3 sun = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .7);
   vec3 sk = skyLight();
   vec3 lo = sk * 1.35 + sun * .12;
   vec3 hi = sun * .72 + sk * 1.05;
-  return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * fwd * .4;
+  return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * vec3(1.08, 1., .88) * fwd * .45;
 }
 
 // A body as the 2D scene draws it: a soft disc 10.4% of the frame's height
@@ -684,32 +702,44 @@ vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float z = dot(uSunDir, f);
   if (z <= 0.) return c;
   vec2 sp = vec2(dot(uSunDir, r), dot(uSunDir, u)) * lens / z;
-  // Low, the air bends its lower edge up (flattened) and dims and reddens
-  // it (the light that reaches us); high, it burns white.
+  // (0.5.7) Stylised, like the desk: a flat painted disc, its colour the
+  // light's (gold low, cream high), a soft lighter heart, a clean edge and
+  // two flat rings of glow. No rays, no limb darkening.
   float alt = uSunDir.y;
   vec2 dv = uv - sp;
-  dv.y *= 1. + .28 * smoothstep(.07, 0., alt);
+  dv.y *= 1. + .18 * smoothstep(.06, 0., alt);
   float R = .104 * lens / 1.7320508, d = length(dv) / R, px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, alt);
   vec3 L = reach(uSunDir, SUN_I);
-  float high = smoothstep(.005, .09, alt);
-  // The disc: a white-hot core once it's up (it outshines its own colour),
-  // its rim darker (limb darkening) and its colour plain while it's low.
-  float mu = sqrt(max(1. - d * d, 0.));
-  float limb = mix(.55 + .45 * pow(mu, .6), 1., high * .8);
-  // (Low, it's still the brightest thing in the sky: deep orange, its own
-  // colour, not lost in the glow.)
   vec3 hue = L / max(max(L.r, L.g), 1e-4);
-  vec3 disc = mix(min(hue * 1.08, vec3(1.)), vec3(1.), high * high) * limb;
-  // Its glow: a tight bright halo and a wide soft one, both its colour, and
-  // faint rays (the eye's and a lens's star) once it's bright.
-  float o = max(d - 1., 0.);
-  vec3 glowC = toScreen(L * mix(.6, .35, high));
-  float halo = .5 * exp(-o * 2.2) + .2 * exp(-o * .45) + .06 * exp(-o * .1);
+  float high = smoothstep(.02, .25, alt);
+  // (0.5.7) As in the owner's references: a small white-hot core, a wide
+  // gold glow along the horizon, and a starburst of thin rays of uneven
+  // length, all added to the sky.
+  float hot = 1. - smoothstep(.12, .7, d);
+  vec3 coreC = vec3(1., .98, .9);
+  vec3 warm = mix(vec3(1., .7, .22), vec3(1., .8, .36), high);
+  vec2 wide = dv / R * vec2(.35, 1.2);
+  float wd = length(wide);
+  float glow = .75 * exp(-d * 1.5) + .5 * exp(-d * .4) + .22 * exp(-d * .14) + .1 * exp(-wd * .1);
   float ang = atan(dv.y, dv.x);
-  float rays = (pow(abs(cos(ang * 3. + .3)), 60.) + .6 * pow(abs(cos(ang * 4. - .7)), 90.)) * exp(-o * .55) * high * .35;
-  c = mix(c, glowC, clamp(up * (halo + rays) * mix(.55, 1., high), 0., 1.));
-  return mix(c, disc, up * smoothstep(1. + px, 1. - px, d));
+  float rays = 0.;
+  for (int k = 0; k < 2; k++) {
+    float N = k == 0 ? 14. : 9.;
+    float a0 = ang / 6.2831853 * N + (k == 0 ? 0. : .37);
+    float id = floor(a0 + .5);
+    float off = (a0 - id) * 6.2831853 / N * d;
+    float len = 1.6 + 4.5 * hash(vec2(id, float(k) * 7.1));
+    rays += exp(-off * off / (.006 + .004 * d)) * exp(-d / len) * (k == 0 ? .26 : .16);
+  }
+  rays *= smoothstep(.4, 1.1, d);
+  // Gold where it's strong (mixed in, so it reads gold, not grey-beige
+  // over the blue), white at the heart.
+  c = mix(c, warm * 1.05, clamp(up * glow * .75, 0., .85));
+  c += vec3(1., .95, .85) * up * .35 * exp(-d * .9);
+  c += mix(warm, coreC, .5) * up * rays * mix(1., .6, high);
+  c = mix(c, coreC, up * hot);
+  return c;
 }
 // The moon as it is: its near side's seas where they are (Imbrium, Serenity,
 // Tranquillity, Crisis, Fertility, Nectar, Clouds, Moisture, the Ocean of
@@ -729,56 +759,47 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float R = .104 * lens / 1.7320508;
   float malt = uMoonDir.y;
   vec2 q = (uv - sp) / R;
-  q.y *= 1. + .28 * smoothstep(.07, 0., malt);
+  q.y *= 1. + .18 * smoothstep(.06, 0., malt);
   float d = length(q), px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, uMoonDir.y);
+  // (0.5.7) Stylised, like the desk: a flat cream disc, its seas in one
+  // flat cooler tone with soft edges (from the real map where it's
+  // loaded), a few bright craters, a clean terminator, a flat halo.
   float mare = 0.;
-  mare = max(mare, sea(q, vec2(-.34, .36), vec2(.3, .25), .3));
-  mare = max(mare, sea(q, vec2(.14, .38), vec2(.15, .14), 0.));
-  mare = max(mare, sea(q, vec2(.3, .14), vec2(.2, .16), .5));
-  mare = max(mare, sea(q, vec2(.64, .3), vec2(.11, .09), 0.));
-  mare = max(mare, sea(q, vec2(.5, -.1), vec2(.1, .17), .2));
-  mare = max(mare, sea(q, vec2(.31, -.25), vec2(.08, .08), 0.));
-  mare = max(mare, sea(q, vec2(-.15, -.33), vec2(.17, .13), .4));
-  mare = max(mare, sea(q, vec2(-.46, -.37), vec2(.09, .09), 0.));
-  mare = max(mare, sea(q, vec2(-.62, .05), vec2(.24, .42), .15));
-  mare = max(mare, sea(q, vec2(.02, .66), vec2(.48, .07), -.05));
-  mare = max(mare, sea(q, vec2(.03, .2), vec2(.07, .06), 0.));
-  float hi = fbm(q * 5. + 1.3, 5);
-  vec3 col = mix(vec3(.86, .84, .8) * (.86 + .24 * hi), vec3(.5, .5, .52) * (.85 + .3 * hi), mare * .9);
-  // Old craters: rimmed pits in the highlands, fewer in the seas.
-  vec2 gq = q * 9., gi = floor(gq), gf = fract(gq) - .5;
-  vec2 cj = hash2(gi) - .5;
-  float cr = .16 + .2 * hash(gi + 3.3);
-  float cd = length(gf - cj * .4) / cr;
-  float pit = hash(gi + 7.1) > .55 ? smoothstep(1., .7, cd) * .1 - smoothstep(1.15, 1., cd) * smoothstep(.9, 1., cd) * .08 : 0.;
-  col *= 1. - pit * (1. - mare * .7);
-  // The young bright craters and Tycho's rays.
-  vec2 ty = vec2(-.12, -.68);
-  float rays = pow(max(cos(atan(q.y - ty.y, q.x - ty.x) * 14. + fbm(q * 3., 2) * 4.), 0.), 6.) * smoothstep(.9, .1, length(q - ty));
-  col += vec3(.18) * rays * .6;
-  col += vec3(.35) * smoothstep(.05, .02, length(q - ty));
-  col += vec3(.22) * smoothstep(.045, .02, length(q - vec2(-.27, .12)));
-  col += vec3(.16) * smoothstep(.03, .012, length(q - vec2(-.5, .16)));
-  col += vec3(.3) * smoothstep(.028, .01, length(q - vec2(-.62, .36)));
   if (uMoonReady > .5) {
-    vec3 tex = pow(texture(uMoonTex, vec2(q.x, -q.y) * .5 + .5).rgb, vec3(2.2));
-    col = tex * 1.55;
+    float lum = dot(texture(uMoonTex, vec2(q.x, -q.y) * .5 + .5).rgb, vec3(.3, .55, .15));
+    mare = smoothstep(.56, .3, lum);
+  } else {
+    mare = max(mare, sea(q, vec2(-.34, .36), vec2(.3, .25), .3));
+    mare = max(mare, sea(q, vec2(.14, .38), vec2(.15, .14), 0.));
+    mare = max(mare, sea(q, vec2(.3, .14), vec2(.2, .16), .5));
+    mare = max(mare, sea(q, vec2(-.15, -.33), vec2(.17, .13), .4));
+    mare = max(mare, sea(q, vec2(-.62, .05), vec2(.24, .42), .15));
   }
-  // The phase: waxing gibbous, lit from the right, the terminator soft,
-  // the bright limb a touch dimmer (the regolith's own falloff).
+  // (0.5.7) A warm gold moon (the owner, 2026-11-20).
+  vec3 col = mix(vec3(.98, .9, .66), vec3(.74, .66, .48), mare * .85);
+  col += vec3(.06) * smoothstep(.07, .03, length(q - vec2(-.12, -.68)));
+  col += vec3(.05) * smoothstep(.05, .02, length(q - vec2(-.27, .12)));
+  // The phase: waxing gibbous, lit from the right; the dark side a touch
+  // lighter than the sky (earthshine), the line between them clean.
   vec3 sn = vec3(q, sqrt(max(1. - d * d, 0.)));
-  float lit = smoothstep(-.18, .12, dot(sn, normalize(vec3(.85, .05, .52))));
-  col *= mix(.035, 1., lit) * 1.12;
-  // Low, through more air: amber, then honey, dimmer; high, silver.
+  // (0.5.7) Full (the owner, 2026-11-20).
+  float lit = 1.;
+  // (Its dark side is the sky's own colour, a breath lighter: earthshine.)
+  vec3 dark = c * .9 + vec3(.014, .017, .026);
+  col = mix(dark, col, lit);
+  // Low, warmer (amber to honey); high, cream.
   vec3 tr = exp(-tau0() * airmass(max(malt, 0.) + .004));
   vec3 tint = tr / max(max(tr.r, tr.g), 1e-3);
   float high = smoothstep(.02, .3, malt);
-  col *= mix(tint * mix(.55, 1., smoothstep(-.02, .08, malt)), vec3(1.), high);
-  float out1 = max(d - 1., 0.);
-  vec3 haloC = mix(vec3(.85, .6, .35), vec3(.62, .7, .9), high);
-  c += haloC * up * (.07 * exp(-out1 * 1.3) + .03 * exp(-out1 * .22)) * step(1., d);
-  return mix(c, col, up * smoothstep(1. + px, 1. - px, d));
+  col *= mix(mix(tint, vec3(1.), .4), vec3(1.), high);
+  // Its light in the air round it, added: a soft aureole and the sky
+  // lifted wide round it, cool high, warm low.
+  float o = max(d - 1., 0.);
+  vec3 haloC = mix(vec3(.9, .68, .4), vec3(.85, .76, .52), high);
+  c += haloC * up * (.2 * exp(-o * 3.5) + .07 * exp(-o * .7) + .035 * exp(-o * .15));
+  float edge = 1. - smoothstep(.93 - px, 1. + px, d);
+  return mix(c, col, up * edge);
 }
 
 // The light, in two parts: what's there (the ground or the sky, with the
@@ -787,10 +808,10 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
 void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
   for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
   LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
-  EXPO = mix(1.05, 30., smoothstep(.0, 1., uNight));
+  EXPO = 1.25 * pow(16., uNight);
   if (g.hit > 0.) base = ground(g, rd);
   else {
-    base = sky(rd) + stars(rd) * uNight;
+    base = sky(rd) + stars(rd) * smoothstep(.65, 1., uNight);
     base = drawSun(base, uv, f, r, u, lens);
     base = drawMoon(base, uv, f, r, u, lens);
   }
@@ -958,7 +979,7 @@ void main() {
   vec4 m = texelFetch(uMist, px, 0);
   vec3 c = m.a > .9999 ? base : pow(compose(pow(base, vec3(2.2)), pow(m.rgb, vec3(2.2)), m.a * m.a, rd), vec3(1. / 2.2));
   c += (hash(gl_FragCoord.xy) - .5) / 255.;
-  o = vec4(c * uA, uA);
+  o = vec4(dayGrade(c) * uA, uA);
 }`;
 
 // The light and the composite in one, for the drop (the camera moving).
@@ -981,7 +1002,7 @@ void main() {
   // The first load: the mountains fade in over the sky that was there.
   if (g.hit > 0. && uReveal < 1. && uSkipGeo < .5 && uNear <= 0.) lin = mix(sky(rd), lin, uReveal);
   vec3 c = pow(lin, vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
-  o = vec4(c * uA, uA);
+  o = vec4(dayGrade(c) * uA, uA);
 }`;
 
 // Both in one, where float targets can't be drawn into.
@@ -999,7 +1020,7 @@ void main() {
   vec3 base, mist;
   lightParts(g, rd, uv, f, r, u, lens, base, mist);
   vec3 c = pow(compose(base, mist, g.T, rd), vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
-  o = vec4(c * uA, uA);
+  o = vec4(dayGrade(c) * uA, uA);
 }`;
 
 

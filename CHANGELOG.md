@@ -6,6 +6,34 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.7 — 2026-11-20
+
+The day and the switch, remade (`peaks.js`, `gl/peaksShader.js`,
+`gl/MistCanvas.jsx`), to the owner's references.
+
+- **Golden-hour day.** The sun rests 4.5° up on the left (the moon in the
+  same place by night). Deep blue overhead and away from the sun, gold
+  only toward it; white snow lit warm against cool blue shade; a thinner,
+  bluer aerial haze; a light day grade (`uGrade`) that fades out as the
+  sun sets.
+- **The sun melts into the sky:** a white core, the sky round it paling
+  to its warm white, a gold glow mixed in (not added over the blue, which
+  went beige), and a soft starburst of uneven rays. The mist and the
+  clouds glow gold only toward it.
+- **A full gold moon**, its seas from the real map in one tone, its
+  light lifting the sky round it.
+- **A timelapse switch.** The body going crosses the sky inside the frame
+  and sets at the right-hand corner of the skyline; the other rises from
+  the left-hand corner into its place. The night (exposure, stars, tint)
+  follows the sun's height, not the switch's clock, so it's one sky
+  darkening, not two crossfading. The clouds sweep with the switch from
+  its first moment and come back to the first load's at rest. The Milky
+  Way (a white streak that outlasted the dawn) is gone; the clouds no
+  longer fade out by night; the stars show only once it's dark.
+
+Open: the 2D scene (grass, trees, house) isn't graded or relit with it;
+the button's hit target is the old size.
+
 ## 0.5.6 — 2026-11-20
 
 The plateau as a real mountaintop (`peaks.js`, `gl/peaksShader.js`,

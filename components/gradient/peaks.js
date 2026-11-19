@@ -138,7 +138,8 @@ export function peaksCameraAt(about) {
 // share of the frame's half-width, so the body, which is the day/night
 // button, stays in frame on any aspect; 0 is straight ahead, + left). The
 // sun rests low on the right, the moon higher on the left.
-export const BODIES = { sun: { el: 13, az: -0.62 }, moon: { el: 13, az: 0.58 } };
+// (0.5.7) The day is golden hour: the sun low (the owner, 2026-11-20).
+export const BODIES = { sun: { el: 4.5, az: 0.58 }, moon: { el: 13, az: 0.58 } };
 // How far under the horizon a body must be once it's out of its scene.
 export const BELOW = -16;
 // The latitude the sky turns at: its pole is this high behind the camera
@@ -192,34 +193,42 @@ const altOf = d => (Math.asin(Math.max(-1, Math.min(1, d[1]))) * 180) / Math.PI;
  * afternoon. Mid-switch (`orbit`, progress `e`) the turn is `e` of the way.
  */
 export function peaksLightAt(recipe, orbit, e, cam, w, h) {
-  const frame = skyFrame(cam);
-  // Each body on the sky where the scene it belongs to holds it.
-  const sunRest = toSky(lightDir(BODIES.sun, cam, w, h), frame);
-  const moonRest = toSky(lightDir(BODIES.moon, cam, w, h), frame);
-  // The dusk's turn: enough that the sun is well down and the moon, turned
-  // back by as much, is well down by day.
-  let dusk = Math.PI / 2;
-  for (let d = rad(30); d <= rad(200); d += rad(1)) {
-    const s = altOf(fromSky({ dec: sunRest.dec, H: sunRest.H + d }, frame));
-    const m = altOf(fromSky({ dec: moonRest.dec, H: moonRest.H - d }, frame));
-    if (s < BELOW && m < BELOW) {
-      dusk = d;
-      break;
-    }
-  }
+  // (0.5.7) The switch moves the bodies themselves (both rest on the left);
+  // turning the whole sky about a pole sent the moon across before the
+  // sun could rise, and the day waited for it.
   const toNight = isNight(orbit ? orbit.next : recipe);
   const fromNight = orbit ? isNight(orbit.prev) : toNight;
   const t = orbit && toNight !== fromNight ? clamp01(e) : 1;
-  // The sky's turn from the day's: 0 by day, `dusk` by night, and a dawn
-  // carries on from `dusk` to a full turn.
-  const turn = !orbit || toNight === fromNight ? (toNight ? dusk : 0) : toNight ? dusk * t : dusk + (2 * Math.PI - dusk) * t;
-  const sun = fromSky({ dec: sunRest.dec, H: sunRest.H + turn }, frame);
-  const moon = fromSky({ dec: moonRest.dec, H: moonRest.H - dusk + turn }, frame);
-  const night = toNight ? smooth(t) : 1 - smooth(t);
+  const down = BELOW - 2;
+  // (0.5.7) A timelapse: the body going crosses the whole sky, from its
+  // place on the left up over the frame to set off on the right; the one
+  // coming rises on the left into its place as the other goes down. The
+  // light, the sky and the clouds follow the sun.
+  const cross = k => smooth(clamp01(k / 0.78));
+  const rise = k => smooth(clamp01((k - 0.45) / 0.55));
+  // Kept inside the frame: the arc tops out ~20° up (the top of the frame
+  // is ~25°), and ends at the right-hand corner of the skyline.
+  const across = (rest, u) =>
+    lightDir({ el: rest.el + (down - rest.el) * u + 22 * Math.sin(Math.PI * u), az: rest.az + (-1 - rest.az) * u }, cam, w, h);
+  // Up from the left-hand corner of the skyline into its place.
+  const up = (rest, u) => lightDir({ el: down + (rest.el - down) * u, az: 1 + (rest.az - 1) * u }, cam, w, h);
+  const switching = !!orbit && toNight !== fromNight;
+  const sun = !switching ? (toNight ? up(BODIES.sun, 0) : up(BODIES.sun, 1)) : toNight ? across(BODIES.sun, cross(t)) : up(BODIES.sun, rise(t));
+  const moon = !switching ? (toNight ? up(BODIES.moon, 1) : up(BODIES.moon, 0)) : toNight ? up(BODIES.moon, rise(t)) : across(BODIES.moon, cross(t));
   const sunEl = altOf(sun);
+  // (0.5.7) How much of the night shows follows the sun itself, not the
+  // switch's clock: day while it's above 4°, night once it's 14° down
+  // (past nautical twilight), so one sky darkens and lightens, never two
+  // skies crossfading.
+  const night = 1 - smooth(clamp01((sunEl + 14) / 18));
   // The alpenglow: the sun's last (or first) light, pink on the snow.
   const glow = Math.max(0, 1 - Math.abs(sunEl - 1.5) / 6) * (sunEl > -2 ? 1 : 0);
-  return { sun, moon, night, glow, by: sunEl >= altOf(moon) ? 'sun' : 'moon', rest: toNight ? 'moon' : 'sun' };
+  // (0.5.7) The day's grade: whole while the sun is at its height, gone by
+  // the time it's 2° up, so the sunset keeps its own colours.
+  const grade = smooth(clamp01((sunEl + 1) / 4));
+  // How far through a switch (0 at rest): the clouds sweep with it.
+  const sweep = switching ? t : 0;
+  return { sun, moon, night, glow, grade, sweep, by: sunEl >= altOf(moon) ? 'sun' : 'moon', rest: toNight ? 'moon' : 'sun' };
 }
 
 // The bearings the shape pass works the ground's horizon out for (as a

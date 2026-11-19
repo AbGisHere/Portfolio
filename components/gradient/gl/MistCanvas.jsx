@@ -1634,6 +1634,7 @@ export default function MistCanvas({ recipe, onFail }) {
     let peaksKept = null;
     let peaksMoon = null;
     let peaksLapse = 0;
+    let peaksLastSweep = 0;
     let peaksLastKey = null;
     let peaksShown = false;
     let peaksReadyAt = 0;
@@ -2082,7 +2083,12 @@ export default function MistCanvas({ recipe, onFail }) {
       // The timelapse's own clock: it runs on through every switch, either
       // way, so the mist and the high cloud only ever drift forward.
       if (frame.peaks) {
-        peaksLapse += Math.abs(frame.peaks.light.night - peaksLastNight);
+        // (0.5.7) The clouds sweep with the switch's progress, from its
+        // first moment (not only once the night changes, at its end).
+        const sw = frame.peaks.light.sweep ?? 0;
+        if (sw > peaksLastSweep) peaksLapse += sw - peaksLastSweep;
+        else if (sw === 0 && peaksLastSweep > 0) peaksLapse = Math.round(peaksLapse);
+        peaksLastSweep = sw;
         peaksLastNight = frame.peaks.light.night;
       }
       peaksNow = frame.peaks && {
@@ -3550,6 +3556,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2fv(u('uShift'), pk.cam.shift ?? [0, 0]);
       gl.uniform1f(u('uNear'), pk.behind ? 0.5 : 0);
       gl.uniform1f(u('uSkipGeo'), pk.skipGeo ? 1 : 0);
+      gl.uniform1f(u('uGrade'), pk.light.grade ?? 0);
       gl.uniform2fv(u('uBear'), pk.bearings.flat());
       gl.uniform1i(u('uHN'), PEAKS_HN);
       gl.uniform1i(u('uHF'), PEAKS_HF);

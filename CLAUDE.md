@@ -198,7 +198,16 @@ plateau now start at its rim), keeps one mist whatever the camera's
 height, and sizes the sun and moon by angle. Open items in its
 `CHANGELOG.md` entry.
 
-**Next: 0.5.7** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
+**0.5.7** (2026-11-20) remakes the day and the switch: a golden-hour
+day (the sun 4.5° up on the left, blue overhead, white snow, warm light
+against blue shade, a blue aerial haze, a light day grade), a sun that
+melts into the sky (white core, gold glow, a starburst), a full gold
+moon on the left too, and a timelapse switch: the body going crosses
+the sky and sets at the right-hand corner while the other rises from the
+left one; the night, exposure and grade follow the sun's height, and
+the clouds sweep with the switch and return to the first load's.
+
+**Next: 0.5.8** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
 valley flight, then the cliffs' own detail, the phones, the fallback's
 stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
