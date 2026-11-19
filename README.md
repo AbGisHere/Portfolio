@@ -5,7 +5,7 @@ page of stacked sections.
 
 **Live:** [abgupta.me](https://abgupta.me)
 
-![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-informational)
+![Version 0.5.1](https://img.shields.io/badge/version-0.5.1-informational)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)
 
@@ -15,10 +15,10 @@ The whole site sits on a single full-bleed scene: mountain ridges under
 drifting haze, with a sun (or at night, a moon) in the sky. Every scroll delta
 stages the next beat of that scene instead of paging through sections.
 
-**Where it stands (0.5.0):** the atmosphere, the camera pull-back, the desk
+**Where it stands (0.5.1):** the atmosphere, the camera pull-back, the desk
 and the house with its pool are built, and `0.5.x` is rebuilding the opening
 hills in 3D: from 0.5.0 the page opens over real 3D peaks in valley mist,
-under a real sky, with a timelapse dusk on the click. The device screen,
+under a real sky, the mist drifting, with a timelapse dusk or dawn on the click. The device screen,
 header navigation and real content follow
 (see [Versioning](#versioning)). What each release changed and measured is in
 [`CHANGELOG.md`](./CHANGELOG.md).

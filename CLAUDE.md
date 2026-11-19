@@ -158,8 +158,17 @@ targets once per view; the light from them, so a switch only relights);
 over to the 2D scene until 0.5.3. The layered fallback still draws the 2D
 opening (its stills are open), so parity at the opening is a known gap.
 
-**Next: 0.5.1** (`ROADMAP.md`, `0.5.x`): the opening's motion, the phones,
-the fallback's stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.5.1** (2026-11-19) brings the opening to life and makes it light: the
+mist drifts (a composite each frame moves it over the kept light, three
+texture reads a pixel, from `flowNoise`), the sky turns rigidly about a
+pole at 42° so the bodies set and rise on real arcs, always forward (a dawn
+turns on round, not back); the first load shows the sky at once and builds
+the shape a slice a frame (coarse distances, the full pass in bands, the
+horizons at half size), the mountains fading in. M4 @2: rest and switch
+8.3 ms; the shape ~150 ms, spread over frames.
+
+**Next: 0.5.2** (`ROADMAP.md`, `0.5.x`): the phones, the fallback's stills
+and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

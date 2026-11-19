@@ -33,9 +33,8 @@ precision highp int;
 uniform vec2 uRes;
 uniform vec3 uCam, uLook;
 uniform float uFov;
-// The sun's and the moon's bearings, flat (their azimuths hold through a
-// switch: each only sinks or rises on its own side, ../peaks.js).
-uniform vec2 uSunH, uMoonH;
+// The four bearings the ground's horizon is found for (../peaks.js BEARINGS).
+uniform vec2 uBear[4];
 
 const vec4 PEAK[${PEAKS.length}] = vec4[${PEAKS.length}](${peaks});
 // The mist: its floor, and the height it thins out by.
@@ -89,22 +88,28 @@ float terrain(vec2 p, int oct) {
   for (int i = 0; i < ${PEAKS.length}; i++) h = max(h, peak(p, PEAK[i], i == 0 ? 1. : .62, det));
   return h;
 }
-float march(vec3 ro, vec3 rd, float tmax) {
-  float t = 1.;
-  for (int i = 0; i < 300; i++) {
+// Nothing stands above this: a ray past it, climbing, has missed.
+const float CEILING = 4400.;
+float march(vec3 ro, vec3 rd, float tmax, float t0) {
+  float t = max(t0, 1.), tp = t, hp = 1.;
+  for (int i = 0; i < 160; i++) {
     vec3 p = ro + rd * t;
-    float h = p.y - terrain(p.xz, 6);
-    if (h < .0012 * t) return t;
-    if (t > tmax || (rd.y > 0. && p.y > 5600.)) break;
-    t += max(h * .42, .2 + t * .0007);
+    float h = p.y - terrain(p.xz, 5);
+    if (h < .0015 * t) {
+      // Between the last step above and this one, where the ground was met.
+      return mix(tp, t, hp / max(hp - h, 1e-4));
+    }
+    if (t > tmax || (rd.y > 0. && p.y > CEILING)) break;
+    tp = t; hp = h;
+    t += max(h * .62, .4 + t * .0012);
   }
   return -1.;
 }
 vec3 nrm(vec3 p, float t) {
   float e = max(.8, t * .0014);
-  int oc = t < 5000. ? 11 : 8;
-  return normalize(vec3(terrain(p.xz - vec2(e, 0), oc) - terrain(p.xz + vec2(e, 0), oc), 2. * e,
-                        terrain(p.xz - vec2(0, e), oc) - terrain(p.xz + vec2(0, e), oc)));
+  int oc = t < 5000. ? 10 : 7;
+  float h0 = terrain(p.xz, oc);
+  return normalize(vec3(h0 - terrain(p.xz + vec2(e, 0), oc), e, h0 - terrain(p.xz + vec2(0, e), oc)));
 }
 
 // ---- the mist: soft banks pooled low, thinning upward, torn by noise
@@ -112,23 +117,23 @@ float mistAt(vec3 p) {
   float hgt = (p.y - MIST_BASE) / MIST_RISE;
   if (hgt > 3.5) return 0.;
   vec2 q = p.xz / 1400.;
-  float n = fbm(q + .5 * vec2(fbm(q * 1.7 + 3.1, 3), fbm(q * 1.7 + 8.3, 3)), 5);
+  float n = fbm(q + .5 * vec2(noise(q * 1.7 + 3.1), noise(q * 1.7 + 8.3)), 4);
   float bank = smoothstep(.32, .78, n + .35 - hgt * .3);
   return bank * exp(-max(hgt, 0.) * 1.3) * .0011;
 }
 
-struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec2 hor; };
+struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec4 hor; };
 
 // How high the ground rises toward a bearing, seen from p: the tangent of
 // the horizon's elevation. A body below it is hidden, so the light pass
 // shades with this instead of marching a shadow every frame.
 float horizon(vec3 p, vec2 dir) {
-  float m = -1., t = 12.;
-  for (int i = 0; i < 40; i++) {
+  float m = -1., t = 15.;
+  for (int i = 0; i < 18; i++) {
     vec2 q = p.xz + dir * t;
-    float h = terrain(q, 4) - p.y;
+    float h = terrain(q, 3) - p.y;
     m = max(m, h / t);
-    t *= 1.16;
+    t *= 1.38;
     if (t > 16000.) break;
   }
   return m;
@@ -141,11 +146,11 @@ vec3 viewRay(out vec3 f, out vec3 r, out vec3 u, out float lens, out vec2 uv) {
   return normalize(f * lens + uv.x * r + uv.y * u);
 }
 
-G geo(vec3 rd) {
+G geo(vec3 rd, float tStart) {
   G g;
-  g.t = march(uCam, rd, 80000.);
+  g.t = march(uCam, rd, 80000., tStart);
   g.hit = g.t > 0. ? 1. : 0.;
-  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec2(-1);
+  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec4(-1);
   vec3 p = uCam + rd * max(g.t, 0.);
   if (g.hit > 0.) {
     g.n = nrm(p, g.t);
@@ -158,8 +163,6 @@ G geo(vec3 rd) {
     g.snow = smoothstep(line - 120., line + 120., alt) * smoothstep(.36, .5, holds);
     g.snow = max(g.snow, smoothstep(.55, .68, holds) * smoothstep(1300., 1600., alt));
     g.ao = clamp(.6 + (alt - terrain(p.xz, 3)) / 300., .3, 1.);
-    vec3 lift = p + g.n * 3.;
-    g.hor = vec2(horizon(lift, uSunH), horizon(lift, uMoonH));
   }
   // The mist between the eye and what it sees: its depth (transmittance)
   // and how high in it the light was gathered (the light pass lights it).
@@ -169,9 +172,9 @@ G geo(vec3 rd) {
   float top = MIST_BASE + MIST_RISE * 3.5;
   if (rd.y < 0.) t0 = max(0., (top - uCam.y) / rd.y); else if (uCam.y > top) t1 = 0.;
   if (t1 > t0) {
-    float dt = (t1 - t0) / 28.;
+    float dt = (t1 - t0) / 14.;
     float j = hash(gl_FragCoord.xy) * dt;
-    for (int i = 0; i < 28; i++) {
+    for (int i = 0; i < 14; i++) {
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);
@@ -187,6 +190,11 @@ G geo(vec3 rd) {
 `;
 
 const SHADE = `
+uniform sampler2D uFlow;
+// Noise from the flow texture (five octaves baked in): one or two reads,
+// not a dozen noise sums.
+float tn(vec2 p) { return texture(uFlow, p).r; }
+float tn2(vec2 p) { return texture(uFlow, p).r * .62 + texture(uFlow, p * 2.73 + .37).g * .38; }
 uniform float uByMoon;
 uniform vec3 uSunDir, uMoonDir, uLightDir;
 uniform vec3 uStops[6];
@@ -201,9 +209,15 @@ vec3 LIGHT;
 uniform sampler2D uMoonTex;
 uniform float uMoonReady;
 // The light's shadow: the body against the ground's horizon toward it.
+uniform float uLightAz;
+uniform vec4 uBearAz;
 float shadow(G g) {
   float tl = uLightDir.y / max(length(uLightDir.xz), 1e-4);
-  float th = uByMoon > .5 ? g.hor.y : g.hor.x;
+  // The horizon toward the light: blended between the bearings either side.
+  float a = clamp(uLightAz, uBearAz.x, uBearAz.w);
+  float th = a < uBearAz.y ? mix(g.hor.x, g.hor.y, (a - uBearAz.x) / (uBearAz.y - uBearAz.x))
+           : a < uBearAz.z ? mix(g.hor.y, g.hor.z, (a - uBearAz.y) / (uBearAz.z - uBearAz.y))
+           : mix(g.hor.z, g.hor.w, (a - uBearAz.z) / (uBearAz.w - uBearAz.z));
   return smoothstep(-.035, .035, tl - th);
 }
 
@@ -291,10 +305,10 @@ vec3 sky(vec3 rd) {
   if (rd.y > .005) {
     vec2 sp = rd.xz * (9000. / rd.y) / 9000.;
     vec2 q = mat2(.94, .34, -.34, .94) * sp + vec2(uLapse * 1.6, uLapse * .3);
-    float cover = smoothstep(.42, .7, fbm(q * .35 + 11.3, 4));
-    vec2 w = q + .6 * vec2(fbm(q * 1.1 + 1.7, 4), fbm(q * 1.1 + 6.1, 4));
-    float fib = fbm(vec2(w.x * 1.2, w.y * 3.6), 7);
-    float soft = fbm(w * 2.1 + 3.3, 6);
+    float cover = smoothstep(.42, .7, tn(q * .05 + .3));
+    vec2 w = q + .6 * (texture(uFlow, q * .15 + .7).rg - .5) * 2.;
+    float fib = tn2(vec2(w.x * .17, w.y * .5));
+    float soft = tn2(w * .3 + .45);
     float dens = smoothstep(.48, .78, mix(fib, soft, .35)) * cover;
     dens *= smoothstep(.005, .06, rd.y);
     float a = clamp(dens * .75, 0., .8) * (1. - .75 * smoothstep(.3, 1., uNight));
@@ -327,9 +341,9 @@ vec3 stars(vec3 rd) {
   vec3 e1 = normalize(cross(ax, vec3(0., 1., 0.))), e2 = cross(ax, e1);
   float along = atan(dot(rd, e2), dot(rd, e1));
   vec2 bp = vec2(along * 14., lat * 14.);
-  float m = fbm(bp * 2.4, 7);
-  float lanes = smoothstep(.36, .62, fbm(bp * vec2(.6, 1.4) + 4.2, 6));
-  float grain = fbm(bp * 5. + 9.1, 4);
+  float m = tn2(bp * .34);
+  float lanes = smoothstep(.36, .62, tn2(bp * vec2(.085, .2) + .6));
+  float grain = tn(bp * .7 + .3);
   c += mix(vec3(.5, .55, .75), vec3(.85, .78, .7), m) * .13 * band * (.2 + m) * (.2 + .8 * lanes) * (.6 + .8 * grain);
   // Fewer near the moon (its glow outshines them) and down low (the air).
   return c * smoothstep(.02, .22, rd.y) * (1. - .8 * pow(max(dot(rd, uMoonDir), 0.), 20.));
@@ -345,7 +359,7 @@ vec3 haze(vec3 c, vec3 rd, float t) {
 
 vec3 ground(G g, vec3 rd) {
   // Under deep mist nothing of the ground shows: skip its light.
-  if (g.T < .02) return vec3(0);
+  if (g.T < .004) return vec3(0);
   vec3 p = uCam + rd * g.t;
   vec3 n = g.n;
   float alt = p.y;
@@ -370,7 +384,10 @@ vec3 ground(G g, vec3 rd) {
 vec3 mistLit(G g, vec3 rd) {
   float fwd = pow(max(dot(rd, uLightDir), 0.), 4.);
   vec3 lo = skyLight() * .95;
-  vec3 hi = bodyLight() * .75 + skyLight() * .6;
+  // (Mist scatters every colour alike, so a low sun's deep red reaches it
+  // paler: pink and gold, not red.)
+  vec3 bl = bodyLight();
+  vec3 hi = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .5) * .75 + skyLight() * .6;
   return mix(lo, hi, smoothstep(0., .8, g.mh)) + bodyLight() * fwd * .35;
 }
 
@@ -451,64 +468,235 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   return mix(c, col, up * smoothstep(1. + px, 1. - px, d));
 }
 
-vec4 lightPass(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
+// The light, in two parts: what's there (the ground or the sky, with the
+// bodies) and the mist before it, with how much of the first shows
+// through. The composite (PEAKS_MIX_FS) moves the mist over them each frame.
+void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
   for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
   LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
   EXPO = mix(1.05, 30., smoothstep(.0, 1., uNight));
-  vec3 c;
-  if (g.hit > 0.) c = ground(g, rd);
+  if (g.hit > 0.) base = ground(g, rd);
   else {
-    c = sky(rd) + stars(rd) * uNight;
-    c = drawSun(c, uv, f, r, u, lens);
-    c = drawMoon(c, uv, f, r, u, lens);
+    base = sky(rd) + stars(rd) * uNight;
+    base = drawSun(base, uv, f, r, u, lens);
+    base = drawMoon(base, uv, f, r, u, lens);
   }
-  c = mix(mistLit(g, rd), c, g.T);
-  c = pow(c, vec3(1. / 2.2));
-  c += (hash(gl_FragCoord.xy) - .5) / 255.;
-  return vec4(c * uA, uA);
+  mist = mistLit(g, rd);
 }
 `;
+
+// The coarse pass, at a quarter of the size each way: how far each ray
+// gets before it is near the ground (a little short of it, so the full
+// pass, starting there, never steps over a ridge a coarse ray missed).
+export const PEAKS_COARSE_FS = `#version 300 es
+${COMMON}
+uniform vec2 uFull;
+out vec4 o;
+void main() {
+  // This texel's block of 4 × 4 full pixels: its centre, in the full
+  // frame's view coordinates.
+  vec2 uv = (gl_FragCoord.xy * 4. * 2. - uFull) / uFull.y;
+  vec3 f = normalize(uLook - uCam), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
+  float lens = 1. / tan(radians(uFov) * .5);
+  // The corner rays of this coarse texel's block, the nearest of them.
+  float best = 1e9;
+  for (int k = 0; k < 4; k++) {
+    vec2 o2 = vec2(k & 1, k >> 1) * 2. - 1.;
+    vec2 q = uv + o2 * 4. / uFull.y;
+    vec3 rd = normalize(f * lens + q.x * r + q.y * u);
+    float t = march(uCam, rd, 80000., 1.);
+    best = min(best, t < 0. ? 80000. : t);
+  }
+  o = vec4(best * .82 * .001, 0., 0., 1.);
+}`;
+
+// Each pixel's ground horizon toward the four bearings, at half the size
+// each way (the shadows are soft; the light pass reads it filtered).
+export const PEAKS_HOR_FS = `#version 300 es
+${COMMON}
+uniform sampler2D uG0;
+out vec4 o;
+void main() {
+  ivec2 px = ivec2(gl_FragCoord.xy) * 2;
+  vec4 a = texelFetch(uG0, px, 0);
+  if (a.x <= 0.) { o = vec4(-1); return; }
+  vec2 uv = (vec2(px) + .5) * 2. / uRes - 1.;
+  uv.x *= uRes.x / uRes.y;
+  vec3 f = normalize(uLook - uCam), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
+  vec3 rd = normalize(f / tan(radians(uFov) * .5) + uv.x * r + uv.y * u);
+  vec3 n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z);
+  vec3 p = uCam + rd * a.x * 1000. + n * 3.;
+  o = vec4(horizon(p, uBear[0]), horizon(p, uBear[1]), horizon(p, uBear[2]), horizon(p, uBear[3]));
+}`;
 
 // The shape pass: two float targets.
 export const PEAKS_GEO_FS = `#version 300 es
 ${COMMON}
 layout(location = 0) out vec4 o0;
 layout(location = 1) out vec4 o1;
-layout(location = 2) out vec4 o2;
+uniform sampler2D uCoarse;
 void main() {
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
-  G g = geo(rd);
+  G g = geo(rd, texelFetch(uCoarse, ivec2(gl_FragCoord.xy) / 4, 0).x * 1000.);
   o0 = vec4(g.t * .001, g.n.x, g.n.z, g.snow);
   o1 = vec4(g.T, g.mh, g.ao, g.hit);
-  o2 = vec4(g.hor, 0., 0.);
 }`;
 
 // The light pass, reading them.
-export const PEAKS_FS = `#version 300 es
-${COMMON}
-${SHADE}
+const READ_G = `
 uniform sampler2D uG0, uG1, uG2;
-out vec4 o;
-void main() {
-  vec3 f, r, u; float lens; vec2 uv;
-  vec3 rd = viewRay(f, r, u, lens, uv);
+uniform float uReady, uReveal;
+G readG() {
+  if (uReady < .5) {
+    G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.hor = vec4(-1);
+    return s;
+  }
   ivec2 px = ivec2(gl_FragCoord.xy);
   vec4 a = texelFetch(uG0, px, 0), b = texelFetch(uG1, px, 0);
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
   g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = b.w;
-  g.hor = texelFetch(uG2, px, 0).xy;
-  o = lightPass(g, rd, uv, f, r, u, lens);
+  g.hor = texture(uG2, gl_FragCoord.xy / uRes);
+  return g;
+}`;
+
+// The mist's motion: a wind field from a small tiling noise texture
+// (uFlow, made once on the CPU), sampled where the ray crosses the mist's
+// middle, rolling on with the clock and faster through a switch (the
+// timelapse), so the banks drift and part. Three texture reads a pixel.
+const FLOW = `
+uniform float uT, uLapseMix;
+float mistFlow(vec3 rd) {
+  float mid = MIST_BASE + MIST_RISE * 1.2;
+  if (rd.y >= -.002) return 1.;
+  vec2 p = (uCam + rd * ((mid - uCam.y) / rd.y)).xz;
+  float clock = uT * .07 + uLapseMix * 2.2;
+  vec2 q = p / 1700. + vec2(clock, clock * .35);
+  vec2 warp = texture(uFlow, q * .6 + clock * .2).rg - .5;
+  float a = texture(uFlow, q + warp * .4).r;
+  float b = texture(uFlow, p / 650. + vec2(-clock * 1.7, clock * .9)).g;
+  return mix(.22, 2.3, smoothstep(.28, .72, a * .7 + b * .3));
+}
+vec3 compose(vec3 base, vec3 mist, float T0, vec3 rd) {
+  float T = T0 < .9999 ? pow(T0, mistFlow(rd)) : T0;
+  return mix(mist, base, T);
+}`;
+
+// The light pass: both parts into two targets (the mist's transmittance,
+// square-rooted for its precision, in the second's alpha).
+export const PEAKS_FS = `#version 300 es
+${COMMON}
+${SHADE}
+${READ_G}
+layout(location = 0) out vec4 o0;
+layout(location = 1) out vec4 o1;
+void main() {
+  vec3 f, r, u; float lens; vec2 uv;
+  vec3 rd = viewRay(f, r, u, lens, uv);
+  G g = readG();
+  vec3 base, mist;
+  lightParts(g, rd, uv, f, r, u, lens, base, mist);
+  o0 = vec4(pow(base, vec3(1. / 2.2)), 1.);
+  o1 = vec4(pow(mist, vec3(1. / 2.2)), sqrt(g.T));
+}`;
+
+// The composite, every frame: the two parts and the mist's motion.
+export const PEAKS_MIX_FS = `#version 300 es
+${COMMON}
+uniform sampler2D uFlow;
+${FLOW}
+uniform sampler2D uBase, uMist;
+uniform float uA;
+out vec4 o;
+void main() {
+  vec3 f, r, u; float lens; vec2 uv;
+  vec3 rd = viewRay(f, r, u, lens, uv);
+  ivec2 px = ivec2(gl_FragCoord.xy);
+  vec3 base = texelFetch(uBase, px, 0).rgb;
+  vec4 m = texelFetch(uMist, px, 0);
+  vec3 c = m.a > .9999 ? base : pow(compose(pow(base, vec3(2.2)), pow(m.rgb, vec3(2.2)), m.a * m.a, rd), vec3(1. / 2.2));
+  c += (hash(gl_FragCoord.xy) - .5) / 255.;
+  o = vec4(c * uA, uA);
+}`;
+
+// The light and the composite in one, for the drop (the camera moving).
+export const PEAKS_LIT_FS = `#version 300 es
+${COMMON}
+${SHADE}
+${READ_G}
+${FLOW}
+out vec4 o;
+void main() {
+  vec3 f, r, u; float lens; vec2 uv;
+  vec3 rd = viewRay(f, r, u, lens, uv);
+  G g = readG();
+  vec3 base, mist;
+  lightParts(g, rd, uv, f, r, u, lens, base, mist);
+  vec3 lin = compose(base, mist, g.T, rd);
+  // The first load: the mountains fade in over the sky that was there.
+  if (g.hit > 0. && uReveal < 1.) lin = mix(sky(rd), lin, uReveal);
+  vec3 c = pow(lin, vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
+  o = vec4(c * uA, uA);
 }`;
 
 // Both in one, where float targets can't be drawn into.
 export const PEAKS_ALL_FS = `#version 300 es
 ${COMMON}
 ${SHADE}
+${FLOW}
 out vec4 o;
 void main() {
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
-  o = lightPass(geo(rd), rd, uv, f, r, u, lens);
+  G g = geo(rd, 1.);
+  vec3 p0 = uCam + rd * max(g.t, 0.) + g.n * 3.;
+  g.hor = g.hit > 0. ? vec4(horizon(p0, uBear[0]), horizon(p0, uBear[1]), horizon(p0, uBear[2]), horizon(p0, uBear[3])) : vec4(-1);
+  vec3 base, mist;
+  lightParts(g, rd, uv, f, r, u, lens, base, mist);
+  vec3 c = pow(compose(base, mist, g.T, rd), vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
+  o = vec4(c * uA, uA);
 }`;
+
+
+// The mist's wind field: 128² tiling value-noise fbm, two channels, made
+// once (about a millisecond) so the composite reads it instead of working
+// noise out per pixel.
+export function flowNoise(N = 128) {
+  const out = new Uint8Array(N * N * 4);
+  const grid = (seed, g) => {
+    const v = new Float32Array(g * g);
+    let x = seed * 2654435761;
+    for (let i = 0; i < v.length; i++) {
+      x = (x ^ (x << 13)) >>> 0; x = (x ^ (x >>> 17)) >>> 0; x = (x ^ (x << 5)) >>> 0;
+      v[i] = x / 4294967296;
+    }
+    return v;
+  };
+  const sample = (v, g, u, w) => {
+    const x = u * g, y = w * g;
+    const i = Math.floor(x), j = Math.floor(y);
+    const fx = x - i, fy = y - j;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const at = (a, b) => v[((b % g) + g) % g * g + (((a % g) + g) % g)];
+    const a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  const octaves = [4, 8, 16, 32, 64].map((g, k) => [g, grid(k + 1, g), grid(k + 11, g)]);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      let r = 0, gch = 0, amp = 0.5, tot = 0;
+      for (const [g, va, vb] of octaves) {
+        r += amp * sample(va, g, x / N, y / N);
+        gch += amp * sample(vb, g, x / N, y / N);
+        tot += amp;
+        amp *= 0.5;
+      }
+      const o = (y * N + x) * 4;
+      out[o] = (r / tot) * 255;
+      out[o + 1] = (gch / tot) * 255;
+      out[o + 2] = 0;
+      out[o + 3] = 255;
+    }
+  return out;
+}

@@ -6,6 +6,17 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.1 — 2026-11-19
+
+The opening comes to life and gets light.
+
+- **The mist drifts:** a wind field (`flowNoise`, a 128² tiling noise texture made once on the CPU) thickens and thins the mist where each ray crosses it, rolling on the sky's clock and faster through a switch (the timelapse); it only ever drifts forward.
+- **A real sky's turn:** the sky turns rigidly about a pole at 42°, the camera facing south, so the sun and moon set and rise on arcs tilted to the horizon, always the same way: a dusk turns it on until the sun is down and the moon up; a dawn turns it on round (the moon setting on the right, the sun rising on the left, crossing and coming down to the afternoon), never back. Shadows follow a body across: horizons toward four bearings, blended.
+- **Light:** at rest a frame is only a composite (the kept light in two parts, the ground or sky and the mist before it, and the mist's motion: three texture reads a pixel); while the light changes (a switch) one pass a frame. The sky's cirrus and Milky Way read the same noise texture instead of summing noise.
+- **The first load:** the sky shows at once; the shape is built a step a frame (coarse distances at a quarter size, so the full pass starts near the ground; the full pass in eight bands; the horizons at half size in four), then the mountains fade in over half a second. No blank screen and no long frame for it (the longest is ~150 ms, compiling the shaders).
+- **Measured (M4, 1512×982 @2):** rest 8.3 ms median with the mist moving; switch 8.3 ms; the shape ~150 ms of GPU work (was ~300), spread over 13 frames; sky on screen ~0.35 s after navigation, mountains in by ~0.7 s.
+- **Still open:** the phones (BrowserStack), the fallback's stills, `npm run qa`, and the 0.5.0 carry-overs.
+
 ## 0.5.0 — 2026-11-19
 
 The page opens on the hills in 3D (`ROADMAP.md`, "0.5 — the opening hills in 3D: the look brief", agreed with the owner over a run of sketches and rounds of feedback).
