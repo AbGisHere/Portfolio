@@ -19,7 +19,7 @@ import { LIGHTMAP_PROGRAMS } from '../../components/gradient/gl/houseLightmap.js
 import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/houseGlass.js';
 import { PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX } from '../../components/gradient/gl/mirrorProbe.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
-import { PEAKS_ALL_FS, PEAKS_COARSE_FS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_HOR_FS, PEAKS_LIT_FS, PEAKS_MIX_FS, PEAKS_VS } from '../../components/gradient/gl/peaksShader.js';
+import { PEAKS_ALL_FS, PEAKS_BAKE_FS, PEAKS_COARSE_FS, PEAKS_FAR_VS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_HOR_FS, PEAKS_LIT_FS, PEAKS_MIX_FS, PEAKS_VS } from '../../components/gradient/gl/peaksShader.js';
 import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
 export const PROGRAMS = [
@@ -31,6 +31,8 @@ export const PROGRAMS = [
   ['peaks-mix', PEAKS_VS, PEAKS_MIX_FS],
   ['peaks-lit', PEAKS_VS, PEAKS_LIT_FS],
   ['peaks-all', PEAKS_VS, PEAKS_ALL_FS],
+  ['peaks-bake', PEAKS_VS, PEAKS_BAKE_FS],
+  ['peaks-behind', PEAKS_FAR_VS, PEAKS_LIT_FS],
   ['crest', CREST_VERTEX, CREST_FRAGMENT],
   ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
   ['flowers', FLOWER_VERTEX, FLOWER_FRAGMENT],

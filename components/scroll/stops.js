@@ -10,6 +10,10 @@
  * - contact .96: (0.4.0) straight down over the pool: the contact hold.
  */
 export const DESK_STOPS = [0.025, 0.5];
+/** (0.5.3) Under the 3D opening the pull-back's hold is gone: the path
+ * comes out of the mist straight down onto the desk
+ * (../gradient/deskCamera.js DESK_PATH_3D). */
+export const DESK_STOPS_3D = [0.5];
 export const CONTACT_STOPS = [0.02, 0.96];
 
 /** How near a stop (share of the viewport's height) a resting scroll is

@@ -22,7 +22,7 @@
 
 import { depthOf, descentAt, frameAt, skyUnder } from './camera';
 import { mix } from './colour';
-import { CONTACT_STOPS, DESK_STOPS } from '../scroll/stops';
+import { CONTACT_STOPS, DESK_STOPS, DESK_STOPS_3D } from '../scroll/stops';
 import { POOL } from './gl/houseShape';
 
 /** Metres per world unit (the rest camera's eye height). */
@@ -84,6 +84,25 @@ export const DESK_PATH = {
     // middle at the frame's, the mountains over its top.
     { at: 0.92, ...READ },
     { at: 1, ...READ },
+  ],
+};
+
+/**
+ * (0.5.3) The path under the 3D opening (../peaks.js): it picks up where
+ * the flight down the valley leaves the camera, over the sunlit meadow
+ * plateau with the desk 42 m ahead and no lens shift (`centre: 1`), so the
+ * entire 3D range stays framed above the trees until the camera tips down
+ * onto the desk. No hold at the start: the pull-back's is the 2D opening's
+ * (`?peaks=0`, the layered renderer).
+ */
+export const DESK_PATH_3D = {
+  d0: DESK_PATH.d0,
+  keys: [
+    { at: 0, d: 85, y: 62, pitch: 14, centre: 1, zoom: 1 },
+    { at: 0.14, d: 38, y: 30, pitch: 24, centre: 1, zoom: 1 },
+    { at: 0.28, d: 14, y: 12, pitch: 48, centre: 1, zoom: 1 },
+    { at: 0.38, d: 4, y: 4.8, pitch: 76, centre: 1, zoom: 1 },
+    ...DESK_PATH.keys.filter(k => k.at >= 0.46),
   ],
 };
 
@@ -208,7 +227,7 @@ function cameraOn(path, x, end, device) {
  * `opts.device`: the tablet's end in place of the laptop's (0.3.10).
  */
 export function deskCameraAt(desk, recipe, opts = {}) {
-  return cameraOn(DESK_PATH, desk, descentAt(1, recipe, opts), opts.device);
+  return cameraOn(opts.peaks ? DESK_PATH_3D : DESK_PATH, desk, descentAt(1, recipe, opts), opts.device);
 }
 
 /**
@@ -422,6 +441,7 @@ export function deskWidest(scene, h, recipe) {
 export const deskHolds = () =>
   [
     ...DESK_STOPS.map(at => [DESK_PATH.keys, at]),
+    ...DESK_STOPS_3D.map(at => [DESK_PATH_3D.keys, at]),
     ...CONTACT_STOPS.map(at => [CONTACT_PATH.keys, at]),
   ].map(([ks, at]) => {
     const i = ks.findIndex((k, j) => j + 1 < ks.length && k.at <= at && ks[j + 1].at >= at);

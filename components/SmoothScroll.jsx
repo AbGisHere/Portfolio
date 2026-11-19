@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { isPinned, setDescent } from './scroll/descent';
-import { CONTACT_STOPS, DESK_STOPS, STOP_REACH } from './scroll/stops';
+import { CONTACT_STOPS, DESK_STOPS, DESK_STOPS_3D, STOP_REACH } from './scroll/stops';
 import { getHouseHold, getHouseReadiness, subscribeHouseReadiness } from './scroll/houseReadiness';
 import styles from './SmoothScroll.module.css';
 
@@ -111,7 +111,9 @@ export default function SmoothScroll() {
       const y = lenis ? lenis.animatedScroll : window.scrollY;
       const vh = probe.current?.offsetHeight || window.innerHeight;
       let best = null;
-      for (const [name, stops] of [['desk', DESK_STOPS], ['contact', CONTACT_STOPS]]) {
+      // (0.5.3) Under the 3D opening the desk's path has no pull-back hold.
+      const desk = document.documentElement.dataset.opening === '3d' ? DESK_STOPS_3D : DESK_STOPS;
+      for (const [name, stops] of [['desk', desk], ['contact', CONTACT_STOPS]]) {
         const t = tracks.find(k => k.name === name);
         for (const at of t ? stops : []) {
           const s = t.start + at * t.span;

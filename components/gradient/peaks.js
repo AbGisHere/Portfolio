@@ -16,30 +16,86 @@ export const PEAKS = [
   [-1300, 3000, 1100, 1100],
   [1900, 3100, 1000, 1000],
 ];
+// (0.5.3) The alpine valley between the sunlit meadow plateau and the hero
+// range: aligned with the hero peak (x = 300) so the pull-back stays centred,
+// with a broad mist-filled trough leading to the peaks' feet and mountain
+// walls rising on either side.
+export const VALLEY = { x: 300, amp: 0, wave: 3000, head: 1100, half: 1400, wall: 3400, rise: 0 };
+export const valleyX = z => VALLEY.x + VALLEY.amp * Math.sin(z / VALLEY.wave);
+// Where the desk stands: perched on a sunlit high-alpine meadow overlook
+// right in front of the mountains (~7.4 km from the hero summit, ~5.5 km from
+// its base), so the entire snowy Matterhorn peak (~7.7° elevation) towers
+// close and dramatic right behind the meadow, trees and laptop lid.
+const DESK_Z = -4100;
+export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 360 };
+// (0.5.3) The ground baked into textures once (gl/peaksShader.js): a near
+// box covering BOTH the desk plateau, the entire valley and the hero massif
+// in one seamless high-res map (7 m/texel at 2048²), plus a far horizon box.
+export const BAKE = { near: [-7200, -5600, 14336], far: [-30000, -24000, 65536], nearN: 2048, farN: 1024 };
 // The sea of clouds: its floor and the most its billows rise.
 export const CLOUD = { base: 1050, rise: 280 };
 
-// Where the camera rests at the top, and where the drop into the cloud
-// ends (the 2D scene takes over under it until 0.5.3 builds the rest).
-const REST = { pos: [300, 2900, 500], look: [300, 2650, 3300], fov: 60 };
-const DIVE = { pos: [300, 1560, 1250], look: [300, 1100, 3600], fov: 60 };
-// The stretch of `about` the drop takes, and where the 3D scene is gone.
-export const PEAKS_DROP = 0.3;
-export const PEAKS_GONE = 0.38;
+// (0.5.3) The flight down: the whole `about` stretch, keyed like the
+// desk's path (deskCamera.js), each channel on a monotone cubic. Facing
+// the peaks, the camera pulls back and descends smoothly across the sunlit
+// alpine valley directly onto the meadow overlook (at d=85 m, y=62 m, where
+// every 3D tree is still behind the camera so nothing ever ghosts in).
+const DROP = [
+  { at: 0, y: 2900, z: 500, pitch: 5.1, fov: 60 },
+  { at: 0.3, y: 2640, z: -650, pitch: 6.5, fov: 63 },
+  { at: 0.65, y: 2240, z: -2400, pitch: 9.5, fov: 69 },
+  { at: 1, y: SHELF.y + 62, z: DESK_Z + 85, pitch: 14, fov: 79.6 },
+];
+// Where the desk's path takes over.
+export const PEAKS_GONE = 1;
 
 const smooth = t => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
-const lerp3 = (a, b, t) => a.map((v, i) => lerp(v, b[i], t));
 const clamp01 = x => Math.min(1, Math.max(0, x));
+
+// A monotone cubic through keys (no overshoot; a repeated key holds).
+function monotone(xs, ys, x) {
+  const n = xs.length;
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[n - 1]) return ys[n - 1];
+  const dk = [];
+  for (let i = 0; i < n - 1; i++) dk.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+  const m = [0];
+  for (let i = 1; i < n - 1; i++) m.push(dk[i - 1] * dk[i] <= 0 ? 0 : (dk[i - 1] + dk[i]) / 2);
+  m.push(0);
+  for (let i = 0; i < n - 1; i++) {
+    if (dk[i] === 0) {
+      m[i] = m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / dk[i];
+    const b = m[i + 1] / dk[i];
+    const s = a * a + b * b;
+    if (s > 9) {
+      const t = 3 / Math.sqrt(s);
+      m[i] = t * a * dk[i];
+      m[i + 1] = t * b * dk[i];
+    }
+  }
+  let i = 0;
+  while (x > xs[i + 1]) i++;
+  const h = xs[i + 1] - xs[i];
+  const t = (x - xs[i]) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1];
+}
+const xs = DROP.map(k => k.at);
+const on = (c, x) => monotone(xs, DROP.map(k => k[c]), x);
 
 /** The opening's camera for the descent's `about` (0 at the top). */
 export function peaksCameraAt(about) {
-  const t = smooth(clamp01(about / PEAKS_DROP));
-  return {
-    pos: lerp3(REST.pos, DIVE.pos, t),
-    look: lerp3(REST.look, DIVE.look, t),
-    fov: lerp(REST.fov, DIVE.fov, t),
-  };
+  const x = clamp01(about);
+  const y = on('y', x);
+  const z = on('z', x);
+  const p = (on('pitch', x) * Math.PI) / 180;
+  const vx = valleyX(z);
+  const pos = [vx, y, z];
+  return { pos, look: [vx, y - Math.sin(p) * 1000, z + Math.cos(p) * 1000], right: [-1, 0, 0], fov: on('fov', x) };
 }
 
 // The bodies: each one's resting elevation (degrees) and azimuth (as a
@@ -147,7 +203,7 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 /** A direction's place on a w × h frame (CSS px, y down), or null if behind. */
 export function toFrame(cam, dir, w, h) {
   const f = norm(sub(cam.look, cam.pos));
-  const r = norm(cross(f, [0, 1, 0]));
+  const r = cam.right ?? norm(cross(f, [0, 1, 0]));
   const u = cross(r, f);
   const z = dot(dir, f);
   if (z <= 1e-4) return null;
@@ -160,23 +216,72 @@ export function toFrame(cam, dir, w, h) {
  * on the desk or the contact path, or `?peaks=0`). `a` is its opacity: 1
  * over the clouds, fading out once the camera is inside them.
  */
-export function peaksAt({ recipe, orbit = null, e = 1, about = 0, onDesk = false, w, h, off = false }) {
-  if (off || onDesk || about >= PEAKS_GONE) return null;
-  const cam = peaksCameraAt(about);
-  const light = peaksLightAt(recipe, orbit, e, cam, w, h);
+export function peaksAt({ recipe, orbit = null, e = 1, about = 0, onDesk = false, w, h, off = false, desk = null }) {
+  if (off || (onDesk && !desk)) return null;
+  const cam = desk?.join ? joinCamera(peaksCameraAt(about), desk.join, desk.t) : desk ?? peaksCameraAt(about);
+  // The sky is the top's, whatever the drop does to the lens: the bodies
+  // and the shadows' bearings stay put on it.
+  const top = peaksCameraAt(0);
+  const light = peaksLightAt(recipe, orbit, e, top, w, h);
   const { sun, moon } = light;
-  const a = 1 - smooth(clamp01((about - PEAKS_DROP) / (PEAKS_GONE - PEAKS_DROP)));
+  // Opaque all the way: under the white, nothing below it shows.
+  const a = 1;
   // The button goes straight to where the incoming body comes to rest (as
   // over the 2D scene), and waits there for the switch to finish.
-  const spot = toFrame(cam, lightDir(BODIES[light.rest], cam, w, h), w, h);
+  const at = toFrame(cam, lightDir(BODIES[light.rest], top, w, h), w, h);
+  const spot = at && cam.shift ? { x: at.x + (cam.shift[0] * h) / 2, y: at.y - (cam.shift[1] * h) / 2 } : at;
   // Flat bearings for the shape pass's horizons, and the light's own (as a
   // share of the half-width, + left).
-  const half = Math.atan(Math.tan(rad(cam.fov) / 2) * (w / h));
-  const f = norm(sub(cam.look, cam.pos));
+  const half = Math.atan(Math.tan(rad(top.fov) / 2) * (w / h));
+  const f = norm(sub(top.look, top.pos));
   const head = Math.atan2(f[0], f[2]);
   const flat = az => [Math.sin(head + az * half), Math.cos(head + az * half)];
   const dir = light.by === 'sun' ? sun : moon;
   let off2 = Math.atan2(dir[0], dir[2]) - head;
   off2 = Math.atan2(Math.sin(off2), Math.cos(off2));
-  return { cam, light, sun, moon, bearings: BEARINGS.map(flat), lightAz: off2 / half, dir, a, spot };
+  const behind = !!desk && !desk.join;
+  // Looking straight down (desk/pool hold) or turned away toward the house:
+  // no 3D mountains are in frame, so skip terrain raymarching completely and
+  // draw only the real sky + flat meadow ground.
+  const skipGeo = behind && !!cam.skipGeo;
+  return { cam, light, sun, moon, bearings: BEARINGS.map(flat), lightAz: off2 / half, dir, a, spot, behind, skipGeo };
+}
+
+/**
+ * (0.5.3) The desk's camera (deskCamera.js: metres from the desk, its
+ * pitch, yaw, zoom and shifted lens, `P` from pitchOf) as the opening's,
+ * the desk standing on the meadow's shelf, so the peaks behind it are the
+ * ones the flight came down from. `shift` is where the lens's axis meets
+ * the frame (view units: the frame's half-height is 1).
+ */
+function joinCamera(a, b, t) {
+  const k = smooth(clamp01(t));
+  const mix = (x, y) => x.map((v, i) => v + (y[i] - v) * k);
+  const fa = norm(sub(a.look, a.pos));
+  const fb = norm(sub(b.look, b.pos));
+  const pos = mix(a.pos, b.pos);
+  const f = norm(mix(fa, fb));
+  const r = norm(mix(a.right ?? [-1, 0, 0], b.right ?? [-1, 0, 0]));
+  return { pos, look: pos.map((v, i) => v + f[i] * 1000), right: r, fov: a.fov + (b.fov - a.fov) * k, shift: mix([0, 0], b.shift) };
+}
+
+export function deskPeaksCamera(m, cam, P, w, h) {
+  const pos = [SHELF.x + m.x, SHELF.y + m.y, SHELF.z + m.z];
+  const cp = Math.cos(cam.pitch);
+  const yaw = cam.yaw ?? 0;
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const dir = [sy * cp, -Math.sin(cam.pitch), cy * cp];
+  // Exact right vector in peaks handedness (singularity-free at pitch = 90°).
+  const right = [-cy, 0, sy];
+  const F = P.zoom * P.f;
+  const skipGeo = cam.pitch > rad(62) || Math.abs(yaw) > rad(72);
+  return {
+    pos,
+    look: pos.map((v, i) => v + dir[i] * 1000),
+    right,
+    fov: (2 * Math.atan(h / 2 / F) * 180) / Math.PI,
+    shift: [(2 * P.sx - w) / h, (h - 2 * P.sy) / h],
+    skipGeo,
+  };
 }

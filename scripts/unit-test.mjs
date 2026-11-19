@@ -27,6 +27,7 @@ import { descentAt, scrollPalette } from '../components/gradient/camera.js';
 import { airOpacity, layout, mistOf, ridgePaint, sunColour } from '../components/gradient/gl/mistGeometry.js';
 import { beginOrbit, orbitScene, targetGeo } from '../components/gradient/orbit.js';
 import { DISC_WHITE, SET_COLOUR, SUNSET_COLOUR } from '../components/gradient/sunLook.js';
+import { peaksCameraAt } from '../components/gradient/peaks.js';
 import { contactCameraAt, deskCameraAt, deskHolds, grassOf, groundAt, pitchOf, toScreen, toVirtual } from '../components/gradient/deskCamera.js';
 import { LIFE, STRIDE, createWalker } from '../components/gradient/gl/footsteps.js';
 import { BOOT_FLOATS, bootOf, seeded } from '../components/gradient/gl/bootPrint.js';
@@ -150,7 +151,7 @@ const W = 1440;
 const H = 900;
 
 /** One frame the way the layered renderer asks for it (its own layout). */
-function frame(recipe, { about = 0, desk = 0, orbit = null, e = 1, w = W, h = H, reduced = false } = {}) {
+function frame(recipe, { about = 0, desk = 0, orbit = null, e = 1, w = W, h = H, reduced = false, peaksOff = false } = {}) {
   const geo = orbit ? orbitScene(orbit, e).geo : targetGeo(recipe);
   const base = orbit ? orbitScene(orbit, e).stops : recipe.stops;
   const [size, horizon, haze, height, sharp, sun, seed] = geo;
@@ -160,7 +161,7 @@ function frame(recipe, { about = 0, desk = 0, orbit = null, e = 1, w = W, h = H,
     base,
     haze,
     layoutAt,
-    f: sceneAt({ recipe, orbit, e, base, haze, about, desk, reduced, w, h, layoutAt, restCol: sunColour(base) }),
+    f: sceneAt({ recipe, orbit, e, base, haze, about, desk, reduced, w, h, layoutAt, restCol: sunColour(base), peaksOff }),
   };
 }
 
@@ -264,10 +265,19 @@ test('sceneAt with a switch not yet turning keeps the resting bodies', () => {
   assert.deepEqual(f.stops, scrollPalette(moonlit.stops, moonlit, 0.5));
 });
 
+test('(0.5.3) the flight down only falls', () => {
+  let y = Infinity;
+  for (let a = 0; a <= 1; a += 0.01) {
+    const c = peaksCameraAt(a);
+    assert.ok(c.pos[1] <= y + 1e-9, `the drop only falls (${a})`);
+    y = c.pos[1];
+  }
+});
+
 test('the 0.3 camera starts exactly where the pull-back ends', () => {
   for (const r of RECIPES) {
-    const end = frame(r, { about: 1 }).f;
-    const join = frame(r, { about: 1, desk: 1e-9 }).f;
+    const end = frame(r, { about: 1, peaksOff: true }).f;
+    const join = frame(r, { about: 1, desk: 1e-9, peaksOff: true }).f;
     // (Up to float rounding: the 0.3 camera's back is rebuilt from metres.)
     const near = (a, b, path) => {
       if (typeof a === 'number') return assert.ok(Math.abs(a - b) < 1e-9, `${path}: ${a} vs ${b}`);

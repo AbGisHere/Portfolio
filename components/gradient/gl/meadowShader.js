@@ -57,6 +57,9 @@ uniform vec2 uEye;           // the camera's height and back, world units
 uniform vec3 uCamM;          // the camera, metres from the desk's centre
 uniform vec2 uDepthAB;       // (0.4.12) the solid passes' depth mapping (deskShader.js project)
 uniform vec2 uHazeAt;        // metres: the ground's haze starts, it's all painted meadow
+// (0.5.3) Over the 3D ground (peaks.js), the paint only near: past these
+// metres the 3D meadow shows untinted (0, 0: everywhere, the 2D ground).
+uniform vec2 uPaintNear;
 uniform sampler2D uMeadow;
 uniform float uMeadowA;      // how much of the paint shows (0 where the descent starts)
 uniform float uGrassT;       // the wind's clock, seconds
@@ -161,7 +164,7 @@ bool groundHit(out vec2 gm, out float dist) {
   }
 #endif
   dist = t * length(dir) * ${f(WORLD_M)};
-  if (!(dir.y < 0.0 && (v.y > uFront || face < 0.5))) return false;
+  if (!(dir.y < 0.0 && (uPaintNear.y > 0.0 || v.y > uFront || face < 0.5))) return false;
   return true;
 }
 
@@ -251,12 +254,15 @@ void main() {
   if (u > 0.0) near *= mix(vec3(1.0), under(gm, gx, gy), u);
   if (uPrintN > 0 && px < 0.05) near *= boots(gm, px);
   // Far off the pattern thins out, and toward the mountains' foot it's gone:
-  // the plain lies smooth into the foot's mist (MEADOW_FOOT).
+  // the plain lies smooth into the foot's mist (MEADOW_FOOT). Under the 3D
+  // opening (uPaintNear.y > 0) there is no 2D ridge foot, so the paint runs
+  // cleanly across the plateau and thins out by real distance.
   vec2 v;
   rayOf(v);
-  float plain = 1.0 - smoothstep(0.3, 0.8, footQ(v.y));
+  float plain = uPaintNear.y > 0.0 ? 1.0 : 1.0 - smoothstep(0.3, 0.8, footQ(v.y));
   vec3 far = mix(vec3(1.0), k, uMeadowA * plain * (1.0 - smoothstep(400.0, 3000.0, dist)));
   vec3 m = mix(near, far, smoothstep(uHazeAt.x, uHazeAt.y, dist));
+  if (uPaintNear.y > 0.0) m = mix(m, vec3(1.0), smoothstep(uPaintNear.x, uPaintNear.y, dist));
   outColor = vec4(clamp(m * 0.5, 0.0, 1.0), 1.0);
 }
 `;

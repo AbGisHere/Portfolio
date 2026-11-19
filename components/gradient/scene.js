@@ -16,8 +16,11 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
-import { peaksAt } from './peaks';
-import { contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
+import { deskPeaksCamera, peaksAt } from './peaks';
+
+// (0.5.3) Where the flight starts easing into the desk path's camera.
+const FLIGHT_JOIN = 0.85;
+import { cameraMetres, contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
  * One frame of the scene, as both renderers paint it: the descent's camera
@@ -70,7 +73,7 @@ export function sceneAt({
   // (0.4.0) Past the desk (`contact` > 0) the contact path does.
   // (0.4.2) The dev-only /house route's free camera takes over from both.
   const onDesk = desk > 0 || contact > 0 || !!free;
-  const camOpts = { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h) };
+  const camOpts = { reduced, from: orbit?.prev, e: p, device: deviceFor(w, h), peaks: !peaksOff };
   const cam = free
     ? freeCameraAt(free, r, camOpts)
     : contact > 0
@@ -120,7 +123,19 @@ export function sceneAt({
   const pitch = onDesk ? pitchOf(cam, view, w, h) : null;
   const shown = pitch ? toScreen(pitch, painted.x, painted.y) : painted;
   // (0.5.0) Over the opening the body is the 3D scene's (../peaks.js).
-  const peaks = peaksAt({ recipe: r, orbit: turning ? orbit : null, e, about, onDesk, w, h, off: peaksOff });
+  // (0.5.3) On the desk's paths the same peaks, from the desk's camera,
+  // behind the meadow (not over the dev route's free camera).
+  const deskPeaks = onDesk && pitch && !free ? deskPeaksCamera(cameraMetres(cam), cam, pitch, w, h) : null;
+  // (0.5.3) The flight's last stretch eases into the desk path's first
+  // camera (its lens, shifted, and its focal length), so there's no cut.
+  let flight = deskPeaks;
+  if (!onDesk && !peaksOff && about > FLIGHT_JOIN) {
+    const c0 = deskCameraAt(0, r, camOpts);
+    const v0 = deskFrameAt(layoutAt(c0.ranges), h, c0);
+    const P0 = pitchOf(c0, v0, w, h);
+    if (P0) flight = { join: deskPeaksCamera(cameraMetres(c0), c0, P0, w, h), t: (about - FLIGHT_JOIN) / (1 - FLIGHT_JOIN) };
+  }
+  const peaks = peaksAt({ recipe: r, orbit: turning ? orbit : null, e, about, onDesk, w, h, off: peaksOff, desk: flight });
   const at = peaks && peaks.a > 0.5 ? peaks.spot : shown;
   const spot = at ? { x: at.x, y: at.y } : { x: -1e4, y: -1e4 };
   const life = onDesk ? skyLifeAt(desk, r, stops, { prev: turning ? orbit.prev : null, e }) : null;
@@ -138,6 +153,9 @@ export function sceneAt({
   // The meadow below the front ridge.
   const n = ridges.length;
   const ground = n ? groundPaint(stops, meadowOf(from, r, p), paints[n - 1].fill[2], view, h, hz) : null;
+
+  const grassObj = onDesk || peaks ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: litFrom, pitch, w }) : null;
+  if (peaks && grassObj) peaks.meadow = { ground: grassObj.ground, far: grassObj.far, sky: grassObj.sky };
 
   return {
     cam,
@@ -161,7 +179,7 @@ export function sceneAt({
     // (0.3) The closing shot's sky: clouds, birds, stars (null: none).
     life,
     // (0.3.1) The grass's colours under the desk camera (null: none).
-    grass: onDesk ? grassLit(grassOf(r, { prev: turning ? orbit.prev : null, e }), { stops, light, body: litFrom, pitch, w }) : null,
+    grass: onDesk ? grassObj : null,
     // (0.3.8) The laptop's lid, degrees open (0: shut, or no desk).
     lid: onDesk ? lidAt(desk) : 0,
     // (0.3.10) The device on the desk: the tablet on a portrait frame.

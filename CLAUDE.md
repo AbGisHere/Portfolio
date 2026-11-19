@@ -174,8 +174,16 @@ backlit faces get the bounce off the lit mist and snow, the mist is bright
 and heaped (no level top, lower), its wind one way at three scales, and the
 snow matte, its patterns laid along steep faces.
 
-**Next: 0.5.3** (`ROADMAP.md`, `0.5.x`): the cliffs' own detail, the phones,
-the fallback's stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.5.3** (2026-11-20) is a first cut of one world from the peaks to the
+house: a meadow valley carved through the range (`peaks.js` `VALLEY`), the
+flight back and down it onto the desk with no cut, and the 3D mountains
+drawn behind the desk, the house and the pool in place of the 2D ridges
+(`deskPeaksCamera`, the far-plane `behind` pass); the terrain baked at load.
+Work in progress: see its `CHANGELOG.md` entry for what's open.
+
+**Next: 0.5.4** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
+valley flight, then the cliffs' own detail, the phones, the fallback's
+stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

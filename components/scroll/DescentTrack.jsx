@@ -6,10 +6,12 @@ import styles from './DescentTrack.module.css';
  * 200, one full screen of scrolling carries `about` from 0 to 1. Tune here.
  */
 export const TRACK_LVH = {
-  about: 200,
+  // (0.5.3) The pull-back from the 3D peaks onto the meadow plateau.
+  about: 240,
   // A track after the first starts where the one before ends, so it scrolls
-  // its whole length: at 400, four screens carry `desk` from 0 to 1.
-  desk: 400,
+  // its whole length: carry `desk` uniformly from the meadow onto the desk
+  // and laptop.
+  desk: 360,
   // (0.4.0) Round to the house and down onto its pool. (0.4.10) A longer
   // turn, looking down, and the path up to the house.
   contact: 500,

@@ -1,7 +1,7 @@
 'use client';
 
-import { PEAKS_ALL_FS, PEAKS_COARSE_FS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_HOR_FS, PEAKS_LIT_FS, PEAKS_MIX_FS, PEAKS_VS, flowNoise } from './peaksShader';
-import { BEARINGS as PEAKS_BEARINGS } from '../peaks';
+import { PEAKS_ALL_FS, PEAKS_BAKE_FS, PEAKS_COARSE_FS, PEAKS_FAR_VS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_HOR_FS, PEAKS_LIT_FS, PEAKS_MIX_FS, PEAKS_VS, flowNoise } from './peaksShader';
+import { BAKE as PEAKS_BAKE, BEARINGS as PEAKS_BEARINGS } from '../peaks';
 import { useEffect, useRef } from 'react';
 import { createPassProfiler } from './passProfiler';
 import { createGpuCompletion } from './gpuCompletion';
@@ -1625,6 +1625,8 @@ export default function MistCanvas({ recipe, onFail }) {
     let dirty = true; // geometry / colours need recomputing
     // (0.5.0) The 3D opening's state (drawPeaks, below).
     let peaksNow = null;
+    // (0.5.3) The ground baked into textures (peaksShader.js PEAKS_BAKE_FS).
+    let peaksBake = null;
     let peaksMode;
     let peaksGeo = null;
     let peaksKept = null;
@@ -2085,6 +2087,13 @@ export default function MistCanvas({ recipe, onFail }) {
         ...frame.peaks,
         stops: Float32Array.from(stops.flatMap(rgb01)),
         body: Float32Array.from(value.slice(7, 10).map(c => c / 255)),
+        meadow: frame.peaks.meadow
+          ? {
+              ground: Float32Array.from(rgb01(frame.peaks.meadow.ground)),
+              far: Float32Array.from(rgb01(frame.peaks.meadow.far)),
+              sky: Float32Array.from(frame.peaks.meadow.sky),
+            }
+          : null,
       };
       scene = frame.layout;
       view = frame.view;
@@ -2235,7 +2244,11 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         // (0.3.2) The meadow's paint comes in as the camera comes down from
         // where the descent starts (~64 m), so that frame is the 0.2 meadow.
-        const sm = Math.min(1, Math.max(0, (64 - cm.y) / 22));
+        // (0.5.3) Under the 3D opening, all 3D trees and the desk start behind
+        // the camera at desk=0 (d=85 m), so trees stay 100% solid (`a: 1`) with
+        // zero ghosting, while fine meadow paint eases in smoothly over desk 0..0.14.
+        const sm = peaksNow?.behind ? 1 : Math.min(1, Math.max(0, (64 - cm.y) / 22));
+        const paintSm = peaksNow?.behind && !free && contact <= 0 ? Math.min(1, Math.max(0, desk / 0.14)) : sm;
         meadowShown = !!frame.grass && sm > 0;
         // The rows the pass can touch (CSS px from the top): the ground's
         // first, and the first within FLOWER_M (the flowers'). Down the
@@ -2269,15 +2282,17 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         meadowAt = frame.grass
           ? {
-              pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), lid: frame.lid, device: frame.device,
+              pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), paintA: paintSm * paintSm * (3 - 2 * paintSm), lid: frame.lid, device: frame.device,
               contact: free ? 0 : contact,
               top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
               nearBot: rowWhere(y => Math.max(groundAt(pitch, cam, 0, y)?.d ?? Infinity, groundAt(pitch, cam, w, y)?.d ?? Infinity) < FLOWERS.fade[0]),
               // (0.3.5) How far the meadow runs to the mountains' foot down
               // the centre (metres): a tree past it would stand on the
-              // ridges. Unbounded while the foot is above the frame.
+              // ridges. Unbounded while the foot is above the frame, or under
+              // the 3D opening where the plateau extends to the valley rim.
               farM: (() => {
+                if (peaksNow?.behind) return 1e5;
                 if (!ground) return 0;
                 const row = rowWhere(y => (toVirtual(pitch, pitch.sx, y)?.y ?? Infinity) > ground.top);
                 return row <= 0 ? 1e5 : groundAt(pitch, cam, pitch.sx, row + 1)?.d ?? 1e5;
@@ -3389,7 +3404,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const M = meadowPrograms();
       if (!M) return;
       meadowTexture();
-      const { pitch: P, cam: c, cm, front, colours, a, top, near, nearBot, mist, mistRows } = meadowAt;
+      const { pitch: P, cam: c, cm, front, colours, a, paintA, top, near, nearBot, mist, mistRows } = meadowAt;
       if (top >= h) return;
       gl.bindVertexArray(M.vao);
       gl.enable(gl.BLEND);
@@ -3399,7 +3414,8 @@ export default function MistCanvas({ recipe, onFail }) {
       const rows = y => Math.min(canvas.height, Math.ceil(((h - y) / h) * canvas.height) + 2);
       const paintPass = !lawnSeen && M.paintFlat ? M.paintFlat : M.paint;
       const passes = grassAt ? [paintPass, M.flowers] : [paintPass];
-      if (mist && meadowShown) passes.push(M.foot);
+      // (0.5.3) Not before the 3D peaks: the real mist stands at their feet.
+      if (mist && meadowShown && !peaksNow?.behind) passes.push(M.foot);
       for (const g of passes) {
         if (!g) continue;
         if (g === paintPass) {
@@ -3430,8 +3446,9 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
         gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
         gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
+        gl.uniform2f(g.u('uPaintNear'), ...(peaksNow?.behind ? [260, 520] : [0, 0]));
         gl.uniform1i(g.u('uMeadow'), 5);
-        gl.uniform1f(g.u('uMeadowA'), meadowShown ? a : 0);
+        gl.uniform1f(g.u('uMeadowA'), meadowShown ? (paintA ?? a) : 0);
         gl.uniform1f(g.u('uGrassT'), windPhase / WIND.speed);
         gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
         gl.uniform3fv(g.u('uGrassGround'), rgb01(colours.ground));
@@ -3496,7 +3513,9 @@ export default function MistCanvas({ recipe, onFail }) {
       const direct = mix && passProgram(gl, 'peaks-lit', PEAKS_VS, PEAKS_LIT_FS);
       const coarse = direct && passProgram(gl, 'peaks-coarse', PEAKS_VS, PEAKS_COARSE_FS);
       const hor = coarse && passProgram(gl, 'peaks-horizon', PEAKS_VS, PEAKS_HOR_FS);
-      if (hor) peaksMode = { geo, lit, mix, direct, coarse, hor, all: null };
+      const bake = hor && passProgram(gl, 'peaks-bake', PEAKS_VS, PEAKS_BAKE_FS);
+      const behind = hor && passProgram(gl, 'peaks-behind', PEAKS_FAR_VS, PEAKS_LIT_FS);
+      if (hor) peaksMode = { geo, lit, mix, direct, coarse, hor, bake, behind, all: null };
       else {
         const all = passProgram(gl, 'peaks-all', PEAKS_VS, PEAKS_ALL_FS);
         peaksMode = all ? { geo: null, lit: null, mix: null, direct: null, all } : false;
@@ -3524,8 +3543,69 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(u('uRes'), canvas.width, canvas.height);
       gl.uniform3fv(u('uCam'), pk.cam.pos);
       gl.uniform3fv(u('uLook'), pk.cam.look);
+      gl.uniform3fv(u('uRight'), pk.cam.right ?? [-1, 0, 0]);
       gl.uniform1f(u('uFov'), pk.cam.fov);
+      gl.uniform2fv(u('uShift'), pk.cam.shift ?? [0, 0]);
+      gl.uniform1f(u('uNear'), pk.behind ? 0.5 : 0);
+      gl.uniform1f(u('uSkipGeo'), pk.skipGeo ? 1 : 0);
       gl.uniform2fv(u('uBear'), pk.bearings.flat());
+      gl.uniform1i(u('uHN'), PEAKS_HN);
+      gl.uniform1i(u('uHF'), PEAKS_HF);
+      gl.uniform1f(u('uBaked'), peaksBake?.ready ? 1 : 0);
+    }
+    const PEAKS_HN = 29;
+    const PEAKS_HF = 30;
+    // One band of the bake a frame (the near box in eight, the far in two);
+    // true once it's all there. Without the program the shape works the
+    // ground out itself.
+    function peaksBakeStep(P) {
+      if (!P.bake) return true;
+      if (peaksBake?.ready) return true;
+      if (!peaksBake) {
+        const make = (N, unit) => {
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          const t = texture(gl, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, N, N, 0, gl.RGBA, gl.HALF_FLOAT, null);
+          const fbo = gl.createFramebuffer();
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+          gl.activeTexture(gl.TEXTURE0);
+          return { t, fbo, N };
+        };
+        // Made with their units unbound, so neither is read while drawn.
+        peaksBake = { near: make(PEAKS_BAKE.nearN, PEAKS_SPARE), far: make(PEAKS_BAKE.farN, PEAKS_SPARE), step: 0, ready: false };
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+      const k = peaksBake.step;
+      const [box, bands, b] = k < 8 ? [peaksBake.near, 8, k] : [peaksBake.far, 2, k - 8];
+      const [x0, z0, size] = box === peaksBake.near ? PEAKS_BAKE.near : PEAKS_BAKE.far;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, box.fbo);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+      gl.viewport(0, 0, box.N, box.N);
+      gl.enable(gl.SCISSOR_TEST);
+      const y0 = Math.floor((b * box.N) / bands);
+      gl.scissor(0, y0, box.N, Math.floor(((b + 1) * box.N) / bands) - y0);
+      gl.useProgram(P.bake);
+      gl.uniform4f(gl.getUniformLocation(P.bake, 'uBox'), x0, z0, 0, size / box.N);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      peaksBake.step++;
+      if (peaksBake.step >= 10) {
+        peaksBake.ready = true;
+        for (const [unit, x] of [[PEAKS_HN, peaksBake.near], [PEAKS_HF, peaksBake.far]]) {
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, x.t);
+        }
+        gl.activeTexture(gl.TEXTURE0);
+        // The shape again, from the baked ground.
+        if (peaksGeo) peaksGeo.key = null;
+      }
+      return peaksBake.ready;
     }
     function peaksLight(p, pk) {
       const u = n => gl.getUniformLocation(p, n);
@@ -3539,12 +3619,21 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform4fv(u('uBearAz'), PEAKS_BEARINGS);
       gl.uniform3fv(u('uStops'), pk.stops);
       gl.uniform3fv(u('uBody'), pk.body);
+      if (pk.meadow) {
+        gl.uniform3fv(u('uGrassGround'), pk.meadow.ground);
+        gl.uniform3fv(u('uGrassFar'), pk.meadow.far);
+        gl.uniform3fv(u('uGrassSky'), pk.meadow.sky);
+      } else {
+        gl.uniform3f(u('uGrassGround'), 0.18, 0.28, 0.22);
+        gl.uniform3f(u('uGrassFar'), 0.44, 0.56, 0.29);
+        gl.uniform3f(u('uGrassSky'), 1, 0.9, 0.8);
+      }
       gl.uniform1f(u('uNight'), pk.light.night);
       gl.uniform1f(u('uA'), pk.a);
       gl.uniform1i(u('uFlow'), PEAKS_FLOW);
       gl.uniform1f(u('uReady'), peaksGeo?.ready ? 1 : 0);
       gl.uniform1f(u('uReveal'), peaksReveal);
-      if (p === peaksMode.lit || p === peaksMode.direct) {
+      if (p === peaksMode.lit || p === peaksMode.direct || p === peaksMode.behind) {
         gl.uniform1i(u('uG0'), PEAKS_G0);
         gl.uniform1i(u('uG1'), PEAKS_G1);
         gl.uniform1i(u('uG2'), PEAKS_G2);
@@ -3585,14 +3674,30 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!pk) return false;
       const P = peaksPrograms();
       if (!P) return false;
+      // The scroll's stops follow the opening (../../scroll/stops.js).
+      document.documentElement.dataset.opening = '3d';
+      // (0.5.3) Its own textures on its own units again: on the desk's
+      // paths the house's passes may have bound theirs there.
+      const bindTo = (unit, t) => {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, t);
+      };
+      if (P.flowTex) bindTo(PEAKS_FLOW, P.flowTex);
+      if (peaksBake?.ready) {
+        bindTo(PEAKS_HN, peaksBake.near.t);
+        bindTo(PEAKS_HF, peaksBake.far.t);
+      }
+      if (peaksMoon?.ready) bindTo(PEAKS_MOON, peaksMoon.tex);
+      gl.activeTexture(gl.TEXTURE0);
       const half = (n, k) => Math.ceil(n / k);
       const prev = gl.getParameter(gl.FRAMEBUFFER_BINDING);
       const W = canvas.width;
       const H = canvas.height;
       gl.bindVertexArray(null);
       gl.disable(gl.DEPTH_TEST);
-      const viewKey = [W, H, ...pk.cam.pos, ...pk.cam.look, pk.cam.fov, ...pk.bearings.flat()].join();
-      if (P.geo) {
+      gl.disable(gl.SCISSOR_TEST);
+      const viewKey = [W, H, ...pk.cam.pos, ...pk.cam.look, ...(pk.cam.right ?? []), pk.cam.fov, ...(pk.cam.shift ?? []), ...pk.bearings.flat()].join();
+      if (P.geo && !pk.skipGeo) {
         if (!peaksGeo || peaksGeo.w !== W || peaksGeo.h !== H) {
           if (peaksGeo) for (const t of [peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
           dropTarget(peaksGeo);
@@ -3618,7 +3723,9 @@ export default function MistCanvas({ recipe, onFail }) {
         const HBANDS = 4;
         const STEPS = 1 + BANDS + HBANDS;
         const all = peaksShown;
-        while (!peaksGeo.ready) {
+        // The bake first, a band a frame; the sky shows meanwhile.
+        const baked = peaksBakeStep(P);
+        while (baked && !peaksGeo.ready) {
           for (const unit of [PEAKS_G0, PEAKS_G1, PEAKS_G2]) {
             gl.activeTexture(gl.TEXTURE0 + unit);
             gl.bindTexture(gl.TEXTURE_2D, null);
@@ -3697,6 +3804,23 @@ export default function MistCanvas({ recipe, onFail }) {
       // settles.
       const changing = key !== peaksLastKey;
       peaksLastKey = key;
+      // (0.5.3) Behind the desk's scene: on the far plane, under its depth.
+      if (pk.behind) {
+        if (!P.behind) return false;
+        gl.useProgram(P.behind);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
+        gl.viewport(0, 0, W, H);
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
+        peaksLight(P.behind, pk);
+        peaksFlow(P.behind);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+        gl.useProgram(prog);
+        return true;
+      }
       if (pk.a < 1 || !P.lit || changing) {
         const L = P.direct || P.all;
         gl.useProgram(L);
@@ -3782,7 +3906,16 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform4fv(uniform('uVeil'), veilPos);
         gl.uniform1fv(uniform('uVeilA'), veilAlphaBuf);
         const prints = printsNow();
+        gl.disable(gl.SCISSOR_TEST);
         gl.viewport(0, 0, canvas.width, canvas.height);
+        // (0.5.3) Over the drop the 3D opening is the whole frame.
+        if (peaksNow?.a >= 1 && !peaksNow.behind) {
+          gl.disable(gl.DEPTH_TEST);
+          if (drawPeaks()) {
+            lastDrawn = vs;
+            return;
+          }
+        }
         // (0.4.18, 0.4.36) Mirror probes: warmed in idle queue; at rest, step if any face is still needed.
         probing = !dirty && settled() && !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep(false);
         const deskOn = !!meadowAt && !noDesk && !!deskProgram(true);
@@ -3850,7 +3983,8 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.bindVertexArray(null);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
-        timed('scene', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
+        // (0.5.3) The 3D peaks and sky in the 2D scene's place.
+        if (!(peaksNow?.behind && drawPeaks())) timed('scene', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         gl.depthMask(true);
         gl.depthFunc(gl.LESS);
         if (deskOn) timed('shadows', () => drawDesk(true));
@@ -3870,7 +4004,7 @@ export default function MistCanvas({ recipe, onFail }) {
         const glow = deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom;
         if (glow) bloom ??= makeBloom(gl, 14, fxProgram) || false;
         // (0.5.0) The 3D opening fading out over the 2D scene below the clouds.
-        if (peaksNow && peaksNow.a < 1) drawPeaks();
+        if (peaksNow && peaksNow.a < 1 && !peaksNow.behind) drawPeaks();
         // (0.4.57) By night with the frame in its own target, the bloom's
         // last pass writes the frame and the glow onto the canvas at once
         // (no copy, no blend); else the frame is copied over first.

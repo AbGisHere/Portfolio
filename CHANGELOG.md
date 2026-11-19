@@ -6,6 +6,17 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.3 — 2026-11-20
+
+One world from the peaks to the house, a first cut (work in progress; the owner continues it).
+
+- **The valley:** a meadow valley carved through the range from the hero's foot (`peaks.js` `VALLEY`), its walls the range's own mountains; the desk stands on its floor about 3.8 km from the hero (`SHELF`), the 3D floor level with the meadow's ground round it.
+- **The flight:** the whole `about` stretch (now 300 lvh) flies back and down the valley facing the peaks (`DROP`), no hold at the top, easing into the desk path's first camera with no cut (`FLIGHT_JOIN`, `DESK_PATH_3D`); under the 3D opening the pull-back's stop is gone (`DESK_STOPS_3D`).
+- **The 3D mountains behind the desk, the house and the pool,** in place of the 2D ridges: the desk camera as a 3D one on the valley floor (`deskPeaksCamera`, its shifted lens as `uShift`), drawn on the far plane behind the meadow scene; the 2D foot mist off there, the meadow's paint faded past 25–60 m (`uPaintNear`).
+- **The terrain baked** into two textures at load (`PEAKS_BAKE_FS`; heights split for exact filtering, the mist's noise), marched with a safe margin and finished on the exact ground; the coarse pass conservative (`coneReach`), misses retried, rays skimming a valley floor taken as ground, rays from the desk starting past the meadow (`uNear`).
+- **The mist** clear under its floor, thin from under it and over the valley floor; integrated only within its layer.
+- **Open:** the valley floor's blur on the low glide, the hero's size from the desk, a faint line at the horizon, moving frames ~80 ms on the M4 @2 (8.3 the budget), the phones, the fallback's stills, `npm run qa`, the 0.5.0 carry-overs.
+
 ## 0.5.2 — 2026-11-19
 
 The bodies and the ground read real.

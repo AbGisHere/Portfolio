@@ -18,7 +18,7 @@
 // from below near the horizon. The sky and the haze come from the scene's
 // own palette (the recipe's six stops), so it stays one world with the 2D
 // ridges and the desk.
-import { CLOUD, PEAKS } from '../peaks';
+import { BAKE, CLOUD, PEAKS, SHELF, VALLEY } from '../peaks';
 
 const f = x => (Number.isInteger(x) ? `${x}.` : `${x}`);
 const peaks = PEAKS.map(([x, z, ht, r]) => `vec4(${f(x)}, ${f(z)}, ${f(ht)}, ${f(r)})`).join(', ');
@@ -26,13 +26,27 @@ const peaks = PEAKS.map(([x, z, ht, r]) => `vec4(${f(x)}, ${f(z)}, ${f(ht)}, ${f
 export const PEAKS_VS = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0., 1.); }`;
+// (0.5.3) On the far plane: behind the meadow, the desk and the house,
+// drawn only where none of them stands (as the 2D scene was).
+export const PEAKS_FAR_VS = `#version 300 es
+in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 1., 1.); }`;
 
 const COMMON = `
 precision highp float;
 precision highp int;
 uniform vec2 uRes;
-uniform vec3 uCam, uLook;
+uniform vec3 uCam, uLook, uRight;
 uniform float uFov;
+// (0.5.3) Where the lens's axis meets the frame, in view units (0 but on
+// the desk's camera, whose lens is shifted).
+uniform vec2 uShift;
+// (0.5.3) Where the rays start: 0, but on the desk's paths past the
+// meadow's own ground (drawn in front), so none skims the grass.
+uniform float uNear;
+// (0.5.3) Skip 3D terrain raymarching when looking straight down or turned
+// away toward the house: draw analytic meadow plane + real 3D sky only.
+uniform float uSkipGeo;
 // The four bearings the ground's horizon is found for (../peaks.js BEARINGS).
 uniform vec2 uBear[4];
 
@@ -77,6 +91,25 @@ float peak(vec2 p, vec4 P, float sc, float det) {
   float prof = pow(k, 1.2) * 1.25 + k * .18;
   return 950. * sc + P.z * sc * prof * det;
 }
+// (0.5.3) Where a ray starts on the desk's paths: strictly upward rays jump
+// cleanly past the flat meadow plateau straight toward the 3D mountains
+// (so 1 m eye clearance never stalls the march over the shelf, while rays
+// near horizontal still catch the valley and shelf cleanly with no gap).
+float nearFor(vec3 rd) {
+  if (uNear <= 0.) return 0.;
+  return rd.y > .0015 ? ${f(SHELF.r * 0.88)} : 0.;
+}
+// (0.5.3) The valley (../peaks.js VALLEY): how far a place is from its
+// centre, how much of it lies inside its length, and its floor.
+float valleyDist(vec2 p) { return abs(p.x - ${f(VALLEY.x)} - ${f(VALLEY.amp)} * sin(p.y / ${f(VALLEY.wave)})); }
+float valleyLen(vec2 p) { return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y); }
+// How much of a place is the sunlit meadow overlook around the desk.
+float shelfMask(vec2 p) {
+  float dd = length(p - vec2(${f(SHELF.x)}, ${f(SHELF.z)}));
+  return smoothstep(${f(SHELF.r + 650)}, ${f(SHELF.r)}, dd);
+}
+// How much of a place is the valley's floor (never encroaching on the hero massif).
+float flankAt(vec2 p) { return valleyLen(p) * smoothstep(${f(VALLEY.half + VALLEY.wall * 0.45)}, ${f(VALLEY.half)}, valleyDist(p)); }
 float terrain(vec2 p, int oct) {
   float d = length(p), ring = smoothstep(1100., 3400., d);
   float mask = .45 + .55 * noise(p / 3800. + vec2(3.1, 1.7));
@@ -86,42 +119,127 @@ float terrain(vec2 p, int oct) {
   // Erosion: gullies and spurs down every face, finer as they go.
   float det = .8 + .36 * ridged(p / 560. + vec2(5.3, 2.1), min(oct, 9));
   for (int i = 0; i < ${PEAKS.length}; i++) h = max(h, peak(p, PEAK[i], i == 0 ? 1. : .62, det));
+  // (0.5.3) Wide alpine valley trough between the meadow plateau and the
+  // hero range: low enough for luminous valley mist to pool at the peaks'
+  // feet, flanked by mountain walls on either side.
+  float vd = valleyDist(p);
+  float vfloor = 980. + fbm(p / 900., 3) * 65.;
+  float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
+  float walls = max(h - vfloor, 0.) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
+  h = mix(h, vfloor + walls * wall, valleyLen(p));
+  // The sunlit alpine meadow plateau where the desk and house stand.
+  h = mix(h, ${f(SHELF.y)}, shelfMask(p));
   return h;
+}
+// (0.5.3) The ground and the mist's pattern baked once (PEAKS_BAKE_FS):
+// a near box covering the whole hero range and a far box covering the
+// plateau and distant ranges. Each texel stores height split in two (exact
+// in half floats), mist noise, and coarse 3-octave height for instant AO.
+uniform sampler2D uHN, uHF;
+uniform float uBaked;
+const vec4 BOX_N = vec4(${f(BAKE.near[0])}, ${f(BAKE.near[1])}, ${f(BAKE.near[2])}, 0.);
+const vec4 BOX_F = vec4(${f(BAKE.far[0])}, ${f(BAKE.far[1])}, ${f(BAKE.far[2])}, 0.);
+float mistNoise(vec2 xz) {
+  vec2 q = xz / 1400.;
+  return fbm(q + .5 * vec2(noise(q * 1.7 + 3.1), noise(q * 1.7 + 8.3)), 4);
+}
+vec4 bakedAt(vec2 p) {
+  vec2 un = (p - BOX_N.xy) / BOX_N.z;
+  if (all(greaterThan(un, vec2(.001))) && all(lessThan(un, vec2(.999)))) return textureLod(uHN, un, 0.);
+  vec2 uf = (p - BOX_F.xy) / BOX_F.z;
+  if (all(greaterThan(uf, vec2(.001))) && all(lessThan(uf, vec2(.999)))) return textureLod(uHF, uf, 0.);
+  return vec4(-1e5);
+}
+float H(vec2 p, int oct) {
+  if (uBaked > .5) {
+    vec4 b = bakedAt(p);
+    if (b.x > -1e4) return b.x + b.y;
+  }
+  return terrain(p, oct);
+}
+float Hcoarse(vec2 p) {
+  if (uBaked > .5) {
+    vec4 b = bakedAt(p);
+    if (b.x > -1e4) return b.a * 1000.;
+  }
+  return terrain(p, 3);
+}
+float mistN(vec2 xz) {
+  if (uBaked > .5) {
+    vec4 b = bakedAt(xz);
+    if (b.x > -1e4) return b.z;
+  }
+  return mistNoise(xz);
 }
 // Nothing stands above this: a ray past it, climbing, has missed.
 const float CEILING = 4400.;
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
+  bool gone = false;
+  for (int i = 0; i < 190; i++) {
+    vec3 p = ro + rd * t;
+    // Static baked heightfield (1 texture read/step): blazing fast and
+    // completely rigid across scroll frames, with conservative Lipschitz
+    // stepping so thin peaks never clip or morph.
+    float h = p.y - H(p.xz, 5);
+    if (h < .0012 * t) {
+      // Binary search refinement for rock-solid silhouettes.
+      float lo = tp, hi = t;
+      for (int j = 0; j < 5; j++) {
+        float mid = .5 * (lo + hi);
+        vec3 pm = ro + rd * mid;
+        if (pm.y - H(pm.xz, 5) < 0.) hi = mid;
+        else lo = mid;
+      }
+      return .5 * (lo + hi);
+    }
+    if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
+    tp = t; hp = h;
+    t += max(h * .42, .5 + t * .0014);
+  }
+  // Out of steps while still skimming the ground: only downward rays can
+  // count as ground (an upward ray over the shelf must never fake a hit).
+  return gone || rd.y >= 0. || hp > 40. + t * .02 ? -1. : t;
+}
+// (0.5.3) For the coarse pass: conservative cone reach against the baked
+// heightfield so the full pass skips empty sky in one jump.
+float coneReach(vec3 ro, vec3 rd, float tmax, float k) {
+  float t = max(1., nearFor(rd));
   for (int i = 0; i < 160; i++) {
     vec3 p = ro + rd * t;
-    float h = p.y - terrain(p.xz, 5);
-    if (h < .0015 * t) {
-      // Between the last step above and this one, where the ground was met.
-      return mix(tp, t, hp / max(hp - h, 1e-4));
-    }
+    float h = p.y - H(p.xz, 5);
+    if (h < k * t + 6.) return t;
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) break;
-    tp = t; hp = h;
-    t += max(h * .62, .4 + t * .0012);
+    t += max(h * .42, 1. + t * .0015);
   }
-  return -1.;
+  return tmax;
 }
 vec3 nrm(vec3 p, float t) {
-  float e = max(.8, t * .0014);
-  int oc = t < 5000. ? 10 : 7;
-  return normalize(vec3(terrain(p.xz - vec2(e, 0), oc) - terrain(p.xz + vec2(e, 0), oc), 2. * e,
-                        terrain(p.xz - vec2(0, e), oc) - terrain(p.xz + vec2(0, e), oc)));
+  // Match central-difference step to the active bake box's texel spacing so
+  // bilinear normals stay silky-smooth with zero square facets.
+  vec2 un = (p.xz - BOX_N.xy) / BOX_N.z;
+  bool inNear = all(greaterThan(un, vec2(.003))) && all(lessThan(un, vec2(.997)));
+  float e = inNear ? max(8.0, t * .0016) : max(64.0, t * .004);
+  int oc = t < 5000. ? 8 : 6;
+  return normalize(vec3(H(p.xz - vec2(e, 0), oc) - H(p.xz + vec2(e, 0), oc), 2. * e,
+                        H(p.xz - vec2(0, e), oc) - H(p.xz + vec2(0, e), oc)));
 }
 
-// ---- the mist: soft banks pooled low, thinning upward, torn by noise
+// ---- the mist: soft banks pooled low in the alpine valley trough
 float mistAt(vec3 p) {
   float hgt = (p.y - MIST_BASE) / MIST_RISE;
   if (hgt > 4.5) return 0.;
-  vec2 q = p.xz / 1400.;
-  float n = fbm(q + .5 * vec2(noise(q * 1.7 + 3.1), noise(q * 1.7 + 8.3)), 4);
-  // Its top heaps and dips: banks where the noise is high rise up to four
-  // times as far, the rest lies low, so there is no level surface.
-  float top = .6 + 3.6 * smoothstep(.35, .8, n);
+  float n = mistN(p.xz);
+  // Its top heaps and dips: high billows from above, settling lower in the
+  // valley trough when viewed from the meadow overlook so the close peaks
+  // stand tall and clear above a luminous ribbon of mist at their feet.
+  float lowView = smoothstep(2550., ${f(SHELF.y + 40)}, uCam.y);
+  float top = mix(.6 + 3.6 * smoothstep(.35, .8, n), .45 + 1.85 * smoothstep(.35, .8, n), lowView);
   float body = smoothstep(top, top - 1.1, hgt);
+  body *= smoothstep(-.32, .12, hgt);
+  body *= 1. - .32 * lowView;
+  // Keep the meadow overlook around the desk clear of low cloud banks.
+  body *= 1. - shelfMask(p.xz);
   float bill = noise(p.xz / 260. + hgt * .7);
   return body * (.55 + .45 * bill) * .0016;
 }
@@ -144,7 +262,7 @@ float horizon(vec3 p, vec2 dir) {
   float m = -1., t = 15.;
   for (int i = 0; i < 18; i++) {
     vec2 q = p.xz + dir * t;
-    float h = terrain(q, 3) - p.y;
+    float h = H(q, 3) - p.y;
     m = max(m, h / t);
     t *= 1.38;
     if (t > 16000.) break;
@@ -152,42 +270,66 @@ float horizon(vec3 p, vec2 dir) {
   return m;
 }
 
+vec3 camRight(vec3 f) {
+  vec3 r = uRight - f * dot(uRight, f);
+  float l = length(r);
+  return l > 1e-4 ? r / l : normalize(cross(f, abs(f.y) > .99 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
+}
+
 vec3 viewRay(out vec3 f, out vec3 r, out vec3 u, out float lens, out vec2 uv) {
-  uv = (gl_FragCoord.xy * 2. - uRes) / uRes.y;
-  f = normalize(uLook - uCam); r = normalize(cross(f, vec3(0, 1, 0))); u = cross(r, f);
+  uv = (gl_FragCoord.xy * 2. - uRes) / uRes.y - uShift;
+  f = normalize(uLook - uCam); r = camRight(f); u = cross(r, f);
   lens = 1. / tan(radians(uFov) * .5);
   return normalize(f * lens + uv.x * r + uv.y * u);
 }
 
 G geo(vec3 rd, float tStart) {
   G g;
-  g.t = march(uCam, rd, 80000., tStart);
+  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec4(-1); g.T = 1.; g.mh = 0.;
+  // (0.5.3) Fast analytic hit on the level sunlit meadow plateau around the
+  // desk: zero raymarch steps and razor-clean flat ground (no noise lumps).
+  if (rd.y < -.0005 && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
+    float tp = (${f(SHELF.y)} - uCam.y) / rd.y;
+    vec3 pp = uCam + rd * tp;
+    if (tp > 0. && length(pp.xz - vec2(${f(SHELF.x)}, ${f(SHELF.z)})) < ${f(SHELF.r * 0.85)}) {
+      g.t = tp;
+      g.hit = 1.;
+      return g;
+    }
+  }
+  float tn = nearFor(rd);
+  g.t = march(uCam, rd, 80000., max(tStart, tn));
+  // The coarse start can't be trusted on a miss (a grazing ray, a thin
+  // crest between its corners): look again from the eye.
+  if (g.t < 0. && tStart > max(tn, 1.)) g.t = march(uCam, rd, 80000., max(tn, 1.));
   g.hit = g.t > 0. ? 1. : 0.;
-  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec4(-1);
   vec3 p = uCam + rd * max(g.t, 0.);
   if (g.hit > 0.) {
     g.n = nrm(p, g.t);
     float alt = p.y;
-    // Snow where the slope holds it, more of it higher up; the steepest
-    // faces bare, in bands (the rock's strata).
-    float line = 1500. + fbm(p.xz / 650., 3) * 450.;
-    // The breakup varies with place and height together, so no pattern
-    // smears into stripes down a steep face.
+    float shf = shelfMask(p.xz);
+    // Snow where the slope holds it, draping naturally down the hero peak
+    // and flanking massifs (never pushed off the hero peak by the valley).
+    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf;
     vec2 fu = faceUV(p, g.n);
     float bn = noise(fu / 32.);
     float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
-    float holds = g.n.y + .1 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
-    g.snow = smoothstep(line - 120., line + 120., alt) * smoothstep(.36, .5, holds);
-    g.snow = max(g.snow, smoothstep(.55, .68, holds) * smoothstep(1300., 1600., alt));
-    // Fine relief the heightfield is too coarse for, in the light only:
-    // rough on rock, soft under snow.
-    vec2 bq = fu / 9.;
-    float b0 = fbm(bq, 3), bx = fbm(bq + vec2(.3, 0.), 3), bz = fbm(bq + vec2(0., .3), 3);
-    vec2 bq2 = fu / 38.;
-    float c0 = noise(bq2), cx = noise(bq2 + vec2(.25, 0.)), cz = noise(bq2 + vec2(0., .25));
-    float rough = mix(1., .3, g.snow) * smoothstep(9000., 1500., g.t);
-    g.n = normalize(g.n - vec3((bx - b0) * 2.2 + (cx - c0) * 1.2, 0., (bz - b0) * 2.2 + (cz - c0) * 1.2) * rough);
-    g.ao = clamp(.6 + (alt - terrain(p.xz, 3)) / 300., .3, 1.);
+    float holds = g.n.y + .11 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
+    g.snow = smoothstep(line - 140., line + 140., alt) * smoothstep(.33, .48, holds);
+    g.snow = max(g.snow, smoothstep(.52, .66, holds) * smoothstep(1380., 1680., alt - 600. * shf));
+    g.snow *= (1. - shf);
+    // Fine crag relief ONLY on rocky/snowy mountain faces — never on the
+    // meadow overlook or flat grass, so the meadow stays crisp and smooth.
+    float flatMeadow = max(shf, smoothstep(${f(SHELF.y + 80)}, ${f(SHELF.y - 400)}, alt) * smoothstep(.8, .92, g.n.y));
+    float rough = (1. - flatMeadow) * mix(1., .25, g.snow) * smoothstep(18000., 2200., g.t);
+    if (rough > .01) {
+      vec2 bq = fu / 14.;
+      float b0 = fbm(bq, 3), bx = fbm(bq + vec2(.3, 0.), 3), bz = fbm(bq + vec2(0., .3), 3);
+      vec2 bq2 = fu / 48.;
+      float c0 = noise(bq2), cx = noise(bq2 + vec2(.25, 0.)), cz = noise(bq2 + vec2(0., .25));
+      g.n = normalize(g.n - vec3((bx - b0) * 1.9 + (cx - c0) * 1.1, 0., (bz - b0) * 1.9 + (cz - c0) * 1.1) * rough);
+    }
+    g.ao = mix(clamp(.62 + (alt - Hcoarse(p.xz)) / 320., .35, 1.), 1., shf);
   }
   // The mist between the eye and what it sees: its depth (transmittance)
   // and how high in it the light was gathered (the light pass lights it).
@@ -195,11 +337,16 @@ G geo(vec3 rd, float tStart) {
   float tau = 0., hw = 0., w = 0.;
   float t0 = 0., t1 = end;
   float top = MIST_BASE + MIST_RISE * 4.5;
-  if (rd.y < 0.) t0 = max(0., (top - uCam.y) / rd.y); else if (uCam.y > top) t1 = 0.;
+  float lo = MIST_BASE - MIST_RISE * .32;
+  if (abs(rd.y) > 1e-4) {
+    float ta = (top - uCam.y) / rd.y, tb = (lo - uCam.y) / rd.y;
+    t0 = max(0., min(ta, tb));
+    t1 = min(end, max(ta, tb));
+  } else if (uCam.y > top || uCam.y < lo) t1 = 0.;
   if (t1 > t0) {
-    float dt = (t1 - t0) / 18.;
+    float dt = (t1 - t0) / 14.;
     float j = hash(gl_FragCoord.xy) * dt;
-    for (int i = 0; i < 18; i++) {
+    for (int i = 0; i < 14; i++) {
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);
@@ -224,6 +371,7 @@ uniform float uByMoon;
 uniform vec3 uSunDir, uMoonDir, uLightDir;
 uniform vec3 uStops[6];
 uniform vec3 uBody;
+uniform vec3 uGrassGround, uGrassFar, uGrassSky;
 uniform float uNight, uGlow, uA;
 
 vec3 S[6];
@@ -382,40 +530,72 @@ vec3 haze(vec3 c, vec3 rd, float t) {
   return mix(c, to, clamp(k, 0., .85));
 }
 
+// Exact meadow palette matching mistShader.js & grassShader.js (in linear light),
+// with soft sunlit rolling pasture variation matching MEADOW_PAINT's mean tone
+// so there is zero shade shift when MEADOW_PAINT adds fine grass detail.
+vec3 shelfMeadow(vec2 xz, float dist, vec3 rd) {
+  vec3 srgb = mix(uGrassGround, uGrassFar, smoothstep(4., 24., dist)) * mix(vec3(1.), uGrassSky, .25);
+  // Subtle broad sunlit/dappled meadow variation matched to MEADOW_PAINT's average brightness.
+  float broad = tn(xz / 340.) * .6 + tn(xz / 110. + .31) * .4;
+  float modK = mix(1., .84 + .32 * broad, smoothstep(22., 75., dist) * (1. - smoothstep(320., 900., dist)));
+  srgb *= modK;
+  vec3 lin = pow(max(srgb, vec3(0.)), vec3(2.2));
+  // Subtle alpine horizon haze far off (never muddy, never dark).
+  float hk = 1. - exp(-max(dist - 280., 0.) / 5500.);
+  vec3 hz = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, .02), rd.z))));
+  return mix(lin, hz, clamp(hk, 0., .75));
+}
+
 vec3 ground(G g, vec3 rd) {
   // Under deep mist nothing of the ground shows: skip its light.
   if (g.T < .004) return vec3(0);
   vec3 p = uCam + rd * g.t;
+  float shf = shelfMask(p.xz);
+  // On the flat sunlit meadow plateau around the desk (or when looking
+  // straight down / away toward the house), match mistShader.js cleanly so
+  // grass blades, trees, and MEADOW_PAINT stitch with zero seam.
+  if (uSkipGeo > .5 || (shf > .98 && p.y <= ${f(SHELF.y + 3)})) {
+    return shelfMeadow(p.xz, g.t, rd);
+  }
   vec3 n = g.n;
   float alt = p.y;
   vec2 fu = faceUV(p, n);
   float bn = noise(fu / 32.);
   float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
-  vec3 rock = mix(vec3(.08, .07, .068), vec3(.24, .21, .19), strata);
-  rock = mix(rock, vec3(.12, .095, .075), noise(fu / 120.) * .6);
-  // Below the snow and the scree, pine: dark, blue-green.
-  float pine = smoothstep(1650., 1250., alt + noise(p.xz / 90.) * 200.) * smoothstep(.55, .75, n.y);
-  rock = mix(rock, vec3(.02, .045, .045), pine);
-  vec3 alb = mix(rock, vec3(.86, .87, .88), g.snow);
+  // Crisp alpine granite & slate (never muddy flat brown when viewed from the base).
+  vec3 rock = mix(vec3(.14, .135, .145), vec3(.33, .30, .28), strata);
+  rock = mix(rock, vec3(.19, .17, .155), noise(fu / 120.) * .55);
+  // Alpine evergreen foothills on gentler lower slopes.
+  float pine = smoothstep(1900., 1450., alt + noise(p.xz / 90.) * 220.) * smoothstep(.52, .76, n.y);
+  rock = mix(rock, vec3(.042, .088, .058), pine);
+  // Sunlit alpine pasture on low valley floors & plateau shoulders.
+  float fl = flankAt(p.xz);
+  float lawn = smoothstep(1680., 1380., alt + noise(p.xz / 140.) * 160.) * smoothstep(.78, .92, n.y);
+  lawn = max(lawn, shf);
+  vec3 grass = mix(vec3(.11, .19, .065), vec3(.16, .25, .08), noise(p.xz / 120.) * .6 + noise(p.xz / 420.) * .4);
+  rock = mix(rock, grass, lawn * (1. - shf));
+  vec3 alb = mix(rock, vec3(.88, .89, .91), g.snow);
   float dif = max(dot(n, uLightDir), 0.);
   float sh = dif > 0. ? shadow(g) : 0.;
   // Shaded snow takes the sky's light paler than rock does (it scatters
   // inside itself): a soft grey-blue, not a saturated blue.
   vec3 sk = skyLight();
-  vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.3;
-  vec3 c = alb * (bodyLight() * dif * sh + mix(sk, skSnow, g.snow) * (.5 + .5 * n.y) * g.ao);
-  // Bounce: with the body ahead, the faces toward the viewer are backlit,
-  // but the sunlit mist and snowfields before them throw light back onto
-  // them (warm, strongest low down, near the mist), as in a real backlit
-  // range; only into the shade the body leaves.
-  vec2 back = normalize(-rd.xz);
-  float facing = max(dot(normalize(n.xz + 1e-4), back), 0.) * (1. - n.y * .5);
-  float lowness = smoothstep(MIST_BASE + MIST_RISE * 6., MIST_BASE, alt);
-  vec3 bounce = bodyLight() * mix(vec3(1.), vec3(1., .9, .78), .5) * (.16 + .22 * lowness);
-  c += alb * bounce * facing * (1. - dif * sh) * g.ao;
+  vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.35;
+  vec3 c = alb * (bodyLight() * dif * sh + mix(sk, skSnow, g.snow) * (.55 + .45 * n.y) * g.ao);
+  // Bounce: with the body ahead, faces toward the viewer are backlit, so
+  // sunlit mist and snowfields throw warm luminous light back onto them,
+  // giving sculpted 3D relief even when viewed from the meadow below.
+  vec2 back = normalize(-rd.xz + 1e-4);
+  float facing = max(dot(normalize(n.xz + 1e-4), back), 0.) * (1. - n.y * .45);
+  float lowness = smoothstep(MIST_BASE + MIST_RISE * 7., MIST_BASE, alt);
+  vec3 bounce = bodyLight() * mix(vec3(1.), vec3(1., .92, .82), .45) * (.22 + .28 * lowness);
+  c += alb * bounce * facing * (1. - dif * sh * .85) * g.ao;
   // Snow is matte: no sheen, only a faint glitter of crystals in the light.
   c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
-  return haze(c, rd, g.t);
+  c = haze(c, rd, g.t);
+  // Smoothly transition into exact shelf meadow palette as we approach the plateau.
+  if (shf > .001) c = mix(c, shelfMeadow(p.xz, g.t, rd), shf);
+  return c;
 }
 
 // The mist, lit: its tops catch the body's light, its depths take the sky's
@@ -564,8 +744,8 @@ out vec4 o;
 void main() {
   // This texel's block of 4 × 4 full pixels: its centre, in the full
   // frame's view coordinates.
-  vec2 uv = (gl_FragCoord.xy * 4. * 2. - uFull) / uFull.y;
-  vec3 f = normalize(uLook - uCam), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
+  vec2 uv = (gl_FragCoord.xy * 4. * 2. - uFull) / uFull.y - uShift;
+  vec3 f = normalize(uLook - uCam), r = camRight(f), u = cross(r, f);
   float lens = 1. / tan(radians(uFov) * .5);
   // The corner rays of this coarse texel's block, the nearest of them.
   float best = 1e9;
@@ -573,10 +753,11 @@ void main() {
     vec2 o2 = vec2(k & 1, k >> 1) * 2. - 1.;
     vec2 q = uv + o2 * 4. / uFull.y;
     vec3 rd = normalize(f * lens + q.x * r + q.y * u);
-    float t = march(uCam, rd, 80000., 1.);
-    best = min(best, t < 0. ? 80000. : t);
+    // A block's width (4 px) a few times over, as an angle.
+    float cone = 4. * 3. * 2. / (uFull.y * lens);
+    best = min(best, coneReach(uCam, rd, 80000., cone));
   }
-  o = vec4(best * .82 * .001, 0., 0., 1.);
+  o = vec4(best * .9 * .001, 0., 0., 1.);
 }`;
 
 // Each pixel's ground horizon toward the four bearings, at half the size
@@ -591,11 +772,26 @@ void main() {
   if (a.x <= 0.) { o = vec4(-1); return; }
   vec2 uv = (vec2(px) + .5) * 2. / uRes - 1.;
   uv.x *= uRes.x / uRes.y;
-  vec3 f = normalize(uLook - uCam), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
+  uv -= uShift;
+  vec3 f = normalize(uLook - uCam), r = camRight(f), u = cross(r, f);
   vec3 rd = normalize(f / tan(radians(uFov) * .5) + uv.x * r + uv.y * u);
   vec3 n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z);
   vec3 p = uCam + rd * a.x * 1000. + n * 3.;
+  if (p.y <= ${f(SHELF.y + 6)} && shelfMask(p.xz) > .95) { o = vec4(-1); return; }
   o = vec4(horizon(p, uBear[0]), horizon(p, uBear[1]), horizon(p, uBear[2]), horizon(p, uBear[3]));
+}`;
+
+// (0.5.3) The bake: one box's texels — exact ground height (split in r+g),
+// mist noise (b), and coarse 3-octave height (a) for instant AO.
+export const PEAKS_BAKE_FS = `#version 300 es
+${COMMON}
+uniform vec4 uBox;
+out vec4 o;
+void main() {
+  vec2 p = uBox.xy + gl_FragCoord.xy * uBox.w;
+  float h = terrain(p, 8);
+  float a = floor(h / 32. + .5) * 32.;
+  o = vec4(a, h - a, mistNoise(p), terrain(p, 3) * .001);
 }`;
 
 // The shape pass: two float targets.
@@ -616,9 +812,13 @@ void main() {
 const READ_G = `
 uniform sampler2D uG0, uG1, uG2;
 uniform float uReady, uReveal;
-G readG() {
-  if (uReady < .5) {
+G readG(vec3 rd) {
+  if (uSkipGeo > .5 || uReady < .5) {
     G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.hor = vec4(-1);
+    if ((uSkipGeo > .5 || uNear > 0.) && rd.y < -.0005 && uCam.y >= ${f(SHELF.y - 0.5)}) {
+      s.t = max((${f(SHELF.y)} - uCam.y) / rd.y, .1);
+      s.hit = 1.;
+    }
     return s;
   }
   ivec2 px = ivec2(gl_FragCoord.xy);
@@ -671,7 +871,7 @@ layout(location = 1) out vec4 o1;
 void main() {
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
-  G g = readG();
+  G g = readG(rd);
   vec3 base, mist;
   lightParts(g, rd, uv, f, r, u, lens, base, mist);
   o0 = vec4(pow(base, vec3(1. / 2.2)), 1.);
@@ -707,12 +907,12 @@ out vec4 o;
 void main() {
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
-  G g = readG();
+  G g = readG(rd);
   vec3 base, mist;
   lightParts(g, rd, uv, f, r, u, lens, base, mist);
   vec3 lin = compose(base, mist, g.T, rd);
   // The first load: the mountains fade in over the sky that was there.
-  if (g.hit > 0. && uReveal < 1.) lin = mix(sky(rd), lin, uReveal);
+  if (g.hit > 0. && uReveal < 1. && uSkipGeo < .5 && uNear <= 0.) lin = mix(sky(rd), lin, uReveal);
   vec3 c = pow(lin, vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
   o = vec4(c * uA, uA);
 }`;
