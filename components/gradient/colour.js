@@ -14,8 +14,13 @@ export function hexToRgb(hex) {
 export const rgb01 = hex => hexToRgb(hex).map(c => c / 255);
 
 /** [r, g, b] (0–255, may be fractional) → '#rrggbb', rounded and clamped. */
-export const rgbToHex = c =>
-  `#${c.map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('')}`;
+// (0.4.67) Without the per-channel strings and arrays: the same result.
+const HEX2 = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const byte = x => {
+  const v = Math.max(0, Math.min(255, Math.round(x)));
+  return HEX2[v] ?? v.toString(16).padStart(2, '0');
+};
+export const rgbToHex = c => `#${byte(c[0])}${byte(c[1])}${byte(c[2])}`;
 
 /** Two colours (hex or 0–255 RGB) mixed in gamma-encoded RGB, like the
  * shader's mix(): 0–255 float RGB, unrounded. */
@@ -31,7 +36,19 @@ const toSrgb = c => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.max(0, c) ** (1 /
 
 /** sRGB hex → oklab's cube-root LMS space (a linear map of oklab, so
  * interpolating here is interpolating in oklab). */
+// (0.4.67) Pure in the string, so kept: the same few hundred colours are
+// converted every frame. A fresh array each call (callers may change it).
+const LMS = new Map();
 export function hexToLms(hex) {
+  let v = LMS.get(hex);
+  if (!v) {
+    if (LMS.size > 4096) LMS.clear();
+    v = lmsOf(hex);
+    LMS.set(hex, v);
+  }
+  return [v[0], v[1], v[2]];
+}
+function lmsOf(hex) {
   const [r, g, b] = hexToRgb(hex).map(c => toLinear(c / 255));
   return [
     Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b),

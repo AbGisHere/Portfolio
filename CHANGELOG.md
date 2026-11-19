@@ -6,6 +6,12 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.67 — 2026-11-19
+
+- `hexToLms` keeps what it's converted (pure in the string; a fresh array each call), and `rgbToHex` builds its string from a table, the same result: `sceneAt` on the climb 0.16 → 0.078 ms a frame (M4, Node). A memo of `skyRamp` was slower (its stops change every frame) and was left out.
+- Same picture: house parity subset 24/24 against 0.4.66; unit and adaptive tests pass.
+- Phones on 0.4.66 (BrowserStack climb, median of 3): Moto G71 8.3 fps, ready 26.4 s; OnePlus 11R 66.8 fps, ready 15.9 s; iPhone 15 45.1 fps, ready 14.1 s: flat against 0.4.65 within noise (the lamp lists and the shell variants measured nothing on these three).
+
 ## 0.4.66 — 2026-11-19
 
 - The lamps' and strips' loops fetch the light list's texel once per four entries (four ids a texel), not once an entry.
