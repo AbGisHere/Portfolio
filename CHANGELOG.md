@@ -6,6 +6,38 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.10 — 2026-11-20
+
+Speed, with the same picture (0.5.9 against 0.5.10, every scroll stop,
+day and night, phone and laptop: equal once settled), and the 0.5.0
+carry-overs.
+
+- **The opening's shape** (`gl/peaksShader.js`, `gl/MistCanvas.jsx`): a
+  block the coarse pass saw as sky marches nothing (it marched twice);
+  the light's per-frame terms (the air's depth, the body's and the sky's
+  light) worked once a pixel, not at every use; the stars only by night,
+  the sun and moon only above −7°; a new view drawn in one pass once the
+  opening is up, not eight bands and four; its uniform locations looked
+  up once; dead targets dropped before they're redrawn (`?invalidate=0`);
+  its targets, textures and programs freed on unmount.
+- **Loading in the order things are met:** nothing else is prepared until
+  the mountains are up (or 5 s), then the meadow, desk and things on it,
+  then the house in the background, so nobody waits at any of them.
+- **Smaller costs:** the camera's spline tangents worked once (`peaks.js`);
+  the sun and lamp targets write only what changed and never read layout
+  in a frame (`SunToggle.jsx`, `LampToggle.jsx`); the caustics' indices
+  16-bit (`poolWater.js`).
+- **Carry-overs:** the ridge scratch arrays reused only at their length;
+  0.4.66's two shell variants out (the pool climb with and without them on
+  the Moto G71, Pixel 6 and Pixel 7: no difference); 0.4.60's vertex
+  tables kept (0.4.59 against 0.4.60 on the Moto G71, OnePlus 11R and
+  Pixel 7: 7.2/7.4, 65.5/65.6, 44.5/43.0 fps).
+- **Measured** (M4, scroll through the descent, GL): 1440×900@2 44.8 →
+  48.5 fps, 1728×1117@2 34.2 → 40.0, 393×852@2 90.0 → 97.9.
+- **Found:** the Moto G71's pool climb is ~3 fps from 0.5.x (~7 at 0.4.59);
+  the OnePlus and Pixels are unchanged. For 0.5.11.
+- **`parity`:** `--base-b` compares two servers (a build against a build).
+
 ## 0.5.9 — 2026-11-20
 
 - **The hero peak apart by day too** (`gl/peaksShader.js`): within ~1.9 km

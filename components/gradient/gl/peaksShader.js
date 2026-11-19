@@ -342,6 +342,9 @@ G geo(vec3 rd, float tStart) {
     }
   }
   float tn = nearFor(rd);
+  // (0.5.10) The coarse pass saw only sky round this block (its cone
+  // covers the block three times over): nothing to march.
+  if (tStart >= 70000.) { g.t = -1.; g.hit = 0.; return g; }
   g.t = march(uCam, rd, 80000., max(tStart, tn));
   // The coarse start can't be trusted on a miss (a grazing ray, a thin
   // crest between its corners): look again from the eye.
@@ -462,9 +465,12 @@ float airmass(float y) {
 // real sunsets go orange and magenta, and twilight deep blue.
 const vec3 OZONE = vec3(.65e-6, 1.88e-6, .085e-6) * 9000.;
 vec3 tau0() { float a = uCam.y; return BR * HR * exp(-a / HR) + vec3(BM * HM * exp(-a / HM) * 1.1) + OZONE; }
+// (0.5.10) What's the same for every pixel, worked once a pixel in
+// lightParts, not at every use.
+vec3 TAU0, SKYL, BODYL, SUNL;
 // A body's light where it reaches (reddened by the air on the way), and
 // fading out as it goes under.
-vec3 reach(vec3 L, float I) { return I * exp(-tau0() * airmass(max(L.y, 0.) + .004)) * smoothstep(-.1, .02, L.y); }
+vec3 reach(vec3 L, float I) { return I * exp(-TAU0 * airmass(max(L.y, 0.) + .004)) * smoothstep(-.1, .02, L.y); }
 vec3 scatter(vec3 rd, vec3 L, float I) {
   float mu = dot(rd, L);
   float phR = 3. / (16. * PI) * (1. + mu * mu);
@@ -475,7 +481,7 @@ vec3 scatter(vec3 rd, vec3 L, float I) {
   vec3 tau = (tR + tM) * airmass(max(rd.y, 0.) + .01);
   vec3 oz = exp(-OZONE * airmass(max(rd.y, 0.) + .01) * .5);
   vec3 ph = (tR * phR + tM * phM) / (tR + tM);
-  vec3 lit = I * exp(-tau0() * airmass(max(L.y, 0.) + .004) * .9);
+  vec3 lit = I * exp(-TAU0 * airmass(max(L.y, 0.) + .004) * .9);
   vec3 c = lit * ph * (1. - exp(-tau)) * oz * smoothstep(-.07, .01, L.y);
   // Twilight: after the body is down the sky stays lit from above the
   // horizon, overhead longest, blue, until it is some 10° under.
@@ -512,7 +518,7 @@ vec3 skyRaw(vec3 rd) {
 }
 // The body's light on the ground and the sky's in the shade, on screen.
 vec3 bodyLight() { return toScreen(reach(uLightDir, uByMoon > .5 ? MOON_I : SUN_I) * (uByMoon > .5 ? .8 : .11)) * 1.25 * (uByMoon > .5 ? vec3(.8, .9, 1.15) : vec3(1.)); }
-vec3 sunLit() { vec3 b = bodyLight(); if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .18) * vec3(1.02, 1., .97); }
+vec3 sunLit() { vec3 b = BODYL; if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .18) * vec3(1.02, 1., .97); }
 vec3 skyLight() { return toScreen(skyRaw(normalize(vec3(0., 1., 0.) + uLightDir * .3)) * .55); }
 
 vec3 sky(vec3 rd) {
@@ -642,7 +648,7 @@ vec3 ground(G g, vec3 rd) {
   float sh = dif > 0. ? shadow(g) : 0.;
   // Shaded snow takes the sky's light paler than rock does (it scatters
   // inside itself): a soft grey-blue, not a saturated blue.
-  vec3 sk = skyLight();
+  vec3 sk = SKYL;
   vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.35;
   // (0.5.7) By day the sun carries the scene: stronger direct light against
   // a cooler, lower sky fill, so lit faces glow warm and shade goes blue.
@@ -652,9 +658,9 @@ vec3 ground(G g, vec3 rd) {
   // rest of the range keeps the night.
   float hero = smoothstep(1900., 700., length(p.xz - PEAK[0].xy));
   amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * g.ao;
-  vec3 c = alb * (sunLit() * dif * sh * mix(1., 2., 1. - uNight) + amb);
+  vec3 c = alb * (SUNL * dif * sh * mix(1., 2., 1. - uNight) + amb);
   // (0.5.9) By day too the hero stands apart: a touch more light on it.
-  c += (1. - uNight) * hero * alb * skyLight() * vec3(.85, .9, 1.) * .55 * (.5 + .5 * n.y) * g.ao;
+  c += (1. - uNight) * hero * alb * SKYL * vec3(.85, .9, 1.) * .55 * (.5 + .5 * n.y) * g.ao;
   c *= 1. + .12 * hero * (1. - uNight);
   // Bounce: with the body ahead, faces toward the viewer are backlit, so
   // sunlit mist and snowfields throw warm luminous light back onto them,
@@ -662,17 +668,17 @@ vec3 ground(G g, vec3 rd) {
   vec2 back = normalize(-rd.xz + 1e-4);
   float facing = max(dot(normalize(n.xz + 1e-4), back), 0.) * (1. - n.y * .45);
   float lowness = smoothstep(MIST_BASE + MIST_RISE * 7., MIST_BASE, alt);
-  vec3 bounce = bodyLight() * mix(vec3(1.), vec3(1., .92, .82), .45) * (.22 + .28 * lowness);
+  vec3 bounce = BODYL * mix(vec3(1.), vec3(1., .92, .82), .45) * (.22 + .28 * lowness);
   c += alb * bounce * facing * (1. - dif * sh * .85) * g.ao;
   // Snow is matte: no sheen, only a faint glitter of crystals in the light.
-  c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
+  c += g.snow * BODYL * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
   // (0.5.9) ... and clear of the haze the rest of the range sits back in.
   c = haze(c, rd, g.t * (1. - .7 * hero));
   // Below the mist's floor the ground fades into it: never a seen valley floor.
   // (0.5.6) In drifts, never a level grey sheet: its depth wanders and it
   // thickens and thins across the trough.
   float sink = smoothstep(MIST_BASE - 60., MIST_BASE - 480., alt + 220. * (noise(p.xz / 380. + 6.2) - .5));
-  c = mix(c, skyLight() * 1.35 + bodyLight() * .12, (.45 + .4 * noise(p.xz / 900. + 1.7)) * sink);
+  c = mix(c, SKYL * 1.35 + BODYL * .12, (.45 + .4 * noise(p.xz / 900. + 1.7)) * sink);
   // Smoothly transition into exact shelf meadow palette as we approach the plateau.
   // (0.5.6) And its grass carries on over the rim, down the shoulder's
   // gentle top, shaded by its slope, before the rock breaks through.
@@ -697,9 +703,9 @@ vec3 mistLit(G g, vec3 rd) {
   // depths only the sky's, a soft grey-blue; toward the body it glows
   // (light through it).
   float fwd = pow(max(dot(rd, uLightDir), 0.), 5.);
-  vec3 bl = bodyLight();
+  vec3 bl = BODYL;
   vec3 sun = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .7);
-  vec3 sk = skyLight();
+  vec3 sk = SKYL;
   vec3 lo = sk * 1.35 + sun * .12;
   vec3 hi = sun * .72 + sk * 1.05;
   return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * vec3(1.02, 1., .96) * fwd * .4;
@@ -709,7 +715,7 @@ vec3 mistLit(G g, vec3 rd) {
 // across (the button's size, SunToggle.module.css), round on the frame.
 vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float z = dot(uSunDir, f);
-  if (z <= 0.) return c;
+  if (z <= 0. || uSunDir.y <= -.12) return c;
   vec2 sp = vec2(dot(uSunDir, r), dot(uSunDir, u)) * lens / z;
   // (0.5.7) Stylised, like the desk: a flat painted disc, its colour the
   // light's (gold low, cream high), a soft lighter heart, a clean edge and
@@ -763,7 +769,7 @@ float sea(vec2 q, vec2 c, vec2 r, float rot) {
 }
 vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float z = dot(uMoonDir, f);
-  if (z <= 0.) return c;
+  if (z <= 0. || uMoonDir.y <= -.12) return c;
   vec2 sp = vec2(dot(uMoonDir, r), dot(uMoonDir, u)) * lens / z;
   float R = .104 * lens / 1.7320508;
   float malt = uMoonDir.y;
@@ -798,7 +804,7 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   vec3 dark = c * .9 + vec3(.014, .017, .026);
   col = mix(dark, col, lit);
   // Low, warmer (amber to honey); high, cream.
-  vec3 tr = exp(-tau0() * airmass(max(malt, 0.) + .004));
+  vec3 tr = exp(-TAU0 * airmass(max(malt, 0.) + .004));
   vec3 tint = tr / max(max(tr.r, tr.g), 1e-3);
   float high = smoothstep(.02, .3, malt);
   col *= mix(mix(tint, vec3(1.), .4), vec3(1.), high);
@@ -818,9 +824,11 @@ void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out v
   for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
   LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
   EXPO = 1.25 * pow(16., uNight);
+  TAU0 = tau0(); BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
   if (g.hit > 0.) base = ground(g, rd);
   else {
-    base = sky(rd) + stars(rd) * smoothstep(.65, 1., uNight);
+    base = sky(rd);
+    if (uNight > .65) base += stars(rd) * smoothstep(.65, 1., uNight);
     base = drawSun(base, uv, f, r, u, lens);
     base = drawMoon(base, uv, f, r, u, lens);
   }

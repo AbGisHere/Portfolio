@@ -39,14 +39,20 @@ export default function LampToggle({ recipe }) {
 
   useEffect(() => {
     const el = button.current;
+    // (0.5.10) Only what changed is written (the path re-parsed only when
+    // it's a new one).
+    const last = {};
+    const set = (k, v) => {
+      if (last[k] !== v) el.style[k] = last[k] = v;
+    };
     const apply = spot => {
-      el.hidden = !spot;
+      if (el.hidden !== !spot) el.hidden = !spot;
       if (!spot) return;
-      el.style.left = `${spot.x}px`;
-      el.style.top = `${spot.y}px`;
-      el.style.width = `${spot.w}px`;
-      el.style.height = `${spot.h}px`;
-      el.style.clipPath = `path('${spot.path}')`;
+      set('left', `${spot.x}px`);
+      set('top', `${spot.y}px`);
+      set('width', `${spot.w}px`);
+      set('height', `${spot.h}px`);
+      set('clipPath', `path('${spot.path}')`);
     };
     apply(getLampSpot());
     return subscribeLampSpot(apply);

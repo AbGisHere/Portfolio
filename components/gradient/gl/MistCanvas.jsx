@@ -1383,13 +1383,25 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     };
 
+    // (0.5.10) Loading in the order the visitor meets things: the mountains
+    // first (nothing else is prepared until the opening is up, or after 5 s
+    // whatever happens), then everything down to the desk, then the house,
+    // all in the background so nobody waits at any of them.
+    const mountedAt = performance.now();
+    const openingFirst = () => peaksShown || !peaksNow || peaksMode === false || performance.now() - mountedAt > 5000;
     const preparation = createPreparationQueue({
       schedule: next => typeof window.requestIdleCallback === 'function'
         ? window.requestIdleCallback(next, { timeout: 200 })
         : setTimeout(next, 16),
       cancel: id => (window.cancelIdleCallback ?? clearTimeout)(id),
       restore: cleanGL,
-      canRun: () => !stopped && !document.hidden,
+      canRun: () => {
+        if (stopped || document.hidden) return false;
+        if (openingFirst()) return true;
+        // (Asked again shortly: the queue waits on a no.)
+        setTimeout(() => preparation.resume(), 250);
+        return false;
+      },
       onReady: () => {
         dirty = true;
         kickRef.current();
@@ -1484,6 +1496,12 @@ export default function MistCanvas({ recipe, onFail }) {
         if (!birdAsync && !canStartCompile()) return 'pending';
         startBirdAsync();
         return birdProgram(false) === null ? 'pending' : 'done';
+      },
+      // (0.5.10) Then the house, in the background, with the desk's passes
+      // all ready: its build in the worker, its programs in idle slots.
+      () => {
+        ensureWarmHouse();
+        return 'done';
       },
     ]);
 
@@ -2153,7 +2171,9 @@ export default function MistCanvas({ recipe, onFail }) {
       // its own copy of what was sent), not a new one a uniform.
       fAt = 0;
       const f = (k, fn) => {
-        const a = (fScratch[fAt] ??= new Float32Array(MAX_RIDGES * k));
+        // (0.5.10) Reused only at the length this call needs.
+        let a = fScratch[fAt];
+        if (a?.length !== MAX_RIDGES * k) a = fScratch[fAt] = new Float32Array(MAX_RIDGES * k);
         fAt++;
         a.fill(0);
         for (let i = 0; i < n; i++) {
@@ -3512,6 +3532,14 @@ export default function MistCanvas({ recipe, onFail }) {
     const PEAKS_FLOW = 26;
     const PEAKS_BASE = 27;
     const PEAKS_MIST = 28;
+    // (0.5.10) Each peaks program's uniform locations looked up once, so the
+    // uniform cache sees the same location each frame.
+    const peaksLocs = new WeakMap();
+    function peaksU(p) {
+      let f = peaksLocs.get(p);
+      if (!f) peaksLocs.set(p, (f = uniformLookup(p)));
+      return f;
+    }
     function peaksPrograms() {
       if (peaksMode !== undefined) return peaksMode;
       const floats = !!gl.getExtension('EXT_color_buffer_float');
@@ -3541,13 +3569,13 @@ export default function MistCanvas({ recipe, onFail }) {
       return peaksMode;
     }
     function peaksFlow(p) {
-      const u = n => gl.getUniformLocation(p, n);
+      const u = peaksU(p);
       gl.uniform1i(u('uFlow'), PEAKS_FLOW);
       gl.uniform1f(u('uT'), skyT);
       gl.uniform1f(u('uLapseMix'), peaksLapse);
     }
     function peaksView(p, pk) {
-      const u = n => gl.getUniformLocation(p, n);
+      const u = peaksU(p);
       gl.uniform2f(u('uRes'), canvas.width, canvas.height);
       gl.uniform3fv(u('uCam'), pk.cam.pos);
       gl.uniform3fv(u('uLook'), pk.cam.look);
@@ -3599,7 +3627,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const y0 = Math.floor((b * box.N) / bands);
       gl.scissor(0, y0, box.N, Math.floor(((b + 1) * box.N) / bands) - y0);
       gl.useProgram(P.bake);
-      gl.uniform4f(gl.getUniformLocation(P.bake, 'uBox'), x0, z0, 0, size / box.N);
+      gl.uniform4f(peaksU(P.bake)('uBox'), x0, z0, 0, size / box.N);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.disable(gl.SCISSOR_TEST);
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3617,7 +3645,7 @@ export default function MistCanvas({ recipe, onFail }) {
       return peaksBake.ready;
     }
     function peaksLight(p, pk) {
-      const u = n => gl.getUniformLocation(p, n);
+      const u = peaksU(p);
       peaksView(p, pk);
       gl.uniform3fv(u('uSunDir'), pk.sun);
       gl.uniform3fv(u('uMoonDir'), pk.moon);
@@ -3745,9 +3773,10 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.bindFramebuffer(gl.FRAMEBUFFER, peaksGeo.coarse.fbo);
             gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
             gl.viewport(0, 0, half(W, 4), half(H, 4));
+            drop(gl.COLOR_ATTACHMENT0);
             gl.useProgram(P.coarse);
             peaksView(P.coarse, pk);
-            gl.uniform2f(gl.getUniformLocation(P.coarse, 'uFull'), W, H);
+            gl.uniform2f(peaksU(P.coarse)('uFull'), W, H);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
           } else if (k <= BANDS) {
             gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
@@ -3756,13 +3785,20 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.bindFramebuffer(gl.FRAMEBUFFER, peaksGeo.fbo);
             gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
             gl.viewport(0, 0, W, H);
-            const y0 = Math.floor(((k - 1) * H) / BANDS);
-            const y1 = Math.floor((k * H) / BANDS);
+            // (0.5.10) Once the opening is shown, a new view is drawn whole
+            // in one pass, not in bands.
+            const whole = all && k === 1;
+            const y0 = whole ? 0 : Math.floor(((k - 1) * H) / BANDS);
+            const y1 = whole ? H : Math.floor((k * H) / BANDS);
+            if (whole) {
+              drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
+              peaksGeo.step = BANDS;
+            }
             gl.enable(gl.SCISSOR_TEST);
             gl.scissor(0, y0, W, y1 - y0);
             gl.useProgram(P.geo);
             peaksView(P.geo, pk);
-            gl.uniform1i(gl.getUniformLocation(P.geo, 'uCoarse'), PEAKS_G2);
+            gl.uniform1i(peaksU(P.geo)('uCoarse'), PEAKS_G2);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             gl.disable(gl.SCISSOR_TEST);
           } else {
@@ -3775,13 +3811,18 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.bindFramebuffer(gl.FRAMEBUFFER, peaksGeo.hor.fbo);
             gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
             gl.viewport(0, 0, hw, hh);
-            const y0 = Math.floor((b * hh) / HBANDS);
-            const y1 = Math.floor(((b + 1) * hh) / HBANDS);
+            const whole = all && b === 0;
+            const y0 = whole ? 0 : Math.floor((b * hh) / HBANDS);
+            const y1 = whole ? hh : Math.floor(((b + 1) * hh) / HBANDS);
+            if (whole) {
+              drop(gl.COLOR_ATTACHMENT0);
+              peaksGeo.step = STEPS - 1;
+            }
             gl.enable(gl.SCISSOR_TEST);
             gl.scissor(0, y0, hw, y1 - y0);
             gl.useProgram(P.hor);
             peaksView(P.hor, pk);
-            gl.uniform1i(gl.getUniformLocation(P.hor, 'uG0'), PEAKS_G0);
+            gl.uniform1i(peaksU(P.hor)('uG0'), PEAKS_G0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             gl.disable(gl.SCISSOR_TEST);
           }
@@ -3890,7 +3931,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(P.mix);
       peaksView(P.mix, pk);
       peaksFlow(P.mix);
-      const um = n => gl.getUniformLocation(P.mix, n);
+      const um = peaksU(P.mix);
       gl.uniform1i(um('uBase'), PEAKS_BASE);
       gl.uniform1i(um('uMist'), PEAKS_MIST);
       gl.uniform1f(um('uA'), 1);
@@ -4312,6 +4353,15 @@ export default function MistCanvas({ recipe, onFail }) {
       water?.dispose();
       if (bloom) bloom.dispose();
       if (probes) probes.dispose();
+      // (0.5.10) The opening's targets, textures and programs.
+      if (peaksGeo) for (const t of [peaksGeo, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
+      if (peaksKept) dropTarget(peaksKept);
+      if (peaksBake) for (const x of [peaksBake.near, peaksBake.far]) { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.fbo); }
+      if (peaksMoon?.tex) gl.deleteTexture(peaksMoon.tex);
+      if (peaksMode) {
+        if (peaksMode.flowTex) gl.deleteTexture(peaksMode.flowTex);
+        for (const k of ['geo', 'lit', 'mix', 'direct', 'coarse', 'hor', 'bake', 'behind', 'all']) if (peaksMode[k]) gl.deleteProgram(peaksMode[k]);
+      }
       if (birdPass) {
         for (const k of birdPass.kinds) {
           gl.deleteVertexArray(k.vao);

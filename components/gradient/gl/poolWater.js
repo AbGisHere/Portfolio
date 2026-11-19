@@ -123,7 +123,9 @@ function makeCaustics(gl, pre) {
   const [gx, gz] = CAUSTICS.grid;
   const pts = new Float32Array((gx + 1) * (gz + 1) * 2);
   for (let j = 0, k = 0; j <= gz; j++) for (let i = 0; i <= gx; i++) { pts[k++] = i / gx; pts[k++] = j / gz; }
-  const idx = new Uint32Array(gx * gz * 6);
+  // (0.5.10) 16-bit indices where the grid fits them.
+  const short = (gx + 1) * (gz + 1) <= 65536;
+  const idx = new (short ? Uint16Array : Uint32Array)(gx * gz * 6);
   for (let j = 0, k = 0; j < gz; j++) {
     for (let i = 0; i < gx; i++) {
       const a = j * (gx + 1) + i, b = a + 1, c = a + gx + 2, d = a + gx + 1;
@@ -142,7 +144,7 @@ function makeCaustics(gl, pre) {
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   const u = name => gl.getUniformLocation(prog, name);
-  return { prog, tex, fbo, vao, buf, ibuf, count: idx.length, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
+  return { prog, tex, fbo, vao, buf, ibuf, count: idx.length, type: short ? gl.UNSIGNED_SHORT : gl.UNSIGNED_INT, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
 }
 
 /**
@@ -318,7 +320,7 @@ export function makeWater(gl, unit, pre = null) {
       CAUSTICS.ior.forEach((n, c) => {
         gl.colorMask(c === 0, c === 1, c === 2, false);
         gl.uniform1f(caus.u.ior, n);
-        gl.drawElements(gl.TRIANGLES, caus.count, gl.UNSIGNED_INT, 0);
+        gl.drawElements(gl.TRIANGLES, caus.count, caus.type, 0);
       });
       gl.colorMask(true, true, true, true);
       gl.disable(gl.BLEND);

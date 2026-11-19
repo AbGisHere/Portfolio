@@ -35,17 +35,36 @@ export default function SunToggle({ recipe }) {
 
   useEffect(() => {
     const el = button.current;
+    const box = el.parentElement;
+    // (0.5.10) The box's size kept from a ResizeObserver, so a frame never
+    // reads layout right after writing it; unchanged spots write nothing.
+    let size = box ? [box.clientWidth, box.clientHeight] : null;
+    let last = null;
     const apply = spot => {
       if (!spot) return;
+      if (last && last.x === spot.x && last.y === spot.y) return;
+      last = { x: spot.x, y: spot.y };
       el.style.setProperty('--spot-x', `${spot.x}px`);
       el.style.setProperty('--spot-y', `${spot.y}px`);
       // (0.3.11) Where the descent has taken the body off the frame, the
       // target leaves the page (and the tab order) with it.
-      const box = el.parentElement;
-      el.hidden = !!box && (spot.x < 0 || spot.y < 0 || spot.x > box.clientWidth || spot.y > box.clientHeight);
+      const hidden = !!size && (spot.x < 0 || spot.y < 0 || spot.x > size[0] || spot.y > size[1]);
+      if (el.hidden !== hidden) el.hidden = hidden;
     };
+    const ro = box && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          size = [box.clientWidth, box.clientHeight];
+          last = null;
+          apply(getSunSpot());
+        })
+      : null;
+    ro?.observe(box);
     apply(getSunSpot());
-    return subscribeSunSpot(apply);
+    const off = subscribeSunSpot(apply);
+    return () => {
+      off();
+      ro?.disconnect();
+    };
   }, []);
 
   useEffect(() => {

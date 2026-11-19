@@ -89,10 +89,24 @@ const smooth = t => t * t * (3 - 2 * t);
 const clamp01 = x => Math.min(1, Math.max(0, x));
 
 // A monotone cubic through keys (no overshoot; a repeated key holds).
+// (0.5.10) The tangents depend only on the keys: worked once per key set.
+const tangents = new WeakMap();
 function monotone(xs, ys, x) {
   const n = xs.length;
   if (x <= xs[0]) return ys[0];
   if (x >= xs[n - 1]) return ys[n - 1];
+  let m = tangents.get(ys);
+  if (!m) tangents.set(ys, (m = slopes(xs, ys)));
+  let i = 0;
+  while (x > xs[i + 1]) i++;
+  const h = xs[i + 1] - xs[i];
+  const t = (x - xs[i]) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1];
+}
+function slopes(xs, ys) {
+  const n = xs.length;
   const dk = [];
   for (let i = 0; i < n - 1; i++) dk.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
   const m = [0];
@@ -112,16 +126,11 @@ function monotone(xs, ys, x) {
       m[i + 1] = t * b * dk[i];
     }
   }
-  let i = 0;
-  while (x > xs[i + 1]) i++;
-  const h = xs[i + 1] - xs[i];
-  const t = (x - xs[i]) / h;
-  const t2 = t * t;
-  const t3 = t2 * t;
-  return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1];
+  return m;
 }
 const xs = DROP.map(k => k.at);
-const on = (c, x) => monotone(xs, DROP.map(k => k[c]), x);
+const keys = {};
+const on = (c, x) => monotone(xs, (keys[c] ??= DROP.map(k => k[c])), x);
 
 /** The opening's camera for the descent's `about` (0 at the top). */
 export function peaksCameraAt(about) {

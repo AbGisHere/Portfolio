@@ -8,7 +8,7 @@
  *        [--viewports 393x852@2,1440x900@2] [--themes day,night]
  *        [--scrolls 0,0.5,1]
  *        [--settle 2500] [--sun-tolerance 1] [--a layers --b gl] [--grain]
- *        [--query k=v&k=v] [--query-a k=v] [--query-b k=v] [--quiet]
+ *        [--base-b URL] [--query k=v&k=v] [--query-a k=v] [--query-b k=v] [--quiet]
  *
  * First it loads home and the 404 with each renderer and switches the sky
  * once. Every page load fails on a console error or warning, a page error or
@@ -35,6 +35,8 @@ import { overflowsX, watchConsole } from './lib/console.mjs';
 
 const args = parseArgs();
 const BASE = args.base ?? 'http://localhost:3001';
+// `--base-b URL`: side b from another server (a build against a build).
+const BASE_B = args['base-b'] ?? BASE;
 const THRESHOLD = Number(args.threshold ?? 2); // mean abs diff, 0–255 scale
 const P99 = Number(args.p99 ?? 24); // 99th-percentile per-pixel max-channel diff
 const SETTLE = Number(args.settle ?? 2500);
@@ -101,7 +103,7 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
   const errors = watchConsole(page);
 
   const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), scroll: String(scroll), ...QUERY[side] };
-  await page.goto(sceneUrl(BASE, renderer, query), { waitUntil: 'load' });
+  await page.goto(sceneUrl(side === 'b' ? BASE_B : BASE, renderer, query), { waitUntil: 'load' });
   await page.waitForSelector('[data-renderer]', { timeout: 15000 }).catch(() => {});
   await page.addStyleTag({ content: FREEZE_CSS });
   await sleep(SETTLE);

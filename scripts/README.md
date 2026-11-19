@@ -114,6 +114,7 @@ draws a diff between them.
 | `--sun-tolerance` | `1` | Max CSS px between the sun hit target's centre and the painted sun (at every `scroll`: the target follows the painted sun), and between the two renderers' painted suns (every case) |
 | `--settle` | `2500` | ms to wait after load before capturing |
 | `--grain` | off | Include grain in the comparison. It's off by default because grain is random noise that no two renderers can match pixel for pixel. Judge grain by eye in the report instead. |
+| `--base-b` | `--base` | Side b from another server: one build against another (0.5.10), e.g. `--a gl --b gl --base-b http://localhost:3172`. |
 | `--query`, `--query-a`, `--query-b` | none | Extra URL params (`k=v&k=v`) for both sides or one side. For example, `--a gl --b gl --query driftAt=0.25 --query-b crest=cpu` compares the GL crest paths mid-drift. `perf.mjs` takes `--query` too. |
 
 Before the cases it loads home and the 404 with each renderer at 1440×900,

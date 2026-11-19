@@ -216,9 +216,19 @@ it), and guards `devices`' probe result.
 fill on its faces, a touch more light, and clear of the haze the rest of
 the range sits back in.
 
-**Next: 0.5.10** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
-valley flight, then the cliffs' own detail, the phones, the fallback's
-stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.5.10** (2026-11-20) speeds the opening up with the same picture (no
+double march over the sky, per-frame light terms once a pixel, one pass
+per new view, cached uniform locations, freed targets), loads in the
+order things are met (mountains, then down to the desk, then the house,
+all in the background) and closes the 0.5.0 carry-overs (shell variants
+out, vertex tables kept, the scratch guard). M4 scroll 34 → 40 fps at
+1728×1117@2. The Moto G71's climb fell to ~3 fps in 0.5.x (~7 at 0.4.59).
+
+**Next: 0.5.11** (`ROADMAP.md`, `0.5.x`): the opening's terrain drawn as a
+mesh from the bake and a max-height pyramid to skip empty space (P5a,
+P5c), the Moto's climb, then 0.5.12 (one WebGL2 context, the fonts).
+After that: the owner's next steps on the valley flight, the cliffs' own
+detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
