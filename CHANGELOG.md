@@ -6,6 +6,16 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.2 — 2026-11-19
+
+The bodies and the ground read real.
+
+- **The sun and moon change with height,** through the air's own light (`reach`): the sun high is a white-hot core with a tight and a wide halo and faint rays; low it stays the brightest thing in the sky, keeps its own hue (orange, then red), shows its darker rim and flattens at the horizon. The moon rises amber, through honey to silver, flattened low, its halo following. Twilight after sunset darkens.
+- **The backlit faces:** light bounced off the sunlit mist and snowfields before them fills the shade facing the viewer (warm, strongest low down); shaded snow takes the sky's light paler. The sun rests a little higher (13°, was 9°), still in frame.
+- **The mist:** bright (its tops lit by the body and the sky, grey-blue only in its depths, glowing toward the body), heaped (banks up to four times the low parts, no level top), lower (its floor 1050 m, was 1480), its wind one way at three scales turned to unrelated angles (no visible repeat; a switch speeds it, never reverses part of it).
+- **The snow:** matte (no sheen; a faint glitter), its breakup and strata laid along steep faces rather than from above (no smears down cliffs), fine relief in the light (rough rock, soft snow); the normals central again.
+- **Open:** a trace of vertical grain on the steepest cliffs (the heightfield's own detail; 0.5.3), the phones, the fallback's stills, `npm run qa`, the 0.5.0 carry-overs.
+
 ## 0.5.1 — 2026-11-19
 
 The opening comes to life and gets light.

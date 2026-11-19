@@ -108,18 +108,31 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
 vec3 nrm(vec3 p, float t) {
   float e = max(.8, t * .0014);
   int oc = t < 5000. ? 10 : 7;
-  float h0 = terrain(p.xz, oc);
-  return normalize(vec3(h0 - terrain(p.xz + vec2(e, 0), oc), e, h0 - terrain(p.xz + vec2(0, e), oc)));
+  return normalize(vec3(terrain(p.xz - vec2(e, 0), oc) - terrain(p.xz + vec2(e, 0), oc), 2. * e,
+                        terrain(p.xz - vec2(0, e), oc) - terrain(p.xz + vec2(0, e), oc)));
 }
 
 // ---- the mist: soft banks pooled low, thinning upward, torn by noise
 float mistAt(vec3 p) {
   float hgt = (p.y - MIST_BASE) / MIST_RISE;
-  if (hgt > 3.5) return 0.;
+  if (hgt > 4.5) return 0.;
   vec2 q = p.xz / 1400.;
   float n = fbm(q + .5 * vec2(noise(q * 1.7 + 3.1), noise(q * 1.7 + 8.3)), 4);
-  float bank = smoothstep(.32, .78, n + .35 - hgt * .3);
-  return bank * exp(-max(hgt, 0.) * 1.3) * .0011;
+  // Its top heaps and dips: banks where the noise is high rise up to four
+  // times as far, the rest lies low, so there is no level surface.
+  float top = .6 + 3.6 * smoothstep(.35, .8, n);
+  float body = smoothstep(top, top - 1.1, hgt);
+  float bill = noise(p.xz / 260. + hgt * .7);
+  return body * (.55 + .45 * bill) * .0016;
+}
+
+// Where a pattern lies on the ground: from above on gentle slopes, along
+// the face (across it and up it) on steep ones, so nothing stretches down
+// a cliff.
+vec2 faceUV(vec3 p, vec3 n) {
+  vec2 tg = normalize(vec2(-n.z, n.x) + 1e-5);
+  float steep = smoothstep(.75, .35, n.y);
+  return mix(p.xz, vec2(dot(p.xz, tg), p.y * 1.15), steep);
 }
 
 struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec4 hor; };
@@ -158,10 +171,22 @@ G geo(vec3 rd, float tStart) {
     // Snow where the slope holds it, more of it higher up; the steepest
     // faces bare, in bands (the rock's strata).
     float line = 1500. + fbm(p.xz / 650., 3) * 450.;
-    float strata = noise(vec2(alt / 38. + fbm(p.xz / 260., 3) * 3., 1.7));
-    float holds = g.n.y + .1 * (fbm(p.xz / 45., 3) - .5) + .12 * (strata - .5);
+    // The breakup varies with place and height together, so no pattern
+    // smears into stripes down a steep face.
+    vec2 fu = faceUV(p, g.n);
+    float bn = noise(fu / 32.);
+    float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
+    float holds = g.n.y + .1 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
     g.snow = smoothstep(line - 120., line + 120., alt) * smoothstep(.36, .5, holds);
     g.snow = max(g.snow, smoothstep(.55, .68, holds) * smoothstep(1300., 1600., alt));
+    // Fine relief the heightfield is too coarse for, in the light only:
+    // rough on rock, soft under snow.
+    vec2 bq = fu / 9.;
+    float b0 = fbm(bq, 3), bx = fbm(bq + vec2(.3, 0.), 3), bz = fbm(bq + vec2(0., .3), 3);
+    vec2 bq2 = fu / 38.;
+    float c0 = noise(bq2), cx = noise(bq2 + vec2(.25, 0.)), cz = noise(bq2 + vec2(0., .25));
+    float rough = mix(1., .3, g.snow) * smoothstep(9000., 1500., g.t);
+    g.n = normalize(g.n - vec3((bx - b0) * 2.2 + (cx - c0) * 1.2, 0., (bz - b0) * 2.2 + (cz - c0) * 1.2) * rough);
     g.ao = clamp(.6 + (alt - terrain(p.xz, 3)) / 300., .3, 1.);
   }
   // The mist between the eye and what it sees: its depth (transmittance)
@@ -169,17 +194,17 @@ G geo(vec3 rd, float tStart) {
   float end = g.hit > 0. ? g.t : 60000.;
   float tau = 0., hw = 0., w = 0.;
   float t0 = 0., t1 = end;
-  float top = MIST_BASE + MIST_RISE * 3.5;
+  float top = MIST_BASE + MIST_RISE * 4.5;
   if (rd.y < 0.) t0 = max(0., (top - uCam.y) / rd.y); else if (uCam.y > top) t1 = 0.;
   if (t1 > t0) {
-    float dt = (t1 - t0) / 14.;
+    float dt = (t1 - t0) / 18.;
     float j = hash(gl_FragCoord.xy) * dt;
-    for (int i = 0; i < 14; i++) {
+    for (int i = 0; i < 18; i++) {
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);
       tau += dn;
-      hw += a * dn * clamp((q.y - MIST_BASE) / (MIST_RISE * 3.5), 0., 1.);
+      hw += a * dn * clamp((q.y - MIST_BASE) / (MIST_RISE * 4.5), 0., 1.);
       w += a * dn;
     }
   }
@@ -263,7 +288,7 @@ vec3 scatter(vec3 rd, vec3 L, float I) {
   // Twilight: after the body is down the sky stays lit from above the
   // horizon, overhead longest, blue, until it is some 10° under.
   float tw = smoothstep(-.18, -.02, L.y) * (1. - smoothstep(0., .08, L.y));
-  c += I * vec3(.0016, .0032, .0075) * tw * (.4 + .6 * smoothstep(0., .6, rd.y));
+  c += I * vec3(.0005, .0011, .0028) * tw * (.4 + .6 * smoothstep(0., .6, rd.y));
   return c;
 }
 float EXPO;
@@ -363,32 +388,50 @@ vec3 ground(G g, vec3 rd) {
   vec3 p = uCam + rd * g.t;
   vec3 n = g.n;
   float alt = p.y;
-  float strata = noise(vec2(alt / 38. + fbm(p.xz / 260., 3) * 3., 1.7));
+  vec2 fu = faceUV(p, n);
+  float bn = noise(fu / 32.);
+  float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
   vec3 rock = mix(vec3(.08, .07, .068), vec3(.24, .21, .19), strata);
-  rock = mix(rock, vec3(.12, .095, .075), noise(p.xz / 120.) * .6);
+  rock = mix(rock, vec3(.12, .095, .075), noise(fu / 120.) * .6);
   // Below the snow and the scree, pine: dark, blue-green.
   float pine = smoothstep(1650., 1250., alt + noise(p.xz / 90.) * 200.) * smoothstep(.55, .75, n.y);
   rock = mix(rock, vec3(.02, .045, .045), pine);
-  vec3 alb = mix(rock, vec3(.92, .93, .95), g.snow);
+  vec3 alb = mix(rock, vec3(.86, .87, .88), g.snow);
   float dif = max(dot(n, uLightDir), 0.);
   float sh = dif > 0. ? shadow(g) : 0.;
-  vec3 c = alb * (bodyLight() * dif * sh + skyLight() * (.5 + .5 * n.y) * g.ao);
-  // Snow's sheen toward the body.
-  vec3 hlf = normalize(uLightDir - rd);
-  c += g.snow * bodyLight() * sh * pow(max(dot(n, hlf), 0.), 40.) * .25;
+  // Shaded snow takes the sky's light paler than rock does (it scatters
+  // inside itself): a soft grey-blue, not a saturated blue.
+  vec3 sk = skyLight();
+  vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.3;
+  vec3 c = alb * (bodyLight() * dif * sh + mix(sk, skSnow, g.snow) * (.5 + .5 * n.y) * g.ao);
+  // Bounce: with the body ahead, the faces toward the viewer are backlit,
+  // but the sunlit mist and snowfields before them throw light back onto
+  // them (warm, strongest low down, near the mist), as in a real backlit
+  // range; only into the shade the body leaves.
+  vec2 back = normalize(-rd.xz);
+  float facing = max(dot(normalize(n.xz + 1e-4), back), 0.) * (1. - n.y * .5);
+  float lowness = smoothstep(MIST_BASE + MIST_RISE * 6., MIST_BASE, alt);
+  vec3 bounce = bodyLight() * mix(vec3(1.), vec3(1., .9, .78), .5) * (.16 + .22 * lowness);
+  c += alb * bounce * facing * (1. - dif * sh) * g.ao;
+  // Snow is matte: no sheen, only a faint glitter of crystals in the light.
+  c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
   return haze(c, rd, g.t);
 }
 
 // The mist, lit: its tops catch the body's light, its depths take the sky's
 // and the shade's; toward the body it glows (light through it).
 vec3 mistLit(G g, vec3 rd) {
-  float fwd = pow(max(dot(rd, uLightDir), 0.), 4.);
-  vec3 lo = skyLight() * .95;
-  // (Mist scatters every colour alike, so a low sun's deep red reaches it
-  // paler: pink and gold, not red.)
+  // Mist is bright: water droplets scatter nearly all the light that falls
+  // on them. Its tops take the body's light and the sky's, white; its
+  // depths only the sky's, a soft grey-blue; toward the body it glows
+  // (light through it).
+  float fwd = pow(max(dot(rd, uLightDir), 0.), 5.);
   vec3 bl = bodyLight();
-  vec3 hi = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .5) * .75 + skyLight() * .6;
-  return mix(lo, hi, smoothstep(0., .8, g.mh)) + bodyLight() * fwd * .35;
+  vec3 sun = mix(bl, vec3(dot(bl, vec3(.3, .5, .2))), .4);
+  vec3 sk = skyLight();
+  vec3 lo = sk * 1.35 + sun * .12;
+  vec3 hi = sun * .72 + sk * 1.05;
+  return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * fwd * .4;
 }
 
 // A body as the 2D scene draws it: a soft disc 10.4% of the frame's height
@@ -397,14 +440,32 @@ vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float z = dot(uSunDir, f);
   if (z <= 0.) return c;
   vec2 sp = vec2(dot(uSunDir, r), dot(uSunDir, u)) * lens / z;
-  // Flattened a little at the horizon (the air bends its lower edge up).
+  // Low, the air bends its lower edge up (flattened) and dims and reddens
+  // it (the light that reaches us); high, it burns white.
+  float alt = uSunDir.y;
   vec2 dv = uv - sp;
-  dv.y *= 1. + .25 * smoothstep(.06, 0., uSunDir.y);
+  dv.y *= 1. + .28 * smoothstep(.07, 0., alt);
   float R = .104, d = length(dv) / R, px = 2.5 / uRes.y / R;
-  float up = smoothstep(-.12, -.02, uSunDir.y);
-  vec3 sunC = toScreen(reach(uSunDir, SUN_I) * .5) * 1.05 + vec3(.04, .03, .02);
-  c = mix(c, sunC, up * (.42 * exp(-max(d - 1., 0.) * 1.6) + .14 * exp(-max(d - 1., 0.) * .3)));
-  return mix(c, sunC * (.94 + .06 * sqrt(max(1. - d * d, 0.))), up * smoothstep(1. + px, 1. - px, d));
+  float up = smoothstep(-.12, -.02, alt);
+  vec3 L = reach(uSunDir, SUN_I);
+  float high = smoothstep(.005, .09, alt);
+  // The disc: a white-hot core once it's up (it outshines its own colour),
+  // its rim darker (limb darkening) and its colour plain while it's low.
+  float mu = sqrt(max(1. - d * d, 0.));
+  float limb = mix(.55 + .45 * pow(mu, .6), 1., high * .8);
+  // (Low, it's still the brightest thing in the sky: deep orange, its own
+  // colour, not lost in the glow.)
+  vec3 hue = L / max(max(L.r, L.g), 1e-4);
+  vec3 disc = mix(min(hue * 1.08, vec3(1.)), vec3(1.), high * high) * limb;
+  // Its glow: a tight bright halo and a wide soft one, both its colour, and
+  // faint rays (the eye's and a lens's star) once it's bright.
+  float o = max(d - 1., 0.);
+  vec3 glowC = toScreen(L * mix(.6, .35, high));
+  float halo = .5 * exp(-o * 2.2) + .2 * exp(-o * .45) + .06 * exp(-o * .1);
+  float ang = atan(dv.y, dv.x);
+  float rays = (pow(abs(cos(ang * 3. + .3)), 60.) + .6 * pow(abs(cos(ang * 4. - .7)), 90.)) * exp(-o * .55) * high * .35;
+  c = mix(c, glowC, clamp(up * (halo + rays) * mix(.55, 1., high), 0., 1.));
+  return mix(c, disc, up * smoothstep(1. + px, 1. - px, d));
 }
 // The moon as it is: its near side's seas where they are (Imbrium, Serenity,
 // Tranquillity, Crisis, Fertility, Nectar, Clouds, Moisture, the Ocean of
@@ -422,7 +483,9 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   if (z <= 0.) return c;
   vec2 sp = vec2(dot(uMoonDir, r), dot(uMoonDir, u)) * lens / z;
   float R = .104;
+  float malt = uMoonDir.y;
   vec2 q = (uv - sp) / R;
+  q.y *= 1. + .28 * smoothstep(.07, 0., malt);
   float d = length(q), px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, uMoonDir.y);
   float mare = 0.;
@@ -463,8 +526,14 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   vec3 sn = vec3(q, sqrt(max(1. - d * d, 0.)));
   float lit = smoothstep(-.18, .12, dot(sn, normalize(vec3(.85, .05, .52))));
   col *= mix(.035, 1., lit) * 1.12;
+  // Low, through more air: amber, then honey, dimmer; high, silver.
+  vec3 tr = exp(-tau0() * airmass(max(malt, 0.) + .004));
+  vec3 tint = tr / max(max(tr.r, tr.g), 1e-3);
+  float high = smoothstep(.02, .3, malt);
+  col *= mix(tint * mix(.55, 1., smoothstep(-.02, .08, malt)), vec3(1.), high);
   float out1 = max(d - 1., 0.);
-  c += vec3(.62, .7, .9) * up * (.07 * exp(-out1 * 1.3) + .03 * exp(-out1 * .22)) * step(1., d);
+  vec3 haloC = mix(vec3(.85, .6, .35), vec3(.62, .7, .9), high);
+  c += haloC * up * (.07 * exp(-out1 * 1.3) + .03 * exp(-out1 * .22)) * step(1., d);
   return mix(c, col, up * smoothstep(1. + px, 1. - px, d));
 }
 
@@ -571,12 +640,20 @@ float mistFlow(vec3 rd) {
   float mid = MIST_BASE + MIST_RISE * 1.2;
   if (rd.y >= -.002) return 1.;
   vec2 p = (uCam + rd * ((mid - uCam.y) / rd.y)).xz;
-  float clock = uT * .07 + uLapseMix * 2.2;
-  vec2 q = p / 1700. + vec2(clock, clock * .35);
-  vec2 warp = texture(uFlow, q * .6 + clock * .2).rg - .5;
-  float a = texture(uFlow, q + warp * .4).r;
-  float b = texture(uFlow, p / 650. + vec2(-clock * 1.7, clock * .9)).g;
-  return mix(.22, 2.3, smoothstep(.28, .72, a * .7 + b * .3));
+  // One wind (all of it drifts the same way, the larger forms slower), read
+  // at three scales turned to unrelated angles, so the texture's repeat
+  // never lines up into a pattern.
+  float clock = uT * .05 + uLapseMix * 1.8;
+  vec2 wind = normalize(vec2(1., .32)) * clock;
+  vec2 q1 = mat2(.82, .57, -.57, .82) * (p / 5600.) + wind * .35;
+  vec2 q2 = mat2(.36, -.93, .93, .36) * (p / 2300.) + wind * .7;
+  vec2 q3 = mat2(-.6, .8, -.8, -.6) * (p / 900.) + wind * 1.2;
+  vec2 warp = texture(uFlow, q1 * .7 + .13).rg - .5;
+  float a = texture(uFlow, q1 + warp * .35).r;
+  float b = texture(uFlow, q2 + warp * .25).g;
+  float c = texture(uFlow, q3).r;
+  float v = a * .5 + b * .33 + c * .17;
+  return mix(.25, 2.2, smoothstep(.3, .72, v));
 }
 vec3 compose(vec3 base, vec3 mist, float T0, vec3 rd) {
   float T = T0 < .9999 ? pow(T0, mistFlow(rd)) : T0;

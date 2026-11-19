@@ -17,7 +17,7 @@ export const PEAKS = [
   [1900, 3100, 1000, 1000],
 ];
 // The sea of clouds: its floor and the most its billows rise.
-export const CLOUD = { base: 1480, rise: 300 };
+export const CLOUD = { base: 1050, rise: 280 };
 
 // Where the camera rests at the top, and where the drop into the cloud
 // ends (the 2D scene takes over under it until 0.5.3 builds the rest).
@@ -46,7 +46,7 @@ export function peaksCameraAt(about) {
 // share of the frame's half-width, so the body, which is the day/night
 // button, stays in frame on any aspect; 0 is straight ahead, + left). The
 // sun rests low on the right, the moon higher on the left.
-export const BODIES = { sun: { el: 9, az: -0.62 }, moon: { el: 13, az: 0.58 } };
+export const BODIES = { sun: { el: 13, az: -0.62 }, moon: { el: 13, az: 0.58 } };
 // How far under the horizon a body must be once it's out of its scene.
 export const BELOW = -16;
 // The latitude the sky turns at: its pole is this high behind the camera

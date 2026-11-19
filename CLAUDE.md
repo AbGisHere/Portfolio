@@ -167,8 +167,15 @@ the shape a slice a frame (coarse distances, the full pass in bands, the
 horizons at half size), the mountains fading in. M4 @2: rest and switch
 8.3 ms; the shape ~150 ms, spread over frames.
 
-**Next: 0.5.2** (`ROADMAP.md`, `0.5.x`): the phones, the fallback's stills
-and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.5.2** (2026-11-19) makes the bodies and the ground read real: the sun
+and moon change with height (white-hot, haloed and rayed high; low,
+flattened, limb-darkened, orange to red, the moon amber to silver), the
+backlit faces get the bounce off the lit mist and snow, the mist is bright
+and heaped (no level top, lower), its wind one way at three scales, and the
+snow matte, its patterns laid along steep faces.
+
+**Next: 0.5.3** (`ROADMAP.md`, `0.5.x`): the cliffs' own detail, the phones,
+the fallback's stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
