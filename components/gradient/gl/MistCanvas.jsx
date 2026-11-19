@@ -44,7 +44,7 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, LIGHTMAP_BOUNDS, houseLightData, houseVariant } from './houseShader';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_DEPTH_VERTEX, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, LIGHTMAP_BOUNDS, houseLightData, houseVariant } from './houseShader';
 import { CURTAIN_STRIDE, houseRanges, leafChecksum, runVariant, runsChecksum } from './houseLights';
 import { buildHouse as buildHouseMeshes } from './houseBuild';
 import { HOUSE_PVS } from './housePvs';
@@ -373,7 +373,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const startHouseAsync = () => (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, houseFragment) : null);
     const startShadowAsync = () => (shadowAsync ??= !noHouse ? startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT) : null);
     const startGlassAsync = () => (glassAsync ??= !noHouse && !noGlass ? startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null);
-    const startDepthAsync = () => (depthAsync ??= !noHouse && !noAO && gl.getExtension('EXT_color_buffer_float') ? startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT) : null);
+    const startDepthAsync = () => (depthAsync ??= !noHouse && !noAO && gl.getExtension('EXT_color_buffer_float') ? startProgram('house-depth', HOUSE_DEPTH_VERTEX, HOUSE_DEPTH_FRAGMENT) : null);
 
     const onHouseRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/house');
     const isDirectHouse = typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'));

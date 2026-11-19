@@ -6,6 +6,13 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.63 — 2026-11-19
+
+- The house's depth pass (AO) has its own vertex shader (`HOUSE_DEPTH_VERTEX`): only the position and part its fragment reads, so the normal and ST tables aren't fetched there.
+- The bloom's add pass reads the night's frame on texture unit 20, used by nothing else: no `getParameter` or rebind each night frame.
+- 0.4.61's entry corrected: readiness doesn't wait on the variants.
+- Same picture: house parity subset 24/24 against 0.4.62.
+
 ## 0.4.62 — 2026-11-19
 
 - The lamps' lightmap (0.4.45) now rasterises the lawn from its own mesh, as intended: its triangle count was passed as `lawnChunk[1]` of an object (undefined), so only the analytical fill ever ran. The stored lightmap's key moves to `lightmap-2`, so bakes kept before are dropped.
@@ -13,7 +20,7 @@ budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
 ## 0.4.61 — 2026-11-19
 
-- The house's preparation, faster with the same picture: the house's own program first and the lightmap's beside it as the queue has room (none when it's kept, 0.4.59); the shader variants compiled once the first frame's programs are linked, each slotted in as it links (its vertex tables' samplers set then); the mirrors' probe faces drawn back to back (a queue result `'again'`, no idle wait between faces); readiness waits only on the mirrors the contact path can see (all four are, today) and on every variant.
+- The house's preparation, faster with the same picture: the house's own program first and the lightmap's beside it as the queue has room (none when it's kept, 0.4.59); the shader variants compiled once the first frame's programs are linked, each slotted in as it links (its vertex tables' samplers set then); the mirrors' probe faces drawn back to back (a queue result `'again'`, no idle wait between faces); readiness waits only on the mirrors the contact path can see (all four are, today), not on the variants (the house's own shader draws until each links).
 - Fixes a race the faster probes exposed, which main had in milder form: a probe face could be drawn before the light's shadow map, so a mirror showed its room unshadowed; `probeStep` now draws the map for the light as it is first.
 - M4, open to the house ready (median of 3, noisy): cached ~9.5 → 3.3 s, uncached ~9.2 → 6.1 s; GPU preparation ~5 → 2.2 s. Phones to be measured.
 - Same picture: house parity 24/24 twice against 0.4.60.

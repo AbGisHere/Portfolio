@@ -137,6 +137,39 @@ void main() {
 }
 `;
 
+/** (0.4.63) HOUSE_VERTEX for the depth pass: only the position and part
+ * its fragment reads, so the normal and ST tables aren't fetched there. */
+export const HOUSE_DEPTH_VERTEX = `#version 300 es
+precision highp float;
+
+layout(location = 0) in vec3 aPos;
+${HOUSE_VERTEX_GLSL}
+layout(location = 4) in vec3 aPos2;
+
+${LEAF_GLSL}
+${CAMERA_GLSL}
+uniform vec2 uMirror;
+uniform float uMorph;
+out vec3 vWorld;
+flat out int vPart;
+
+${PROJECT_GLSL}
+void main() {
+  vec3 pos0 = aPos;
+  float part;
+  if (uLeaf > 0.5) {
+    pos0 = leafPos(leafFace());
+    part = aLeafPart;
+  } else part = hvPart();
+  vec3 pos = mix(pos0, aPos2, uMorph);
+  vWorld = pos;
+  vPart = int(floor(part + 0.001));
+  vec3 at = pos;
+  if (uMirror.x > 0.5) at.y = 2.0 * uMirror.y - at.y;
+  gl_Position = project(at);
+}
+`;
+
 const P = HOUSE_PART;
 const G = PLAN.ground;
 const U = PLAN.upper;

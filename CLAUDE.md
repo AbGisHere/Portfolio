@@ -131,7 +131,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.62** (2026-11-19) runs the lightmap's lawn mesh pass (its count was undefined since 0.4.45).
 
-**Next: 0.4.63**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.63** (2026-11-19) skips the vertex tables' normal and ST in the depth pass and puts the bloom's frame on its own unit (20).
+
+**Next: 0.4.64**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

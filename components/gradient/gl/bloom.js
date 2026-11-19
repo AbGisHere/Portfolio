@@ -94,6 +94,9 @@ function program(gl, fs) {
  * framebuffer. Leaves the default framebuffer bound, blending off, the
  * viewport the frame's; the caller resets its program.
  */
+/** (0.4.63) The night's frame for the add pass: no other pass uses unit 20. */
+const BASE_UNIT = 20;
+
 export function makeBloom(gl, unit) {
   let progs;
   try {
@@ -158,24 +161,18 @@ export function makeBloom(gl, unit) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE);
       }
-      // (The frame on the next unit for this pass only: its texture there
-      // put back after, as other passes keep theirs bound.)
-      let was = null;
+      // (0.4.63) The frame on a unit of its own (BASE_UNIT, used by
+      // nothing else), so nothing there needs saving or putting back.
       run(progs.add, null, targets[0].tex, p => {
         gl.uniform1f(u(p, 'uAmount'), amount);
         gl.uniform1f(u(p, 'uBaseOn'), base ? 1 : 0);
-        gl.uniform1i(u(p, 'uBase'), base ? unit + 1 : unit);
+        gl.uniform1i(u(p, 'uBase'), base ? BASE_UNIT : unit);
         if (base) {
-          gl.activeTexture(gl.TEXTURE0 + unit + 1);
-          was = gl.getParameter(gl.TEXTURE_BINDING_2D);
+          gl.activeTexture(gl.TEXTURE0 + BASE_UNIT);
           gl.bindTexture(gl.TEXTURE_2D, base);
           gl.activeTexture(gl.TEXTURE0 + unit);
         }
       });
-      if (base) {
-        gl.activeTexture(gl.TEXTURE0 + unit + 1);
-        gl.bindTexture(gl.TEXTURE_2D, was);
-      }
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
       gl.activeTexture(gl.TEXTURE0);
