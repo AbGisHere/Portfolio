@@ -26,6 +26,7 @@ import { WORLD_M, YAW_OFF } from '../deskCamera';
 import { LIFE, MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 import { MOUND, MOUND_GLSL } from './houseShape';
+import { RIM_GLSL, SHELF } from '../peaks';
 
 const f = v => v.toFixed(6);
 
@@ -107,6 +108,7 @@ float footQ(float vy) {
 }
 
 ${MOUND_GLSL}
+${RIM_GLSL}
 float hitDepth;
 // This pixel's ground point (metres) and its distance, or false for the
 // sky, the ridges and the desk.
@@ -165,6 +167,9 @@ bool groundHit(out vec2 gm, out float dist) {
 #endif
   dist = t * length(dir) * ${f(WORLD_M)};
   if (!(dir.y < 0.0 && (uPaintNear.y > 0.0 || v.y > uFront || face < 0.5))) return false;
+  // (0.5.6) Under the 3D mountains the meadow is the plateau: nothing of it
+  // past the rim (the terrain's own ground and cliffs show there).
+  if (uPaintNear.y > 0.0 && rimDm(gm) > ${f(SHELF.r * 1.02)}) return false;
   return true;
 }
 
@@ -262,7 +267,7 @@ void main() {
   float plain = uPaintNear.y > 0.0 ? 1.0 : 1.0 - smoothstep(0.3, 0.8, footQ(v.y));
   vec3 far = mix(vec3(1.0), k, uMeadowA * plain * (1.0 - smoothstep(400.0, 3000.0, dist)));
   vec3 m = mix(near, far, smoothstep(uHazeAt.x, uHazeAt.y, dist));
-  if (uPaintNear.y > 0.0) m = mix(m, vec3(1.0), smoothstep(uPaintNear.x, uPaintNear.y, dist));
+  if (uPaintNear.y > 0.0) m = mix(m, vec3(1.0), max(smoothstep(uPaintNear.x, uPaintNear.y, dist), smoothstep(${f(SHELF.r * 0.97)}, ${f(SHELF.r * 1.02)}, rimDm(gm))));
   outColor = vec4(clamp(m * 0.5, 0.0, 1.0), 1.0);
 }
 `;

@@ -6,6 +6,38 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.6 — 2026-11-20
+
+The plateau as a real mountaintop (`peaks.js`, `gl/peaksShader.js`,
+`gl/meadowShader.js`, `gl/grassShader.js`, `gl/treeShader.js`).
+
+- **One rim for everything.** `RIM_GLSL` (its lobes mirrored across
+  the desk's line, since the meadow's passes run in a frame mirrored in x)
+  is the plateau's edge for the terrain, the meadow's paint, and the grass.
+  The flat 2D meadow no longer runs past it over the 3D terrain (the
+  "invisible layer").
+- **Smaller, to the trees.** The edge stands ~10 m past the farthest trees:
+  90 m in front, 115 to the sides, 162 behind (`SHELF`). The woodland belt
+  behind the house is gone; its trees are scattered in clumps over the
+  plateau.
+- **A real edge.** Gullies and crags just past the rim, rock breaking
+  through the grass in outcrops, no snow on it, no knolls above the
+  rim's line, a moat round the mountain so nothing near stands higher.
+- **No white line.** Rays skimming the plateau from eye height spent their
+  steps over the grass and missed the mountains (a row of sky). They now
+  start at the rim.
+- **Grass to the edge.** Seven rings, reach 104 m (were six, 56 m).
+- **One mist.** Its top and density no longer change with the camera's
+  height, so the flight sees the same banks throughout.
+- **Snow in the trough** (the line 240 m lower there), five closer peaks
+  behind the house, ground under the mist fading in drifts, and the sun
+  and moon sized by angle (they shrank against the scene as the lens
+  widened).
+
+Open: the grass ring's cost (up to ~33k more instances) and the phones,
+the night view, `npm run qa`, the desk camera's perspective as it pitches
+to the laptop (the owner's question, 2026-11-20).
+
 ## 0.5.5 — 2026-11-20
 
 Mountains all round (`peaks.js`, `gl/peaksShader.js`).

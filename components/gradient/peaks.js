@@ -20,6 +20,12 @@ export const PEAKS = [
   [1700, -3900, 1350, 1200],
   [-3600, -2200, 1150, 1100],
   [4000, -2000, 1100, 1000],
+  // (0.5.6) Closer behind the house: a near ring past its garden's drop.
+  [-150, -2250, 1250, 950],
+  [1150, -2450, 1150, 900],
+  [-1350, -2050, 1050, 850],
+  [2250, -1950, 1000, 850],
+  [500, -3000, 1400, 1100],
 ];
 // (0.5.3) The alpine valley between the sunlit meadow plateau and the hero
 // range: aligned with the hero peak (x = 300) so the pull-back stays centred,
@@ -32,9 +38,32 @@ export const valleyX = z => VALLEY.x + VALLEY.amp * Math.sin(z / VALLEY.wave);
 // its base), so the entire snowy Matterhorn peak (~7.7° elevation) towers
 // close and dramatic right behind the meadow, trees and laptop lid.
 const DESK_Z = -1200;
-// r: the plateau's reach behind and to the sides; lip: how far its edge
-// stands in front of the desk, toward the peaks (the drop starts there).
-export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 360, lip: 120 };
+// The plateau's edge, ~10 m past the farthest trees each way (treeShader.js):
+// r to the sides (the woodland belt's ends), lip in front of the desk
+// (the copses, out to ~78 m), back behind the house (the belt, ~150 m).
+export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 115, lip: 90, back: 162 };
+// (0.5.6) The plateau's rim as one GLSL function for every pass that draws
+// on it (the terrain, the meadow's paint, the grass, the flowers): its
+// distance in units of r (the rim is at r), lobed by its own noise, from a
+// world point (x, z). Self-contained (rim-prefixed names).
+const g = v => v.toFixed(6);
+export const RIM_GLSL = `
+float rimHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float rimNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p), u = f * f * (3. - 2. * f);
+  return mix(mix(rimHash(i), rimHash(i + vec2(1, 0)), u.x), mix(rimHash(i + vec2(0, 1)), rimHash(i + vec2(1, 1)), u.x), u.y);
+}
+// (Its lobes mirror across the desk's line, x: the meadow's passes run
+// in a frame mirrored in x to the terrain's, and must meet the same rim.)
+float rimD(vec2 p) {
+  vec2 d = p - vec2(${g(SHELF.x)}, ${g(SHELF.z)});
+  vec2 q = vec2(abs(d.x), d.y);
+  d.y *= d.y > 0. ? ${g(SHELF.r / SHELF.lip)} : ${g(SHELF.r / SHELF.back)};
+  return length(d) * (1. + .12 * (rimNoise(q / 160. + 4.1) - .5) + .05 * (rimNoise(q / 55. + 1.3) - .5));
+}
+// From the meadow's metres (the desk at 0; the passes' own frame).
+float rimDm(vec2 m) { return rimD(m + vec2(${g(SHELF.x)}, ${g(SHELF.z)})); }
+`;
 // (0.5.3) The ground baked into textures once (gl/peaksShader.js): a near
 // box covering BOTH the desk plateau, the entire valley and the hero massif
 // in one seamless high-res map (7 m/texel at 2048²), plus a far horizon box.

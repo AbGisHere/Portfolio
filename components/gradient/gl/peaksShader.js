@@ -18,7 +18,7 @@
 // from below near the horizon. The sky and the haze come from the scene's
 // own palette (the recipe's six stops), so it stays one world with the 2D
 // ridges and the desk.
-import { BAKE, CLOUD, PEAKS, SHELF, VALLEY } from '../peaks';
+import { BAKE, CLOUD, PEAKS, RIM_GLSL, SHELF, VALLEY } from '../peaks';
 
 const f = x => (Number.isInteger(x) ? `${x}.` : `${x}`);
 const peaks = PEAKS.map(([x, z, ht, r]) => `vec4(${f(x)}, ${f(z)}, ${f(ht)}, ${f(r)})`).join(', ');
@@ -95,25 +95,34 @@ float peak(vec2 p, vec4 P, float sc, float det) {
 // cleanly past the flat meadow plateau straight toward the 3D mountains
 // (so 1 m eye clearance never stalls the march over the shelf, while rays
 // near horizontal still catch the valley and shelf cleanly with no gap).
+float rimD(vec2 p);
 float nearFor(vec3 rd) {
   if (uNear <= 0.) return 0.;
-  return rd.y > .0015 ? ${f(SHELF.r * 0.88)} : 0.;
+  if (rd.y > .0015) return ${f(SHELF.r * 0.88)};
+  // (0.5.6) A ray skimming the plateau from eye height would spend every
+  // step crawling over the grass and miss the mountains (a white line of
+  // sky at the horizon): start it where it leaves the plateau's rim.
+  if (uCam.y < ${f(SHELF.y + 85)} && rd.y > -.06) {
+    float t = 0.;
+    for (int i = 0; i < 40; i++) {
+      if (rimD((uCam + rd * (t + 8.)).xz) > ${f(SHELF.r * 0.96)}) break;
+      t += 8.;
+    }
+    return t;
+  }
+  return 0.;
 }
 // (0.5.3) The valley (../peaks.js VALLEY): how far a place is from its
 // centre, how much of it lies inside its length, and its floor.
+${RIM_GLSL}
 float valleyDist(vec2 p) { return abs(p.x - ${f(VALLEY.x)} - ${f(VALLEY.amp)} * sin(p.y / ${f(VALLEY.wave)})); }
 float valleyLen(vec2 p) {
   return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y)
     * smoothstep(${f(SHELF.z - 1500)}, ${f(SHELF.z - 650)}, p.y);
 }
 // How much of a place is the sunlit meadow overlook around the desk.
-float shelfD(vec2 p) {
-  vec2 d = p - vec2(${f(SHELF.x)}, ${f(SHELF.z)});
-  d.y *= d.y > 0. ? ${f(SHELF.r / SHELF.lip)} : 1.;
-  // A lobed, uneven rim, never a drawn ellipse.
-  return length(d) * (1. + .16 * (noise(p / 210. + 4.1) - .5) + .07 * (noise(p / 70. + 1.3) - .5));
-}
-float shelfMask(vec2 p) { return smoothstep(${f(SHELF.r + 120)}, ${f(SHELF.r)}, shelfD(p)); }
+float shelfD(vec2 p) { return rimD(p); }
+float shelfMask(vec2 p) { return smoothstep(${f(SHELF.r + 45)}, ${f(SHELF.r)}, shelfD(p)); }
 // How much of a place is the valley's floor (never encroaching on the hero massif).
 float flankAt(vec2 p) { return valleyLen(p) * smoothstep(${f(VALLEY.half + VALLEY.wall * 0.45)}, ${f(VALLEY.half)}, valleyDist(p)); }
 float terrain(vec2 p, int oct) {
@@ -140,11 +149,20 @@ float terrain(vec2 p, int oct) {
   // ~7° at first) and steepens into cliffs down to the trough.
   float sx = max(shelfD(p) - ${f(SHELF.r)}, 0.);
   float spur = ${f(SHELF.y)} - (.12 * sx + .0009 * sx * sx)
-    - 160. * det * smoothstep(80., 700., sx) * ridged(p / 420. + 7.7, min(oct, 7))
-    - 18. * smoothstep(0., 120., sx) * fbm(p / 160. + 2.3, min(oct, 4));
+    - 160. * det * smoothstep(25., 500., sx) * ridged(p / 420. + 7.7, min(oct, 7))
+    - 55. * smoothstep(0., 90., sx) * ridged(p / 130. + 3.1, min(oct, 6))
+    - 22. * smoothstep(0., 60., sx) * fbm(p / 60. + 2.3, min(oct, 5));
   // Hummocks and knolls on the shoulder, standing above the rim's line.
   spur += smoothstep(0., 60., sx) * (1. - smoothstep(250., 600., sx))
     * (22. * smoothstep(.45, .8, noise(p / 95. + 9.1)) + 7. * noise(p / 28. + 3.3));
+  // (0.5.6) Never above the rim's line: from the plateau the edge is an
+  // edge, not a ring of hills.
+  spur = min(spur, ${f(SHELF.y)} - .06 * sx);
+  // (0.5.6) A moat round our mountain: nothing near it stands as high as
+  // the plateau (it never sits in a bowl); past it the range rises again,
+  // close, behind the house and to the sides.
+  float cap = ${f(SHELF.y)} - 520. * smoothstep(0., 380., sx) + 2600. * smoothstep(520., 1500., sx);
+  h = min(h, cap + 60. * det * (noise(p / 230. + 2.9) - .5));
   h = max(h, spur);
   h = mix(h, ${f(SHELF.y)}, shelfMask(p));
   return h;
@@ -248,14 +266,13 @@ float mistAt(vec3 p) {
   float hgt = (p.y - MIST_BASE) / MIST_RISE;
   if (hgt > 4.5) return 0.;
   float n = mistN(p.xz);
-  // Its top heaps and dips: high billows from above, settling lower in the
-  // valley trough when viewed from the meadow overlook so the close peaks
-  // stand tall and clear above a luminous ribbon of mist at their feet.
-  float lowView = smoothstep(2550., ${f(SHELF.y + 40)}, uCam.y);
-  float top = mix(.6 + 3.6 * smoothstep(.35, .8, n), .45 + 1.85 * smoothstep(.35, .8, n), lowView);
+  // Its top heaps and dips. (0.5.6) One mist whatever the camera's height:
+  // it once sank and thinned as the camera came down, so the flight saw
+  // a different mist at every point of the scroll.
+  float top = .55 + 2.7 * smoothstep(.35, .8, n);
   float body = smoothstep(top, top - 1.1, hgt);
   body *= smoothstep(-.32, .12, hgt);
-  body *= 1. - .32 * lowView;
+  body *= .86;
   // Keep the meadow overlook around the desk clear of low cloud banks.
   body *= 1. - shelfMask(p.xz);
   float bill = noise(p.xz / 260. + hgt * .7);
@@ -306,7 +323,7 @@ G geo(vec3 rd, float tStart) {
   g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec4(-1); g.T = 1.; g.mh = 0.;
   // (0.5.3) Fast analytic hit on the level sunlit meadow plateau around the
   // desk: zero raymarch steps and razor-clean flat ground (no noise lumps).
-  if (rd.y < -.0005 && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
+  if (rd.y < 0. && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
     float tp = (${f(SHELF.y)} - uCam.y) / rd.y;
     vec3 pp = uCam + rd * tp;
     if (tp > 0. && shelfD(pp.xz) < ${f(SHELF.r * 0.97)}) {
@@ -328,17 +345,17 @@ G geo(vec3 rd, float tStart) {
     float shf = shelfMask(p.xz);
     // Snow where the slope holds it, draping naturally down the hero peak
     // and flanking massifs (never pushed off the hero peak by the valley).
-    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf - 380. * valleyLen(p.xz);
+    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf - 620. * valleyLen(p.xz);
     vec2 fu = faceUV(p, g.n);
     float bn = noise(fu / 32.);
     float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
     float holds = g.n.y + .11 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
     g.snow = smoothstep(line - 140., line + 140., alt) * smoothstep(.33, .48, holds);
     g.snow = max(g.snow, smoothstep(.52, .66, holds) * smoothstep(1380., 1680., alt - 600. * shf));
-    g.snow *= (1. - shf) * smoothstep(${f(SHELF.r * 1.8)}, ${f(SHELF.r * 4.5)}, shelfD(p.xz));
+    g.snow *= (1. - shf) * smoothstep(${f(SHELF.r * 3.5)}, ${f(SHELF.r * 8.)}, shelfD(p.xz));
     // Fine crag relief ONLY on rocky/snowy mountain faces — never on the
     // meadow overlook or flat grass, so the meadow stays crisp and smooth.
-    float flatMeadow = max(shf, smoothstep(${f(SHELF.y + 80)}, ${f(SHELF.y - 400)}, alt) * smoothstep(.8, .92, g.n.y));
+    float flatMeadow = shf;
     float rough = (1. - flatMeadow) * mix(1., .25, g.snow) * smoothstep(18000., 2200., g.t);
     if (rough > .01) {
       vec2 bq = fu / 14.;
@@ -601,7 +618,7 @@ vec3 ground(G g, vec3 rd) {
   // Sunlit alpine pasture on low valley floors & plateau shoulders.
   float fl = flankAt(p.xz);
   float lawn = smoothstep(${f(SHELF.y - 520)}, ${f(SHELF.y - 260)}, alt + noise(p.xz / 140.) * 120.)
-    * smoothstep(${f(SHELF.r * 4)}, ${f(SHELF.r * 1.6)}, shelfD(p.xz)) * smoothstep(.62, .85, n.y);
+    * smoothstep(${f(SHELF.r * 2.2)}, ${f(SHELF.r * 1.4)}, shelfD(p.xz)) * smoothstep(.62, .85, n.y);
   lawn = max(lawn, shf);
   vec3 grass = mix(vec3(.11, .19, .065), vec3(.16, .25, .08), noise(p.xz / 120.) * .6 + noise(p.xz / 420.) * .4);
   rock = mix(rock, grass, lawn * (1. - shf));
@@ -625,9 +642,23 @@ vec3 ground(G g, vec3 rd) {
   c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
   c = haze(c, rd, g.t);
   // Below the mist's floor the ground fades into it: never a seen valley floor.
-  c = mix(c, skyLight() * 1.35 + bodyLight() * .12, .6 * smoothstep(MIST_BASE - 100., MIST_BASE - 500., alt));
+  // (0.5.6) In drifts, never a level grey sheet: its depth wanders and it
+  // thickens and thins across the trough.
+  float sink = smoothstep(MIST_BASE - 60., MIST_BASE - 480., alt + 220. * (noise(p.xz / 380. + 6.2) - .5));
+  c = mix(c, skyLight() * 1.35 + bodyLight() * .12, (.45 + .4 * noise(p.xz / 900. + 1.7)) * sink);
   // Smoothly transition into exact shelf meadow palette as we approach the plateau.
-  if (shf > .001) c = mix(c, shelfMeadow(p.xz, g.t, rd), shf);
+  // (0.5.6) And its grass carries on over the rim, down the shoulder's
+  // gentle top, shaded by its slope, before the rock breaks through.
+  // Rock breaks through it in outcrops and along the steeper breaks.
+  float crop = smoothstep(.42, .62, noise(p.xz / 22. + 3.7) * .65 + noise(p.xz / 7. + 1.1) * .35 + (.9 - n.y) * 1.6);
+  float edge = smoothstep(${f(SHELF.r * 1.6)}, ${f(SHELF.r * 1.02)}, shelfD(p.xz)) * smoothstep(.62, .86, n.y)
+    * smoothstep(${f(SHELF.y - 110)}, ${f(SHELF.y - 30)}, alt + noise(p.xz / 40.) * 30.) * (1. - crop);
+  float gw = max(shf, edge);
+  if (gw > .001) {
+    vec3 sm = shelfMeadow(p.xz, g.t, rd);
+    float slope = clamp(.55 + .45 * dot(n, uLightDir) / max(uLightDir.y, .25), .55, 1.1);
+    c = mix(c, sm * mix(slope, 1., shf), gw);
+  }
   return c;
 }
 
@@ -658,7 +689,7 @@ vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float alt = uSunDir.y;
   vec2 dv = uv - sp;
   dv.y *= 1. + .28 * smoothstep(.07, 0., alt);
-  float R = .104, d = length(dv) / R, px = 2.5 / uRes.y / R;
+  float R = .104 * lens / 1.7320508, d = length(dv) / R, px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, alt);
   vec3 L = reach(uSunDir, SUN_I);
   float high = smoothstep(.005, .09, alt);
@@ -695,7 +726,7 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   float z = dot(uMoonDir, f);
   if (z <= 0.) return c;
   vec2 sp = vec2(dot(uMoonDir, r), dot(uMoonDir, u)) * lens / z;
-  float R = .104;
+  float R = .104 * lens / 1.7320508;
   float malt = uMoonDir.y;
   vec2 q = (uv - sp) / R;
   q.y *= 1. + .28 * smoothstep(.07, 0., malt);
@@ -943,6 +974,9 @@ void main() {
   G g = readG(rd);
   vec3 base, mist;
   lightParts(g, rd, uv, f, r, u, lens, base, mist);
+  // (0.5.6) From the plateau, the gorge's mist seen edge-on past the rim
+  // is in the far ranges' shade, not a white line along the horizon.
+  if (uNear > 0. && g.t > 250.) mist = mix(mist, mist * .55, smoothstep(-.06, -.004, rd.y));
   vec3 lin = compose(base, mist, g.T, rd);
   // The first load: the mountains fade in over the sky that was there.
   if (g.hit > 0. && uReveal < 1. && uSkipGeo < .5 && uNear <= 0.) lin = mix(sky(rd), lin, uReveal);

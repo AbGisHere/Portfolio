@@ -35,7 +35,7 @@
  */
 
 import { seeded } from './bootPrint';
-import { moundY } from './houseShape';
+import { MOUND, moundY } from './houseShape';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 
 const LONE = { x: -6.4, z: 9.5, h: 8, spread: 4.4, depth: 4, leaves: 30, leafSize: 0.58 };
@@ -233,13 +233,24 @@ export function treeLayout(seed = null) {
   rnd = seeded(0xb4c6d);
   const groves = [
     [-34, -100, 5, 9], [-19, -112, 3, 7], [22, -104, 4, 8], [40, -118, 5, 10],
-    [-58, -126, 4, 10], [6, -128, 3, 6],
+    [6, -128, 3, 6],
   ];
+  // (0.5.6) No belt behind the house any more (the plateau ends ~160 m
+  // back): its trees are scattered over the plateau instead, in clumps,
+  // each well inside the rim (peaks.js SHELF: ~90 m in front, 115 to the
+  // sides, 162 behind), off the desk's line, the house's hill and the
+  // path between them.
   const belt = [];
-  for (let i = 0; i < 16; i++) {
-    const x = -190 + i * 25 + (rnd() - 0.5) * 14;
-    if (rnd() < 0.2) continue;
-    belt.push([x, -175 - 45 * rnd(), 5 + Math.floor(rnd() * 4), 14, 1.35]);
+  for (let tries = 0; belt.length < 11 && tries < 400; tries++) {
+    const x = (rnd() * 2 - 1) * 100;
+    const z = -150 + rnd() * 230;
+    const e = Math.hypot(x / 115, z / (z > 0 ? 90 : 162));
+    if (e > 0.7) continue;
+    if (Math.abs(x) < 22 && z > -110 && z < 90) continue;
+    if (Math.hypot((x - MOUND.at[0]) / (MOUND.r[0] + 14), (z - MOUND.at[1]) / (MOUND.r[1] + 14)) < 1) continue;
+    if (belt.some(([bx, bz]) => Math.hypot(bx - x, bz - z) < 26)) continue;
+    if (COPSES.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 20)) continue;
+    belt.push([x, z, 2 + Math.floor(rnd() * 3), 6, 1]);
   }
   const beltSecBase = sec + groves.length + 1;
   let gi = 0;

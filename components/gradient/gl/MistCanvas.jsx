@@ -1258,6 +1258,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
       gl.uniform4f(g.u('uScreen'), P.sx, P.sy, w, h);
       gl.uniform3f(g.u('uCam'), c.x, c.y, c.z);
+      // (0.5.6) On the plateau under the 3D mountains: no blade past its rim.
+      gl.uniform1f(g.u('uRim'), peaksNow?.behind ? 1 : 0);
       gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
       gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
@@ -3446,7 +3448,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
         gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
         gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
-        gl.uniform2f(g.u('uPaintNear'), ...(peaksNow?.behind ? [110, 165] : [0, 0]));
+        gl.uniform2f(g.u('uPaintNear'), ...(peaksNow?.behind ? [170, 240] : [0, 0]));
         gl.uniform1i(g.u('uMeadow'), 5);
         gl.uniform1f(g.u('uMeadowA'), meadowShown ? (paintA ?? a) : 0);
         gl.uniform1f(g.u('uGrassT'), windPhase / WIND.speed);

@@ -190,7 +190,15 @@ behind the house. Open items in its `CHANGELOG.md` entry.
 mist, brings the plateau to ~3 km from the peaks and stands peaks close
 around the house. Open items in its `CHANGELOG.md` entry.
 
-**Next: 0.5.6** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
+**0.5.6** (2026-11-20) ends the plateau ~10 m past its trees on every
+side (one rim for the terrain, the meadow's paint and the grass:
+`peaks.js` `RIM_GLSL`), gives its edge rock and gullies, scatters the
+trees over it, fixes the white line at the horizon (rays skimming the
+plateau now start at its rim), keeps one mist whatever the camera's
+height, and sizes the sun and moon by angle. Open items in its
+`CHANGELOG.md` entry.
+
+**Next: 0.5.7** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
 valley flight, then the cliffs' own detail, the phones, the fallback's
 stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

@@ -29,13 +29,15 @@ import { BOOT_GLSL } from './bootPrint';
 import { TREE_SHADE_GLSL } from './treeShader';
 import { DESK_SHADE_GLSL } from './deskShader';
 import { MOUND, MOUND_GLSL, moundY } from './houseShape';
+import { RIM_GLSL, SHELF } from '../peaks';
 
 const f = v => v.toFixed(6);
 
 export const GRASS = {
   // (0.4.16) Six rings, out to 51 m: the house's hill grows as full as the
-  // desk's meadow from the approach.
-  rings: 6,
+  // desk's meadow from the approach. (0.5.6) Seven, out to 102 m: on the
+  // plateau the blades run all the way to its edge (~90 m in front).
+  rings: 7,
   // Cells per ring side, and the innermost ring's cell size (metres).
   side: 32,
   cell: 0.1,
@@ -46,7 +48,7 @@ export const GRASS = {
   density: 5000,
   // Metres from the camera past which the grass has faded out, and the
   // camera's height past which no blade is drawn at all.
-  reach: 56,
+  reach: 104,
   over: 32,
 };
 
@@ -199,6 +201,7 @@ uniform float uT;       // the wind's clock, seconds
 uniform float uWindA;   // the wind's strength (0: still)
 uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
 uniform float uPxCss;   // one device pixel, CSS px
+uniform float uRim;     // (0.5.6) 1: on the plateau under the 3D mountains, grown to its rim
 uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
 
 // (0.4.0) A world offset in the camera's frame before its pitch: turned
@@ -237,6 +240,7 @@ float vnoise(vec2 x) {
 ${PRINTS_GLSL}
 ${TREE_SHADE_GLSL}${DESK_SHADE_GLSL}
 ${MOUND_GLSL}
+${RIM_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
   int id = gl_InstanceID + uFirst;
@@ -268,6 +272,8 @@ void main() {
   // doesn't show through from above.
   float down = 1.0 + 2.0 * uPitch.y * uPitch.y;
   float want = min(${f(GRASS.cap)} * down, ${f(GRASS.density)} * down / (d * d)) * (1.0 - smoothstep(${f(GRASS.reach * 0.6)}, ${f(GRASS.reach)}, d));
+  // (0.5.6) Thick right up to the plateau's rim, none past it.
+  if (uRim > 0.5) want *= 1.0 - smoothstep(${f(SHELF.r * 0.99)}, ${f(SHELF.r * 1.03)}, rimDm(pos));
   float p = own * want * c * c / ${f(GRASS.blades)};
   float grow = clamp((p - rnd(s)) / 0.08, 0.0, 1.0);
   if (grow <= 0.0) {
