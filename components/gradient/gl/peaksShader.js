@@ -102,12 +102,18 @@ float nearFor(vec3 rd) {
 // (0.5.3) The valley (../peaks.js VALLEY): how far a place is from its
 // centre, how much of it lies inside its length, and its floor.
 float valleyDist(vec2 p) { return abs(p.x - ${f(VALLEY.x)} - ${f(VALLEY.amp)} * sin(p.y / ${f(VALLEY.wave)})); }
-float valleyLen(vec2 p) { return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y); }
-// How much of a place is the sunlit meadow overlook around the desk.
-float shelfMask(vec2 p) {
-  float dd = length(p - vec2(${f(SHELF.x)}, ${f(SHELF.z)}));
-  return smoothstep(${f(SHELF.r + 650)}, ${f(SHELF.r)}, dd);
+float valleyLen(vec2 p) {
+  return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y)
+    * smoothstep(${f(SHELF.z - 2600)}, ${f(SHELF.z - 1100)}, p.y);
 }
+// How much of a place is the sunlit meadow overlook around the desk.
+float shelfD(vec2 p) {
+  vec2 d = p - vec2(${f(SHELF.x)}, ${f(SHELF.z)});
+  d.y *= d.y > 0. ? ${f(SHELF.r / SHELF.lip)} : 1.;
+  // A lobed, uneven rim, never a drawn ellipse.
+  return length(d) * (1. + .16 * (noise(p / 210. + 4.1) - .5) + .07 * (noise(p / 70. + 1.3) - .5));
+}
+float shelfMask(vec2 p) { return smoothstep(${f(SHELF.r + 120)}, ${f(SHELF.r)}, shelfD(p)); }
 // How much of a place is the valley's floor (never encroaching on the hero massif).
 float flankAt(vec2 p) { return valleyLen(p) * smoothstep(${f(VALLEY.half + VALLEY.wall * 0.45)}, ${f(VALLEY.half)}, valleyDist(p)); }
 float terrain(vec2 p, int oct) {
@@ -123,11 +129,21 @@ float terrain(vec2 p, int oct) {
   // hero range: low enough for luminous valley mist to pool at the peaks'
   // feet, flanked by mountain walls on either side.
   float vd = valleyDist(p);
-  float vfloor = 980. + fbm(p / 900., 3) * 65.;
+  float vfloor = 120. + fbm(p / 900., 3) * 90.;
   float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
   float walls = max(h - vfloor, 0.) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
   h = mix(h, vfloor + walls * wall, valleyLen(p));
   // The sunlit alpine meadow plateau where the desk and house stand.
+  // Past the plateau's lip our own mountain rolls over (a grass shoulder,
+  // ~7° at first) and steepens into cliffs down to the trough.
+  float sx = max(shelfD(p) - ${f(SHELF.r)}, 0.);
+  float spur = ${f(SHELF.y)} - (.12 * sx + .0009 * sx * sx)
+    - 160. * det * smoothstep(80., 700., sx) * ridged(p / 420. + 7.7, min(oct, 7))
+    - 18. * smoothstep(0., 120., sx) * fbm(p / 160. + 2.3, min(oct, 4));
+  // Hummocks and knolls on the shoulder, standing above the rim's line.
+  spur += smoothstep(0., 60., sx) * (1. - smoothstep(250., 600., sx))
+    * (22. * smoothstep(.45, .8, noise(p / 95. + 9.1)) + 7. * noise(p / 28. + 3.3));
+  h = max(h, spur);
   h = mix(h, ${f(SHELF.y)}, shelfMask(p));
   return h;
 }
@@ -291,7 +307,7 @@ G geo(vec3 rd, float tStart) {
   if (rd.y < -.0005 && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
     float tp = (${f(SHELF.y)} - uCam.y) / rd.y;
     vec3 pp = uCam + rd * tp;
-    if (tp > 0. && length(pp.xz - vec2(${f(SHELF.x)}, ${f(SHELF.z)})) < ${f(SHELF.r * 0.85)}) {
+    if (tp > 0. && shelfD(pp.xz) < ${f(SHELF.r * 0.97)}) {
       g.t = tp;
       g.hit = 1.;
       return g;
@@ -317,7 +333,7 @@ G geo(vec3 rd, float tStart) {
     float holds = g.n.y + .11 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
     g.snow = smoothstep(line - 140., line + 140., alt) * smoothstep(.33, .48, holds);
     g.snow = max(g.snow, smoothstep(.52, .66, holds) * smoothstep(1380., 1680., alt - 600. * shf));
-    g.snow *= (1. - shf);
+    g.snow *= (1. - shf) * smoothstep(${f(SHELF.r * 1.8)}, ${f(SHELF.r * 4.5)}, shelfD(p.xz));
     // Fine crag relief ONLY on rocky/snowy mountain faces — never on the
     // meadow overlook or flat grass, so the meadow stays crisp and smooth.
     float flatMeadow = max(shf, smoothstep(${f(SHELF.y + 80)}, ${f(SHELF.y - 400)}, alt) * smoothstep(.8, .92, g.n.y));
@@ -537,8 +553,22 @@ vec3 shelfMeadow(vec2 xz, float dist, vec3 rd) {
   vec3 srgb = mix(uGrassGround, uGrassFar, smoothstep(4., 24., dist)) * mix(vec3(1.), uGrassSky, .25);
   // Subtle broad sunlit/dappled meadow variation matched to MEADOW_PAINT's average brightness.
   float broad = tn(xz / 340.) * .6 + tn(xz / 110. + .31) * .4;
+  float mid = tn(xz / 38. + .13) * .55 + tn(xz / 14. + .61) * .45;
   float modK = mix(1., .84 + .32 * broad, smoothstep(22., 75., dist) * (1. - smoothstep(320., 900., dist)));
+  modK *= mix(1., .86 + .28 * mid, smoothstep(6., 30., dist) * (1. - smoothstep(500., 1400., dist)));
   srgb *= modK;
+  // Up close: tufts, blades' streaks and bare patches at 0.3–12 m, faded
+  // by the pixel's footprint so nothing shimmers far off.
+  float near = 1. - smoothstep(30., 140., dist);
+  if (near > 0.) {
+    vec2 q = xz * vec2(1., .55);
+    float tuft = tn(xz / 12.) * .45 + tn(xz / 3.4 + .17) * .35 + tn(q / .9 + .53) * .2;
+    float blade = tn(vec2(xz.x / .35, xz.y / 1.6) + .71);
+    float fine = mix(1., .78 + .42 * tuft, near) * mix(1., .9 + .2 * blade, near * (1. - smoothstep(8., 40., dist)));
+    srgb *= fine;
+    srgb = mix(srgb, srgb * vec3(1.06, 1.02, .82), near * smoothstep(.62, .8, tuft) * .6);
+  }
+  srgb = mix(srgb, srgb * vec3(1.08, 1.03, .78), smoothstep(.6, .85, mid) * .35 * (1. - smoothstep(500., 1400., dist)));
   vec3 lin = pow(max(srgb, vec3(0.)), vec3(2.2));
   // Subtle alpine horizon haze far off (never muddy, never dark).
   float hk = 1. - exp(-max(dist - 280., 0.) / 5500.);
@@ -570,7 +600,8 @@ vec3 ground(G g, vec3 rd) {
   rock = mix(rock, vec3(.042, .088, .058), pine);
   // Sunlit alpine pasture on low valley floors & plateau shoulders.
   float fl = flankAt(p.xz);
-  float lawn = smoothstep(1680., 1380., alt + noise(p.xz / 140.) * 160.) * smoothstep(.78, .92, n.y);
+  float lawn = smoothstep(${f(SHELF.y - 520)}, ${f(SHELF.y - 260)}, alt + noise(p.xz / 140.) * 120.)
+    * smoothstep(${f(SHELF.r * 4)}, ${f(SHELF.r * 1.6)}, shelfD(p.xz)) * smoothstep(.62, .85, n.y);
   lawn = max(lawn, shf);
   vec3 grass = mix(vec3(.11, .19, .065), vec3(.16, .25, .08), noise(p.xz / 120.) * .6 + noise(p.xz / 420.) * .4);
   rock = mix(rock, grass, lawn * (1. - shf));

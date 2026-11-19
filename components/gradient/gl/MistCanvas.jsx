@@ -3446,7 +3446,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform3f(g.u('uCamM'), cm.x, cm.y, cm.z);
         gl.uniform2f(g.u('uDepthAB'), ...DEPTH_AB);
         gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
-        gl.uniform2f(g.u('uPaintNear'), ...(peaksNow?.behind ? [260, 520] : [0, 0]));
+        gl.uniform2f(g.u('uPaintNear'), ...(peaksNow?.behind ? [110, 165] : [0, 0]));
         gl.uniform1i(g.u('uMeadow'), 5);
         gl.uniform1f(g.u('uMeadowA'), meadowShown ? (paintA ?? a) : 0);
         gl.uniform1f(g.u('uGrassT'), windPhase / WIND.speed);

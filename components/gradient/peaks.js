@@ -27,7 +27,9 @@ export const valleyX = z => VALLEY.x + VALLEY.amp * Math.sin(z / VALLEY.wave);
 // its base), so the entire snowy Matterhorn peak (~7.7° elevation) towers
 // close and dramatic right behind the meadow, trees and laptop lid.
 const DESK_Z = -4100;
-export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 360 };
+// r: the plateau's reach behind and to the sides; lip: how far its edge
+// stands in front of the desk, toward the peaks (the drop starts there).
+export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 360, lip: 120 };
 // (0.5.3) The ground baked into textures once (gl/peaksShader.js): a near
 // box covering BOTH the desk plateau, the entire valley and the hero massif
 // in one seamless high-res map (7 m/texel at 2048²), plus a far horizon box.
@@ -275,7 +277,7 @@ export function deskPeaksCamera(m, cam, P, w, h) {
   // Exact right vector in peaks handedness (singularity-free at pitch = 90°).
   const right = [-cy, 0, sy];
   const F = P.zoom * P.f;
-  const skipGeo = cam.pitch > rad(62) || Math.abs(yaw) > rad(72);
+  const skipGeo = cam.pitch > rad(62);
   return {
     pos,
     look: pos.map((v, i) => v + dir[i] * 1000),

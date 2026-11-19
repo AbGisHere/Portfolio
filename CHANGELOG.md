@@ -6,6 +6,17 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.4 — 2026-11-20
+
+The meadow on its own mountain, among others (`peaks.js`, `gl/peaksShader.js`).
+
+- The valley's floor drops from ~980 m to ~120–200 m, under the mist: the range's walls now rise from deep in it, with no green plain in the opening.
+- The plateau is the top of our own mountain: past its lip (`SHELF.lip`, 120 m toward the peaks) a grass shoulder rolls over at ~7° and steepens into cliffs down to the trough; the rim is uneven, with knolls on it, and holds no snow. The meadow's paint fades out before the lip (`uPaintNear` 110–165 m).
+- The plateau's ground has tufts, blade streaks and mottled patches, so it isn't plain green before the grass comes in.
+- The valley ends 1.1–2.6 km behind the desk, so the range closes in around the house; the 3D mountains are now drawn on turned views too (skipped only looking steeply down).
+
+Open: the lip still reads sharp at the desk stretch's start; the mountains behind the house are washed out and low (the far bake's ~64 m texels); perf and phones not measured.
+
 ## 0.5.3 — 2026-11-20
 
 One world from the peaks to the house, a first cut (work in progress; the owner continues it).
