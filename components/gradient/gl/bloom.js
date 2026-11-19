@@ -57,10 +57,15 @@ const ADD = `#version 300 es
 precision highp float;
 uniform sampler2D uFrom;
 uniform float uAmount;
+// (0.4.57) With the frame itself (uBaseOn), written over the canvas with
+// blending off: one full-screen pass in place of a copy and a blend.
+uniform sampler2D uBase;
+uniform float uBaseOn;
 in vec2 vUv;
 out vec4 outColor;
 void main() {
-  outColor = vec4(texture(uFrom, vUv).rgb * uAmount, 1.0);
+  vec3 b = uBaseOn > 0.5 ? texture(uBase, vUv).rgb : vec3(0.0);
+  outColor = vec4(b + texture(uFrom, vUv).rgb * uAmount, 1.0);
 }
 `;
 
@@ -134,7 +139,9 @@ export function makeBloom(gl, unit) {
   };
   return {
     prepare: resize,
-    apply(frame, w, h, amount) {
+    // (0.4.57) `base`: the frame's texture, to write it and the glow onto
+    // the canvas in one pass (blending off); else the glow is added on.
+    apply(frame, w, h, amount, base = null) {
       resize(w, h);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
@@ -147,9 +154,28 @@ export function makeBloom(gl, unit) {
         run(progs.blur, targets[0], targets[1].tex, p => gl.uniform2f(u(p, 'uDir'), 0, r / size[1]));
       }
       gl.viewport(0, 0, w, h);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.ONE, gl.ONE);
-      run(progs.add, null, targets[0].tex, p => gl.uniform1f(u(p, 'uAmount'), amount));
+      if (!base) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE);
+      }
+      // (The frame on the next unit for this pass only: its texture there
+      // put back after, as other passes keep theirs bound.)
+      let was = null;
+      run(progs.add, null, targets[0].tex, p => {
+        gl.uniform1f(u(p, 'uAmount'), amount);
+        gl.uniform1f(u(p, 'uBaseOn'), base ? 1 : 0);
+        gl.uniform1i(u(p, 'uBase'), base ? unit + 1 : unit);
+        if (base) {
+          gl.activeTexture(gl.TEXTURE0 + unit + 1);
+          was = gl.getParameter(gl.TEXTURE_BINDING_2D);
+          gl.bindTexture(gl.TEXTURE_2D, base);
+          gl.activeTexture(gl.TEXTURE0 + unit);
+        }
+      });
+      if (base) {
+        gl.activeTexture(gl.TEXTURE0 + unit + 1);
+        gl.bindTexture(gl.TEXTURE_2D, was);
+      }
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
       gl.activeTexture(gl.TEXTURE0);

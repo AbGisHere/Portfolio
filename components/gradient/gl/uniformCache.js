@@ -6,53 +6,100 @@
  * Every caller goes through the wrapper, so nothing can go stale. Arrays
  * longer than 16 are always sent (comparing them costs what sending does).
  * Off with `?ucache=0`.
+ *
+ * (0.4.57) Allocation-free after a location's first value: fixed-arity
+ * wrappers (no rest arguments or closures), each location's last value
+ * kept in one array updated in place.
  */
-const SCALAR = ['uniform1f', 'uniform2f', 'uniform3f', 'uniform4f', 'uniform1i', 'uniform2i', 'uniform3i', 'uniform4i', 'uniform1ui'];
-const VECTOR = ['uniform1fv', 'uniform2fv', 'uniform3fv', 'uniform4fv', 'uniform1iv', 'uniform2iv', 'uniform3iv', 'uniform4iv', 'uniformMatrix3fv', 'uniformMatrix4fv'];
 const MAX = 16;
 
 export function cacheUniforms(gl) {
   const last = new WeakMap();
-  // Values compared as the GPU stores them (float32 for float uniforms).
-  const f32 = new Float32Array(MAX);
-  const same = (loc, n, at, isFloat) => {
-    const prev = last.get(loc);
-    if (prev && prev.length === n) {
-      let k = 0;
-      for (; k < n; k++) if (prev[k] !== (isFloat ? (f32[0] = at(k), f32[0]) : at(k))) break;
-      if (k === n) return true;
+  // A location's slot, sized once: floats as the GPU stores them (float32),
+  // ints exactly.
+  const slot = (loc, n, isFloat) => {
+    let s = last.get(loc);
+    if (!s || s.length !== n || s.isFloat !== isFloat) {
+      s = isFloat ? new Float32Array(n) : new Int32Array(n);
+      s.isFloat = isFloat;
+      s.fresh = true;
+      last.set(loc, s);
     }
-    const next = new Float64Array(n);
-    for (let k = 0; k < n; k++) next[k] = isFloat ? (f32[0] = at(k), f32[0]) : at(k);
-    last.set(loc, next);
-    return false;
+    return s;
   };
-  for (const name of SCALAR) {
+  const scalar = (name, n, isFloat) => {
     const raw = gl[name].bind(gl);
-    const isFloat = name.endsWith('f');
-    gl[name] = (loc, ...v) => {
+    if (n === 1) gl[name] = (loc, a) => {
       if (loc == null) return;
-      if (same(loc, v.length, k => v[k], isFloat)) return;
-      raw(loc, ...v);
+      const s = slot(loc, 1, isFloat);
+      const was = s[0];
+      s[0] = a;
+      if (!s.fresh && s[0] === was) return;
+      s.fresh = false;
+      raw(loc, a);
     };
-  }
-  for (const name of VECTOR) {
+    else if (n === 2) gl[name] = (loc, a, b) => {
+      if (loc == null) return;
+      const s = slot(loc, 2, isFloat);
+      const w0 = s[0], w1 = s[1];
+      s[0] = a; s[1] = b;
+      if (!s.fresh && s[0] === w0 && s[1] === w1) return;
+      s.fresh = false;
+      raw(loc, a, b);
+    };
+    else if (n === 3) gl[name] = (loc, a, b, c) => {
+      if (loc == null) return;
+      const s = slot(loc, 3, isFloat);
+      const w0 = s[0], w1 = s[1], w2 = s[2];
+      s[0] = a; s[1] = b; s[2] = c;
+      if (!s.fresh && s[0] === w0 && s[1] === w1 && s[2] === w2) return;
+      s.fresh = false;
+      raw(loc, a, b, c);
+    };
+    else gl[name] = (loc, a, b, c, d) => {
+      if (loc == null) return;
+      const s = slot(loc, 4, isFloat);
+      const w0 = s[0], w1 = s[1], w2 = s[2], w3 = s[3];
+      s[0] = a; s[1] = b; s[2] = c; s[3] = d;
+      if (!s.fresh && s[0] === w0 && s[1] === w1 && s[2] === w2 && s[3] === w3) return;
+      s.fresh = false;
+      raw(loc, a, b, c, d);
+    };
+  };
+  for (const [name, n] of [['uniform1f', 1], ['uniform2f', 2], ['uniform3f', 3], ['uniform4f', 4]]) scalar(name, n, true);
+  for (const [name, n] of [['uniform1i', 1], ['uniform2i', 2], ['uniform3i', 3], ['uniform4i', 4], ['uniform1ui', 1]]) scalar(name, n, false);
+  for (const name of ['uniform1fv', 'uniform2fv', 'uniform3fv', 'uniform4fv', 'uniform1iv', 'uniform2iv', 'uniform3iv', 'uniform4iv', 'uniformMatrix3fv', 'uniformMatrix4fv']) {
     const raw = gl[name].bind(gl);
     const matrix = name.startsWith('uniformMatrix');
     const isFloat = name.endsWith('fv');
-    gl[name] = (loc, ...args) => {
+    const send = (loc, data, extra, t, o, l) => {
+      if (matrix) raw(loc, t, data, ...(extra ? [o, l].filter(x => x !== undefined) : []));
+      else raw(loc, data, ...(extra ? [o, l].filter(x => x !== undefined) : []));
+    };
+    gl[name] = (loc, x, y, z, q) => {
       if (loc == null) return;
-      // Matrices: (loc, transpose, data); vectors: (loc, data). Extra
-      // offset/length arguments are sent as given.
-      const data = matrix ? args[1] : args[0];
-      const extra = args.length > (matrix ? 2 : 1);
-      if (extra || !data || data.length > MAX || (matrix && args[0])) {
+      // Matrices: (loc, transpose, data[, offset, length]); vectors:
+      // (loc, data[, offset, length]).
+      const data = matrix ? y : x;
+      const extra = matrix ? z !== undefined : y !== undefined;
+      if (extra || !data || data.length > MAX || (matrix && x)) {
         last.delete(loc);
-        raw(loc, ...args);
+        if (matrix) send(loc, data, extra, x, z, q);
+        else send(loc, data, extra, false, y, z);
         return;
       }
-      if (same(loc, data.length, k => data[k], isFloat)) return;
-      raw(loc, ...args);
+      const n = data.length;
+      const s = slot(loc, n, isFloat);
+      let same = !s.fresh;
+      for (let k = 0; k < n; k++) {
+        const was = s[k];
+        s[k] = data[k];
+        if (s[k] !== was) same = false;
+      }
+      if (same) return;
+      s.fresh = false;
+      if (matrix) raw(loc, x, data);
+      else raw(loc, data);
     };
   }
   return gl;

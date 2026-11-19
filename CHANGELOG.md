@@ -6,6 +6,16 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.57 — 2026-11-19
+
+- The prebuilt house (0.4.56) only on touch-first devices, where building takes 5–8 s; a desktop builds it again (~1.4 s on the M4), as 0.4.56's download made its first scroll to the house slower. `?prebuilt=1` forces it, `?prebuilt=0` never.
+- Phone GPUs told what they needn't load or store (`invalidateFramebuffer`, `?invalidate=0` off): the frame target's old colour at the start (the sky covers every pixel), its depth once shown, the lawn copy's depth, the pool reflection's depth.
+- By night, with the frame in its own target, the bloom's last pass writes the frame and the glow onto the canvas at once, blending off: one full-screen copy and one blend fewer (`?bloommerge=0` off).
+- The uniform cache allocates nothing after a location's first value (fixed-arity wrappers, values updated in place).
+- House parity (`scripts/house-parity.mjs`) ~15× faster: one page per side, viewport and theme, views switched without a reload, reference and candidate in parallel; the room views run on production builds (104/104 in ~5.5 min).
+- Tried and dropped: grouping the leaves by place (the visible set still keeps 59–61 of 61 leaf runs: they're outdoors, in view all climb).
+- Same picture: house parity 24/24 against 0.4.56.
+
 ## 0.4.56 — 2026-11-19
 
 - The house ships prebuilt: `npm run build`'s prebuild (`scripts/house-prebuild.mjs`) builds the same meshes the worker would (`houseBuild.js`) into one blob (`houseBlob.js`, byte for byte, unit-tested), gzipped to `public/house/house.bin.gz` (29.1 → 8.3 MB). Made fresh every build, never committed, so it can't go stale. The worker fetches and unzips it (`DecompressionStream`) in place of building (Moto G71: 7.8 s to build), past any HTTP cache by its own content-hashed URL; it builds instead in dev, on Save-Data or a slower link than 4G, without `DecompressionStream`, on any failure, or with `?prebuilt=0`. The IndexedDB copy (0.4.44) still serves return visits.

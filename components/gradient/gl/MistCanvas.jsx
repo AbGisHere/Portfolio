@@ -218,6 +218,9 @@ export default function MistCanvas({ recipe, onFail }) {
     // compare against.
     const noHouseCull = params.get('housecull') === '0';
     const noEarlyZ = params.get('earlyz') === '0';
+    // (0.4.57) `?bloommerge=0`: the frame copied over before the glow.
+    const noBloomMerge = params.get('bloommerge') === '0';
+    const noInvalidate = params.get('invalidate') === '0';
     const noPvs = params.get('pvs') === '0';
     // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
     // cost from geometry on a device (0.4.39).
@@ -707,7 +710,13 @@ export default function MistCanvas({ recipe, onFail }) {
           houseWorker = null;
           here();
         };
-        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: params.get('prebuilt') !== '0' });
+        // (0.4.57) The prebuilt house (0.4.56) only where building is slow:
+        // touch-first devices (phones and tablets, 5–8 s to build); a
+        // desktop builds it quicker than it downloads (~1.4 s on the M4).
+        // `?prebuilt=1` forces it, `?prebuilt=0` never.
+        const pb = params.get('prebuilt');
+        const touch = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch) });
       } catch {
         here();
       }
@@ -993,6 +1002,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
         gl.bindFramebuffer(gl.FRAMEBUFFER, a.frame.lawnFbo);
         houseGeometry(g, a.u, 'lawn', ctx);
+        drop(gl.DEPTH_ATTACHMENT);
       } else houseGeometry(g, a.u, 'all', ctx);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -1008,6 +1018,24 @@ export default function MistCanvas({ recipe, onFail }) {
     let houseDepthIn = false;
     const frameTarget = () => (houseDepthIn ? aoPass.frame.fbo : null);
     // The frame onto the canvas.
+    // (0.4.57) The frame's texture, left for the bloom to write onto the
+    // canvas with its glow (bloom.js `base`): no copy here.
+    let mergedFrame = false;
+    // (0.4.57) What a pass leaves behind that nothing reads again, dropped
+    // so phones' tile GPUs neither load nor store it (`?invalidate=0` off).
+    const drop = (...what) => {
+      if (!noInvalidate) gl.invalidateFramebuffer(gl.FRAMEBUFFER, what);
+    };
+    function takeFrame() {
+      if (!houseDepthIn) return null;
+      // (Its colour is read by the bloom still; only its depth is done.)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+      drop(gl.DEPTH_ATTACHMENT);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      houseDepthIn = false;
+      mergedFrame = true;
+      return aoPass.frame.tex;
+    }
     // (0.4.50) Returns the frame's texture if it was drawn in it.
     function showFrame() {
       if (!houseDepthIn) return null;
@@ -1015,6 +1043,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, aoPass.frame.fbo);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
       gl.blitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+      drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       houseDepthIn = false;
       return aoPass.frame.tex;
@@ -3024,6 +3054,7 @@ export default function MistCanvas({ recipe, onFail }) {
       mirrorRect = noHouseCull ? null : poolRect();
       timed('pool-reflection', () => drawHouse(true));
       mirrorRect = null;
+      drop(gl.DEPTH_ATTACHMENT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE12);
@@ -3307,8 +3338,12 @@ export default function MistCanvas({ recipe, onFail }) {
         // lawn, the solid part and the leaves: what the colour pass's own
         // depth pass drew again), where the frame target is there.
         houseDepthIn = !!(aoReady && deskOn && !noHouse && houseSeen && aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height);
-        if (houseDepthIn) gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
-        else gl.clear(gl.DEPTH_BUFFER_BIT);
+        if (houseDepthIn) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+          // (0.4.57) The scene's pass covers every pixel: last frame's colour
+          // needn't be loaded (the house's depth is kept).
+          if (!skipped.has('scene')) drop(gl.COLOR_ATTACHMENT0);
+        } else gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
         // (0.3.10) The device before the desk, so the desk's top isn't shaded
         // behind it.
@@ -3348,19 +3383,23 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.26) The fireflies by night (fireflies.js), added on.
         fliesOn = !!meadowAt && !motion.matches && houseNight() > 0.05;
         if (fliesOn) drawBirds(true);
-        const frameTex = showFrame();
         // (0.4.6) By night round the house, the bright spills a glow.
         const night = houseNight();
-        if (deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom) {
-          bloom ??= makeBloom(gl, 14) || false;
-          if (bloom) {
-            // (0.4.50) The frame's own texture when it has one (showFrame).
-            if (!frameTex) copyFrame(glass, true);
-            const src = frameTex || glass.tex;
-            if (profiler) profiler.measure('bloom', () => bloom.apply(src, canvas.width, canvas.height, 0.7 * night));
-            else bloom.apply(src, canvas.width, canvas.height, 0.7 * night);
-            gl.useProgram(prog);
-          }
+        const glow = deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom;
+        if (glow) bloom ??= makeBloom(gl, 14) || false;
+        // (0.4.57) By night with the frame in its own target, the bloom's
+        // last pass writes the frame and the glow onto the canvas at once
+        // (no copy, no blend); else the frame is copied over first.
+        const frameTex = glow && bloom && houseDepthIn && !noBloomMerge ? takeFrame() : showFrame();
+        if (glow && bloom) {
+          // (0.4.50) The frame's own texture when it has one (showFrame).
+          if (!frameTex) copyFrame(glass, true);
+          const src = frameTex || glass.tex;
+          const base = mergedFrame ? frameTex : null;
+          if (profiler) profiler.measure('bloom', () => bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base));
+          else bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base);
+          mergedFrame = false;
+          gl.useProgram(prog);
         }
         gl.disable(gl.DEPTH_TEST);
         lastDrawn = vs;

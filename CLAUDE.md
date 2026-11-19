@@ -117,7 +117,11 @@ at mediump (positions, depth, shadows, hashes, light sums, ints highp).
 **0.4.56** (2026-11-19) ships the house prebuilt (`scripts/house-prebuild.mjs`,
 run by `npm run build`; `public/house/`, not committed; `?prebuilt=0` off).
 
-**Next: 0.4.57**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.57** (2026-11-19) keeps the prebuilt house for touch devices,
+invalidates dead buffers (`?invalidate=0`), merges the night's frame and
+glow (`?bloommerge=0`) and makes house parity ~15× faster.
+
+**Next: 0.4.58**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

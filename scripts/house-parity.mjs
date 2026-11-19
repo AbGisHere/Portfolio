@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Cross-build house regression gate; see ROADMAP.md 0.4.37.
  * node scripts/house-parity.mjs --base http://localhost:3001 --reference http://localhost:3002
- * Rooms require dev /house on each side; optional --room-base and --reference-room-base.
+ * Rooms run on the home page (production builds work); --room-base and --reference-room-base open the dev /house route instead.
+ * One page per side, viewport and theme is kept across views (no reload); --view-settle ms waits after each view change.
  * --views desk-hold,kitchen --viewports 1440x900@2 --themes night --settle 10000
  * --out scripts/out/house-parity --reference-revision v0.4.35 --reference-dir /path/to/checkout
  * Thresholds are fixed: max channel <= 2, mean RGB < .2. No threshold override.
@@ -39,7 +40,7 @@ const args = parseArgs();
 const base = String(args.base ?? 'http://localhost:3001');
 const reference = args.reference;
 if (args.help || args.list) {
-  console.log('House parity: --base URL --reference URL [--room-base URL --reference-room-base URL] [--reference-dir PATH] [--reference-revision REF] [--views names] [--viewports WxH@dpr] [--themes day,night] [--settle ms] [--timeout ms] [--out PATH] [--candidate-query QUERY --reference-query QUERY] [--reference-ready] [--prepared-reference] [--headed] [--quiet]');
+  console.log('House parity: --base URL --reference URL [--room-base URL --reference-room-base URL] [--reference-dir PATH] [--reference-revision REF] [--views names] [--viewports WxH@dpr] [--themes day,night] [--settle ms] [--view-settle ms] [--timeout ms] [--out PATH] [--candidate-query QUERY --reference-query QUERY] [--reference-ready] [--prepared-reference] [--headed] [--quiet]');
   console.log(views.map(v => v.name).join(','));
   process.exit(0);
 }
@@ -51,6 +52,7 @@ const selectedViews = views.filter(v => selected.includes(v.name));
 const vps = viewportsFrom(args.viewports, ['1440x900@2', '393x852@2']);
 const themes = String(args.themes ?? 'day,night').split(',');
 if (themes.some(t => !['day', 'night'].includes(t))) throw new Error('Themes must be day and/or night');
+const viewSettle = Number(args['view-settle'] ?? 400);
 const settle = Number(args.settle ?? 10000), timeout = Number(args.timeout ?? 120000);
 if (!Number.isFinite(settle) || settle < 0 || !Number.isFinite(timeout) || timeout <= 0) throw new Error('Invalid settle/timeout');
 const out = ensureDir(resolve(String(args.out ?? 'scripts/out/house-parity')));
@@ -77,11 +79,21 @@ function deterministic() {
   Math.random = () => { t = (t + 0x6d2b79f5) | 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
   try { localStorage.removeItem('abg-lamp'); localStorage.removeItem('abg-trees'); } catch {}
 }
-async function capture(browser, side, vp, theme, view, file) {
-  const origin = side === 'candidate' ? (view.cam ? metadata.roomBase : base) : (view.cam ? metadata.referenceRoomBase : reference);
-  const url = new URL(view.cam ? '/house' : '/', origin);
-  const query = { renderer: 'gl', freeze: '1', grain: '0', adapt: '0', skyt: '0', boot: '1', theme, ...view.query };
-  if (view.cam) query.cam = view.cam.join(',');
+// One page per (side, viewport, theme), kept across views: a view is set in
+// place (the descent pinned, the free camera moved) with no reload, so the
+// house is built once and the IndexedDB cache (housecache) stays on. Rooms
+// go through the home page's own hooks (__pinDescent, __houseCam, set by
+// MistCanvas), so they run on production builds; --room-base (or
+// --reference-room-base) still opens the dev /house route there instead.
+const pinOf = view => view.cam ? { about: 1, desk: 1, contact: .64 }
+  : view.query.desk != null ? { about: 1, desk: Number(view.query.desk), contact: 0 }
+  : { about: 1, desk: 1, contact: Number(view.query.contact) };
+const camArg = cam => ({ on: true, x: cam[0], y: cam[1], z: cam[2], yaw: cam[3], pitch: cam[4], zoom: cam[5] });
+async function openSession(browser, side, vp, theme, first) {
+  const custom = first.cam ? (side === 'candidate' ? args['room-base'] : args['reference-room-base']) : null;
+  const origin = custom ?? (side === 'candidate' ? base : reference);
+  const url = new URL(custom ? '/house' : '/', origin);
+  const query = { renderer: 'gl', freeze: '1', grain: '0', adapt: '0', skyt: '0', boot: '1', theme, ...(first.cam ? (custom ? { cam: first.cam.join(',') } : { contact: '.64' }) : first.query) };
   if (side === 'reference' && args['prepared-reference']) query.warmprobes = '1';
   const extraQuery = args[`${side}-query`];
   if (extraQuery) Object.assign(query, Object.fromEntries(new URLSearchParams(String(extraQuery))));
@@ -93,27 +105,45 @@ async function capture(browser, side, vp, theme, view, file) {
     const response = await page.goto(url.toString(), { waitUntil: 'load', timeout });
     if (!response?.ok()) throw new Error(`HTTP ${response?.status()} at ${url}`);
     await page.waitForSelector('[data-renderer="gl"] canvas', { timeout });
-    if (view.cam) await page.waitForFunction(() => typeof window.__houseCam === 'function', null, { timeout });
+    // A build without the harness hooks (an old reference) reloads per view instead.
+    const hooks = await page.waitForFunction(() => typeof window.__houseCam === 'function' && typeof window.__pinDescent === 'function', null, { timeout: 5000 }).then(() => true, () => false);
     // Freeze hides the grain; keep this image restricted to the renderer, excluding dev HUD/readiness UI.
     await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important}body *{visibility:hidden!important}canvas{visibility:visible!important}' });
     await page.waitForTimeout(settle);
-    if (side === 'candidate' || args['reference-ready'] || args['prepared-reference']) {
-      await page.waitForFunction(() => {
-        const state = window.__debugHouse?.();
-        return state?.house && state.houseBuilt && state.ready && !state.probesStale;
-      }, null, { timeout });
-      // Allow the readiness transition's final draw to reach the compositor.
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    }
-    const readiness = await page.evaluate(() => window.__debugHouse?.() ?? null);
-    if (readiness && (!readiness.house || !readiness.houseBuilt)) throw new Error(`House not ready: ${JSON.stringify(readiness)}`);
-    const painted = await readRenderer(page);
-    if (painted !== 'gl') throw new Error(`Renderer silently fell back to ${painted}`);
-    const canvas = page.locator('[data-renderer="gl"] canvas').first();
-    const png = await canvas.screenshot({ type: 'png', timeout });
-    writeFileSync(file, png);
-    return { png, url: url.toString(), errors, overflow: await overflowsX(page), readiness, sha256: createHash('sha256').update(png).digest('hex') };
-  } finally { await context.close(); }
+    return { side, context, page, errors, url: url.toString(), seen: 0, current: first, house: !!custom, hooks, vp, theme };
+  } catch (e) { await context.close(); throw e; }
+}
+async function capture(session, view, file) {
+  if (!session.hooks && session.current !== view) {
+    await session.context.close();
+    Object.assign(session, await openSession(browser, session.side, session.vp, session.theme, view));
+  }
+  const { page, side, errors } = session;
+  if (session.current !== view) {
+    await page.evaluate(({ pin, cam, house }) => {
+      if (!house) window.__pinDescent(pin);
+      window.__houseCam(cam ? { on: true, x: cam[0], y: cam[1], z: cam[2], yaw: cam[3], pitch: cam[4], zoom: cam[5] } : { on: false });
+    }, { pin: pinOf(view), cam: view.cam ?? null, house: session.house });
+    session.current = view;
+    await page.waitForTimeout(viewSettle);
+  }
+  if (side === 'candidate' || args['reference-ready'] || args['prepared-reference']) {
+    await page.waitForFunction(() => {
+      const state = window.__debugHouse?.();
+      return state?.house && state.houseBuilt && state.ready && !state.probesStale;
+    }, null, { timeout });
+  }
+  // Allow the final draw to reach the compositor.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+  const readiness = await page.evaluate(() => window.__debugHouse?.() ?? null);
+  if (readiness && (!readiness.house || !readiness.houseBuilt)) throw new Error(`House not ready: ${JSON.stringify(readiness)}`);
+  const painted = await readRenderer(page);
+  if (painted !== 'gl') throw new Error(`Renderer silently fell back to ${painted}`);
+  const canvas = page.locator('[data-renderer="gl"] canvas').first();
+  const png = await canvas.screenshot({ type: 'png', timeout });
+  writeFileSync(file, png);
+  const fresh = errors.slice(session.seen); session.seen = errors.length;
+  return { png, url: session.url, errors: fresh, overflow: await overflowsX(page), readiness, sha256: createHash('sha256').update(png).digest('hex') };
 }
 async function compare(page, a, b) {
   return page.evaluate(async ({ a, b }) => {
@@ -158,24 +188,32 @@ try {
   await info.close();
   metadata.browser = browser.version();
   const diffPage = await browser.newPage();
-  for (const vp of vps) for (const theme of themes) for (const view of selectedViews) {
-    const id = `${view.name}-${theme}-${vp.name}`;
-    let result;
+  for (const vp of vps) for (const theme of themes) {
+    const first = selectedViews[0];
+    let ref, cand, openError;
+    try { [ref, cand] = await Promise.all([openSession(browser, 'reference', vp, theme, first), openSession(browser, 'candidate', vp, theme, first)]); }
+    catch (error) { openError = error; }
     try {
-      const a = await capture(browser, 'reference', vp, theme, view, join(out, `${id}-reference.png`));
-      const b = await capture(browser, 'candidate', vp, theme, view, join(out, `${id}-candidate.png`));
-      const { diff, ...stats } = await compare(diffPage, a.png, b.png);
-      writeFileSync(join(out, `${id}-diff-x32.png`), Buffer.from(diff.split(',')[1], 'base64'));
-      const allErrors = [...a.errors.map(e => `reference ${e}`), ...b.errors.map(e => `candidate ${e}`)];
-      // /house is dev-only. Next dev preloads unused error-route CSS/fonts;
-      // hiding the inspector HUD also leaves its fonts unused. Preserve these
-      // diagnostics separately; production captures and all other warnings fail.
-      const devWarnings = view.cam ? allErrors.filter(e => /warning: The resource .*\/_next\/.* was preloaded using link preload but not used/.test(e)) : [];
-      const errors = allErrors.filter(e => !devWarnings.includes(e));
-      result = { id, view, viewport: vp, theme, ...stats, errors, devWarnings, reference: { url: a.url, readiness: a.readiness, sha256: a.sha256 }, candidate: { url: b.url, readiness: b.readiness, sha256: b.sha256 }, ok: stats.max <= 2 && stats.mean < .2 && !stats.blank && !errors.length && !a.overflow && !b.overflow, overflow: { reference: a.overflow, candidate: b.overflow } };
-    } catch (error) { result = { id, ok: false, error: String(error.stack ?? error) }; }
-    results.push(result); save();
-    if (!args.quiet || !result.ok) console.log(`${result.ok ? 'PASS' : 'FAIL'} ${id}: ${result.error ?? `max ${result.max}, mean ${result.mean.toFixed(6)}, pixels >2 ${result.aboveThresholdPixels}`}`);
+      for (const view of selectedViews) {
+        const id = `${view.name}-${theme}-${vp.name}`;
+        let result;
+        try {
+          if (openError) throw openError;
+          const [a, b] = await Promise.all([capture(ref, view, join(out, `${id}-reference.png`)), capture(cand, view, join(out, `${id}-candidate.png`))]);
+          const { diff, ...stats } = await compare(diffPage, a.png, b.png);
+          writeFileSync(join(out, `${id}-diff-x32.png`), Buffer.from(diff.split(',')[1], 'base64'));
+          const allErrors = [...a.errors.map(e => `reference ${e}`), ...b.errors.map(e => `candidate ${e}`)];
+          // Next dev (the /house route) preloads unused error-route CSS/fonts;
+          // hiding the inspector HUD also leaves its fonts unused. Preserve these
+          // diagnostics separately; production captures and all other warnings fail.
+          const devWarnings = view.cam ? allErrors.filter(e => /warning: The resource .*\/_next\/.* was preloaded using link preload but not used/.test(e)) : [];
+          const errors = allErrors.filter(e => !devWarnings.includes(e));
+          result = { id, view, viewport: vp, theme, ...stats, errors, devWarnings, reference: { url: a.url, readiness: a.readiness, sha256: a.sha256 }, candidate: { url: b.url, readiness: b.readiness, sha256: b.sha256 }, ok: stats.max <= 2 && stats.mean < .2 && !stats.blank && !errors.length && !a.overflow && !b.overflow, overflow: { reference: a.overflow, candidate: b.overflow } };
+        } catch (error) { result = { id, ok: false, error: String(error.stack ?? error) }; }
+        results.push(result); save();
+        if (!args.quiet || !result.ok) console.log(`${result.ok ? 'PASS' : 'FAIL'} ${id}: ${result.error ?? `max ${result.max}, mean ${result.mean.toFixed(6)}, pixels >2 ${result.aboveThresholdPixels}`}`);
+      }
+    } finally { await Promise.all([ref?.context.close(), cand?.context.close()]); }
   }
 } catch (error) { metadata.fatal = String(error.stack ?? error); process.exitCode = 2; }
 finally { await browser?.close(); metadata.finished = new Date().toISOString(); save(); }
