@@ -327,11 +327,8 @@ vec4 cellOf(vec3 p) {
   if (any(lessThan(c, ivec3(0))) || any(greaterThanEqual(c, ivec3(${CELLS.n.join(', ')})))) return vec4(0.0);
   return ldAt(${CELL_ROW}, c.x + ${CELLS.n[0]} * (c.y + ${CELLS.n[1]} * c.z));
 }
-int listAt(int j) {
-  vec4 t = ldAt(${LIST_ROW}, j >> 2);
-  int k = j & 3;
-  return int((k == 0 ? t.x : k == 1 ? t.y : k == 2 ? t.z : t.w) + 0.5);
-}
+int listPick(vec4 t, int k) { return int((k == 0 ? t.x : k == 1 ? t.y : k == 2 ? t.z : t.w) + 0.5); }
+int listAt(int j) { return listPick(ldAt(${LIST_ROW}, j >> 2), j & 3); }
 
 // (0.4.28) How far on a light is by night as the house turns to it: the
 // coves and lamps first, the accents next, the facade and the garden last
@@ -405,8 +402,12 @@ vec3 stripsAt(vec3 p, vec3 N, int room, float dayOn, vec4 cell) {
     ivec2 sr = S_RANGE(room);
     int s0 = int(cell.z + 0.5);
     int sn = int(cell.w + 0.5);
+    // (0.4.66) The list's texel fetched once per four entries.
+    vec4 lt = vec4(0.0);
+    int lq = -1;
     for (int j = 0; j < sn; j++) {
-      int i = listAt(s0 + j);
+      if (((s0 + j) >> 2) != lq) { lq = (s0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
+      int i = listPick(lt, (s0 + j) & 3);
       if (i >= sr.y) break;
       if (i < sr.x) continue;
       float w = S_W(i).y * nightOn(S_W(i).z) + S_W(i).x * dayOn;
@@ -448,8 +449,12 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   vec4 cell = cellOf(p);
   int c0 = int(cell.x + 0.5);
   int cn = int(cell.y + 0.5);
+  // (0.4.66) The list's texel fetched once per four entries.
+  vec4 lt = vec4(0.0);
+  int lq = -1;
   for (int j = 0; j < cn; j++) {
-    int i = listAt(c0 + j);
+    if (((c0 + j) >> 2) != lq) { lq = (c0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
+    int i = listPick(lt, (c0 + j) & 3);
     if (i >= lr.y) break;
     if (i < lr.x) continue;
     vec4 lk = L_K(i);
@@ -459,8 +464,10 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
   }
   if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
+    lq = -1;
     for (int j = 0; j < cn; j++) {
-      int i = listAt(c0 + j);
+      if (((c0 + j) >> 2) != lq) { lq = (c0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
+      int i = listPick(lt, (c0 + j) & 3);
       if (LD(3, i).w < 0.5) continue;
       vec4 lk = L_K(i);
       if (lk.x <= 0.0) continue;

@@ -38,6 +38,10 @@ export const HOUSE_VARIANTS = [
   [HOUSE_PART.fabric, HOUSE_PART.cushion, HOUSE_PART.rug],
   [HOUSE_PART.book, HOUSE_PART.pages, HOUSE_PART.spine, HOUSE_PART.ceramic],
   [HOUSE_PART.walnut, HOUSE_PART.cord, HOUSE_PART.brass, HOUSE_PART.steel, HOUSE_PART.lamp, HOUSE_PART.ceramic, HOUSE_PART.fabric, HOUSE_PART.cushion],
+  // (0.4.66) The shell, the surfaces filling most of the climb's frame:
+  // walls and ceilings, then floors, decks and roofs.
+  [HOUSE_PART.stone, HOUSE_PART.render, HOUSE_PART.plaster, HOUSE_PART.ceiling, HOUSE_PART.slab],
+  [HOUSE_PART.deck, HOUSE_PART.timber, HOUSE_PART.paver, HOUSE_PART.roof, HOUSE_PART.tile, HOUSE_PART.oak, HOUSE_PART.frame],
 ];
 
 /** The mound: its top's middle (x, z), its half-widths (x, z) and height. */

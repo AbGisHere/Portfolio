@@ -6,6 +6,13 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.66 — 2026-11-19
+
+- The lamps' and strips' loops fetch the light list's texel once per four entries (four ids a texel), not once an entry.
+- Two shader variants for the shell, the surfaces filling most of the climb's frame: stone, render, plaster, ceiling and slab; deck, timber, paver, roof, tile, oak and frame. Compiled after ready, as the others (0.4.61).
+- Same picture: house parity subset 24/24 against 0.4.65 (the same one pixel as 0.4.65's run flickered once, passed on rerun).
+- Phones on 0.4.65 (BrowserStack climb, median of 3): Moto G71 8.3 fps (as 0.4.64), ready 27.7 s; OnePlus 11R 67.3 fps, ready 16.2 s; iPhone 15 45.5 fps (p95 ~25 ms), ready 11.1 s.
+
 ## 0.4.65 — 2026-11-19
 
 - The caustics grid indexed (Uint32): each corner shaded once, not up to six times, the same uv bit for bit.
