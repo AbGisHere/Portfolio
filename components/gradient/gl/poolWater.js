@@ -84,9 +84,9 @@ function program(gl, fs) {
 }
 
 /** The caustics' target, grid and program (null: can't be drawn here). */
-function makeCaustics(gl) {
-  let prog;
-  try {
+function makeCaustics(gl, pre) {
+  let prog = pre?.('water-caustics');
+  if (!prog) try {
     const sh = (type, src) => {
       const x = gl.createShader(type);
       gl.shaderSource(x, src);
@@ -118,25 +118,31 @@ function makeCaustics(gl) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.activeTexture(gl.TEXTURE0);
   if (!ok) return null;
-  // The grid: two triangles a cell, in the water's uv.
+  // The grid: two triangles a cell, in the water's uv. (0.4.65) Indexed:
+  // each corner shaded once, not up to six times (the same uv, bit for bit).
   const [gx, gz] = CAUSTICS.grid;
-  const pts = [];
-  for (let j = 0; j < gz; j++) {
+  const pts = new Float32Array((gx + 1) * (gz + 1) * 2);
+  for (let j = 0, k = 0; j <= gz; j++) for (let i = 0; i <= gx; i++) { pts[k++] = i / gx; pts[k++] = j / gz; }
+  const idx = new Uint32Array(gx * gz * 6);
+  for (let j = 0, k = 0; j < gz; j++) {
     for (let i = 0; i < gx; i++) {
-      const [u0, u1, v0, v1] = [i / gx, (i + 1) / gx, j / gz, (j + 1) / gz];
-      pts.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
+      const a = j * (gx + 1) + i, b = a + 1, c = a + gx + 2, d = a + gx + 1;
+      idx[k++] = a; idx[k++] = b; idx[k++] = c; idx[k++] = a; idx[k++] = c; idx[k++] = d;
     }
   }
   const buf = gl.createBuffer();
+  const ibuf = gl.createBuffer();
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, pts, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   const u = name => gl.getUniformLocation(prog, name);
-  return { prog, tex, fbo, vao, buf, count: pts.length / 2, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
+  return { prog, tex, fbo, vao, buf, ibuf, count: idx.length, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
 }
 
 /**
@@ -148,11 +154,11 @@ function makeCaustics(gl) {
  * framebuffer bound, depth testing and blending off and the active texture
  * unit 0: the caller sets its viewport and program back.
  */
-export function makeWater(gl, unit) {
+export function makeWater(gl, unit, pre = null) {
   if (!gl.getExtension('EXT_color_buffer_float')) return null;
   let progs;
   try {
-    progs = { step: program(gl, STEP), drop: program(gl, DROP) };
+    progs = { step: pre?.('water-step') ?? program(gl, STEP), drop: pre?.('water-drop') ?? program(gl, DROP) };
   } catch {
     return null;
   }
@@ -208,7 +214,7 @@ export function makeWater(gl, unit) {
     cur = 1 - cur;
   };
   const queue = [];
-  const caus = makeCaustics(gl);
+  const caus = makeCaustics(gl, pre);
   let used = false;
 
   const water = {
@@ -312,7 +318,7 @@ export function makeWater(gl, unit) {
       CAUSTICS.ior.forEach((n, c) => {
         gl.colorMask(c === 0, c === 1, c === 2, false);
         gl.uniform1f(caus.u.ior, n);
-        gl.drawArrays(gl.TRIANGLES, 0, caus.count);
+        gl.drawElements(gl.TRIANGLES, caus.count, gl.UNSIGNED_INT, 0);
       });
       gl.colorMask(true, true, true, true);
       gl.disable(gl.BLEND);
@@ -330,6 +336,7 @@ export function makeWater(gl, unit) {
         gl.deleteProgram(caus.prog);
         gl.deleteVertexArray(caus.vao);
         gl.deleteBuffer(caus.buf);
+        gl.deleteBuffer(caus.ibuf);
       }
       for (const t of targets) {
         gl.deleteTexture(t.tex);

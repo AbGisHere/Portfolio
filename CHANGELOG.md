@@ -6,6 +6,14 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.65 — 2026-11-19
+
+- The caustics grid indexed (Uint32): each corner shaded once, not up to six times, the same uv bit for bit.
+- The water's and the bloom's six programs linked in parallel during preparation (`startProgram`), before they're made, so making them doesn't stall on the driver.
+- `rebuild()` packs the ridges' uniforms into arrays kept across frames, and sends the sky's texture only when a texel changed.
+- Same picture: house parity subset 24/24 against 0.4.64 (one pixel flickered once, passed on rerun).
+- Phones on 0.4.64 (BrowserStack climb, median of 3): Moto G71 7.4 → 8.3 fps; OnePlus 11R 66.4 → 67.4 fps; iPhone 15 35 → 44 fps (p95 38 → 27 ms).
+
 ## 0.4.64 — 2026-11-19
 
 - The house's fragment shader skips work nothing reads: the sun's shadow taps on faces turned from the sun (all but the lawn, curtains and thin leaves, lit from behind), the lawn's ambient occlusion where no lamp lights it (by day), the indoor reflection's second `envAt`, and `envAt` at all where indoors it's only the walls; one shell test before `roomOf`'s eight boxes; `pow(x, 2.0)` and `pow(x, 5.0)` as multiplies; the lamp kinds as `else if`; the normal normalised once.

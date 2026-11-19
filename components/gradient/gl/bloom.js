@@ -97,10 +97,11 @@ function program(gl, fs) {
 /** (0.4.63) The night's frame for the add pass: no other pass uses unit 20. */
 const BASE_UNIT = 20;
 
-export function makeBloom(gl, unit) {
+export function makeBloom(gl, unit, pre = null) {
   let progs;
   try {
-    progs = { bright: program(gl, BRIGHT), blur: program(gl, BLUR), add: program(gl, ADD) };
+    // (0.4.65) `pre(name)`: a program already linked in parallel, if any.
+    progs = { bright: pre?.('bloom-bright') ?? program(gl, BRIGHT), blur: pre?.('bloom-blur') ?? program(gl, BLUR), add: pre?.('bloom-add') ?? program(gl, ADD) };
   } catch {
     return null;
   }

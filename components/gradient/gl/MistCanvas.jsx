@@ -56,10 +56,10 @@ import { FLOOR, HOUSE_BOUNDS, HOUSE_PART, HOUSE_VARIANTS, MOUND, POOL, TERRACE, 
 // the frame.
 const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, POOL.at[2] - POOL.d / 2 - 0.5], [POOL.at[0] + POOL.w / 2 + 0.5, POOL.at[1] + 0.3, POOL.at[2] + POOL.d / 2 + 0.5]];
 const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
-import { makeWater } from './poolWater';
+import { WATER_PROGRAMS, makeWater } from './poolWater';
 import { PROBE, PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX, PROBE_FACES, makeProbes, mirrorsOnPath, probeLayout } from './mirrorProbe';
 import { personMesh } from './personMesh';
-import { makeBloom } from './bloom';
+import { BLOOM_PROGRAMS, makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
 import { BIRD_STRIDE, birdMesh } from './birdShape';
 import { BIRD_INSTANCE, birdsAt } from './birdFlight';
@@ -879,7 +879,10 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.2) The pool's water (poolWater.js), on texture unit 8: made the
     // first time the pool's in view (null: it can't run here).
     let water;
-    const waterSim = () => (water === undefined ? (water = makeWater(gl, 8)) : water);
+    // (0.4.65) The water's and bloom's programs, once linked in parallel.
+    let fxAsync = null;
+    const fxProgram = name => fxAsync?.find(([n]) => n === name)?.[1]?.ready ? fxAsync.find(([n]) => n === name)[1].prog : null;
+    const waterSim = () => (water === undefined ? (water = makeWater(gl, 8, fxProgram)) : water);
     // Whether the pool can be seen: the camera turned to the house.
     let poolSeen = false;
     // Whether the caustics' map has been drawn (texture unit 10).
@@ -1565,13 +1568,23 @@ export default function MistCanvas({ recipe, onFail }) {
           return probeBackdrop(false) === null ? 'pending' : 'done';
         },
         () => {
+          // (0.4.65) The water's and the bloom's programs linked in
+          // parallel first, so making them doesn't stall on the driver.
+          if (!fxAsync) {
+            if (!canStartCompile()) return 'pending';
+            fxAsync = [...WATER_PROGRAMS, ...(noBloom ? [] : BLOOM_PROGRAMS)].map(([n, vs, fs]) => [n, startProgram(n, vs, fs)]);
+          }
+          for (const [, h] of fxAsync) if (readyProgram(h, false) === null && !h.failed) return 'pending';
+          return 'done';
+        },
+        () => {
           if (!noMirror) reflectTarget();
           waterSim()?.prepare();
           return 'done';
         },
         () => {
           if (!noBloom) {
-            bloom ??= makeBloom(gl, 14) || false;
+            bloom ??= makeBloom(gl, 14, fxProgram) || false;
             if (bloom) bloom.prepare(canvas.width, canvas.height);
           }
           return 'done';
@@ -2003,6 +2016,9 @@ export default function MistCanvas({ recipe, onFail }) {
 
     // Recompute layout, colours and textures from the current spring value
     // and the descent's progress.
+    const fScratch = [];
+    let fAt = 0;
+    let skySent = null;
     function rebuild() {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
@@ -2077,13 +2093,28 @@ export default function MistCanvas({ recipe, onFail }) {
       }
 
       bakeSky(stops, r.divs, SKY_TEXELS, skyPixels);
+      // (0.4.65) Sent only when a texel changed.
+      let skyChanged = !skySent;
+      for (let i = 0; !skyChanged && i < skyPixels.length; i++) skyChanged = skyPixels[i] !== skySent[i];
       gl.activeTexture(gl.TEXTURE0);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SKY_TEXELS, 1, gl.RGBA, gl.UNSIGNED_BYTE, skyPixels);
+      if (skyChanged) {
+        (skySent ??= new Uint8Array(skyPixels.length)).set(skyPixels);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SKY_TEXELS, 1, gl.RGBA, gl.UNSIGNED_BYTE, skyPixels);
+      }
 
       const paint = frame.paints;
+      // (0.4.65) Into arrays kept across frames (the uniform cache keeps
+      // its own copy of what was sent), not a new one a uniform.
+      fAt = 0;
       const f = (k, fn) => {
-        const a = new Float32Array(MAX_RIDGES * k);
-        for (let i = 0; i < n; i++) a.set([].concat(fn(ridges[i], i)), i * k);
+        const a = (fScratch[fAt] ??= new Float32Array(MAX_RIDGES * k));
+        fAt++;
+        a.fill(0);
+        for (let i = 0; i < n; i++) {
+          const x = fn(ridges[i], i);
+          if (k === 1) a[i] = x;
+          else for (let c = 0; c < k; c++) a[i * k + c] = x[c];
+        }
         return a;
       };
       const rc = view.ridges;
@@ -3490,7 +3521,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.6) By night round the house, the bright spills a glow.
         const night = houseNight();
         const glow = deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom;
-        if (glow) bloom ??= makeBloom(gl, 14) || false;
+        if (glow) bloom ??= makeBloom(gl, 14, fxProgram) || false;
         // (0.4.57) By night with the frame in its own target, the bloom's
         // last pass writes the frame and the glow onto the canvas at once
         // (no copy, no blend); else the frame is copied over first.

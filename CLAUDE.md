@@ -135,7 +135,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.64** (2026-11-19) skips the house, glass and grass shaders' dead work, same picture (parity 24/24).
 
-**Next: 0.4.65**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.65** (2026-11-19) indexes the caustics, links the water's and bloom's programs in parallel and cuts per-frame allocations. 0.4.64 on phones: Moto G71 8.3 fps, OnePlus 11R 67.4, iPhone 15 44.
+
+**Next: 0.4.66**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
