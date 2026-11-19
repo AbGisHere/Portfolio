@@ -6,6 +6,18 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.5 — 2026-11-20
+
+Mountains all round (`peaks.js`, `gl/peaksShader.js`).
+
+- The trough holds no floor to see: lesser peaks and spurs (650–1900 m) rise into and through the mist; the ground fades softly into the mist well below its floor.
+- The snow line drops ~380 m over the valley, so the lesser peaks carry snow.
+- The desk moves to z −1200 (from −4100): ~4.5 km from the hero's summit, ~3 km from the range's feet; the flight's middle keys follow.
+- Four peaks stand 2–3 km behind and beside the house (`PEAKS`, at full scale), the valley ends close behind it, and the near bake reaches there (`BAKE.near` from z −7400), so they're detailed, not the far bake's blobs.
+- The plateau hazes into distance as the mountains do (no bright line where they meet, unchecked at that view).
+
+Open: grass blades reach 56 m (the plateau beyond is textured ground); trees not moved; perf and phones not measured.
+
 ## 0.5.4 — 2026-11-20
 
 The meadow on its own mountain, among others (`peaks.js`, `gl/peaksShader.js`).

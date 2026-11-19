@@ -15,6 +15,11 @@ export const PEAKS = [
   [300, 3300, 1500, 1500],
   [-1300, 3000, 1100, 1100],
   [1900, 3100, 1000, 1000],
+  // (0.5.5) Behind the house: the range around our own mountain.
+  [-1500, -3600, 1500, 1300],
+  [1700, -3900, 1350, 1200],
+  [-3600, -2200, 1150, 1100],
+  [4000, -2000, 1100, 1000],
 ];
 // (0.5.3) The alpine valley between the sunlit meadow plateau and the hero
 // range: aligned with the hero peak (x = 300) so the pull-back stays centred,
@@ -26,14 +31,14 @@ export const valleyX = z => VALLEY.x + VALLEY.amp * Math.sin(z / VALLEY.wave);
 // right in front of the mountains (~7.4 km from the hero summit, ~5.5 km from
 // its base), so the entire snowy Matterhorn peak (~7.7° elevation) towers
 // close and dramatic right behind the meadow, trees and laptop lid.
-const DESK_Z = -4100;
+const DESK_Z = -1200;
 // r: the plateau's reach behind and to the sides; lip: how far its edge
 // stands in front of the desk, toward the peaks (the drop starts there).
 export const SHELF = { x: valleyX(DESK_Z), z: DESK_Z, y: 1880, r: 360, lip: 120 };
 // (0.5.3) The ground baked into textures once (gl/peaksShader.js): a near
 // box covering BOTH the desk plateau, the entire valley and the hero massif
 // in one seamless high-res map (7 m/texel at 2048²), plus a far horizon box.
-export const BAKE = { near: [-7200, -5600, 14336], far: [-30000, -24000, 65536], nearN: 2048, farN: 1024 };
+export const BAKE = { near: [-7200, -7400, 15360], far: [-30000, -24000, 65536], nearN: 2048, farN: 1024 };
 // The sea of clouds: its floor and the most its billows rise.
 export const CLOUD = { base: 1050, rise: 280 };
 
@@ -44,8 +49,8 @@ export const CLOUD = { base: 1050, rise: 280 };
 // every 3D tree is still behind the camera so nothing ever ghosts in).
 const DROP = [
   { at: 0, y: 2900, z: 500, pitch: 5.1, fov: 60 },
-  { at: 0.3, y: 2640, z: -650, pitch: 6.5, fov: 63 },
-  { at: 0.65, y: 2240, z: -2400, pitch: 9.5, fov: 69 },
+  { at: 0.3, y: 2640, z: -150, pitch: 6.5, fov: 63 },
+  { at: 0.65, y: 2240, z: -750, pitch: 9.5, fov: 69 },
   { at: 1, y: SHELF.y + 62, z: DESK_Z + 85, pitch: 14, fov: 79.6 },
 ];
 // Where the desk's path takes over.

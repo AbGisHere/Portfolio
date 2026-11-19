@@ -186,7 +186,11 @@ mist-filled trough below the range, an uneven rim with a grass shoulder
 rolling into cliffs, grass texture on the plateau, and the range closing in
 behind the house. Open items in its `CHANGELOG.md` entry.
 
-**Next: 0.5.5** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
+**0.5.5** (2026-11-20) fills the trough with mountains rising out of the
+mist, brings the plateau to ~3 km from the peaks and stands peaks close
+around the house. Open items in its `CHANGELOG.md` entry.
+
+**Next: 0.5.6** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
 valley flight, then the cliffs' own detail, the phones, the fallback's
 stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

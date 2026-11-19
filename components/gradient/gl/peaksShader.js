@@ -104,7 +104,7 @@ float nearFor(vec3 rd) {
 float valleyDist(vec2 p) { return abs(p.x - ${f(VALLEY.x)} - ${f(VALLEY.amp)} * sin(p.y / ${f(VALLEY.wave)})); }
 float valleyLen(vec2 p) {
   return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y)
-    * smoothstep(${f(SHELF.z - 2600)}, ${f(SHELF.z - 1100)}, p.y);
+    * smoothstep(${f(SHELF.z - 1500)}, ${f(SHELF.z - 650)}, p.y);
 }
 // How much of a place is the sunlit meadow overlook around the desk.
 float shelfD(vec2 p) {
@@ -124,12 +124,14 @@ float terrain(vec2 p, int oct) {
   float h = mix(valley, range * 3200. * mask + 450., ring);
   // Erosion: gullies and spurs down every face, finer as they go.
   float det = .8 + .36 * ridged(p / 560. + vec2(5.3, 2.1), min(oct, 9));
-  for (int i = 0; i < ${PEAKS.length}; i++) h = max(h, peak(p, PEAK[i], i == 0 ? 1. : .62, det));
+  for (int i = 0; i < ${PEAKS.length}; i++) h = max(h, peak(p, PEAK[i], i == 0 || i > 2 ? 1. : .62, det));
   // (0.5.3) Wide alpine valley trough between the meadow plateau and the
   // hero range: low enough for luminous valley mist to pool at the peaks'
   // feet, flanked by mountain walls on either side.
   float vd = valleyDist(p);
-  float vfloor = 120. + fbm(p / 900., 3) * 90.;
+  // (0.5.5) No floor to see: the trough is all mountains, their spurs and
+  // lesser peaks rising into the mist from deep below it.
+  float vfloor = 650. + 1250. * ridged(p / 1700. + 5.3, min(oct, 6)) * (.45 + .55 * noise(p / 2300. + 2.)) * det;
   float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
   float walls = max(h - vfloor, 0.) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
   h = mix(h, vfloor + walls * wall, valleyLen(p));
@@ -326,7 +328,7 @@ G geo(vec3 rd, float tStart) {
     float shf = shelfMask(p.xz);
     // Snow where the slope holds it, draping naturally down the hero peak
     // and flanking massifs (never pushed off the hero peak by the valley).
-    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf;
+    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf - 380. * valleyLen(p.xz);
     vec2 fu = faceUV(p, g.n);
     float bn = noise(fu / 32.);
     float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
@@ -571,9 +573,7 @@ vec3 shelfMeadow(vec2 xz, float dist, vec3 rd) {
   srgb = mix(srgb, srgb * vec3(1.08, 1.03, .78), smoothstep(.6, .85, mid) * .35 * (1. - smoothstep(500., 1400., dist)));
   vec3 lin = pow(max(srgb, vec3(0.)), vec3(2.2));
   // Subtle alpine horizon haze far off (never muddy, never dark).
-  float hk = 1. - exp(-max(dist - 280., 0.) / 5500.);
-  vec3 hz = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, .02), rd.z))));
-  return mix(lin, hz, clamp(hk, 0., .75));
+  return haze(lin, rd, dist);
 }
 
 vec3 ground(G g, vec3 rd) {
@@ -624,6 +624,8 @@ vec3 ground(G g, vec3 rd) {
   // Snow is matte: no sheen, only a faint glitter of crystals in the light.
   c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
   c = haze(c, rd, g.t);
+  // Below the mist's floor the ground fades into it: never a seen valley floor.
+  c = mix(c, skyLight() * 1.35 + bodyLight() * .12, .6 * smoothstep(MIST_BASE - 100., MIST_BASE - 500., alt));
   // Smoothly transition into exact shelf meadow palette as we approach the plateau.
   if (shf > .001) c = mix(c, shelfMeadow(p.xz, g.t, rd), shf);
   return c;
