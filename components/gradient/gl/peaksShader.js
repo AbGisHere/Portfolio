@@ -650,9 +650,12 @@ vec3 ground(G g, vec3 rd) {
   // (0.5.8) By night the hero peak alone stays legible (text will sit by
   // it): a cool moonlit fill on its faces, the snow catching most; the
   // rest of the range keeps the night.
-  float hero = smoothstep(2300., 900., length(p.xz - PEAK[0].xy));
+  float hero = smoothstep(1900., 700., length(p.xz - PEAK[0].xy));
   amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * g.ao;
   vec3 c = alb * (sunLit() * dif * sh * mix(1., 2., 1. - uNight) + amb);
+  // (0.5.9) By day too the hero stands apart: a touch more light on it.
+  c += (1. - uNight) * hero * alb * skyLight() * vec3(.85, .9, 1.) * .55 * (.5 + .5 * n.y) * g.ao;
+  c *= 1. + .12 * hero * (1. - uNight);
   // Bounce: with the body ahead, faces toward the viewer are backlit, so
   // sunlit mist and snowfields throw warm luminous light back onto them,
   // giving sculpted 3D relief even when viewed from the meadow below.
@@ -663,7 +666,8 @@ vec3 ground(G g, vec3 rd) {
   c += alb * bounce * facing * (1. - dif * sh * .85) * g.ao;
   // Snow is matte: no sheen, only a faint glitter of crystals in the light.
   c += g.snow * bodyLight() * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
-  c = haze(c, rd, g.t);
+  // (0.5.9) ... and clear of the haze the rest of the range sits back in.
+  c = haze(c, rd, g.t * (1. - .7 * hero));
   // Below the mist's floor the ground fades into it: never a seen valley floor.
   // (0.5.6) In drifts, never a level grey sheet: its depth wanders and it
   // thickens and thins across the trough.

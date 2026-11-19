@@ -212,7 +212,11 @@ near-white light, a white glow, white mist and clouds), lights the hero
 peak alone by night (a cool moonlit fill, for the text planned beside
 it), and guards `devices`' probe result.
 
-**Next: 0.5.9** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
+**0.5.9** (2026-11-20) sets the hero peak apart by day too: a soft sky
+fill on its faces, a touch more light, and clear of the haze the rest of
+the range sits back in.
+
+**Next: 0.5.10** (`ROADMAP.md`, `0.5.x`): the owner's next steps on the
 valley flight, then the cliffs' own detail, the phones, the fallback's
 stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

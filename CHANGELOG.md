@@ -6,6 +6,13 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.9 — 2026-11-20
+
+- **The hero peak apart by day too** (`gl/peaksShader.js`): within ~1.9 km
+  of its summit, a soft sky fill on its faces in shade, a touch more
+  light, and 70% less haze, so it stands forward of the range; by night
+  it stays the one moonlit peak (now on the same narrower reach).
+
 ## 0.5.8 — 2026-11-20
 
 - **A white day** (the owner: "WHITE, not dull"): the sun 9° up, its light
