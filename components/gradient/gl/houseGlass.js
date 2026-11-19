@@ -178,14 +178,18 @@ float fresnel(float ci, float n) {
 vec3 mirrored(vec3 R, float a) {
   vec3 Ls = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
   vec3 c = envAt(R);
-  float az = atan(R.x, R.z);
   float facing = smoothstep(-0.1, 0.35, R.z);
-  float far = 0.035 + 0.05 * envNoise(vec2(az * 5.0, 1.0)) + 0.02 * envNoise(vec2(az * 17.0, 3.0));
-  float near = 0.015 + 0.04 * envNoise(vec2(az * 3.3 + 7.0, 5.0)) + 0.015 * envNoise(vec2(az * 11.0, 9.0));
-  vec3 farCol = mix(uEnvLow, uEnvTop, 0.35) * 0.82;
-  vec3 nearCol = mix(uEnvTop * 0.55, uWood * 0.7, 0.35);
-  if (R.y > 0.0 && R.y < far) c = mix(c, farCol, facing);
-  if (R.y > 0.0 && R.y < near) c = mix(c, nearCol, facing);
+  // (0.4.64) The ranges only where they can show: above the horizon,
+  // toward the mountains.
+  if (R.y > 0.0 && facing > 0.0) {
+    float az = atan(R.x, R.z);
+    float far = 0.035 + 0.05 * envNoise(vec2(az * 5.0, 1.0)) + 0.02 * envNoise(vec2(az * 17.0, 3.0));
+    float near = 0.015 + 0.04 * envNoise(vec2(az * 3.3 + 7.0, 5.0)) + 0.015 * envNoise(vec2(az * 11.0, 9.0));
+    vec3 farCol = mix(uEnvLow, uEnvTop, 0.35) * 0.82;
+    vec3 nearCol = mix(uEnvTop * 0.55, uWood * 0.7, 0.35);
+    if (R.y < far) c = mix(c, farCol, facing);
+    if (R.y < near) c = mix(c, nearCol, facing);
+  }
   if (R.y <= 0.0) c = mix(uWood * 0.8, mix(uEnvLow, uWood, 0.6), exp(R.y * 12.0));
   c *= mix(1.0, 0.35, uNight);
   return c + uSun * pow(max(dot(R, Ls), 0.0), 1.0 / max(a, 1e-3)) * 3.0 * (1.0 - 0.7 * uNight);

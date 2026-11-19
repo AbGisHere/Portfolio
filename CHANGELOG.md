@@ -6,12 +6,20 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.64 — 2026-11-19
+
+- The house's fragment shader skips work nothing reads: the sun's shadow taps on faces turned from the sun (all but the lawn, curtains and thin leaves, lit from behind), the lawn's ambient occlusion where no lamp lights it (by day), the indoor reflection's second `envAt`, and `envAt` at all where indoors it's only the walls; one shell test before `roomOf`'s eight boxes; `pow(x, 2.0)` and `pow(x, 5.0)` as multiplies; the lamp kinds as `else if`; the normal normalised once.
+- The glass's mirrored ranges (`atan`, four noise calls) only above the horizon, facing the mountains.
+- Grass blades wholly behind the eye (over 0.5 m; a blade is at most 0.42 m) rejected before their wind and shading.
+- Same picture: house parity subset 24/24 against 0.4.63.
+
 ## 0.4.63 — 2026-11-19
 
 - The house's depth pass (AO) has its own vertex shader (`HOUSE_DEPTH_VERTEX`): only the position and part its fragment reads, so the normal and ST tables aren't fetched there.
 - The bloom's add pass reads the night's frame on texture unit 20, used by nothing else: no `getParameter` or rebind each night frame.
 - 0.4.61's entry corrected: readiness doesn't wait on the variants.
 - Same picture: house parity subset 24/24 against 0.4.62.
+- Phones (BrowserStack climb on 0.4.63, median of 3 sweeps): OnePlus 11R 90 Hz ~66 fps, p95 22 ms (0.4.46: ~57.5), ready 13.1 s; Moto G71 60 Hz ~7.4 fps (unchanged), ready 25.0 s; iPhone 15 59 Hz ~35 fps (24–45 across sweeps, first measured), ready 12.2 s. Loading's build ~8–9 s on all three (the prebuilt house through BrowserStack's tunnel, likely).
 
 ## 0.4.62 — 2026-11-19
 

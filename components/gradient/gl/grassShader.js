@@ -279,7 +279,8 @@ void main() {
   // shimmer, and the ground's far colour already reads as grass there.
   vec3 q0 = viewOf(vec3(rel.x, gy - uCam.y, rel.y));
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
-  if (z0 > 0.0 && 0.16 * uPitch.w * uPitch.z / z0 < uPxCss) {
+  // (0.4.64) And one wholly behind the eye (a blade is at most 0.42 m).
+  if (z0 < -0.5 || (z0 > 0.0 && 0.16 * uPitch.w * uPitch.z / z0 < uPxCss)) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
