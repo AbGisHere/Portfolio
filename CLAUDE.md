@@ -224,9 +224,14 @@ all in the background) and closes the 0.5.0 carry-overs (shell variants
 out, vertex tables kept, the scratch guard). M4 scroll 34 → 40 fps at
 1728×1117@2. The Moto G71's climb fell to ~3 fps in 0.5.x (~7 at 0.4.59).
 
-**Next: 0.5.11** (`ROADMAP.md`, `0.5.x`): the opening's terrain drawn as a
-mesh from the bake and a max-height pyramid to skip empty space (P5a,
-P5c), the Moto's climb, then 0.5.12 (one WebGL2 context, the fonts).
+**0.5.11** (2026-11-20) bakes the far ranges (`BAKE.outer`, ±90 km),
+read by the march while well above them: the flight ~1.5× faster with the
+same picture (M4 1728×1117@2 scroll 34 → 58 fps since 0.5.9). Each
+opening pass can be costed with `?skip=peaks-geo,…`. Found: the climb is
+slower in 0.5.x on the Moto G71 and OnePlus 11R (the peaks behind the
+house), and the Galaxy S21 falls back to 2D (the shape shader).
+
+**Next: 0.5.12** (`ROADMAP.md`, `0.5.x`): one WebGL2 context, the fonts.
 After that: the owner's next steps on the valley flight, the cliffs' own
 detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

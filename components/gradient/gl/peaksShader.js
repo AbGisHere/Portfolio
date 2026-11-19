@@ -195,12 +195,35 @@ vec4 bakedAt(vec2 p) {
   if (all(greaterThan(uf, vec2(.001))) && all(lessThan(uf, vec2(.999)))) return textureLod(uHF, uf, 0.);
   return vec4(-1e5);
 }
+// (0.5.11) The outer box: the march's ground (five octaves) out to the
+// horizon, read, not worked out (the normals still work it out).
+uniform sampler2D uHO;
+uniform float uOuter;
+const vec4 BOX_O = vec4(${f(BAKE.outer[0])}, ${f(BAKE.outer[1])}, ${f(BAKE.outer[2])}, 0.);
 float H(vec2 p, int oct) {
   if (uBaked > .5) {
     vec4 b = bakedAt(p);
     if (b.x > -1e4) return b.x + b.y;
   }
   return terrain(p, oct);
+}
+// The march's ground: as H, but past the far box the outer bake while the
+// ray is well above it (its texels round the crests off a little), the
+// noise itself near the ground, so every hit is where it was.
+float Hm(vec3 p, float t) {
+  if (uBaked > .5) {
+    vec4 b = bakedAt(p.xz);
+    if (b.x > -1e4) return b.x + b.y;
+    if (uOuter > .5) {
+      vec2 uo = (p.xz - BOX_O.xy) / BOX_O.z;
+      if (all(greaterThan(uo, vec2(.001))) && all(lessThan(uo, vec2(.999)))) {
+        vec2 c = textureLod(uHO, uo, 0.).rg;
+        float hb = c.x + c.y;
+        if (p.y - hb > 60. + t * .004) return hb;
+      }
+    }
+  }
+  return terrain(p.xz, 5);
 }
 float Hcoarse(vec2 p) {
   if (uBaked > .5) {
@@ -226,7 +249,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     // Static baked heightfield (1 texture read/step): blazing fast and
     // completely rigid across scroll frames, with conservative Lipschitz
     // stepping so thin peaks never clip or morph.
-    float h = p.y - H(p.xz, 5);
+    float h = p.y - Hm(p, t);
     if (h < .0012 * t) {
       // Binary search refinement for rock-solid silhouettes.
       float lo = tp, hi = t;
@@ -891,6 +914,13 @@ uniform vec4 uBox;
 out vec4 o;
 void main() {
   vec2 p = uBox.xy + gl_FragCoord.xy * uBox.w;
+  // (0.5.11) The outer box (uBox.z 1): the march's five octaves, heights only.
+  if (uBox.z > .5) {
+    float h5 = terrain(p, 5);
+    float a5 = floor(h5 / 32. + .5) * 32.;
+    o = vec4(a5, h5 - a5, 0., 0.);
+    return;
+  }
   float h = terrain(p, 8);
   float a = floor(h / 32. + .5) * 32.;
   o = vec4(a, h - a, mistNoise(p), terrain(p, 3) * .001);

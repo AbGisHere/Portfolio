@@ -6,6 +6,37 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.11 — 2026-11-20
+
+The flight over the peaks ~1.5× faster, with the same picture (0.5.10
+against 0.5.11, every scroll stop, day and night, phone and laptop:
+25/26 within mean 0.5 and p99 3, the last p99 4, mean 0.31).
+
+- **Measured first** (`?skip=peaks-geo,…`, new: each opening pass can be
+  skipped to cost it): the slow frames were all in the flight, all in the
+  shape pass, and most of that in rays past the far bake box, where every
+  step worked the noise terrain out (the top of the flight 68 → 31 ms
+  without them).
+- **The outer bake** (`peaks.js` `BAKE.outer`, `gl/peaksShader.js` `Hm`):
+  the march's ground (five octaves) out to ±90 km at 88 m a texel, baked
+  in eight bands after the opening shows, read while a ray is well above
+  it (60 m + 0.4% of its distance); near the ground and for the final
+  refine the noise itself, so the crests are where they were (`?outer=0`
+  off).
+- **Measured** (M4, scroll through the descent, GL; 0.5.9 → 0.5.11):
+  1440×900@2 44.8 → 71.9 fps, 1728×1117@2 34.2 → 58.2, 393×852@2 90.0 →
+  107.4.
+- **Tried and left out** (measured, no gain): a max-height pyramid to skip
+  empty cells (P5c; slower: in this ground most steps sit below their
+  cell's top), marching only what shows behind the house on the climb
+  (no change on the Moto, OnePlus or Pixel 7). A terrain mesh (P5a) wasn't
+  built: the cost was the far rays, which a mesh of the bake boxes
+  wouldn't reach.
+- **Found:** the pool climb is slower in 0.5.x on the Moto G71 (~3 fps,
+  ~7 at 0.4.59; the peaks lit behind the house cost ~2) and the OnePlus
+  11R (~55, ~65); the Galaxy S21 (Mali-G78, Android 11) can't compile the
+  opening's shape shader and falls back to the 2D scene.
+
 ## 0.5.10 — 2026-11-20
 
 Speed, with the same picture (0.5.9 against 0.5.10, every scroll stop,

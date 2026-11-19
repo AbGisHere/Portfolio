@@ -3589,22 +3589,28 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(u('uHN'), PEAKS_HN);
       gl.uniform1i(u('uHF'), PEAKS_HF);
       gl.uniform1f(u('uBaked'), peaksBake?.ready ? 1 : 0);
+      gl.uniform1i(u('uHO'), PEAKS_HO);
+      gl.uniform1f(u('uOuter'), peaksBake?.outerReady ? 1 : 0);
     }
     const PEAKS_HN = 29;
     const PEAKS_HF = 30;
+    const PEAKS_HO = 31;
+    // `?outer=0`: the march reads the noise past the far box (before 0.5.11).
+    const noOuter = params.get('outer') === '0';
     // One band of the bake a frame (the near box in eight, the far in two);
     // true once it's all there. Without the program the shape works the
     // ground out itself.
     function peaksBakeStep(P) {
       if (!P.bake) return true;
-      if (peaksBake?.ready) return true;
+      if (peaksBake?.ready && (peaksBake.outerReady || !peaksBake.outer)) return true;
       if (!peaksBake) {
-        const make = (N, unit) => {
+        const make = (N, unit, rg = false) => {
           gl.activeTexture(gl.TEXTURE0 + unit);
           const t = texture(gl, gl.LINEAR);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, N, N, 0, gl.RGBA, gl.HALF_FLOAT, null);
+          if (rg) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, N, N, 0, gl.RG, gl.HALF_FLOAT, null);
+          else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, N, N, 0, gl.RGBA, gl.HALF_FLOAT, null);
           const fbo = gl.createFramebuffer();
           gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
@@ -3612,14 +3618,16 @@ export default function MistCanvas({ recipe, onFail }) {
           return { t, fbo, N };
         };
         // Made with their units unbound, so neither is read while drawn.
-        peaksBake = { near: make(PEAKS_BAKE.nearN, PEAKS_SPARE), far: make(PEAKS_BAKE.farN, PEAKS_SPARE), step: 0, ready: false };
+        // (0.5.11) And the outer box (heights only), baked after the shape
+        // shows: past the far box the march read the noise itself.
+        peaksBake = { near: make(PEAKS_BAKE.nearN, PEAKS_SPARE), far: make(PEAKS_BAKE.farN, PEAKS_SPARE), outer: noOuter ? null : make(PEAKS_BAKE.outerN, PEAKS_SPARE, true), step: 0, ready: false, outerReady: false };
         gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
         gl.bindTexture(gl.TEXTURE_2D, null);
         gl.activeTexture(gl.TEXTURE0);
       }
       const k = peaksBake.step;
-      const [box, bands, b] = k < 8 ? [peaksBake.near, 8, k] : [peaksBake.far, 2, k - 8];
-      const [x0, z0, size] = box === peaksBake.near ? PEAKS_BAKE.near : PEAKS_BAKE.far;
+      const [box, bands, b] = k < 8 ? [peaksBake.near, 8, k] : k < 10 ? [peaksBake.far, 2, k - 8] : [peaksBake.outer, 8, k - 10];
+      const [x0, z0, size] = box === peaksBake.near ? PEAKS_BAKE.near : box === peaksBake.far ? PEAKS_BAKE.far : PEAKS_BAKE.outer;
       gl.bindFramebuffer(gl.FRAMEBUFFER, box.fbo);
       gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
       gl.viewport(0, 0, box.N, box.N);
@@ -3627,12 +3635,18 @@ export default function MistCanvas({ recipe, onFail }) {
       const y0 = Math.floor((b * box.N) / bands);
       gl.scissor(0, y0, box.N, Math.floor(((b + 1) * box.N) / bands) - y0);
       gl.useProgram(P.bake);
-      gl.uniform4f(peaksU(P.bake)('uBox'), x0, z0, 0, size / box.N);
+      gl.uniform4f(peaksU(P.bake)('uBox'), x0, z0, box === peaksBake.outer ? 1 : 0, size / box.N);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.disable(gl.SCISSOR_TEST);
       gl.viewport(0, 0, canvas.width, canvas.height);
       peaksBake.step++;
-      if (peaksBake.step >= 10) {
+      if (peaksBake.step >= 18 && peaksBake.outer) {
+        peaksBake.outerReady = true;
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_HO);
+        gl.bindTexture(gl.TEXTURE_2D, peaksBake.outer.t);
+        gl.activeTexture(gl.TEXTURE0);
+        if (peaksGeo) peaksGeo.key = null;
+      } else if (peaksBake.step === 10) {
         peaksBake.ready = true;
         for (const [unit, x] of [[PEAKS_HN, peaksBake.near], [PEAKS_HF, peaksBake.far]]) {
           gl.activeTexture(gl.TEXTURE0 + unit);
@@ -3723,6 +3737,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (peaksBake?.ready) {
         bindTo(PEAKS_HN, peaksBake.near.t);
         bindTo(PEAKS_HF, peaksBake.far.t);
+        if (peaksBake.outerReady) bindTo(PEAKS_HO, peaksBake.outer.t);
       }
       if (peaksMoon?.ready) bindTo(PEAKS_MOON, peaksMoon.tex);
       gl.activeTexture(gl.TEXTURE0);
@@ -3777,7 +3792,7 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.useProgram(P.coarse);
             peaksView(P.coarse, pk);
             gl.uniform2f(peaksU(P.coarse)('uFull'), W, H);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            timed('peaks-coarse', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
           } else if (k <= BANDS) {
             gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
             gl.bindTexture(gl.TEXTURE_2D, peaksGeo.coarse.texs[0]);
@@ -3791,15 +3806,15 @@ export default function MistCanvas({ recipe, onFail }) {
             const y0 = whole ? 0 : Math.floor(((k - 1) * H) / BANDS);
             const y1 = whole ? H : Math.floor((k * H) / BANDS);
             if (whole) {
-              drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
               peaksGeo.step = BANDS;
+              drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
             }
             gl.enable(gl.SCISSOR_TEST);
             gl.scissor(0, y0, W, y1 - y0);
             gl.useProgram(P.geo);
             peaksView(P.geo, pk);
             gl.uniform1i(peaksU(P.geo)('uCoarse'), PEAKS_G2);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            timed('peaks-geo', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
             gl.disable(gl.SCISSOR_TEST);
           } else {
             const hw = half(W, 2);
@@ -3823,7 +3838,7 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.useProgram(P.hor);
             peaksView(P.hor, pk);
             gl.uniform1i(peaksU(P.hor)('uG0'), PEAKS_G0);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            timed('peaks-hor', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
             gl.disable(gl.SCISSOR_TEST);
           }
           gl.viewport(0, 0, W, H);
@@ -3865,7 +3880,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthMask(false);
         peaksLight(P.behind, pk);
         peaksFlow(P.behind);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        timed('peaks-behind', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         gl.depthMask(true);
         gl.depthFunc(gl.LESS);
         gl.useProgram(prog);
@@ -3882,7 +3897,7 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         peaksLight(L, pk);
         peaksFlow(L);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        timed('peaks-lit', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         gl.disable(gl.BLEND);
         gl.useProgram(prog);
         return true;
@@ -3918,7 +3933,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.viewport(0, 0, W, H);
         gl.useProgram(P.lit);
         peaksLight(P.lit, pk);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        timed('peaks-kept', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         peaksKept.key = key;
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
@@ -3935,7 +3950,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(um('uBase'), PEAKS_BASE);
       gl.uniform1i(um('uMist'), PEAKS_MIST);
       gl.uniform1f(um('uA'), 1);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      timed('peaks-mix', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
       gl.useProgram(prog);
       return true;
     }
@@ -4356,7 +4371,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.5.10) The opening's targets, textures and programs.
       if (peaksGeo) for (const t of [peaksGeo, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
       if (peaksKept) dropTarget(peaksKept);
-      if (peaksBake) for (const x of [peaksBake.near, peaksBake.far]) { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.fbo); }
+      if (peaksBake) for (const x of [peaksBake.near, peaksBake.far, peaksBake.outer]) if (x) { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.fbo); }
       if (peaksMoon?.tex) gl.deleteTexture(peaksMoon.tex);
       if (peaksMode) {
         if (peaksMode.flowTex) gl.deleteTexture(peaksMode.flowTex);

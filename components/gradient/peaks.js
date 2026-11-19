@@ -67,7 +67,10 @@ float rimDm(vec2 m) { return rimD(m + vec2(${g(SHELF.x)}, ${g(SHELF.z)})); }
 // (0.5.3) The ground baked into textures once (gl/peaksShader.js): a near
 // box covering BOTH the desk plateau, the entire valley and the hero massif
 // in one seamless high-res map (7 m/texel at 2048²), plus a far horizon box.
-export const BAKE = { near: [-7200, -7400, 15360], far: [-30000, -24000, 65536], nearN: 2048, farN: 1024 };
+// (0.5.11) `outer`: heights only, out to ±90 km at 88 m a texel (the
+// march's five octaves are no finer than ~165 m), so past the far box a
+// step reads a texture instead of the noise.
+export const BAKE = { near: [-7200, -7400, 15360], far: [-30000, -24000, 65536], outer: [-90000, -90000, 180000], nearN: 2048, farN: 1024, outerN: 2048 };
 // The sea of clouds: its floor and the most its billows rise.
 export const CLOUD = { base: 1050, rise: 280 };
 
