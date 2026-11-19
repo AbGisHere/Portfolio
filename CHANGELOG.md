@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.62 — 2026-11-19
+
+- The lamps' lightmap (0.4.45) now rasterises the lawn from its own mesh, as intended: its triangle count was passed as `lawnChunk[1]` of an object (undefined), so only the analytical fill ever ran. The stored lightmap's key moves to `lightmap-2`, so bakes kept before are dropped.
+- Same picture: house parity 24/24 against 0.4.61.
+
 ## 0.4.61 — 2026-11-19
 
 - The house's preparation, faster with the same picture: the house's own program first and the lightmap's beside it as the queue has room (none when it's kept, 0.4.59); the shader variants compiled once the first frame's programs are linked, each slotted in as it links (its vertex tables' samplers set then); the mirrors' probe faces drawn back to back (a queue result `'again'`, no idle wait between faces); readiness waits only on the mirrors the contact path can see (all four are, today) and on every variant.

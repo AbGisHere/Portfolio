@@ -256,7 +256,9 @@ export function lightmapHash(gl, lights, extra = '') {
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   return hashParts([
-    'lightmap-1', ATLAS_VERTEX, ATLAS_FRAGMENT, LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT,
+    // (0.4.62) -2: the lawn's mesh pass runs (it never did: its count was
+    // passed as undefined), so bakes kept before are dropped.
+    'lightmap-2', ATLAS_VERTEX, ATLAS_FRAGMENT, LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT,
     LIGHTMAP_BOUNDS, makeLightmap.toString(), lightmapTexture.toString(), lights,
     String(gpu), String(gl.getParameter(gl.VERSION)), typeof navigator !== 'undefined' ? navigator.userAgent : '', extra,
   ]);

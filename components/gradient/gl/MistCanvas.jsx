@@ -832,7 +832,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const lmT0 = performance.now();
       const stored = houseBuilt.lightmapData;
       houseBuilt.lightmapData = null;
-      const lm = !useLightmap ? null : stored ? uploadLightmap(gl, 17, stored) : makeLightmap(gl, 17, lt, vao, hm.lawnChunk ? hm.lawnChunk[1] : 0, lmProgs);
+      const lm = !useLightmap ? null : stored ? uploadLightmap(gl, 17, stored) : makeLightmap(gl, 17, lt, vao, hm.lawnChunk?.count ?? 0, lmProgs);
       lmTimes = { ms: performance.now() - lmT0, cached: !!lm?.cached, stored: null };
       if (lm && !lm.cached && useLmCache && houseBuilt.key) {
         let key = null;
