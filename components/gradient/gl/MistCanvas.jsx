@@ -1,5 +1,6 @@
 'use client';
 
+import { PEAKS_ALL_FS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_VS } from './peaksShader';
 import { useEffect, useRef } from 'react';
 import { createPassProfiler } from './passProfiler';
 import { createGpuCompletion } from './gpuCompletion';
@@ -210,6 +211,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noLamp = params.get('lamp') === '0';
     const noProps = params.get('props') === '0';
     const noHouse = params.get('house') === '0';
+    // (0.5.0) `?peaks=0`: the 2D opening, not the 3D one (../peaks.js).
+    const noPeaks = params.get('peaks') === '0';
     const noAO = params.get('hao') === '0';
     const noGlass = params.get('glass') === '0';
     const noMirror = params.get('mirror') === '0';
@@ -1619,6 +1622,12 @@ export default function MistCanvas({ recipe, onFail }) {
     let w = 0;
     let h = 0;
     let dirty = true; // geometry / colours need recomputing
+    // (0.5.0) The 3D opening's state (drawPeaks, below).
+    let peaksNow = null;
+    let peaksMode;
+    let peaksGeo = null;
+    let peaksKept = null;
+    let peaksMoon = null;
     let scene = null; // last layout
     let veilPhase = []; // [drift, breathe] per veil, in cycles
     let lastDrawn = null;
@@ -2055,8 +2064,15 @@ export default function MistCanvas({ recipe, onFail }) {
         layoutAt: ranges => layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: false, ranges }),
         restCol: rgbToHex(value.slice(7, 10)),
         maxRidges: MAX_RIDGES,
+        peaksOff: noPeaks,
       });
       const { cam, stops, lit } = frame;
+      // (0.5.0) The 3D opening takes the scene's palette (peaksShader.js).
+      peaksNow = frame.peaks && {
+        ...frame.peaks,
+        stops: Float32Array.from(stops.flatMap(rgb01)),
+        body: Float32Array.from(value.slice(7, 10).map(c => c / 255)),
+      };
       scene = frame.layout;
       view = frame.view;
       view.ranges = cam.ranges;
@@ -3423,6 +3439,190 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.useProgram(prog);
     }
 
+    // (0.5.0) The opening in 3D (peaksShader.js), in two passes: the shape
+    // (where each pixel meets the ground, and the mist before it) into two
+    // float targets, redone only when the camera or the frame's size
+    // changes; then the light from those, so a switch only relights. At rest
+    // the lit frame is kept too and copied onto the canvas; in the drop it's
+    // drawn straight over the 2D scene as it fades (peaks.js). Without float
+    // targets one pass does both.
+    const PEAKS_G0 = 21;
+    const PEAKS_G1 = 22;
+    const PEAKS_G2 = 23;
+    // (0.5.0) The moon's face (public/moon.jpg), loaded once it's wanted.
+    const PEAKS_MOON = 24;
+    function peaksMoonFace() {
+      if (peaksMoon) return peaksMoon.ready;
+      peaksMoon = { ready: false };
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        if (stopped) return;
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_MOON);
+        const t = texture(gl, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.activeTexture(gl.TEXTURE0);
+        peaksMoon = { ready: true, tex: t };
+        dirty = true;
+        kickRef.current();
+      };
+      img.src = '/moon.jpg';
+      return false;
+    }
+    function peaksPrograms() {
+      if (peaksMode !== undefined) return peaksMode;
+      const floats = !!gl.getExtension('EXT_color_buffer_float');
+      const geo = floats && passProgram(gl, 'peaks-shape', PEAKS_VS, PEAKS_GEO_FS);
+      const lit = geo && passProgram(gl, 'peaks', PEAKS_VS, PEAKS_FS);
+      if (geo && lit) peaksMode = { geo, lit, all: null };
+      else {
+        const all = passProgram(gl, 'peaks-all', PEAKS_VS, PEAKS_ALL_FS);
+        peaksMode = all ? { geo: null, lit: null, all } : false;
+      }
+      return peaksMode;
+    }
+    function peaksView(p, pk) {
+      const u = n => gl.getUniformLocation(p, n);
+      gl.uniform2f(u('uRes'), canvas.width, canvas.height);
+      gl.uniform3fv(u('uCam'), pk.cam.pos);
+      gl.uniform3fv(u('uLook'), pk.cam.look);
+      gl.uniform1f(u('uFov'), pk.cam.fov);
+      gl.uniform2fv(u('uSunH'), pk.sunH);
+      gl.uniform2fv(u('uMoonH'), pk.moonH);
+    }
+    function peaksLight(p, pk) {
+      const u = n => gl.getUniformLocation(p, n);
+      peaksView(p, pk);
+      gl.uniform3fv(u('uSunDir'), pk.sun);
+      gl.uniform3fv(u('uMoonDir'), pk.moon);
+      gl.uniform3fv(u('uLightDir'), pk.dir);
+      gl.uniform1f(u('uGlow'), pk.light.glow);
+      gl.uniform1f(u('uLapse'), pk.light.lapse);
+      gl.uniform3fv(u('uStops'), pk.stops);
+      gl.uniform3fv(u('uBody'), pk.body);
+      gl.uniform1f(u('uNight'), pk.light.night);
+      gl.uniform1f(u('uA'), pk.a);
+      if (p === peaksMode.lit) {
+        gl.uniform1i(u('uG0'), PEAKS_G0);
+        gl.uniform1i(u('uG1'), PEAKS_G1);
+        gl.uniform1i(u('uG2'), PEAKS_G2);
+      }
+      gl.uniform1f(u('uByMoon'), pk.light.by === 'moon' ? 1 : 0);
+      const face = pk.light.night > 0.01 && peaksMoonFace();
+      gl.uniform1f(u('uMoonReady'), face ? 1 : 0);
+      if (face) {
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_MOON);
+        gl.bindTexture(gl.TEXTURE_2D, peaksMoon.tex);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(u('uMoonTex'), PEAKS_MOON);
+      }
+    }
+    const PEAKS_SPARE = 25;
+    function floatTarget(W, H, n) {
+      gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      const texs = [];
+      for (let i = 0; i < n; i++) {
+        const t = texture(gl, gl.NEAREST);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, W, H, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, t, 0);
+        texs.push(t);
+      }
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE0);
+      return { fbo, texs };
+    }
+    function dropTarget(t) {
+      if (!t) return;
+      for (const x of t.texs) gl.deleteTexture(x);
+      gl.deleteFramebuffer(t.fbo);
+    }
+    function drawPeaks() {
+      const pk = peaksNow;
+      if (!pk) return false;
+      const P = peaksPrograms();
+      if (!P) return false;
+      const prev = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+      const W = canvas.width;
+      const H = canvas.height;
+      gl.bindVertexArray(null);
+      gl.disable(gl.DEPTH_TEST);
+      const viewKey = [W, H, ...pk.cam.pos, ...pk.cam.look, pk.cam.fov, ...pk.sunH, ...pk.moonH].join();
+      if (P.geo) {
+        if (!peaksGeo || peaksGeo.w !== W || peaksGeo.h !== H) {
+          dropTarget(peaksGeo);
+          peaksGeo = { ...floatTarget(W, H, 3), w: W, h: H, key: null };
+        }
+        if (peaksGeo.key !== viewKey) {
+          // (Its targets mustn't be bound for reading while drawn into.)
+          for (const unit of [PEAKS_G0, PEAKS_G1, PEAKS_G2]) {
+            gl.activeTexture(gl.TEXTURE0 + unit);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+          }
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, peaksGeo.fbo);
+          gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+          gl.viewport(0, 0, W, H);
+          gl.useProgram(P.geo);
+          peaksView(P.geo, pk);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          peaksGeo.key = viewKey;
+        }
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_G0);
+        gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[0]);
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_G1);
+        gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[1]);
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
+        gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[2]);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+      const L = P.lit || P.all;
+      gl.useProgram(L);
+      if (pk.a < 1) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
+        gl.viewport(0, 0, W, H);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        peaksLight(L, pk);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.disable(gl.BLEND);
+        gl.useProgram(prog);
+        return true;
+      }
+      const key = [viewKey, ...pk.sun, ...pk.moon, ...pk.stops, ...pk.body, pk.light.night, pk.light.glow, pk.light.lapse, !!peaksMoon?.ready].join();
+      if (!peaksKept || peaksKept.w !== W || peaksKept.h !== H) {
+        if (peaksKept) {
+          gl.deleteTexture(peaksKept.tex);
+          gl.deleteFramebuffer(peaksKept.fbo);
+        }
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
+        const tex = texture(gl, gl.NEAREST);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.activeTexture(gl.TEXTURE0);
+        const fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        peaksKept = { tex, fbo, w: W, h: H, key: null };
+      }
+      if (peaksKept.key !== key) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, peaksKept.fbo);
+        gl.viewport(0, 0, W, H);
+        peaksLight(L, pk);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        peaksKept.key = key;
+      }
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, peaksKept.fbo);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, prev);
+      gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
+      gl.useProgram(prog);
+      return true;
+    }
+
     function draw(vs) {
       const wasRequired = requiredPass;
       requiredPass = true;
@@ -3458,8 +3658,12 @@ export default function MistCanvas({ recipe, onFail }) {
         const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram(true);
         if (!grassOn && !treesOn && !deskOn) {
           gl.disable(gl.DEPTH_TEST);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
-          drawMeadow(prints);
+          // (0.5.0) Over the clouds the 3D opening covers every pixel.
+          if (!(peaksNow?.a >= 1 && drawPeaks())) {
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            drawMeadow(prints);
+            if (peaksNow) drawPeaks();
+          }
           lastDrawn = vs;
           return;
         }
@@ -3522,6 +3726,8 @@ export default function MistCanvas({ recipe, onFail }) {
         const night = houseNight();
         const glow = deskOn && !noHouse && houseSeen && night > 0.01 && glass && !noBloom;
         if (glow) bloom ??= makeBloom(gl, 14, fxProgram) || false;
+        // (0.5.0) The 3D opening fading out over the 2D scene below the clouds.
+        if (peaksNow && peaksNow.a < 1) drawPeaks();
         // (0.4.57) By night with the frame in its own target, the bloom's
         // last pass writes the frame and the glow onto the canvas at once
         // (no copy, no blend); else the frame is copied over first.

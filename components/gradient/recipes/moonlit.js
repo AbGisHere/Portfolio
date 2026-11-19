@@ -57,11 +57,11 @@ const moonlit = {
 
   // How this scene animates when it becomes the active theme.
   transition: {
-    // Switching into night is the short hop (sun down, moon up), so it's
-    // quicker than night → dusk, which crosses the whole sky.
-    // Keep ms ≈ 5000 / springRate.
-    springRate: 3.33,
-    ms: 1500,
+    // (0.5.0) Into night is a real dusk over the 3D opening (../peaks.js):
+    // the sun sets behind the range, the alpenglow, then the moon rises,
+    // so it takes as long as the way back. Keep ms ≈ 5000 / springRate.
+    springRate: 1.43,
+    ms: 3500,
     // Top of the arc the sun and moon travel in a switch, as a share of the
     // frame height from the top (see components/gradient/orbit.js).
     apex: 0.12,

@@ -54,7 +54,7 @@ import { PROGRAMS } from './lib/programs.mjs';
 const DEVICES = [
   // Adreno (Snapdragon), old to new: the 730 is the one whose linker
   // rejected the grass (0.3.1–0.3.3).
-  { chip: 'Adreno 610 (budget)', deviceName: 'Xiaomi Redmi Note 11', osVersion: '11.0', browserName: 'chrome' },
+  { chip: 'Adreno 730 (Snapdragon 8 Gen 1)', deviceName: 'Samsung Galaxy S22 Ultra', osVersion: '12.0', browserName: 'chrome' }, // (0.5.0) replaces the Redmi Note 11 (Adreno 610), retired 2026-11-12; no budget Adreno is left
   { chip: 'Adreno 619 (mid)', deviceName: 'Motorola Moto G71 5G', osVersion: '11.0', browserName: 'chrome' },
   { chip: 'Adreno 730', deviceName: 'OnePlus 11R', osVersion: '13.0', browserName: 'chrome' },
   { chip: 'Adreno 750', deviceName: 'OnePlus 13R', osVersion: '15.0', browserName: 'chrome' },
@@ -72,11 +72,11 @@ const DEVICES = [
   { chip: 'Xclipse 940 or Adreno 750', deviceName: 'Samsung Galaxy S24', osVersion: '14.0', browserName: 'chrome' },
   { chip: 'Mali-G715 (Tensor G4)', deviceName: 'Google Pixel 9', osVersion: '15.0', browserName: 'chrome' },
   // PowerVR: old (budget MediaTek) and new (Tensor G5 on).
-  { chip: 'PowerVR GE8320 (budget)', deviceName: 'Vivo Y21', osVersion: '11.0', browserName: 'chrome' },
+  { chip: 'Mali-G715 (Tensor G3)', deviceName: 'Google Pixel 8', osVersion: '14.0', browserName: 'chrome' }, // (0.5.0) replaces the Vivo Y21 (PowerVR), retired 2026-11-12; no PowerVR is left
   { chip: 'PowerVR (Tensor G5)', deviceName: 'Google Pixel 10', osVersion: '16.0', browserName: 'chrome' },
   { chip: 'Tensor G6', deviceName: 'Google Pixel 11', osVersion: '17.0', browserName: 'chrome' },
   // Android tablets, old to new.
-  { chip: 'Adreno 650 (tablet, Android 11)', deviceName: 'Samsung Galaxy Tab S7', osVersion: '11.0', browserName: 'chrome' },
+  { chip: 'Adreno 730 (tablet, Android 12)', deviceName: 'Samsung Galaxy Tab S8', osVersion: '12.0', browserName: 'chrome' }, // (0.5.0) replaces the Tab S7, retired 2026-11-12
   { chip: 'Adreno 619 (budget tablet)', deviceName: 'Samsung Galaxy Tab A9 Plus', osVersion: '14.0', browserName: 'chrome' },
   { chip: 'Mali-G925 (tablet)', deviceName: 'Samsung Galaxy Tab S11', osVersion: '16.0', browserName: 'chrome' },
   // Samsung Internet, Samsung's own browser.
@@ -90,7 +90,7 @@ const DEVICES = [
   { chip: 'Apple M4 (iPad Pro, iPadOS 26)', deviceName: 'iPad Pro 13 2025', osVersion: '26', browserName: 'safari' },
   { chip: 'Apple A14 (iPad, iPadOS 16)', deviceName: 'iPad 10th', osVersion: '16', browserName: 'safari' },
   { chip: 'Apple A13 (iPad, iPadOS 15)', deviceName: 'iPad 9th', osVersion: '15', browserName: 'safari' },
-  { chip: 'Apple A13 (iOS 13, no WebGL2)', deviceName: 'iPhone 11', osVersion: '13', browserName: 'safari', expect: 'layers' },
+  { chip: 'Apple A18 (iOS 18)', deviceName: 'iPhone 16e', osVersion: '18', browserName: 'safari' }, // (0.5.0) replaces the iPhone 11 (iOS 13), retired 2026-11-12; nothing under iOS 14 is left
   { chip: 'Apple A14 (iOS 14, no WebGL2)', deviceName: 'iPhone 12', osVersion: '14', browserName: 'safari', expect: 'layers' },
   { chip: 'Apple A12Z (iPad, iPadOS 14, no WebGL2)', deviceName: 'iPad Pro 12.9 2020', osVersion: '14', browserName: 'safari', expect: 'layers' },
 ];

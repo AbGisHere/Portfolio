@@ -1136,31 +1136,78 @@ visitor who looks closely finds it. Exactly where it sits and how it's found
 are still open: the torn-off note, under the pad's top sheet, or legible
 only from up close.
 
-## Later — the mountains in stylised 3D
+## 0.5 — the opening hills in 3D: the look brief
 
-**Status:** agreed 2026-10-23 (the owner), after the home-page critique.
-Not scheduled.
+**Status:** agreed with the owner, 2026-11-19, over a run of sketches
+(a throwaway raymarched page outside the repo, judged by the owner). This
+replaces "the mountains in stylised 3D" (2026-10-23) with **real 3D
+terrain**, styled like the desk and the meadow rather than photoreal (the
+owner, same day: "it doesn't have to be 100% real… keep the whole website
+uniform"): clean forms, soft banded light, and every colour from the
+scene's own palette, so the opening, the 2D ridges below it and the desk
+read as one world. The bar is still awe at first sight.
 
-The descent is drawn in two styles. The mountains are flat painted mist,
-while the meadow, the trees and the desk (`0.3.1`–`0.3.12`) are stylised 3D,
-and the handover shows most around `desk` 0.025, where the violet ridges
-with their drawn crests give way to a 3D meadow. The owner's call is to
-bring the mountains over to the stylised 3D look, so the whole descent
-reads as one world. This replaces "the mountains can stay 2D" in
-"Rendering" above.
+**The world.** A piece of land the owner owns high in the mountains, and
+nothing else built: no town, no neighbours. In order, coming down:
+a lake, the meadow, the desk, the house on its rise. Behind the house its
+drive carries on down the far slope into the trees and the valley haze (no
+cars). One season, summer, with room for more later.
 
-- **Prior attempt:** a sideways drift with per-ridge parallax, slope-lit
-  faces and a wider tonal spread across the ridges was built on 2026-10-14
-  and reverted at the owner's request. It only dressed up the 2D ridges,
-  which is why the look still split.
-- **Keep:** the opening frame (the `0.1` atmosphere, its two recipes, the
-  sun setting into the ridges and the crest light), the ridges' breathing,
-  the day/night switch with no cut, the camera as a pure function of
-  scroll, the frame budget and sharpness on every display, and parity with
-  the layered fallback, or a decision about what the fallback draws.
-- **Still open:** real geometry (a heightfield or meshes) versus shading
-  the current ridges as 3D, how far the look changes at scroll 0, and which
-  release takes it.
+**The opening (scroll 0).** You float above a **sea of clouds** that fills
+the bowl, about 2,900 m up, the camera tilted a little down (like the
+current opening). One **hero peak** rises close in front of you, about
+2 km off, its summit above eye level: broad with a defined summit ridge
+(Matterhorn-like), not the sketch's needle. A neighbouring massif on the
+left, a lower one on the right, and the range all round fading into the
+haze (the owner preferred this to a calmer, emptier range). No lake
+or grass in the first frame.
+
+**Moving, but the mountains stay put.** Spindrift streaming off the
+summits, a little falling snow, the cloud sea drifting and curling round
+the peaks, cloud shadows and the light moving slowly over the snow. No
+parallax slide of layers: the camera only moves with the scroll.
+
+**The descent.** Scrolling tips the camera forward and down into the cloud
+sea beside the hero peak, its face sliding up past you; you come out under
+the cloud base over the bowl, the lake mirroring the peaks, and glide over
+the shore and the meadow to the desk, the hero peak behind the laptop.
+Then the house, as now. One terrain for the whole site: the peaks from the
+opening are the ones behind the desk and the house.
+
+**The lake.** Calm with the odd ripple from the wind; clear over stones at
+the shore, glacier turquoise, then deep sapphire where it mirrors the
+peaks; a pebble shore and a wet edge. It reflects what is beyond it (the
+peaks, the sky), never the house, which stands behind the camera.
+
+**As built in 0.5.0 (the owner's calls along the way):** the sky is real
+light, not the palette (Rayleigh and Mie scattering with ozone, so sunsets
+go orange to pink to violet and twilight blue; cirrus and altocumulus on a
+layer 9 km up; by night a navy sky, stars and the Milky Way); the cloud sea
+became **valley mist**; the peaks sit between spires and domes (firm
+summits, eroded faces, plenty of snow); the moon is the real moon (NASA's
+LRO map, public domain, `public/moon.jpg`, 23 KB); the bodies move like a
+timelapse, sliding sideways on a curve as they set and rise. Open: the
+2D handover's colours (until 0.5.3), the fallback's stills, the phones.
+
+**Afternoon and night, the click a real dusk.** Afternoon: a low sun, light
+on the snow warming white to amber. The click plays the change: the sun
+sets behind the peaks, alpenglow lingers pink on the highest summit, blue
+hour, the stars come out one by one, the moon rises behind a peak. Night:
+moonlit silver-blue snow, and on about one visit in three (seeded per
+visit, like the copses) an aurora: slow green curtains with violet edges,
+lighting the snow. A new sun and moon to match, the sun button following
+the body.
+
+**Fast.** Nothing to download: terrain, clouds and water from code on the
+GPU (target under ~15 KB), detail by distance, no build step; the first
+full frame within ~100 ms of the page showing; 120 fps on the M4 with
+headroom, and the same picture on phones (measured on BrowserStack from
+the first prototype, not at the end). Full quality stays the rule.
+
+**Decisions this forces (to settle in 0.5.0):** what the layered fallback
+draws (it can't draw 3D: stills from the 3D scene, so parity changes),
+`sceneAt` staying the one pure source of each frame, the day/night switch
+with no cut, and the 0.2/0.3 cameras rebuilt as the descent above.
 
 ## Later — a notice for the fallback renderer
 

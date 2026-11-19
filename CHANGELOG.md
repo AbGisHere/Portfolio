@@ -6,6 +6,18 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.0 — 2026-11-19
+
+The page opens on the hills in 3D (`ROADMAP.md`, "0.5 — the opening hills in 3D: the look brief", agreed with the owner over a run of sketches and rounds of feedback).
+
+- **The opening:** a hero peak with its range round it, raymarched from maths (`peaks.js`, `gl/peaksShader.js`), their lower slopes lost in valley mist, snow lit warm toward the body and cool in shade with rock bands through it. In `sceneAt` as `peaks`; `?peaks=0` gives the 2D opening.
+- **The sky:** real light: Rayleigh and Mie scattering with ozone (blue overhead, orange-pink-violet sunsets, the Belt of Venus, a blue twilight), cirrus and altocumulus on a layer 9 km up; by night a navy sky, three layers of stars and the Milky Way, with a blue (Purkinje) shift.
+- **The bodies:** the sun a disc the toggle's size, flattened at the horizon; the moon the real moon (`public/moon.jpg`, NASA LRO, public domain, 23 KB, loaded only by night) in a waxing gibbous phase. The click is a timelapse dusk or dawn: the outgoing body sets on a curve behind the range, the incoming one rises on the other side, the high cloud sweeps across. The toggle goes straight to the incoming body. Into night now takes 3.5 s (was 1.5 s) to play it.
+- **The drop:** scrolling dives into the mist (a white-out) and hands over to the 2D scene until 0.5.3.
+- **Cost (M4, 1512×982 @2):** the shape and the mist are marched once per view into three float targets; a frame at rest copies the lit frame; a switch only relights: 8.3 ms median, 17 ms worst (120 fps). Without float targets one pass does both. The first shape pass after load or resize is the heavy one (~0.1 s on the M4); not yet measured on phones.
+- **Devices:** BrowserStack retired four phones on 2026-11-12; `scripts/devices.mjs` swaps them (Galaxy S22 Ultra, Pixel 8, Tab S8, iPhone 16e; no budget Adreno, PowerVR or iOS 13 left). The three new shaders are in `PROGRAMS`. Not run yet.
+- **Known gaps:** the layered fallback still draws the 2D opening (its stills are open), so parity at the opening fails; `npm run qa` and the phones haven't run; the 0.5.0 carry-overs (lawn MIN blend on phones, the 0.4.60/0.4.66 A/B, the fScratch guard) and the iPhone SE harness crash are open.
+
 ## 0.4.69 — 2026-11-19
 
 Docs: the README trimmed to what's current. The per-release notes (0.4.40–0.4.68) are replaced by a short "Where it stands" section pointing to this changelog; the house's features no longer list the curtains (out since 0.4.47) and name the prebuilt house; the browser table matches `browserslist` (Safari and iOS 13 on); `npm run devices` is listed.

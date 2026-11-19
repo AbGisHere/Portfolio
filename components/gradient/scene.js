@@ -16,6 +16,7 @@ import {
   scrollPaletteSwitch,
   skyUnder,
 } from './camera';
+import { peaksAt } from './peaks';
 import { contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt, deviceFor, deskSkyAt, grassLit, grassOf, lidAt, pitchOf, skyLifeAt, toScreen } from './deskCamera';
 
 /**
@@ -38,6 +39,7 @@ import { contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt, deviceFor, de
  *   scene yet (GL's first switch frame has none): the palette runs through
  *   the switch's keyframes and the bodies ride the arc only once it does.
  * - `maxRidges`: how many ridges get painted (the shader's MAX_RIDGES).
+ * - `peaksOff`: no 3D opening (`?peaks=0`, and the layered renderer).
  */
 export function sceneAt({
   recipe: r,
@@ -57,6 +59,7 @@ export function sceneAt({
   sun: rest,
   restCol,
   maxRidges = Infinity,
+  peaksOff = false,
 }) {
   const p = orbit ? e : 1;
   const from = orbit ? orbit.prev : r;
@@ -116,7 +119,10 @@ export function sceneAt({
   // the body lands there (off the frame once the camera looks down).
   const pitch = onDesk ? pitchOf(cam, view, w, h) : null;
   const shown = pitch ? toScreen(pitch, painted.x, painted.y) : painted;
-  const spot = shown ? { x: shown.x, y: shown.y } : { x: -1e4, y: -1e4 };
+  // (0.5.0) Over the opening the body is the 3D scene's (../peaks.js).
+  const peaks = peaksAt({ recipe: r, orbit: turning ? orbit : null, e, about, onDesk, w, h, off: peaksOff });
+  const at = peaks && peaks.a > 0.5 ? peaks.spot : shown;
+  const spot = at ? { x: at.x, y: at.y } : { x: -1e4, y: -1e4 };
   const life = onDesk ? skyLifeAt(desk, r, stops, { prev: turning ? orbit.prev : null, e }) : null;
 
   // Ridges: past the top each is lit for the slot it has reached (its `t`),
@@ -135,6 +141,8 @@ export function sceneAt({
 
   return {
     cam,
+    // (0.5.0) The opening in 3D (null: not drawn).
+    peaks,
     stops,
     layout,
     view,

@@ -498,6 +498,7 @@ export default function LayeredScene({ recipe }) {
       const [gSize, gHorizon, , gHeight, gSharp, , gSeed] = targetGeo(shape);
       const frameAt = about => sceneAt({
         recipe: r,
+        peaksOff: true,
         orbit: o,
         e,
         base,

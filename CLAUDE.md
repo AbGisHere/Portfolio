@@ -145,7 +145,21 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.69** (2026-11-19) trims the README to what's current (docs).
 
-**Next: 0.5.0, the opening hills in 3D** (`ROADMAP.md`, `0.5.x`). The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.5.0** (2026-11-19) opens on the hills in 3D (`ROADMAP.md`, "0.5 —
+the opening hills in 3D: the look brief"): a hero peak and its range,
+raymarched, their feet in valley mist, under a real-light sky (Rayleigh,
+Mie, ozone; cirrus; stars and the Milky Way by night) with the real moon
+(`public/moon.jpg`, NASA LRO, public domain). The click is a timelapse
+dusk: the sun sets on a curve, the moon rises on the other side. Pure maths
+in `components/gradient/peaks.js` (in `sceneAt` as `peaks`), drawn by
+`gl/peaksShader.js` in two passes (the shape and the mist into float
+targets once per view; the light from them, so a switch only relights);
+`?peaks=0` gives the 2D opening. Scrolling drops through the mist and hands
+over to the 2D scene until 0.5.3. The layered fallback still draws the 2D
+opening (its stills are open), so parity at the opening is a known gap.
+
+**Next: 0.5.1** (`ROADMAP.md`, `0.5.x`): the opening's motion, the phones,
+the fallback's stills and the 0.5.0 carry-overs. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
@@ -389,6 +403,7 @@ components/
     gl/adaptiveQuality.js — the resolution step from frame intervals (pure)
     layers/LayeredScene.jsx, ridgeMasks.js — fallback renderer: CSS layers, ridge alpha masks
     scene.js    — `sceneAt`: one frame of the scene, pure, for both renderers
+    peaks.js, gl/peaksShader.js — the opening in 3D (0.5.0): its camera, the sun's and moon's paths; the terrain, mist, sky and bodies
     camera.js   — the descent (0.2): ridges, sky, ranges, meadow, palette, bodies, `ridgeLightAt`
     deskCamera.js — the 0.3 camera: the S path's keyframes, its pitch, the closing sky, the grass's light; the 0.4 one (CONTACT_PATH, the yaw, TURNED_HAZE, boxSeen)
     gl/grassShader.js, gl/footsteps.js — the meadow's instanced grass; the footprints (0.3.1)
