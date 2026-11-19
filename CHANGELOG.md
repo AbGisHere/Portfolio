@@ -6,6 +6,17 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.8 — 2026-11-20
+
+- **A white day** (the owner: "WHITE, not dull"): the sun 9° up, its light
+  near white, its glow white with a touch of gold, the mist, clouds and
+  the sun's veil white (`peaks.js`, `gl/peaksShader.js`).
+- **The hero peak alone lit by night:** a cool moonlit fill on its faces
+  (within ~2 km of its summit), the snow catching most; the rest of the
+  range keeps the night. Text is planned beside the peak.
+- **`devices`:** a probe that returns without an errors list (the iPhone
+  SE 2022) is logged, not thrown.
+
 ## 0.5.7 — 2026-11-20
 
 The day and the switch, remade (`peaks.js`, `gl/peaksShader.js`,

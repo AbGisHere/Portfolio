@@ -512,7 +512,7 @@ vec3 skyRaw(vec3 rd) {
 }
 // The body's light on the ground and the sky's in the shade, on screen.
 vec3 bodyLight() { return toScreen(reach(uLightDir, uByMoon > .5 ? MOON_I : SUN_I) * (uByMoon > .5 ? .8 : .11)) * 1.25 * (uByMoon > .5 ? vec3(.8, .9, 1.15) : vec3(1.)); }
-vec3 sunLit() { vec3 b = bodyLight(); if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .45) * vec3(1.06, 1., .93); }
+vec3 sunLit() { vec3 b = bodyLight(); if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .18) * vec3(1.02, 1., .97); }
 vec3 skyLight() { return toScreen(skyRaw(normalize(vec3(0., 1., 0.) + uLightDir * .3)) * .55); }
 
 vec3 sky(vec3 rd) {
@@ -524,7 +524,7 @@ vec3 sky(vec3 rd) {
   // The sun melting into the sky round it: the air near it pales to its
   // own warm white, wide and soft.
   float near = pow(max(dot(rd, uSunDir), 0.), 60.) * .9 + pow(max(dot(rd, uSunDir), 0.), 12.) * .35;
-  c = mix(c, max(c, vec3(dot(c, vec3(.33))) * vec3(1.55, 1.32, .9)), near * smoothstep(-.05, .02, uSunDir.y));
+  c = mix(c, max(c, vec3(dot(c, vec3(.33))) * vec3(1.45, 1.42, 1.32)), near * smoothstep(-.05, .02, uSunDir.y));
   // High cloud on a layer 9 km up, so it crowds toward the horizon as real
   // cloud does: patches of fibrous cirrus and soft altocumulus with clear
   // sky between, combed (not smeared) by the wind, sweeping across through
@@ -545,7 +545,7 @@ vec3 sky(vec3 rd) {
     float a = clamp(dens * .75, 0., .8);
     vec3 Lhi = normalize(uSunDir + vec3(0., .05, 0.));
     float fwd = pow(max(dot(rd, uSunDir), 0.), 14.);
-    vec3 lit = reach(Lhi, SUN_I) * (.05 + .9 * fwd) * (.75 + .25 * soft) * vec3(1.1, .95, .8) + reach(uMoonDir, MOON_I) * .12;
+    vec3 lit = reach(Lhi, SUN_I) * (.05 + .9 * fwd) * (.75 + .25 * soft) * vec3(1.02, 1., .96) + reach(uMoonDir, MOON_I) * .12;
     vec3 cc = lit + skyRaw(vec3(0., 1., 0.)) * .5;
     c = mix(c, cc, a);
   }
@@ -576,7 +576,7 @@ vec3 haze(vec3 c, vec3 rd, float t) {
   vec3 to = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, mix(.02, .16, 1. - uNight)), rd.z))));
   // Toward a low sun the veil is lit gold.
   float sunward = pow(max(dot(normalize(rd.xz), normalize(uSunDir.xz)), 0.), 6.) * smoothstep(.25, .02, uSunDir.y) * smoothstep(-.06, .01, uSunDir.y);
-  to = mix(to, to * vec3(1.12, 1.04, .95), sunward);
+  to = mix(to, to * vec3(1.04, 1.02, 1.), sunward);
   return mix(c, to, clamp(k + .1 * sunward, 0., mix(.85, .5, 1. - uNight)));
 }
 
@@ -647,6 +647,11 @@ vec3 ground(G g, vec3 rd) {
   // (0.5.7) By day the sun carries the scene: stronger direct light against
   // a cooler, lower sky fill, so lit faces glow warm and shade goes blue.
   vec3 amb = mix(sk, skSnow, g.snow) * (.55 + .45 * n.y) * g.ao * mix(vec3(1.), vec3(.5, .64, 1.), 1. - uNight);
+  // (0.5.8) By night the hero peak alone stays legible (text will sit by
+  // it): a cool moonlit fill on its faces, the snow catching most; the
+  // rest of the range keeps the night.
+  float hero = smoothstep(2300., 900., length(p.xz - PEAK[0].xy));
+  amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * g.ao;
   vec3 c = alb * (sunLit() * dif * sh * mix(1., 2., 1. - uNight) + amb);
   // Bounce: with the body ahead, faces toward the viewer are backlit, so
   // sunlit mist and snowfields throw warm luminous light back onto them,
@@ -693,7 +698,7 @@ vec3 mistLit(G g, vec3 rd) {
   vec3 sk = skyLight();
   vec3 lo = sk * 1.35 + sun * .12;
   vec3 hi = sun * .72 + sk * 1.05;
-  return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * vec3(1.08, 1., .88) * fwd * .45;
+  return mix(lo, hi, smoothstep(.05, .75, g.mh)) + sun * vec3(1.02, 1., .96) * fwd * .4;
 }
 
 // A body as the 2D scene draws it: a soft disc 10.4% of the frame's height
@@ -718,7 +723,7 @@ vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   // length, all added to the sky.
   float hot = 1. - smoothstep(.12, .7, d);
   vec3 coreC = vec3(1., .98, .9);
-  vec3 warm = mix(vec3(1., .7, .22), vec3(1., .8, .36), high);
+  vec3 warm = mix(vec3(1., .9, .66), vec3(1., .96, .84), high);
   vec2 wide = dv / R * vec2(.35, 1.2);
   float wd = length(wide);
   float glow = .75 * exp(-d * 1.5) + .5 * exp(-d * .4) + .22 * exp(-d * .14) + .1 * exp(-wd * .1);

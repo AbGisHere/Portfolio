@@ -339,18 +339,21 @@ try {
         await driver.sleep(2000);
       }
       const r =await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS);
-      row.gpu = r.gpu;
-      row.renderer = r.renderer;
-      row.programs = r.programs;
-      row.errors = r.errors;
-      for (const e of r.errors) row.failed.push(`page error: ${e}`);
+      row.gpu = r?.gpu;
+      row.renderer = r?.renderer;
+      row.programs = r?.programs;
+      // (The probe can come back without an errors list, as on the iPhone
+      // SE 2022: log what it did return rather than throw.)
+      if (!Array.isArray(r?.errors)) console.log(`  ${d.deviceName}: probe returned ${JSON.stringify(r)?.slice(0, 300)}`);
+      row.errors = r?.errors ?? [];
+      for (const e of row.errors) row.failed.push(`page error: ${e}`);
       if (d.expect === 'layers') {
         // No WebGL2 here: the site must fall back to the layered scene.
-        if (r.renderer !== 'layers') row.failed.push(`site renderer ${r.renderer ?? 'none'} (expected layers)`);
+        if (r?.renderer !== 'layers') row.failed.push(`site renderer ${r?.renderer ?? 'none'} (expected layers)`);
       } else {
         if (!r.webgl2) row.failed.push('no WebGL2');
         for (const p of r.programs) if (!p.link) row.failed.push(`${p.name} (${!p.vs ? 'vertex' : !p.fs ? 'fragment' : 'link'}${p.log ? `: ${p.log.split('\n')[0]}` : ''})`);
-        if (r.renderer !== 'gl') row.failed.push(`site renderer ${r.renderer ?? 'none'}`);
+        if (r?.renderer !== 'gl') row.failed.push(`site renderer ${r?.renderer ?? 'none'}`);
       }
       row.status = row.failed.length ? 'FAIL' : 'pass';
       const shot = join(OUT, `${slug(d.deviceName)}.png`);

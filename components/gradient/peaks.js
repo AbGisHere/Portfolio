@@ -139,7 +139,7 @@ export function peaksCameraAt(about) {
 // button, stays in frame on any aspect; 0 is straight ahead, + left). The
 // sun rests low on the right, the moon higher on the left.
 // (0.5.7) The day is golden hour: the sun low (the owner, 2026-11-20).
-export const BODIES = { sun: { el: 4.5, az: 0.58 }, moon: { el: 13, az: 0.58 } };
+export const BODIES = { sun: { el: 9, az: 0.58 }, moon: { el: 13, az: 0.58 } };
 // How far under the horizon a body must be once it's out of its scene.
 export const BELOW = -16;
 // The latitude the sky turns at: its pole is this high behind the camera
