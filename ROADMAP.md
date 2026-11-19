@@ -12,11 +12,12 @@ as the site takes shape.
 |---|---|
 | `0.1.x` | The atmosphere: the day/night mountain scene. Done as of `0.1.11`. |
 | `0.2.x` | About me: the camera pulls back from the mountains as you scroll, tilting down slightly and rising a little, while the sky turns toward evening (see "The descent"). Done: `0.2.0` pull-back, `0.2.1` ridge conveyor (GL), `0.2.2` the look (GL), `0.2.3` the sun and moon at any scroll, `0.2.4` performance headroom (GL), `0.2.5` ridge light at rest (GL), `0.2.6` the fallback catches up, `0.2.7` the switch cut fix, `0.2.8` the audit's clean-up, `0.2.9` the fallback's tile dropout in Chrome, `0.2.10` the custom domain and a terrain reference (docs), `0.2.11` sharpness on large high-DPI displays and the per-part docs, `0.2.12` the design audit's fixes and `DESIGN.md`, `0.2.13` the audit's owner decisions (docs). Per-release history: `CHANGELOG.md`. |
-| `0.3.x` | The desk: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. The descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, ending at a laptop (a tablet on portrait viewports). Its project screen comes in `0.5.x`. |
+| `0.3.x` | The desk: `0.3.0` the camera, `0.3.1` the meadow and grass, `0.3.2` boot prints, `0.3.3` the mountains' foot, `0.3.4` the grass on Adreno phones, `0.3.5` flowers and trees, `0.3.6` the desk, `0.3.7` frame headroom, `0.3.8` the laptop, `0.3.9` the laptop made real, `0.3.10` the tablet, `0.3.11` the lamp, `0.3.12` the stationery and accessories, `0.3.13` a brighter lamp, `0.3.14` a closer final shot. The descent proper (both arcs of the S), from where `0.2` leaves the camera onto a desk in a meadow, ending at a laptop (a tablet on portrait viewports). Its project screen comes in `0.6.x`. |
 | `0.4.x` | Current line — contact / reach out: the camera turns from the desk to a house on the hill and comes down over its balcony pool, where the contact form is planned (see "0.4 — contact: the house and the pool"). Started 2026-10-24, ahead of the device screen (the owner): `0.4.0` the camera over grey boxes, `0.4.1` the house in 3D, `0.4.2` the house rebuilt room by room, its glass, the pool's water, `0.4.3` caustics, the mirrored house, grass on the hill, contact shadows, `0.4.4` real birds, sliding glass, curtains tied by day and closed by night; `0.4.5` clean frames, wishbone chairs, a marble table, hotel beds, `0.4.6` lighting by night, `0.4.7` the stair, the bookcases, birds by the desk, `0.4.8` books, pillows, marble counters, a glass balustrade, the planters, tied curtains, `0.4.9` limestone paving and steps, daylight indoors, the stair's handrail, `0.4.10` the camera on foot from the desk through the house to the pool (replaced), `0.4.11` the turn made looking straight down over the desk, `0.4.12` the meadow running on behind the house, the hill's lawn its grass, `0.4.13` no stall on the first turn to the house, `0.4.14` no flicker on the kitchen and pictures, the upstairs glass open, curtains untied by night, `0.4.15` CI's hygiene fixed, the house in perf (info), `0.4.16` flowers and grass to the house, twigs, the entrance planting, the land behind, `0.4.17` the roof built up, the olive's pot, the pool inside the glass, brass rails, the stair's rail and lights, `0.4.18` doors' grain, real handles and pulls, mirrors that reflect, `0.4.19` pillows and cushions at rest, the throw clear of the arm, braided ties, `0.4.20` the shelves styled, real frames and prints, the table laid, `0.4.21` garments on hangers, the coat rail, the wardrobe built, `0.4.22` the terrace's bar, sockets and switches, the Home display, `0.4.23` marble washrooms with toilets, wide mirrors and a walk-in shower, `0.4.24` butterflies, the walker designed, `0.4.25` the pool fitted to every frame, `0.4.26` no flicker from afar on frames, rails and the bar's lights, the roof paved, Calacatta veining, mirrors that see out, fireflies, roses on the table, a robe and towels by the pool, `0.4.27` light by room, a table for two, the art varied, the marble cut on purpose, `0.4.28` the house lit to the lighting brief: floating ceilings, a cascade through the stair's void, statement pieces, every corner lit; `0.4.30` the lights fixed on Adreno phones; `0.4.31` the lived-in styling; `0.4.32` full-quality loading and non-blocking parallel compile; `0.4.33` compilation pacing and pop-in removal; `0.4.34` compile concurrency limiter and queue deadlock resolution; `0.4.35` zero-delta spatial light reach pruning and glass-penetration culling; `0.4.36` phones and the turn to the pool; `0.4.37` a local indexed-house/loading checkpoint with unresolved visual parity; `0.4.38` sharing/preparation/readiness batch; next `0.4.39` image parity, pool-climb work and clean performance validation. |
-| `0.5.x` | The device screen: the projects inside the laptop and the tablet (see "The device screen"; moved here from `0.3.15`+, the owner, 2026-10-24). |
-| `0.6.x` | A header on top of the site to navigate between the sections. |
-| `0.7.x` | Populating the site with the real content. |
+| `0.5.x` | The opening hills in 3D: the first scene's mountains rebuilt as real 3D terrain, meshed in code like the desk and the house, to the same quality (the owner, 2026-11-19; moved the device screen, the header and the content one line on). Starts at `0.5.0`. |
+| `0.6.x` | The device screen: the projects inside the laptop and the tablet (see "The device screen"; moved here from `0.3.15`+, the owner, 2026-10-24). |
+| `0.7.x` | A header on top of the site to navigate between the sections. |
+| `0.8.x` | Populating the site with the real content. |
 | `1.0.0` | Ship, once "Before 1.0.0" below is clear. |
 
 ## Before 1.0.0 — ship hygiene
@@ -178,7 +179,7 @@ By version line:
       To tell recruiters apart, share UTM-tagged links (`?utm_source=linkedin`),
       and use the contact form.
 - [ ] **Privacy policy** (`0.4`): a `/privacy` route, in the sitemap. Nothing
-      links to it until the `0.6` header or a footer. It covers the host
+      links to it until the `0.7` header or a footer. It covers the host
       (Vercel), the theme in `localStorage`, the analytics, the contact
       form's data and retention, how to ask for deletion, and that the site
       isn't directed at children. It must stay true, and it's a derived
@@ -199,22 +200,22 @@ By version line:
       isn't directed at children and has no accounts, so an age gate would
       collect data for no reason. The privacy policy says so. Revisit only
       if accounts or profile data ever appear.
-- [ ] **Keyboard navigation** (`0.5`, `0.6`). Today the sun is a real button
+- [ ] **Keyboard navigation** (`0.6`, `0.7`). Today the sun is a real button
       with a visible focus ring, and scrolling works with the keyboard.
-      `0.5`: project cards are focusable, and an opened project's iframe can
-      be left with the keyboard. `0.6`: a skip link, a logical tab order
+      `0.6`: project cards are focusable, and an opened project's iframe can
+      be left with the keyboard. `0.7`: a skip link, a logical tab order
       through the header, and visible focus everywhere.
-- [ ] **Colour contrast** (`0.7`, and every derived surface). Text meets WCAG
+- [ ] **Colour contrast** (`0.8`, and every derived surface). Text meets WCAG
       AA (4.5:1, or 3:1 for large text and UI such as focus rings) over the
       moving scene, in both themes and at every scroll position, using
       scrims where the sky is too bright. Check the error screens with every
       version line.
-- [ ] **Alt text** (`0.5`, `0.7`). Project images and screenshots get
+- [ ] **Alt text** (`0.6`, `0.8`). Project images and screenshots get
       meaningful `alt`. Decorative ones use `alt=""`. `npm run hygiene`
       checks every `<img>` has one.
 - [ ] **Third-party audit** (every version line). Today's runtime
       dependencies are `next`, `react`, `react-dom` and `lenis` (`gsap` was
-      removed in `0.2.8`). `0.5`'s project iframes load third-party pages, so
+      removed in `0.2.8`). `0.6`'s project iframes load third-party pages, so
       sandbox them (`sandbox`, `allow` kept to what each project needs, no
       `allow-top-navigation`).
 - [x] **Unsupported claims** (audited at `0.2.4`). The site copy, metadata,
@@ -377,7 +378,7 @@ differences: no idle drift or reshaping in the fallback, and no wind.
 
 - **Proposal:** the about text sits on the front ridge's fill, so the
   mountains become the page. Not decided; the text itself comes with the
-  real content (`0.7.x`).
+  real content (`0.8.x`).
 - **The favourite so far: sky lanterns** (the user, 2026-09-24; not final).
   Each lantern carries a line about Abhinav and rises into the darkening
   sunset as you scroll, sinking again when you scroll back. It's the only
@@ -412,7 +413,7 @@ the grass, then the table, then the laptop, the lamp and the accessories.
 | `0.3.12` | **Shipped.** The stationery and accessories (the owner, 2026-10-08): an open notebook with a fountain pen, a mug with coffee by day and tea by night (its tag dissolving with the switch) and steam off it, a pad of sticky notes with one torn off, and folded tortoiseshell glasses in the lamp's pool; built in code, lit by the sky and the lamp, with their shadows on the desk, and the lamp's drag stopping at them. |
 | `0.3.13` | **Shipped.** A brighter lamp (the owner, 2026-10-14): its light 1.6× (`LAMP.power`). |
 | `0.3.14` | **Shipped.** A closer final shot (the owner, 2026-10-23, after the home-page critique: more of the laptop's screen, since it will hold the projects): the screen about 57% of a 16:10 frame's width (was 41%), from an eye 1.0 m up (was 1.07) and 10.5° of pitch, so the mountains stay over the lid; the tablet unchanged. |
-| `0.3.15`+ | The device screen, moved to `0.5.x` (the owner, 2026-10-24): `0.3` closes with the desk. |
+| `0.3.15`+ | The device screen, moved to `0.6.x` (the owner, 2026-10-24): `0.3` closes with the desk. |
 
 **Still owed by the `0.3` camera** (before the line closes): the fallback's
 stills (it holds the pull-back's end for now), a reduced-motion version of
@@ -675,7 +676,7 @@ The rule: it must never feel slow, laggy or buggy.
 
 ## The device screen — projects inside the laptop
 
-**Status:** recorded 2026-09-23, now for the `0.5.x` line (moved from
+**Status:** recorded 2026-09-23, now for the `0.6.x` line (moved from
 `0.3.x` on 2026-10-24). The path to the device is "The descent" above.
 
 - **The screen is not an OS.** [2026-09-23: user decision.] What the laptop
@@ -813,6 +814,7 @@ on `0.4.38`. No push is requested for the checkpoint. The detailed
 | `0.4.46` | **Baked lighting in textures.** The house's lamps and strips (static, like the house) baked into lightmap textures at a texel density holding 2/255 on the largest walls, built offline and shipped; the shader reads the light instead of walking lights. Moving or view-dependent parts (specular, glass, water, the flicker) stay live. Per-vertex baking failed 2/255 in 0.4.40; texels don't share that limit. Size measured first. **Ruled out in 0.4.44:** the lamps' highlights depend on the camera, can't be baked, and fail 2/255 when left out (night 2/26, max 188); keeping them live keeps the walk over the lamps, which is the lamps' whole cost (the highlights alone measured free on the phones). Only revisit with an exact way to find the lamps whose highlight can reach a pixel. **Partly done in 0.4.45** (the owner's design, `docs/optimization-0.4.45.md`): where the highlight doesn't depend on the camera (the lawn, roughness 1) or holds 2/255 anyway (the roof's deck), the lamps' light is baked on the device; 104/104, Moto G71 +0.2–0.8 fps, OnePlus unchanged. **0.4.46 shipped other work instead** (the owner's, `docs/optimization-0.4.46.md`): material patterns only where they can be seen, the meadow's hill test only with the lawn in view, grass, flowers, trees and glass culled to the frame, the off-screen passes first for tiled GPUs; OnePlus 11R ~53 → 57.5 fps, Moto G71 ~7 → 7.5. | The full matrix at 2/255 (mean < 0.2), night; phone climbs, especially the Moto G71. |
 | `0.4.47` | **Shader variants, and the curtains and clothes out (done, 2026-11-19).** The house's shader compiled again for the lawn and for leaf runs (`HOUSE_VARIANTS`), same order and picture; the curtains and garments removed on the owner's call, new ones to come. |
 | `0.4.48` | **The house's plants as instances (done, 2026-11-19).** Every `leaf()` (15,000) now an instance of one of four templates (`leafInstances.js`), 0.84 MB in place of 21.6 MB of vertices and indices, drawn after the solid runs by the same programs (`uLeaf`); the leaves' runs culled to the view, not by the PVS. Planned: The olive and the lavender (most of the house's 15 MB of leaf vertices) drawn like the meadow's trees: a leaf shape and a transform per leaf, through every house pass. |
+| `0.4.68` | Docs: open items planned; the hills in 3D become 0.5.x |
 | `0.4.67` | sceneAt ~2× cheaper a frame |
 | `0.4.66` | Lamp lists fetched once per four; two shell variants |
 | `0.4.65` | Indexed caustics; parallel water/bloom programs; fewer per-frame allocations |
@@ -827,6 +829,10 @@ on `0.4.38`. No push is requested for the checkpoint. The detailed
 | Planned | **The house's GPU preparation, faster (owner's ask, 2026-11-19).** The mesh is instant on a return visit (IndexedDB, 0.4.44), but every load still compiles the house's shaders and draws its lightmap, shadow map and mirror probes (M4 ~1.6 s cached; Moto G71 17 s). Ideas: keep the baked lightmap in IndexedDB beside the mesh (it's the same every load; read back once, uploaded after), and the probes likewise where they don't depend on the time of day; start preparing earlier while the page is idle (today only as the desk nears), paced so phones don't lose the GPU context (0.4.32); compile only the variants the path needs first; measure each step on the phones' load holds. | Same picture (house parity); load holds on the phones. |
 | Planned | **Tighter vertex data (from 0.4.56).** Quantised positions (16-bit, relative to their run) and normals (10-bit): smaller buffers and download. It changes every pass's input (the house, depth, shadow, AO, lightmap, the visible set), so all of them move together. | Parity holds, or it's dropped. |
 | Planned | **Device tiers (owner's idea, 2026-11-19).** One tier per device, picked once at load from what can be known (touch or not, cores, memory, GPU name, the first frames' timing), overridable with `?tier=`. The top tier stays exactly today's pipeline, so house parity and `npm run qa` keep their baselines. What a tier decides: **loading first** — the house prebuilt (0.4.56) only where building is slow (phones: 5–8 s), built on the device where that's quicker (desktops: ~1.4 s on the M4; 0.4.56 made the first scroll to the house slower there); then, only on the owner's call per item (they bend the full-quality rule): resolution while moving, half-resolution AO, the paving's baked light. | Each tier's own parity baseline; the top tier equal to today's; phone climbs per tier. |
+| Planned | **The vertex tables on phones (from 0.4.60's audit).** 0.4.60 reads each vertex's normal, part and ST from tables (four `texelFetch` a vertex, the normals' in hash order) in place of 16 more bytes streamed. Climb the 20-byte path against the 36-byte one on the Moto G71, the OnePlus 11R and the iPhone 15; keep it only if it's no slower. | Phone climbs, both paths. |
+| Planned | **The lawn's edge on Adreno and Mali (from 0.4.58's audit).** The lawn goes into the AO by MIN blending into R16F: legal in WebGL2, clean on the M4, unchecked on phone drivers. Night screenshots (`devices`) of the lawn meeting the house on an Adreno and a Mali phone. | Screenshots match the M4's. |
+| Planned | **The mirror probes, cheaper to prepare (from the 0.4.64 audit).** Measure the probes' share of GPU preparation first (Moto G71 with `?mirror=0` against without; ~16 s in all). If it's seconds: keep the atlas in IndexedDB keyed by everything it's drawn from (night, sun, sky, shadow map, build), or cull each face to what its mirror can see through doors and glass (not by the room's box alone, which drops what a mirror shows). | Same picture (house parity); the Moto's preparation hold. |
+| Planned | **The lamp loops' second scan (from the 0.4.64 audit).** Outside, the front rooms' lamps are scanned from the list's start again; starting where the first scan stopped drops front-room lamps listed before the garden's. Exact only with the list ordered garden-first (or a second list per cell). | Same picture (house parity). |
 | `0.4.56` | **The house shipped prebuilt (done, 2026-11-19).** Built at build time, fetched gzipped; builds on any failure. Tighter vertex data deferred. | Unit test (byte for byte); parity; phone load holds. |
 | `0.4.55` | **Mediump material maths (done, 2026-11-19).** Same picture; Adreno and Mali checked; no measurable Moto gain alone. | Parity; phone screenshots. |
 | `0.4.54` | **The MacBook remeasured; CI green (done, 2026-11-19).** Front and side off Apple's images; the variant test updated. | Look, judged by the owner; CI. |
@@ -1102,7 +1108,7 @@ above: the mountains are at −Z and the camera never rolls.
 
 ## Later — cues to scroll and to touch the sun
 
-**Status:** agreed 2026-10-01 (user): built with the content (`0.7.x`),
+**Status:** agreed 2026-10-01 (user): built with the content (`0.8.x`),
 after the whole scroll exists. Raised by the 2026-10-01 audit.
 
 Today nothing on screen says the page scrolls or that the sun and moon can
@@ -1181,7 +1187,7 @@ the ridges don't breathe or reshape, and the desk shows as stills.
 - Small JetBrains Mono label on a palette-tinted scrim, like `ErrorScreen`,
   following day/night, with a z-index above the scene.
 - Bottom-left: the moon rises on the right and the sun's target moves.
-  Recheck against the content sections and the `0.6.x` header when it's
+  Recheck against the content sections and the `0.7.x` header when it's
   built.
 - `role="status"`, a real close button, no motion under reduced motion, and
   a Playwright check via `?renderer=layers`.
@@ -1217,7 +1223,7 @@ recognisable one. It runs as a Go command-line tool, so output can be
 pre-rendered to SVG rather than computed in the browser.
 
 - **Where it could help:** not decided. Possible fits: project thumbnails on
-  the desk screen (`0.5`), a portrait for the about-me layer, or placeholder
+  the desk screen (`0.6`), a portrait for the about-me layer, or placeholder
   images that resolve shape by shape as they load.
 - **Same rules as anything else in the scene:** the palette and light come
   from `sceneAt`, and it stays inside parity and the frame budget.

@@ -68,7 +68,7 @@ components:
 The whole site is one camera move. It starts in the sky over a range of
 painted mountains, pulls back as the visitor scrolls (`0.2`), comes down
 onto a desk in a meadow with a laptop or tablet (`0.3`), then turns toward
-a house and ends over its terrace pool (`0.4`). The project screen (`0.5`)
+a house and ends over its terrace pool (`0.4`). The project screen (`0.6`)
 and contact form over the pool are still to come.
 Every visual decision is staged along that move: a new layer earns its place
 by being somewhere the camera passes, not by being a section on a page.

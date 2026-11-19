@@ -141,7 +141,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.67** (2026-11-19) halves sceneAt's per-frame cost. 0.4.66 on phones was flat: Moto G71 8.3 fps, OnePlus 11R 66.8, iPhone 15 45.1.
 
-**Next: 0.4.68**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.68** (2026-11-19) records the open items as Planned and makes `0.5.x` the opening hills in 3D (docs).
+
+**Next: 0.5.0, the opening hills in 3D** (`ROADMAP.md`, `0.5.x`). The pool climb work stays open below (and in `ROADMAP.md`, Planned):, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure
@@ -165,7 +167,7 @@ detail to meet performance targets. Do not claim the pool jank is fixed.
 The rebuild goes layer by layer, and the version line tracks which layer:
 `0.1.x` the atmosphere (done), `0.2.x` about me (the camera pull-back,
 done), `0.3.x` projects (the desk), `0.4.x` contact (current), `0.5.x` the
-device screen, `0.6.x` header navigation, `0.7.x` real content, `1.0.0`
+opening hills in 3D (next, from `0.5.0`), `0.6.x` the device screen, `0.7.x` header navigation, `0.8.x` real content, `1.0.0`
 ship. The table, with where the
 current line stands, is "Version lines" in `ROADMAP.md`; it's the user's
 current thinking and will change.
@@ -467,7 +469,7 @@ The invariants any change must keep, whatever part it touches:
 | Content layers: real projects, resume, dev log, contact (the descent and the desk: see `ROADMAP.md`) |
 | The about-me content on the pull-back: sky lanterns are the favourite, not final (`ROADMAP.md`, "0.2") |
 | `0.4.x`: contact, the house and the pool (`ROADMAP.md`, "0.4"); the house built (to `0.4.15`); `0.4.16`–`0.4.25` the owner's feedback batch, `0.4.26` its review and the flicker from afar, `0.4.27` the interiors' design pass (`ROADMAP.md`, "Upcoming patch releases"), `0.4.28` lighting every corner; `0.4.30` the lights fixed on Adreno; `0.4.31` the lived-in styling; `0.4.32`–`0.4.36` loading/rendering optimization; `0.4.37` the indexed-mesh/loading checkpoint with unresolved parity; `0.4.38` publishes the sharing/preparation/readiness batch; `0.4.39` image parity and a ~1.9× faster pool climb (`docs/optimization-0.4.39.md`); `0.4.40` light cells and culling, faster on real phones (`docs/optimization-0.4.40.md`); next `0.4.41` the climb at the screen's rate on real phones; then remaining walk/contact work |
-| `0.5.x`: the device screen (`ROADMAP.md`, "The device screen") |
+| `0.6.x`: the device screen (`ROADMAP.md`, "The device screen") |
 | Before `0.3` closes: the fallback's stills under the `0.3` camera (it holds the pull-back's end for now), reduced motion on the `0.3` path, and perf and parity over the `0.3` stretch |
 | Ship hygiene before `1.0.0`: see `ROADMAP.md` (H1, SSR content, bundle) |
 | Trust, privacy and accessibility (`ROADMAP.md`): analytics (Vercel, cookieless) and `/privacy` with `0.4`, form consent, keyboard, contrast, third-party audit; no fabricated facts |

@@ -6,11 +6,17 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.68 — 2026-11-19
+
+- Docs only. The open items from the 0.4.60–0.4.64 audits as Planned in `ROADMAP.md` (no version yet): the vertex tables on phones, the lawn's edge on Adreno and Mali, cheaper mirror probes (measured first), the lamp loops' second scan.
+- The version lines move on (the owner): `0.5.x` is the opening hills rebuilt in 3D, next from `0.5.0`; the device screen is now `0.6.x`, the header `0.7.x`, the real content `0.8.x`.
+
 ## 0.4.67 — 2026-11-19
 
 - `hexToLms` keeps what it's converted (pure in the string; a fresh array each call), and `rgbToHex` builds its string from a table, the same result: `sceneAt` on the climb 0.16 → 0.078 ms a frame (M4, Node). A memo of `skyRamp` was slower (its stops change every frame) and was left out.
 - Same picture: house parity subset 24/24 against 0.4.66; unit and adaptive tests pass.
 - Phones on 0.4.66 (BrowserStack climb, median of 3): Moto G71 8.3 fps, ready 26.4 s; OnePlus 11R 66.8 fps, ready 15.9 s; iPhone 15 45.1 fps, ready 14.1 s: flat against 0.4.65 within noise (the lamp lists and the shell variants measured nothing on these three).
+- Phones on 0.4.67 (measured after its push): Moto G71 8.1 fps, ready 27.2 s; OnePlus 11R 67.0 fps, ready 15.2 s; iPhone 15 44.7 fps, ready 12.4 s: flat within noise.
 
 ## 0.4.66 — 2026-11-19
 
