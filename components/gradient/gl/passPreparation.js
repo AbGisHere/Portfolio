@@ -68,7 +68,8 @@ export function countInFlight(gl, ext, handles) {
   return count;
 }
 
-/** Round-robin retries with 100ms backoff on pending compiles. */
+/** Round-robin retries with 100ms backoff on pending compiles; a step that
+ * returns 'again' runs first at the next idle slot. */
 export function createPreparationQueue({
   schedule,
   cancel,
@@ -104,6 +105,12 @@ export function createPreparationQueue({
       result = 'failed';
     } finally {
       restore();
+    }
+    // 'again': it made progress and has more to do: first in line at the
+    // next idle slot, without the backoff for a wait.
+    if (result === 'again') {
+      tasks.unshift(task);
+      return enqueue();
     }
     if (result === 'pending') {
       tasks.push(task);

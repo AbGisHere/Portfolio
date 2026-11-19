@@ -52,6 +52,21 @@ export function probeLayout(mirrors) {
   });
 }
 
+/** Which probes the house's readiness waits for: the mirrors whose glass can
+ * be seen from the contact path, by its visible set (housePvs.js), and any
+ * mirror near one of those (a mirror's pixel reads the nearest ready probe
+ * within 2 m, so a near one must be ready too, or the seen one would show
+ * the wrong room). `set`: probeLayout's; `box`: the runs' boxes (lo, hi:
+ * six floats a run); `lists`: each device's per-run step intervals. A run
+ * holds a mirror when its box, padded, holds the glass's middle. Without
+ * every device's list, all of them. */
+export function mirrorsOnPath(set, box, lists, pad = 0.1, near = 4) {
+  if (!box || !lists.length || lists.some(L => !Array.isArray(L) || L.length * 6 !== box.length)) return set.map(() => true);
+  const holds = (r, c) => c.every((v, i) => v >= box[r * 6 + i] - pad && v <= box[r * 6 + 3 + i] + pad);
+  const seen = set.map(({ c }) => lists.some(L => L.some((iv, r) => iv.length > 0 && holds(r, c))));
+  return set.map(({ c }, i) => seen[i] || set.some((m, j) => seen[j] && Math.hypot(m.c[0] - c[0], m.c[1] - c[1], m.c[2] - c[2]) < near));
+}
+
 /** The lookup, for the house's fragment shader. */
 export const PROBE_GLSL = `uniform sampler2D uProbe;
 uniform float uProbeOn;      // 0 while a probe is being drawn

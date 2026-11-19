@@ -122,6 +122,16 @@ test('pending tasks retry fairly; disabled and failed tasks settle without a wak
   assert.equal(h.callbacks.size, 0);
 });
 
+test('a task with more to do runs again first, without the backoff', () => {
+  const h = queueHarness();
+  const order = [];
+  let left = 3;
+  h.q.add([() => { order.push('a'); return --left ? 'again' : 'done'; }, () => { order.push('b'); return 'done'; }]);
+  h.tick(); h.tick(); h.tick(); h.tick();
+  assert.deepEqual(order, ['a', 'a', 'a', 'b']);
+  assert.equal(h.callbacks.size, 0);
+});
+
 test('preparation wakes a stationary renderer when a late dependency becomes ready', () => {
   const h = queueHarness();
   let ready = false;

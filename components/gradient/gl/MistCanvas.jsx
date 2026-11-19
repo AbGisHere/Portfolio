@@ -57,7 +57,7 @@ import { FLOOR, HOUSE_BOUNDS, HOUSE_PART, HOUSE_VARIANTS, MOUND, POOL, TERRACE, 
 const POOL_BOX = [[POOL.at[0] - POOL.w / 2 - 0.5, POOL.at[1] - POOL.deep - 0.2, POOL.at[2] - POOL.d / 2 - 0.5], [POOL.at[0] + POOL.w / 2 + 0.5, POOL.at[1] + 0.3, POOL.at[2] + POOL.d / 2 + 0.5]];
 const MOUND_BOX = [[MOUND.at[0] - MOUND.r[0] * 1.12, 0, MOUND.at[1] - MOUND.r[1] * 1.12], [MOUND.at[0] + MOUND.r[0] * 1.12, MOUND.h, MOUND.at[1] + MOUND.r[1] * 1.12]];
 import { makeWater } from './poolWater';
-import { PROBE, PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX, PROBE_FACES, makeProbes, probeLayout } from './mirrorProbe';
+import { PROBE, PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX, PROBE_FACES, makeProbes, mirrorsOnPath, probeLayout } from './mirrorProbe';
 import { personMesh } from './personMesh';
 import { makeBloom } from './bloom';
 import { BIRD_FRAGMENT, BIRD_VERTEX, jointsOf } from './birdShader';
@@ -367,18 +367,15 @@ export default function MistCanvas({ recipe, onFail }) {
     let houseVariantsAsync = null;
     const startLightmapAtlasAsync = () => (lightmapAtlasAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-atlas', ATLAS_VERTEX, ATLAS_FRAGMENT) : null);
     const startLightmapLawnAsync = () => (lightmapLawnAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-lawn', LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT) : null);
-    const startHouseAsync = () => {
-      if (!noHouse && useLightmap && !lmStored()) {
-        startLightmapAtlasAsync();
-        startLightmapLawnAsync();
-      }
-      if (!noHouse && useVariants) houseVariantsAsync ??= HOUSE_VARIANTS.map((parts, v) => startProgram(`house-variant-${v}`, HOUSE_VERTEX, houseVariant(houseFragment, parts)));
-      return (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, houseFragment) : null);
-    };
+    // The house's own program only: the lightmap's two start beside it as
+    // the queue has room (or at once, when the frame needs the house), and
+    // the variants after the house is ready (`warmVariants`).
+    const startHouseAsync = () => (houseAsync ??= !noHouse ? startProgram('house', HOUSE_VERTEX, houseFragment) : null);
     const startShadowAsync = () => (shadowAsync ??= !noHouse ? startProgram('house-shadow', SHADOW_VERTEX, SHADOW_FRAGMENT) : null);
     const startGlassAsync = () => (glassAsync ??= !noHouse && !noGlass ? startProgram('house-glass', GLASS_VERTEX, GLASS_FRAGMENT) : null);
     const startDepthAsync = () => (depthAsync ??= !noHouse && !noAO && gl.getExtension('EXT_color_buffer_float') ? startProgram('house-depth', HOUSE_VERTEX, HOUSE_DEPTH_FRAGMENT) : null);
 
+    const onHouseRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/house');
     const isDirectHouse = typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'));
 
     const ensureWarmHouse = (priority = false) => {
@@ -743,21 +740,18 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!hp) return h?.failed ? (house = false) : null;
       let lmProgs = null;
       if (useLightmap && !lmStored()) {
-        const la = startLightmapAtlasAsync();
-        const ll = startLightmapLawnAsync();
+        const la = lightmapAtlasAsync ?? (wait || canStartCompile() ? startLightmapAtlasAsync() : null);
+        const ll = lightmapLawnAsync ?? (wait || canStartCompile() ? startLightmapLawnAsync() : null);
+        if (!la || !ll) return null;
         const lap = readyProgram(la, wait);
         const llp = readyProgram(ll, wait);
         if ((!lap && !la?.failed) || (!llp && !ll?.failed)) return null;
         if (lap && llp) lmProgs = { atlas: lap, lawn: llp };
       }
-      // (0.4.47) Its variants, compiled beside it: one that fails is left
-      // to the full shader.
-      let variants = null;
-      if (houseVariantsAsync) {
-        const vps = houseVariantsAsync.map(h => readyProgram(h, wait));
-        if (vps.some((vp, i) => !vp && !houseVariantsAsync[i]?.failed)) return null;
-        variants = vps.map(vp => (vp ? { prog: vp, u: uniformLookup(vp) } : null));
-      }
+      // (0.4.47) Its variants: slotted in as each links, after what the house
+      // needs is linked (`warmVariants`); until then, and for one that fails, the full
+      // shader draws their runs, to the same pixels.
+      const variants = useVariants ? HOUSE_VARIANTS.map(() => null) : null;
       const hm = houseBuilt.house;
       const hb = gl.createBuffer();
       const hib = gl.createBuffer();
@@ -1501,13 +1495,50 @@ export default function MistCanvas({ recipe, onFail }) {
       const warmProbes = () => {
         if (noMirror || !houseBuilt?.house.mirrors?.length) return 'disabled';
         if (!meadowAt || !mirrorProbes() || !houseProgram(false) || !probeBackdrop(false)) return 'pending';
-        if (probeStep(false)) return probesStale() ? 'pending' : 'done';
+        // (A face drawn, more to draw: the next at the next idle slot.)
+        if (probeStep(false)) return probesStale() ? 'again' : 'done';
         return 'done';
+      };
+      // Its shader variants, once every program the house's first frame
+      // needs is linked (they compile while the probes are drawn, which use
+      // them as they come), paced like the rest, each slotted in as it links:
+      // they draw the same pixels as the house's own program, which draws
+      // their runs until then.
+      const warmVariants = () => {
+        if (!useVariants) return 'disabled';
+        if (house === false || houseFailed) return 'done';
+        if (!house?.variants || shadow === null || (!noGlass && glass === null) || (!noAO && aoPass === null) || (!noMirror && backdrop === null)) return 'pending';
+        houseVariantsAsync ??= HOUSE_VARIANTS.map(() => null);
+        let left = false;
+        HOUSE_VARIANTS.forEach((parts, v) => {
+          if (house.variants[v]) return;
+          let h = houseVariantsAsync[v];
+          if (!h) {
+            if (!canStartCompile()) {
+              left = true;
+              return;
+            }
+            h = houseVariantsAsync[v] = startProgram(`house-variant-${v}`, HOUSE_VERTEX, houseVariant(houseFragment, parts));
+          }
+          const vp = readyProgram(h, false);
+          // (0.4.61) Its vertex tables' samplers set as it's slotted in
+          // (0.4.60 set them only on the variants made with the house).
+          if (vp) {
+            tableSamplers(gl, vp);
+            house.variants[v] = { prog: vp, u: uniformLookup(vp) };
+          }
+          else if (!h.failed) left = true;
+        });
+        return left ? 'pending' : 'done';
       };
       scheduleQueue([
         () => {
-          if (!houseAsync && !canStartCompile()) return 'pending';
-          startHouseAsync();
+          if (!houseAsync) {
+            if (!canStartCompile()) return 'pending';
+            startHouseAsync();
+          }
+          if (useLightmap && house === null && !lmStored() && !lightmapAtlasAsync && canStartCompile()) startLightmapAtlasAsync();
+          if (useLightmap && house === null && !lmStored() && !lightmapLawnAsync && canStartCompile()) startLightmapLawnAsync();
           return houseProgram(false) === null ? 'pending' : 'done';
         },
         () => {
@@ -1547,6 +1578,7 @@ export default function MistCanvas({ recipe, onFail }) {
         },
         shadowNow,
         warmProbes,
+        warmVariants,
       ], first);
     };
     gl.uniform1i(uniform('uMoon'), 4);
@@ -2853,19 +2885,44 @@ export default function MistCanvas({ recipe, onFail }) {
       backdrop = { prog: bp, vao: gl.createVertexArray(), u: uniformLookup(bp) };
       return backdrop;
     };
-    const probesStale = () => probeSet?.some(m => m.faces < 6 || Math.abs(m.night - houseNight()) > 0.03);
+    const probeStale = m => m.faces < 6 || Math.abs(m.night - houseNight()) > 0.03;
+    const probesStale = (need = null) => probeSet?.some((m, i) => (!need || need[i]) && probeStale(m));
+    // The probes the house's readiness waits for (mirrorProbe.js
+    // mirrorsOnPath): those of mirrors that can be seen from the contact
+    // path, on either device's; the rest are drawn after, by the queue and
+    // at rest. Every one on the /house route (its free camera goes anywhere),
+    // with `?pvs=0`, or when the visible set doesn't match the mesh.
+    let probeNeed = null;
+    const probesNeeded = () => {
+      if (probeNeed || !probeSet) return probeNeed;
+      const runs = houseBuilt?.house.runs;
+      const all = probeSet.map(() => true);
+      const pvsFits = !!runs && HOUSE_PVS.runs === runs.first.length && HOUSE_PVS.checksum === runsChecksum(runs);
+      probeNeed = onHouseRoute || noPvs || !pvsFits ? all : mirrorsOnPath(probeSet, runs.box, [HOUSE_PVS.laptop, HOUSE_PVS.tablet]);
+      return probeNeed;
+    };
     function probeStep(wait = false) {
       const pr = mirrorProbes();
-      if (!pr || !houseProgram(wait)) return false;
+      const hg = pr && houseProgram(wait);
+      if (!hg) return false;
       const b = probeBackdrop(wait);
       if (b === null) return false;
+      // The light's shadow map, drawn for the light as it is before any
+      // face: a face drawn before it (faces come back to back, ahead of the
+      // queue's `shadowNow`) showed the house unshadowed, and nothing draws
+      // that face again. A no-op while the light hasn't moved.
+      const sh = houseShadow(wait);
+      if (sh === null) return false;
+      if (sh && meadowAt?.colours) houseShadowMap(hg, sh, meadowAt.colours);
       const night = houseNight();
       const cm = meadowAt ? meadowAt.cm : { x: 0, y: 0, z: 0 };
       let k = -1;
       let best = Infinity;
+      // (Until the house is ready, the probes its readiness waits for first.)
+      const need = !houseComplete && probesStale(probesNeeded()) ? probesNeeded() : null;
       probeSet.forEach((m, i) => {
         const d = Math.hypot(m.c[0] - cm.x, m.c[1] - cm.y, m.c[2] - cm.z);
-        const stale = m.faces < 6 || Math.abs(m.night - night) > 0.03;
+        const stale = (!need || need[i]) && (m.faces < 6 || Math.abs(m.night - night) > 0.03);
         if (stale && d < best) {
           best = d;
           k = i;
@@ -2923,7 +2980,7 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       if (!house || !houseBuilt || shadow === null || (!noGlass && glass === null) ||
           (!noAO && aoPass === null) || water === undefined || (!noBloom && bloom === undefined)) return;
-      if (!noMirror && houseBuilt.house.mirrors?.length && (!probeSet || probesStale())) return;
+      if (!noMirror && houseBuilt.house.mirrors?.length && (!probeSet || probesStale(probesNeeded()))) return;
       // Cover all submitted uploads/probe/warm-up work without gl.finish or a
       // blocking wait. A resize before initial readiness needs a fresh fence.
       if (glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
