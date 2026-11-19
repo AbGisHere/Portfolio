@@ -931,12 +931,13 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.49) The frame's own target, sharing that depth: the AO pass
         // leaves the house's solid depth in it (drawHouseDepth), so the
         // colour pass needn't draw it again (frameTarget); copied onto the
-        // canvas at the frame's end. The lawn goes into the AO over a copy
-        // of it (`lawn`), as the frame's lawn comes after the grass.
+        // canvas at the frame's end. The lawn goes into the AO without
+        // writing it (drawHouseDepth), as the frame's lawn comes after the
+        // grass.
         if (ok && !noEarlyZ) {
           // (0.4.50) Its colour a texture, so the bloom reads it in place
           // of a copy of the canvas.
-          aoPass.frame ??= { fbo: gl.createFramebuffer(), tex: gl.createTexture(), lawnFbo: gl.createFramebuffer(), lawnDepth: gl.createRenderbuffer() };
+          aoPass.frame ??= { fbo: gl.createFramebuffer(), tex: gl.createTexture() };
           const f = aoPass.frame;
           gl.activeTexture(gl.TEXTURE0);
           const was = gl.getParameter(gl.TEXTURE_BINDING_2D);
@@ -947,17 +948,10 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
           gl.bindTexture(gl.TEXTURE_2D, was);
-          gl.bindRenderbuffer(gl.RENDERBUFFER, f.lawnDepth);
-          gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, size[0], size[1]);
           gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, f.tex, 0);
           gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
-          let fine = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-          gl.bindFramebuffer(gl.FRAMEBUFFER, f.lawnFbo);
-          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aoPass.tex, 0);
-          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, f.lawnDepth);
-          fine &&= gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-          aoPass.frameOk = fine;
+          aoPass.frameOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
         }
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.activeTexture(gl.TEXTURE0);
@@ -993,16 +987,19 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(a.u('uMirror'), 0, 0);
       const ctx = { P, c, fw: w, fh: h, keep: pathKeep(g) };
       if (a.frameOk) {
-        // (0.4.49) The solid part's depth stays for the frame (aoTarget);
-        // the lawn over a copy of it.
+        // (0.4.49) The solid part's depth stays for the frame (aoTarget).
+        // The lawn is tested against it but doesn't write it, and keeps
+        // the nearest of its own fragments by blending to the minimum (R16F
+        // blends in WebGL2 with EXT_color_buffer_float; MIN is core): the
+        // same as testing it against its own depth.
         houseGeometry(g, a.u, 'solid', ctx);
-        const [sw, sh] = a.size;
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, a.fbo);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, a.frame.lawnFbo);
-        gl.blitFramebuffer(0, 0, sw, sh, 0, 0, sw, sh, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, a.frame.lawnFbo);
+        gl.depthMask(false);
+        gl.enable(gl.BLEND);
+        gl.blendEquation(gl.MIN);
         houseGeometry(g, a.u, 'lawn', ctx);
-        drop(gl.DEPTH_ATTACHMENT);
+        gl.blendEquation(gl.FUNC_ADD);
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
       } else houseGeometry(g, a.u, 'all', ctx);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3706,9 +3703,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.deleteFramebuffer(aoPass.fbo);
         if (aoPass.frame) {
           gl.deleteTexture(aoPass.frame.tex);
-          gl.deleteRenderbuffer(aoPass.frame.lawnDepth);
           gl.deleteFramebuffer(aoPass.frame.fbo);
-          gl.deleteFramebuffer(aoPass.frame.lawnFbo);
         }
       }
       if (reflect) {

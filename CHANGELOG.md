@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.58 — 2026-11-19
+
+- The lawn goes into the AO pass over the solid part's depth without writing it, keeping its nearest fragment by blending to the minimum (R16F, MIN): the second full-size depth buffer and its per-frame copy (0.4.49) are gone. `?earlyz=0` keeps the old path.
+- Same picture: house parity 24/24 against 0.4.57.
+
 ## 0.4.57 — 2026-11-19
 
 - The prebuilt house (0.4.56) only on touch-first devices, where building takes 5–8 s; a desktop builds it again (~1.4 s on the M4), as 0.4.56's download made its first scroll to the house slower. `?prebuilt=1` forces it, `?prebuilt=0` never.
