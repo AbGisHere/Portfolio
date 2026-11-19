@@ -15,6 +15,7 @@ import './leaf-instance-test.mjs';
 import './light-cells-test.mjs';
 import './house-pvs-test.mjs';
 import './house-blob-test.mjs';
+import './lightmap-cache-test.mjs';
 import './house-readiness-test.mjs';
 import './pass-preparation-test.mjs';
 import './pass-profiler-test.mjs';

@@ -123,7 +123,9 @@ glow (`?bloommerge=0`) and makes house parity ~15× faster.
 
 **0.4.58** (2026-11-19) draws the lawn into the AO pass without its own depth buffer and per-frame copy (MIN blending).
 
-**Next: 0.4.59**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
+**0.4.59** (2026-11-19) keeps the baked lightmap in IndexedDB (`lightmapCache.js`, `?lmcache=0` off).
+
+**Next: 0.4.60**, toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
 (`ROADMAP.md`, the 0.4.44 row). The house is the OnePlus's main cost; the
 Moto G71 is slow every frame (its GPU, at full resolution). Measure

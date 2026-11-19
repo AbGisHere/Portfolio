@@ -44,7 +44,7 @@ import { TABLET_FRAGMENT, TABLET_STRIDE, TABLET_TEX, TABLET_VERTEX, tabletMesh, 
 import { TABLET } from './tabletShape';
 import { LAMP_FRAGMENT, LAMP_STRIDE, LAMP_VERTEX, lampMesh } from './lampShader';
 import { LAMP, LAMP_POSE, lampAt, lampClear, lampHitOn, lampSegments, makeFlicker } from './lampShape';
-import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, houseLightData, houseMesh, houseVariant } from './houseShader';
+import { HOUSE_DEPTH_FRAGMENT, HOUSE_FRAGMENT, HOUSE_STRIDE, HOUSE_VERTEX, LIGHTMAP_BOUNDS, houseLightData, houseMesh, houseVariant } from './houseShader';
 import { CURTAIN_BYTES, HOUSE_BYTES, houseRanges, leafChecksum, packCurtainMesh, packHouseMesh, runVariant, runsChecksum, tagLampFittings } from './houseLights';
 import { HOUSE_PVS } from './housePvs';
 import { cacheUniforms } from './uniformCache';
@@ -67,7 +67,8 @@ import { firefliesAt, fireflyMesh } from './fireflies';
 import { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
 import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 import { LEAF_INSTANCE_STRIDE, LEAF_TEMPLATES, LEAF_TEMPLATE_STRIDE, leafTemplate } from './leafInstances';
-import { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, makeLightmap } from './houseLightmap';
+import { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, lightmapHash, makeLightmap, startLightmapReadback, uploadLightmap } from './houseLightmap';
+import { storeLightmap, validLightmap } from './lightmapCache';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -350,6 +351,15 @@ export default function MistCanvas({ recipe, onFail }) {
     const hskip = (params.get('hskip') ?? '').split(',').filter(w => /^[a-z]+$/.test(w));
     const houseFragment = hskip.length ? HOUSE_FRAGMENT.replace('precision highp int;\n', `precision highp int;\n${hskip.map(w => `#define HS_${w.toUpperCase()}\n`).join('')}`) : HOUSE_FRAGMENT;
     const useLightmap = params.get('lightmap') !== '0';
+    // (0.4.57) The baked lightmap kept in the browser (lightmapCache.js):
+    // a return visit uploads it in place of baking; `?lmcache=0` bakes.
+    const useLmCache = useLightmap && params.get('lmcache') !== '0';
+    let lmHash = null;
+    const lightmapKeyHash = () => (lmHash ??= lightmapHash(gl, houseLightData().data, indexedHouse ? '' : 'expanded'));
+    let lmReadback = null;
+    let lmTimes = null;
+    // Whether the mesh came with a stored bake (then its programs aren't needed).
+    const lmStored = () => !!houseBuilt?.lightmapData;
     // (0.4.47) The house's shader variants (houseShape.js HOUSE_VARIANTS);
     // `?variants=0` draws everything with the full shader.
     const useVariants = params.get('variants') !== '0';
@@ -357,7 +367,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const startLightmapAtlasAsync = () => (lightmapAtlasAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-atlas', ATLAS_VERTEX, ATLAS_FRAGMENT) : null);
     const startLightmapLawnAsync = () => (lightmapLawnAsync ??= !noHouse && useLightmap ? startProgram('house-lightmap-lawn', LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT) : null);
     const startHouseAsync = () => {
-      if (!noHouse && useLightmap) {
+      if (!noHouse && useLightmap && !lmStored()) {
         startLightmapAtlasAsync();
         startLightmapLawnAsync();
       }
@@ -696,6 +706,8 @@ export default function MistCanvas({ recipe, onFail }) {
           if (e.data?.stored) return worker.terminate();
           if (stopped) return worker.terminate();
           houseBuilt = e.data;
+          // (0.4.57) A stored bake that isn't whole is dropped: baked instead.
+          if (houseBuilt.lightmapData && (!useLmCache || !validLightmap(houseBuilt.lightmapData, ...LIGHTMAP_BOUNDS.size))) houseBuilt.lightmapData = null;
           if (!houseComplete) setHouseReadiness('mesh-ready');
           houseWorker = null;
           updateHouseBuffer();
@@ -716,7 +728,13 @@ export default function MistCanvas({ recipe, onFail }) {
         // `?prebuilt=1` forces it, `?prebuilt=0` never.
         const pb = params.get('prebuilt');
         const touch = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
-        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch) });
+        let lightmap = null;
+        try {
+          lightmap = useLmCache && !noHouse ? lightmapKeyHash() : null;
+        } catch {
+          lightmap = null;
+        }
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch), lightmap });
       } catch {
         here();
       }
@@ -732,7 +750,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const hp = readyProgram(h, wait);
       if (!hp) return h?.failed ? (house = false) : null;
       let lmProgs = null;
-      if (useLightmap) {
+      if (useLightmap && !lmStored()) {
         const la = startLightmapAtlasAsync();
         const ll = startLightmapLawnAsync();
         const lap = readyProgram(la, wait);
@@ -818,7 +836,33 @@ export default function MistCanvas({ recipe, onFail }) {
       const ld = houseLightData();
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ld.width, ld.height, 0, gl.RGBA, gl.FLOAT, ld.data);
       gl.activeTexture(gl.TEXTURE0);
-      const lm = !useLightmap ? null : makeLightmap(gl, 17, lt, vao, hm.lawnChunk ? hm.lawnChunk[1] : 0, lmProgs);
+      // (0.4.57) The stored bake, uploaded; else baked, and read back once
+      // to store (lightmapCache.js), never waiting on the GPU.
+      const lmT0 = performance.now();
+      const stored = houseBuilt.lightmapData;
+      houseBuilt.lightmapData = null;
+      const lm = !useLightmap ? null : stored ? uploadLightmap(gl, 17, stored) : makeLightmap(gl, 17, lt, vao, hm.lawnChunk ? hm.lawnChunk[1] : 0, lmProgs);
+      lmTimes = { ms: performance.now() - lmT0, cached: !!lm?.cached, stored: null };
+      if (lm && !lm.cached && useLmCache && houseBuilt.key) {
+        let key = null;
+        try {
+          key = `${houseBuilt.key}#${lightmapKeyHash()}`;
+        } catch {
+          key = null;
+        }
+        if (key) {
+          const times = lmTimes;
+          const t0 = performance.now();
+          lmReadback = startLightmapReadback(gl, lm.tex, data => {
+            lmReadback = null;
+            if (!data || stopped) return (times.stored = false);
+            storeLightmap(key, data).then(ok => {
+              times.stored = ok;
+              times.storeMs = performance.now() - t0;
+            });
+          });
+        }
+      }
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       house = {
         prog: hp,
@@ -3583,7 +3627,7 @@ export default function MistCanvas({ recipe, onFail }) {
     if (profiler) window.__houseProfile = () => profiler.snapshot();
     window.__houseCam = setFreeCam;
     window.__pinDescent = pinDescent;
-    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, lightmap: !!house?.lightmap, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
+    window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, lightmap: !!house?.lightmap, lightmapCache: lmTimes, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
     window.__warmAllProbes = () => {
       buildHouse();
       if (!houseBuilt) return false;
@@ -3609,6 +3653,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (profiler) { profiler.dispose(); delete window.__houseProfile; }
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();
+      lmReadback?.();
       cancelAnimationFrame(raf);
       raf = 0;
       onFail?.(Object.assign(new Error('webgl context lost'), { lost: true }));
@@ -3657,6 +3702,7 @@ export default function MistCanvas({ recipe, onFail }) {
       cancelAnimationFrame(raf);
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();
+      lmReadback?.();
       kickRef.current = () => {};
       ro.disconnect();
       io?.disconnect();

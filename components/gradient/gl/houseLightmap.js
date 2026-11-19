@@ -12,10 +12,15 @@
  *   triangles so interpolated positions and normals match the mesh.
  * - Rows 896 … 1023, cols 0 … 127 (124² interior, 2 px gutter): the roof deck.
  * - The rest is black (unused).
+ *
+ * (0.4.57) Kept in the browser after the first bake (lightmapCache.js):
+ * `lightmapHash` names the bake, `startLightmapReadback` reads it back
+ * once without stalling, `uploadLightmap` makes the same texture from it.
  */
 
 import { MOUND, MOUND_GLSL } from './houseShape';
 import { HOUSE_LIGHT_GLSL, LIGHTMAP_BOUNDS } from './houseShader';
+import { f32ToF16Exact, hashParts, validLightmap } from './lightmapCache';
 
 const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const [W, H] = LIGHTMAP_BOUNDS.size;
@@ -160,16 +165,8 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0,
   const ownLawn = !lawnProg;
   let fbo = null;
   let emptyVao = null;
-  const tex = gl.createTexture();
+  const tex = lightmapTexture(gl, unit, null);
   try {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, W, H, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
     fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
@@ -232,4 +229,170 @@ export function makeLightmap(gl, unit, lightTex, houseVao = null, lawnCount = 0,
     gl.deleteTexture(tex);
     return null;
   }
+}
+
+// The texture's state, shared by the bake and the upload.
+function lightmapTexture(gl, unit, data) {
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, W, H, 0, gl.RGBA, gl.HALF_FLOAT, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+
+/**
+ * (0.4.57) What a stored bake is named by beside the house worker's URL:
+ * everything the bake reads that the mesh doesn't. `lights` is the lights'
+ * data (houseLightData().data); `extra` any flag that changes the mesh's
+ * upload.
+ */
+export function lightmapHash(gl, lights, extra = '') {
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  return hashParts([
+    'lightmap-1', ATLAS_VERTEX, ATLAS_FRAGMENT, LAWN_MESH_VERTEX, LAWN_MESH_FRAGMENT,
+    LIGHTMAP_BOUNDS, makeLightmap.toString(), lightmapTexture.toString(), lights,
+    String(gpu), String(gl.getParameter(gl.VERSION)), typeof navigator !== 'undefined' ? navigator.userAgent : '', extra,
+  ]);
+}
+
+/**
+ * (0.4.57) The lightmap from a stored bake (`data`, half floats' bits):
+ * the same texture `makeLightmap` draws, or null where it would be.
+ */
+export function uploadLightmap(gl, unit, data) {
+  if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return null;
+  if (!validLightmap(data, W, H)) return null;
+  gl.getExtension('OES_texture_half_float_linear');
+  // (Plain rows: no flip, no premultiply, nothing bound to unpack from.)
+  const keep = [gl.UNPACK_FLIP_Y_WEBGL, gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, gl.UNPACK_ALIGNMENT, gl.UNPACK_ROW_LENGTH, gl.UNPACK_SKIP_ROWS, gl.UNPACK_SKIP_PIXELS].map(k => [k, gl.getParameter(k)]);
+  const unpackBuf = gl.getParameter(gl.PIXEL_UNPACK_BUFFER_BINDING);
+  gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+  gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+  gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+  const tex = lightmapTexture(gl, unit, data);
+  for (const [k, v] of keep) gl.pixelStorei(k, v);
+  gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, unpackBuf);
+  gl.activeTexture(gl.TEXTURE0);
+  return {
+    tex,
+    cached: true,
+    dispose() {
+      gl.deleteTexture(tex);
+    },
+  };
+}
+
+/**
+ * (0.4.57) Read a baked lightmap back without waiting on the GPU: into a
+ * pixel buffer behind a fence, polled with a zero timeout. As floats where
+ * float colour buffers are (exact from half, then checked to be halves),
+ * else as half floats if that's the implementation's own read type. Calls
+ * `done(data)` with the half floats' bits, or `done(null)` on any failure.
+ * Returns a function that cancels it.
+ */
+export function startLightmapReadback(gl, tex, done, { slice = 1 << 19, wait = 50, tries = 400 } = {}) {
+  let pbo = null;
+  let fbo = null;
+  let sync = null;
+  let timer = 0;
+  let over = false;
+  const free = () => {
+    if (timer) clearTimeout(timer);
+    timer = 0;
+    if (gl.isContextLost()) return;
+    if (sync) gl.deleteSync(sync);
+    if (pbo) gl.deleteBuffer(pbo);
+    sync = null;
+    pbo = null;
+  };
+  const finish = data => {
+    if (over) return;
+    over = true;
+    free();
+    done(data);
+  };
+  try {
+    fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    let type = null;
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+      if (gl.getExtension('EXT_color_buffer_float')) type = gl.FLOAT;
+      else if (gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT) === gl.RGBA && gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE) === gl.HALF_FLOAT) type = gl.HALF_FLOAT;
+    }
+    if (type !== null) {
+      const keep = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_ROWS, gl.PACK_SKIP_PIXELS].map(k => [k, gl.getParameter(k)]);
+      gl.pixelStorei(gl.PACK_ALIGNMENT, 4);
+      gl.pixelStorei(gl.PACK_ROW_LENGTH, 0);
+      gl.pixelStorei(gl.PACK_SKIP_ROWS, 0);
+      gl.pixelStorei(gl.PACK_SKIP_PIXELS, 0);
+      pbo = gl.createBuffer();
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, W * H * 4 * (type === gl.FLOAT ? 4 : 2), gl.STREAM_READ);
+      gl.readPixels(0, 0, W, H, gl.RGBA, type, 0);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      for (const [k, v] of keep) gl.pixelStorei(k, v);
+      sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fbo);
+    fbo = null;
+    if (!sync) {
+      finish(null);
+      return () => {};
+    }
+    const asFloat = type === gl.FLOAT;
+    let left = tries;
+    const poll = () => {
+      timer = 0;
+      if (over) return;
+      if (gl.isContextLost() || --left < 0) return finish(null);
+      const status = gl.clientWaitSync(sync, 0, 0);
+      if (status === gl.WAIT_FAILED) return finish(null);
+      if (status === gl.TIMEOUT_EXPIRED) {
+        timer = setTimeout(poll, wait);
+        return;
+      }
+      const raw = asFloat ? new Float32Array(W * H * 4) : new Uint16Array(W * H * 4);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+      gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, raw);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      free();
+      if (!asFloat) return finish(validLightmap(raw, W, H) ? raw : null);
+      // Back to halves a slice a tick, so no frame waits on it.
+      const out = new Uint16Array(raw.length);
+      let at = 0;
+      const step = () => {
+        timer = 0;
+        if (over) return;
+        const to = Math.min(raw.length, at + slice);
+        if (!f32ToF16Exact(raw, out, at, to)) return finish(null);
+        at = to;
+        if (at < raw.length) timer = setTimeout(step, 0);
+        else finish(validLightmap(out, W, H) ? out : null);
+      };
+      step();
+    };
+    timer = setTimeout(poll, wait);
+  } catch {
+    if (fbo && !gl.isContextLost()) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fbo);
+    }
+    finish(null);
+  }
+  return () => {
+    over = true;
+    free();
+  };
 }

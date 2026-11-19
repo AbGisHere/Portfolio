@@ -6,6 +6,11 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.4.59 — 2026-11-19
+
+- The lamps' lightmap (0.4.45) is read back once after its bake (without waiting on the GPU) and kept in IndexedDB beside the mesh; a return visit uploads it, skipping its two programs and the bake. Keyed by the worker's URL, the lightmap's shaders, bounds and lights, the bake's code, the GPU and the browser; any failure bakes as before; `?lmcache=0` off (`lightmapCache.js`, unit-tested).
+- Same picture: identical to a fresh bake (diff 0); house parity 24/24 against 0.4.58 (one view's single-pixel flicker passed on two reruns). M4: no measurable gain (the bake was never its cost); phones to be measured.
+
 ## 0.4.58 — 2026-11-19
 
 - The lawn goes into the AO pass over the solid part's depth without writing it, keeping its nearest fragment by blending to the minimum (R16F, MIN): the second full-size depth buffer and its per-frame copy (0.4.49) are gone. `?earlyz=0` keeps the old path.

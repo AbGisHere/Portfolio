@@ -10,9 +10,15 @@
  * code, so any change to the house builds afresh. Older entries are
  * dropped. Any failure (private mode, quota, no IndexedDB) just builds.
  * The message `{ cache: false }` (`?housecache=0`) skips it both ways.
+ *
+ * (0.4.57) It also reads the baked lightmap kept beside it (lightmapCache.js)
+ * under its own URL and the message's `lightmap` (the bake's hash; null:
+ * `?lmcache=0`), sent with the mesh as `lightmapData`, with `key` (that URL)
+ * for the page to store a fresh bake under.
  */
 import { buildHouse } from './houseBuild';
 import { decodeHouse } from './houseBlob';
+import { loadStoredLightmap } from './lightmapCache';
 
 const DB = 'portfolio-house';
 const STORE = 'mesh';
@@ -73,9 +79,9 @@ const build = async () => {
   return buildHouse();
 };
 
-const send = ({ house, curtains }, cached) => self.postMessage(
-  { house, curtains, cached },
-  [house.vertices.buffer, house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, house.runs.variant.buffer, ...house.leaves.flatMap(l => [l.data.buffer, l.runs.first.buffer, l.runs.count.buffer, l.runs.box.buffer]), curtains.vertices.buffer, curtains.indices.buffer],
+const send = ({ house, curtains }, cached, key, lightmapData) => self.postMessage(
+  { house, curtains, cached, key, lightmapData },
+  [...(lightmapData ? [lightmapData.buffer] : []), house.vertices.buffer,house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, house.runs.variant.buffer, ...house.leaves.flatMap(l => [l.data.buffer, l.runs.first.buffer, l.runs.count.buffer, l.runs.box.buffer]), curtains.vertices.buffer, curtains.indices.buffer],
 );
 
 // (Only inside a worker: the unit tests import every module here.)
@@ -83,13 +89,15 @@ if (typeof self !== 'undefined') {
   self.onmessage = async e => {
     const useCache = e.data?.cache !== false && typeof indexedDB !== 'undefined';
     const key = self.location.href;
+    // (Read beside the mesh; null on any failure.)
+    const lightmap = e.data?.lightmap ? loadStoredLightmap(`${key}#${e.data.lightmap}`) : Promise.resolve(null);
     let db = null;
     if (useCache) {
       try {
         db = await open();
         const hit = await read(db, key);
         if (hit?.house?.vertices && hit.house.leaves && hit?.curtains?.vertices) {
-          send(hit, true);
+          send(hit, true, key, await lightmap);
           self.postMessage({ stored: true });
           return;
         }
@@ -107,7 +115,7 @@ if (typeof self !== 'undefined') {
         stored = null;
       }
     }
-    send(meshes, false);
+    send(meshes, false, key, await lightmap);
     // (The page ends this worker only once the store is written.)
     await stored?.catch(() => {});
     self.postMessage({ stored: true });
