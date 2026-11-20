@@ -6,6 +6,36 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.22 — 2026-11-21
+
+Lower GPU, CPU and startup cost at rest, on the pool climb, and on initial load — full quality at rest.
+
+- **At rest (`A1`–`A6`):**
+  - Opening 4 Hz rest fix: `peaksCovers2D()` skips 2D ridge drift, GPU crests, sky bake and ridge uniform uploads when 3D peaks cover the frame (`3.95 Hz` actual rest rate, down from `30 Hz`).
+  - `stillHit` skips `peaksPrepare()` when peaks are in the kept frame and invalidates dead attachments before blitting.
+  - Bloom glow cache (`bloom.js`, `?bloomcache=0` off): reuses blurred glow at rest, running only the composite pass.
+  - Desk hold `still` (0 Hz static: desk, device, lamp, props, peaks) + `15 Hz` `stillWorld` (trees, lawn, shadows, meadow; bypassed while footprints are active; `?stillworld=0` off).
+  - Pool-only `copyFrame` at rest (`?poolcopy=0` off): copies the full house rect once per still build, then updates only the pool rect.
+  - 60 Hz `water.caustics()` synced to `water.step()` (`?causticssync=0` off).
+- **Moving & climb (`M1`–`M8`):**
+  - Frustum-culled all 7 desk passes (laptop/tablet, lamp, props, desk, desk shadow, steam) during the pool climb (`?deskcull=0` off).
+  - Early-Z mesh-based `MEADOW_LAWN_PAINT` + `MEADOW_FLOWERS_FLAT` (`meadowShader.js`, `?meadowmesh=0` off): keeps flat ground on `MEADOW_PAINT_FLAT` with zero `gl_FragDepth` writes and tints the lawn mesh directly with `gl.LEQUAL` and matching fray discard (`-5.20 ms` / `-31%` at Pool Night `?still=0`).
+  - Narrowed peaks G-buffer (`peaksGeo.texs[1]` `RGBA16F → RGBA8`, `peaksGeo.coarse` `RGBA16F → R16F`) and split `peaksShader.js` `COMMON` into `COMMON_CAM` + `COMMON_TERRAIN` (removing dead `flankAt()`).
+  - Grass CPU cliff-rim culling (`chunkPastRim` in `grassShader.js`) when 3D peaks are behind the house.
+  - `treeShader.js` early leaf-card corner reject, `tv * tv`, and discard-free `TREE_OPAQUE_FRAGMENT` for Early-Z on trunks/shadows.
+  - Zero-allocation memoized `rgb01()` (`colour.js`), precomputed `uNightOn` in `HOUSE_FRAGMENT` (preserving `HOUSE_LIGHT_GLSL` hash for the shipped lightmap), and shared `std140` `HouseFrame` UBO (`gl.bindBufferBase` + `gl.bufferData(..., gl.STREAM_DRAW)`) with one-time sampler binds across all house variants.
+  - `0.5×` moving `peaks-behind` only while scrolling (house remains `1.0×`).
+- **Load & memory (`L1`–`L4`):**
+  - Single-pass `terrain2(p)` in `PEAKS_BAKE_FS` computing `vec2(h8, h3)` across 5.24M heightmap texels.
+  - Lazy-loaded `components/gradient/gl/houseSubsystem.js` via dynamic `import()` on `ensureWarmHouse()`, keeping 14 house/pool/probe/bloom/lightmap modules and `lightCellGrid()` out of the hero chunk.
+  - Deferred `crestGpu` compile & `hashTex` allocation; `peaksKept` freed past the opening.
+- **Measured (M4 `1440×900@2`, `?bench=60`, net GPU ms):**
+  - Desk Day at rest: `5.20` (`?still=0`) → **`2.50 ms`** (`-52%`); `stillCheck()` `[0, 0, true]`.
+  - Desk Night at rest: `5.30` (`?still=0`) → **`2.20 ms`** (`-58%`); `stillCheck()` `[0, 0, true]`.
+  - Pool Day at rest: `7.30` (`?still=0`) → **`4.80 ms`** (`-34%`).
+  - Pool Night: `16.80` (`?still=0&meadowmesh=0`) → `11.60` (`?still=0`) → **`6.60 ms`** at rest (`-61%`; `stillCheck()` `[0, 0, true]` with `?stillworld=0`).
+  - Verified: `test:unit` (88/88), `test:adaptive` (9/9), `build`, `hygiene`, and 112-frame Day/Night scroll-flicker sweep (0 black frames, 0 console/page errors).
+
 ## 0.5.21 — 2026-11-21
 
 No late frames at the pool at rest.

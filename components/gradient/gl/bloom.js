@@ -118,10 +118,12 @@ export function makeBloom(gl, unit, pre = null) {
   const vao = gl.createVertexArray();
   const targets = [0, 1].map(() => ({ tex: gl.createTexture(), fbo: gl.createFramebuffer() }));
   let size = [0, 0];
+  let hasGlow = false;
   const resize = (w, h) => {
     const s = [Math.max(1, w >> 2), Math.max(1, h >> 2)];
     if (s[0] === size[0] && s[1] === size[1]) return;
     size = s;
+    hasGlow = false;
     gl.activeTexture(gl.TEXTURE0 + unit);
     for (const t of targets) {
       gl.bindTexture(gl.TEXTURE_2D, t.tex);
@@ -149,20 +151,25 @@ export function makeBloom(gl, unit, pre = null) {
     prepare: resize,
     // (0.4.57) `base`: the frame's texture, to write it and the glow onto
     // the canvas in one pass (blending off); else the glow is added on.
-    apply(frame, w, h, amount, base = null, scale = [1, 1]) {
+    // `reuse`: at rest when the bright sources haven't changed, reuse the
+    // already-blurred `targets[0].tex` (skips bright + 4 blur passes).
+    apply(frame, w, h, amount, base = null, scale = [1, 1], reuse = false) {
       resize(w, h);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       gl.bindVertexArray(vao);
-      gl.viewport(0, 0, size[0], size[1]);
-      run(progs.bright, targets[0], frame, p => {
-        gl.uniform2f(u(p, 'uTexel'), 1 / w, 1 / h);
-        gl.uniform2f(u(p, 'uScale'), scale[0], scale[1]);
-      });
-      for (let k = 0; k < 2; k++) {
-        const r = 1.6 + k * 1.4;
-        run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(u(p, 'uDir'), r / size[0], 0));
-        run(progs.blur, targets[0], targets[1].tex, p => gl.uniform2f(u(p, 'uDir'), 0, r / size[1]));
+      if (!(reuse && hasGlow)) {
+        gl.viewport(0, 0, size[0], size[1]);
+        run(progs.bright, targets[0], frame, p => {
+          gl.uniform2f(u(p, 'uTexel'), 1 / w, 1 / h);
+          gl.uniform2f(u(p, 'uScale'), scale[0], scale[1]);
+        });
+        for (let k = 0; k < 2; k++) {
+          const r = 1.6 + k * 1.4;
+          run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(u(p, 'uDir'), r / size[0], 0));
+          run(progs.blur, targets[0], targets[1].tex, p => gl.uniform2f(u(p, 'uDir'), 0, r / size[1]));
+        }
+        hasGlow = true;
       }
       gl.viewport(0, 0, w, h);
       if (!base) {

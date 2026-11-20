@@ -74,6 +74,58 @@ export function houseLightData() {
   return lightData;
 }
 
+// (M7) Shared per-frame uniform block across HOUSE_VERTEX, HOUSE_FRAGMENT and
+// all material shader variants: 19 × vec4 (304 bytes, std140) uploaded once per
+// drawHouse() call via gl.bufferData(STREAM_DRAW) instead of 6× per-variant uniform loops.
+export const HOUSE_FRAME_FLOATS = 76;
+export const HOUSE_FRAME_BINDING = 0;
+const HOUSE_FRAME_UBO = `layout(std140) uniform HouseFrame {
+  vec4 uPitch;
+  vec4 uScreen;
+  vec4 uYawDepth;    // xy: uYaw, zw: uDepthAB
+  vec4 uCamNight;    // xyz: uCam, w: uNight
+  vec4 uNightOnPad;  // xyz: uNightOn, w: pad
+  vec4 uSunPad;      // xyz: uSun, w: uLightmapOn
+  vec4 uSkyPad;      // xyz: uSky, w: uShadowOn
+  vec4 uEnvTopPad;   // xyz: uEnvTop, w: uCausticsOn
+  vec4 uEnvLowPad;   // xyz: uEnvLow, w: uAOOn
+  vec4 uWoodPad;     // xyz: uWood, w: uGrainA
+  vec4 uLawnPad;     // xyz: uLawn, w: uCssPerPx
+  vec4 uLawnNearPad; // xyz: uLawnNear, w: uResY
+  vec4 uHazePad;     // xyz: uHaze, w: pad
+  vec4 uSunHaze;     // xy: uSunDir, zw: uHazeAt
+  vec4 uMirrorAO;    // xy: uMirror, zw: uAORes
+  mat4 uLightVP;
+};
+#define uYaw (uYawDepth.xy)
+#define uDepthAB (uYawDepth.zw)
+#define uCam (uCamNight.xyz)
+#define uNight (uCamNight.w)
+#define uNightOn (uNightOnPad.xyz)
+#define uSun (uSunPad.xyz)
+#define uLightmapOn (uSunPad.w)
+#define uSky (uSkyPad.xyz)
+#define uShadowOn (uSkyPad.w)
+#define uEnvTop (uEnvTopPad.xyz)
+#define uCausticsOn (uEnvTopPad.w)
+#define uEnvLow (uEnvLowPad.xyz)
+#define uAOOn (uEnvLowPad.w)
+#define uWood (uWoodPad.xyz)
+#define uGrainA (uWoodPad.w)
+#define uLawn (uLawnPad.xyz)
+#define uCssPerPx (uLawnPad.w)
+#define uLawnNear (uLawnNearPad.xyz)
+#define uResY (uLawnNearPad.w)
+#define uHaze (uHazePad.xyz)
+#define uSunDir (uSunHaze.xy)
+#define uHazeAt (uSunHaze.zw)
+#define uMirror (uMirrorAO.xy)
+#define uAORes (uMirrorAO.zw)
+vec3 viewOf(vec3 q) {
+  return vec3(q.x * uYaw.x - q.z * uYaw.y, q.y, q.x * uYaw.y + q.z * uYaw.x);
+}
+`;
+
 export const HOUSE_VERTEX = `#version 300 es
 precision highp float;
 
@@ -83,10 +135,8 @@ layout(location = 4) in vec3 aPos2;   // (0.4.4) the curtains' other shape
 layout(location = 5) in vec3 aNorm2;
 
 ${LEAF_GLSL}
-${CAMERA_GLSL}
-uniform mat4 uLightVP;
-uniform vec2 uMirror;   // (0.4.2) on, and the water's height: drawn mirrored in it
-uniform float uMorph;   // (0.4.4) how far toward the other shape (the curtains untied, 0.4.14)
+${HOUSE_FRAME_UBO}
+uniform float uMorph;
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
@@ -216,12 +266,11 @@ export const LIGHTMAP_BOUNDS = {
 
 /** Shared by the opaque surfaces and the glass: the sun's shadow, the rooms,
  * the lamps by night. Needs METAL_GLSL's ggx. */
-export const HOUSE_LIGHT_GLSL = `
+const houseLightGlsl = useFrame => `
 const vec2 AO_DISC[12] = vec2[](vec2(-0.326, -0.406), vec2(-0.84, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621), vec2(0.962, -0.195), vec2(0.473, -0.48),
   vec2(0.519, 0.767), vec2(0.185, -0.893), vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
 uniform highp sampler2DShadow uShadow;
-uniform float uShadowOn;
-
+${useFrame ? '' : 'uniform float uShadowOn;\n'}
 ${TURNED_HAZE_GLSL}
 
 // Interleaved gradient noise (Jimenez): a per-pixel turn that reads as an
@@ -330,7 +379,7 @@ int listAt(int j) { return listPick(ldAt(${LIST_ROW}, j >> 2), j & 3); }
 // coves and lamps first, the accents next, the facade and the garden last
 // (cat 0 – 2).
 float nightOn(float cat) {
-  return cat > 1.5 ? smoothstep(0.45, 1.0, uNight) : cat > 0.5 ? smoothstep(0.2, 0.8, uNight) : smoothstep(0.0, 0.55, uNight);
+  return ${useFrame ? 'cat > 1.5 ? uNightOn.z : cat > 0.5 ? uNightOn.y : uNightOn.x' : 'cat > 1.5 ? smoothstep(0.45, 1.0, uNight) : cat > 0.5 ? smoothstep(0.2, 0.8, uNight) : smoothstep(0.0, 0.55, uNight)'};
 }
 
 // (0.4.36) Pre-summed invariant room constant fill: exact sum of L_C * k * 0.04
@@ -529,6 +578,8 @@ vec3 fittingGlow(int fitting, vec3 p, int room) {
   return glow * w;
 }
 `;
+export const HOUSE_LIGHT_GLSL = houseLightGlsl(false);
+const HOUSE_LIGHT_UBO_GLSL = houseLightGlsl(true);
 
 /** (0.4.2) The house's depth along the view, for the ambient occlusion
  * (houseShader's own vertex stage; R16F). */
@@ -559,29 +610,11 @@ export const HOUSE_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
 
-${CAMERA_GLSL}
-uniform vec3 uSun;
-uniform vec3 uSky;
-uniform vec3 uEnvTop;
-uniform vec3 uEnvLow;
-uniform vec3 uWood;     // what a surface mirrors below the horizon: the lawn
-uniform vec3 uLawn;     // the lawn: the grass's colour from afar
-uniform vec3 uLawnNear; // (0.4.12) and near, between the blades (the meadow's)
-uniform vec3 uHaze;     // what the meadow hazes into with distance
-uniform vec2 uHazeAt;   // over these distances (metres)
-uniform float uNight;
+${HOUSE_FRAME_UBO}
 uniform sampler2D uCaustics; // the sun on the pool's floor (houseGlass.js)
-uniform float uCausticsOn;
-uniform vec2 uMirror;
 uniform sampler2D uAO;   // (0.4.2) the house's depth along the view
-uniform float uAOOn;
-uniform vec2 uAORes;     // the frame in device pixels
 uniform sampler2D uGrain;
-uniform float uGrainA;
-uniform float uCssPerPx;
-uniform float uResY;
 uniform highp sampler2D uLightmap;
-uniform float uLightmapOn;
 ${PROBE_GLSL}
 in vec3 vWorld;
 in vec3 vNorm;
@@ -593,7 +626,7 @@ flat in int vFitting;
 out vec4 outColor;
 
 ${METAL_GLSL}
-${HOUSE_LIGHT_GLSL}
+${HOUSE_LIGHT_UBO_GLSL}
 
 // (0.4.45) On-device baked lightmap lookups (houseLightmap.js): the lawn's
 // mound and the roof's deck.

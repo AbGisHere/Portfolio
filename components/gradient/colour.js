@@ -10,8 +10,19 @@ export function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/** A hex colour as 0…1 channels (the shader's uniforms). */
-export const rgb01 = hex => hexToRgb(hex).map(c => c / 255);
+/** A hex colour as 0…1 channels (the shader's uniforms). Cached per string
+ * (read-only by callers) to avoid per-frame allocations across passes. */
+const RGB01 = new Map();
+export function rgb01(hex) {
+  let v = RGB01.get(hex);
+  if (!v) {
+    if (RGB01.size > 4096) RGB01.clear();
+    const n = parseInt(hex.slice(1), 16);
+    v = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    RGB01.set(hex, v);
+  }
+  return v;
+}
 
 /** [r, g, b] (0–255, may be fractional) → '#rrggbb', rounded and clamped. */
 // (0.4.67) Without the per-channel strings and arrays: the same result.

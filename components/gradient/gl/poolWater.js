@@ -270,7 +270,7 @@ export function makeWater(gl, unit, pre = null) {
         water.drop(POOL.at[0] + (Math.random() - 0.5) * POOL.w, POOL.at[2] + (Math.random() - 0.5) * POOL.d, 0.09 + Math.random() * 0.12, (Math.random() - 0.4) * 0.0035);
       }
       acc = Math.min(acc + dt, 4 / WATER.hz);
-      if (!queue.length && acc < 1 / WATER.hz) return;
+      if (!queue.length && acc < 1 / WATER.hz) return false;
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       gl.viewport(0, 0, nx, nz);
@@ -290,6 +290,7 @@ export function makeWater(gl, unit, pre = null) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindVertexArray(null);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return true;
     },
     bind() {
       gl.activeTexture(gl.TEXTURE0 + unit);

@@ -32,7 +32,7 @@ export const PEAKS_FAR_VS = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 1., 1.); }`;
 
-const COMMON = `
+const COMMON_CAM = `
 precision highp float;
 precision highp int;
 uniform vec2 uRes;
@@ -79,6 +79,33 @@ float fbm(vec2 p, int oct) {
   for (int i = 0; i < 8; i++) { if (i >= oct) break; s += a * noise(p); p = M * p * 2.02; a *= .5; }
   return s;
 }
+${RIM_GLSL}
+// How much of a place is the sunlit meadow overlook around the desk.
+float shelfD(vec2 p) { return rimD(p); }
+float shelfMask(vec2 p) { return smoothstep(${f(SHELF.r + 45)}, ${f(SHELF.r)}, shelfD(p)); }
+// Where a pattern lies on the ground: from above on gentle slopes, along
+// the face (across it and up it) on steep ones, so nothing stretches down
+// a cliff.
+vec2 faceUV(vec3 p, vec3 n) {
+  vec2 tg = normalize(vec2(-n.z, n.x) + 1e-5);
+  float steep = smoothstep(.75, .35, n.y);
+  return mix(p.xz, vec2(dot(p.xz, tg), p.y * 1.15), steep);
+}
+struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec4 hor; };
+vec3 camRight(vec3 f) {
+  vec3 r = uRight - f * dot(uRight, f);
+  float l = length(r);
+  return l > 1e-4 ? r / l : normalize(cross(f, abs(f.y) > .99 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
+}
+vec3 viewRay(out vec3 f, out vec3 r, out vec3 u, out float lens, out vec2 uv) {
+  uv = (gl_FragCoord.xy * 2. - uRes) / uRes.y - uShift;
+  f = normalize(uLook - uCam); r = camRight(f); u = cross(r, f);
+  lens = 1. / tan(radians(uFov) * .5);
+  return normalize(f * lens + uv.x * r + uv.y * u);
+}
+`;
+
+const COMMON_TERRAIN = `
 float ridged(vec2 p, int oct) {
   float s = 0., a = .5, w = 1.;
   for (int i = 0; i < 12; i++) {
@@ -88,6 +115,27 @@ float ridged(vec2 p, int oct) {
     p = M * p * 2.03; a *= .5;
   }
   return s;
+}
+vec2 fbm2(vec2 p, int oct) {
+  float s = 0., s3 = 0., a = .5;
+  for (int i = 0; i < 8; i++) {
+    if (i >= oct) break;
+    s += a * noise(p);
+    if (i == 2) s3 = s;
+    p = M * p * 2.02; a *= .5;
+  }
+  return vec2(s, oct <= 3 ? s : s3);
+}
+vec2 ridged2(vec2 p, int oct) {
+  float s = 0., s3 = 0., a = .5, w = 1.;
+  for (int i = 0; i < 12; i++) {
+    if (i >= oct) break;
+    float n = 1. - abs(noise(p) * 2. - 1.);
+    n *= n; s += n * a * w; w = clamp(n * 1.6, 0., 1.);
+    if (i == 2) s3 = s;
+    p = M * p * 2.03; a *= .5;
+  }
+  return vec2(s, oct <= 3 ? s : s3);
 }
 
 // ---- the ground
@@ -106,7 +154,6 @@ float peak(vec2 p, vec4 P, float sc, float det) {
 // cleanly past the flat meadow plateau straight toward the 3D mountains
 // (so 1 m eye clearance never stalls the march over the shelf, while rays
 // near horizontal still catch the valley and shelf cleanly with no gap).
-float rimD(vec2 p);
 float nearFor(vec3 rd) {
   if (uNear <= 0.) return 0.;
   if (rd.y > .0015) return ${f(SHELF.r * 0.88)};
@@ -125,17 +172,11 @@ float nearFor(vec3 rd) {
 }
 // (0.5.3) The valley (../peaks.js VALLEY): how far a place is from its
 // centre, how much of it lies inside its length, and its floor.
-${RIM_GLSL}
 float valleyDist(vec2 p) { return abs(p.x - ${f(VALLEY.x)} - ${f(VALLEY.amp)} * sin(p.y / ${f(VALLEY.wave)})); }
 float valleyLen(vec2 p) {
   return smoothstep(${f(VALLEY.head + 900)}, ${f(VALLEY.head)}, p.y)
     * smoothstep(${f(SHELF.z - 1500)}, ${f(SHELF.z - 650)}, p.y);
 }
-// How much of a place is the sunlit meadow overlook around the desk.
-float shelfD(vec2 p) { return rimD(p); }
-float shelfMask(vec2 p) { return smoothstep(${f(SHELF.r + 45)}, ${f(SHELF.r)}, shelfD(p)); }
-// How much of a place is the valley's floor (never encroaching on the hero massif).
-float flankAt(vec2 p) { return valleyLen(p) * smoothstep(${f(VALLEY.half + VALLEY.wall * 0.45)}, ${f(VALLEY.half)}, valleyDist(p)); }
 float terrain(vec2 p, int oct) {
   float d = length(p), ring = smoothstep(1100., 3400., d);
   float mask = .45 + .55 * noise(p / 3800. + vec2(3.1, 1.7));
@@ -176,6 +217,43 @@ float terrain(vec2 p, int oct) {
   h = min(h, cap + 60. * det * (noise(p / 230. + 2.9) - .5));
   h = max(h, spur);
   h = mix(h, ${f(SHELF.y)}, shelfMask(p));
+  return h;
+}
+// Single-pass 8-octave + 3-octave height for PEAKS_BAKE_FS (exact match to terrain(p,8), terrain(p,3)).
+vec2 terrain2(vec2 p) {
+  float d = length(p), ring = smoothstep(1100., 3400., d);
+  float mask = .45 + .55 * noise(p / 3800. + vec2(3.1, 1.7));
+  float valley = 380. + fbm(p / 1500., 3) * 420.;
+  vec2 range = .78 * ridged2(p / 2800., 8) + .22 * fbm2(p / 2600., 5);
+  vec2 h = mix(vec2(valley), range * 3200. * mask + 450., ring);
+  vec2 det = .8 + .36 * ridged2(p / 560. + vec2(5.3, 2.1), 8);
+  for (int i = 0; i < ${PEAKS.length}; i++) {
+    float sc = i == 0 || i > 2 ? 1. : .62;
+    h.x = max(h.x, peak(p, PEAK[i], sc, det.x));
+    h.y = max(h.y, peak(p, PEAK[i], sc, det.y));
+  }
+  float vd = valleyDist(p);
+  float vn = .45 + .55 * noise(p / 2300. + 2.);
+  vec2 vfloor = 650. + 1250. * ridged2(p / 1700. + 5.3, 6) * vn * det;
+  float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
+  vec2 walls = max(h - vfloor, vec2(0.)) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
+  h = mix(h, vfloor + walls * wall, valleyLen(p));
+  float sx = max(shelfD(p) - ${f(SHELF.r)}, 0.);
+  float sm25 = smoothstep(25., 500., sx);
+  float sm90 = smoothstep(0., 90., sx);
+  float sm60 = smoothstep(0., 60., sx);
+  float hum = sm60 * (1. - smoothstep(250., 600., sx))
+    * (22. * smoothstep(.45, .8, noise(p / 95. + 9.1)) + 7. * noise(p / 28. + 3.3));
+  vec2 spur = vec2(${f(SHELF.y)} - (.12 * sx + .0009 * sx * sx) + hum)
+    - 160. * det * sm25 * ridged2(p / 420. + 7.7, 7)
+    - 55. * sm90 * ridged2(p / 130. + 3.1, 6)
+    - 22. * sm60 * fbm2(p / 60. + 2.3, 5);
+  spur = min(spur, vec2(${f(SHELF.y)} - .06 * sx));
+  float cap = ${f(SHELF.y)} - 520. * smoothstep(0., 380., sx) + 2600. * smoothstep(520., 1500., sx);
+  float capN = noise(p / 230. + 2.9) - .5;
+  h = min(h, vec2(cap) + 60. * det * capN);
+  h = max(h, spur);
+  h = mix(h, vec2(${f(SHELF.y)}), shelfMask(p));
   return h;
 }
 // (0.5.3) The ground and the mist's pattern baked once (PEAKS_BAKE_FS):
@@ -320,17 +398,6 @@ float mistAt(vec3 p) {
   return body * (.55 + .45 * bill) * .0016;
 }
 
-// Where a pattern lies on the ground: from above on gentle slopes, along
-// the face (across it and up it) on steep ones, so nothing stretches down
-// a cliff.
-vec2 faceUV(vec3 p, vec3 n) {
-  vec2 tg = normalize(vec2(-n.z, n.x) + 1e-5);
-  float steep = smoothstep(.75, .35, n.y);
-  return mix(p.xz, vec2(dot(p.xz, tg), p.y * 1.15), steep);
-}
-
-struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec4 hor; };
-
 // How high the ground rises toward a bearing, seen from p: the tangent of
 // the horizon's elevation. A body below it is hidden, so the light pass
 // shades with this instead of marching a shadow every frame.
@@ -344,19 +411,6 @@ float horizon(vec3 p, vec2 dir) {
     if (t > 16000.) break;
   }
   return m;
-}
-
-vec3 camRight(vec3 f) {
-  vec3 r = uRight - f * dot(uRight, f);
-  float l = length(r);
-  return l > 1e-4 ? r / l : normalize(cross(f, abs(f.y) > .99 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
-}
-
-vec3 viewRay(out vec3 f, out vec3 r, out vec3 u, out float lens, out vec2 uv) {
-  uv = (gl_FragCoord.xy * 2. - uRes) / uRes.y - uShift;
-  f = normalize(uLook - uCam); r = camRight(f); u = cross(r, f);
-  lens = 1. / tan(radians(uFov) * .5);
-  return normalize(f * lens + uv.x * r + uv.y * u);
 }
 
 G geo(vec3 rd, float tStart) {
@@ -444,6 +498,7 @@ G geo(vec3 rd, float tStart) {
   return g;
 }
 `;
+const COMMON = `${COMMON_CAM}\n${COMMON_TERRAIN}`;
 
 const SHADE = `
 uniform sampler2D uFlow;
@@ -676,7 +731,6 @@ vec3 ground(G g, vec3 rd) {
   float pine = smoothstep(1900., 1450., alt + noise(p.xz / 90.) * 220.) * smoothstep(.52, .76, n.y);
   rock = mix(rock, vec3(.042, .088, .058), pine);
   // Sunlit alpine pasture on low valley floors & plateau shoulders.
-  float fl = flankAt(p.xz);
   float lawn = smoothstep(${f(SHELF.y - 520)}, ${f(SHELF.y - 260)}, alt + noise(p.xz / 140.) * 120.)
     * smoothstep(${f(SHELF.r * 2.2)}, ${f(SHELF.r * 1.4)}, shelfD(p.xz)) * smoothstep(.62, .85, n.y);
   lawn = max(lawn, shf);
@@ -970,9 +1024,9 @@ void main() {
     o = vec4(a5, h5 - a5, 0., 0.);
     return;
   }
-  float h = terrain(p, 8);
-  float a = floor(h / 32. + .5) * 32.;
-  o = vec4(a, h - a, mistNoise(p), terrain(p, 3) * .001);
+  vec2 h2 = terrain2(p);
+  float a = floor(h2.x / 32. + .5) * 32.;
+  o = vec4(a, h2.x - a, mistNoise(p), h2.y * .001);
 }`;
 
 // The shape pass: two float targets.
@@ -1050,7 +1104,7 @@ vec3 compose(vec3 base, vec3 mist, float T0, vec3 rd) {
 // The light pass: both parts into two targets (the mist's transmittance,
 // square-rooted for its precision, in the second's alpha).
 export const PEAKS_FS = `#version 300 es
-${COMMON}
+${COMMON_CAM}
 ${SHADE}
 ${READ_G}
 layout(location = 0) out vec4 o0;
@@ -1067,7 +1121,7 @@ void main() {
 
 // The composite, every frame: the two parts and the mist's motion.
 export const PEAKS_MIX_FS = `#version 300 es
-${COMMON}
+${COMMON_CAM}
 uniform sampler2D uFlow;
 ${FLOW}
 uniform sampler2D uBase, uMist;
@@ -1086,7 +1140,7 @@ void main() {
 
 // The light and the composite in one, for the drop (the camera moving).
 export const PEAKS_LIT_FS = `#version 300 es
-${COMMON}
+${COMMON_CAM}
 ${SHADE}
 ${READ_G}
 ${FLOW}
@@ -1109,7 +1163,7 @@ void main() {
 
 // (0.5.13) The frame's constants (lightParts), one texel each.
 export const PEAKS_CONSTS_FS = `#version 300 es
-${COMMON}
+${COMMON_CAM}
 ${SHADE}
 out vec4 o;
 void main() {

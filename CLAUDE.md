@@ -283,12 +283,34 @@ house with the still frame and redraws the opening at 4 Hz at rest.
 changes (no 2 s refresh; the lamp only with the desk in frame): no late
 frames at the pool at rest. `?framegrab=1` measures change per frame.
 
-**Next:** the grass drawn last over a kept frame holding everything else
-(the meadow and trees at their own measured rates); the rest of the frame at rest, as low as it goes with nothing
-lost (the moving parts' cost and rate, the bloom, the desk); the
-climb on phones (`devices -- --climb --costs peaks-behind`); then the
-owner's next steps on the valley flight, the cliffs' own detail and the
-fallback's stills.
+**0.5.22** (2026-11-21) cuts GPU, CPU and load cost across rest, climb and
+startup at full settled quality:
+- At rest: opening 2D ridge work skipped when 3D peaks cover the frame
+  (true 3.95 Hz rest rate); `stillHit` skips `peaksPrepare` and invalidates
+  attachments before blit; cached bloom glow (`?bloomcache=0` off); desk
+  hold `still` + 15 Hz `stillWorld` (`?stillworld=0` off); pool-only
+  `copyFrame` (`?poolcopy=0` off); 60 Hz caustics synced to `water.step()`
+  (`?causticssync=0` off).
+- Moving & climb: frustum-culled desk passes (`?deskcull=0` off); Early-Z
+  mesh-based `MEADOW_LAWN_PAINT` + `MEADOW_FLOWERS_FLAT` (`?meadowmesh=0`
+  off, `-5.20 ms` at pool night); narrowed peaks G-buffer (`RGBA8` / `R16F`)
+  and split `COMMON_CAM` / `COMMON_TERRAIN`; grass CPU cliff-rim culling;
+  `treeShader` early corner reject & discard-free `TREE_OPAQUE_FRAGMENT`;
+  memoized `rgb01`, precomputed `uNightOn`, and `HouseFrame` UBO (`std140`,
+  orphaned via `bufferData(STREAM_DRAW)`); `0.5×` moving `peaks-behind`
+  (house stays `1.0×`).
+- Load & memory: single-pass `terrain2(p)` in `PEAKS_BAKE_FS`, lazy
+  `houseSubsystem.js` dynamic import out of the hero chunk, deferred
+  `crestGpu` compile, and `peaksKept` freed past the opening.
+- M4 `1440×900@2` (`?bench=60`, net GPU ms): Desk Day `5.20 → 2.50 ms`
+  (`-52%`), Desk Night `5.30 → 2.20 ms` (`-58%`), Pool Day `7.30 → 4.80 ms`
+  (`-34%`), Pool Night `16.80` (pre-`M2` `?still=0`) → `11.60` (`?still=0`)
+  → `6.60 ms` at rest (`-61%`).
+
+**Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
+deferred R-series research (temporal reprojection, deferred shading, device
+tiers); then the owner's next steps on the valley flight, the cliffs' own
+detail and the fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own
 detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

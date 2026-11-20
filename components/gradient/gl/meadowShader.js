@@ -26,6 +26,7 @@ import { WORLD_M, YAW_OFF } from '../deskCamera';
 import { LIFE, MAX_PRINTS } from './footsteps';
 import { BOOT_GLSL } from './bootPrint';
 import { MOUND, MOUND_GLSL } from './houseShape';
+import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { RIM_GLSL, SHELF } from '../peaks';
 
 const f = v => v.toFixed(6);
@@ -306,6 +307,124 @@ void main() {
 `;
 
 export const MEADOW_PAINT_FLAT = MEADOW_PAINT.replace('#version 300 es\n', '#version 300 es\n#define MEADOW_FLAT\n');
+export const MEADOW_FLOWERS_FLAT = MEADOW_FLOWERS.replace('#version 300 es\n', '#version 300 es\n#define MEADOW_FLAT\n');
+
+// (M2) Mesh-based meadow tint over the house's lawn triangles: exact same
+// broad/under/boots tint as MEADOW_PAINT, but zero 32-step mound raymarch and
+// zero gl_FragDepth writes so hardware Early-Z stays 100% active on both the
+// flat ground (MEADOW_PAINT_FLAT) and the lawn mesh (gl.EQUAL against lawn depth).
+export const MEADOW_LAWN_VERTEX = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+${CAMERA_GLSL}
+out vec3 vWorld;
+${PROJECT_GLSL}
+void main() {
+  vWorld = aPos;
+  gl_Position = project(aPos);
+}
+`;
+
+export const MEADOW_LAWN_FRAGMENT = `#version 300 es
+precision highp float;
+precision highp int;
+uniform vec3 uCamM;
+uniform vec2 uHazeAt;
+uniform vec2 uPaintNear;
+uniform sampler2D uMeadow;
+uniform float uMeadowA;
+uniform float uGrassT;
+uniform float uWindA;
+uniform vec3 uGrassGround;
+uniform vec3 uGrassMid;
+uniform vec3 uGrassTip;
+uniform vec3 uShade;
+uniform vec4 uPrints[${MAX_PRINTS}];
+uniform float uFoot[${MAX_PRINTS}];
+uniform int uPrintN;
+${BOOT_GLSL}
+${RIM_GLSL}
+in vec3 vWorld;
+out vec4 outColor;
+
+uint pcg(uint v) {
+  v = v * 747796405u + 2891336453u;
+  v = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+  return (v >> 22u) ^ v;
+}
+float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec4 meadowTex(float scale, vec2 off, vec2 gm, vec2 gx, vec2 gy) {
+  return textureGrad(uMeadow, gm / scale + off, gx / scale, gy / scale);
+}
+vec3 broad(vec2 gm, vec2 gx, vec2 gy, float px) {
+  vec2 wd = normalize(vec2(0.8, -0.6));
+  float t = uGrassT;
+  vec4 fields = meadowTex(260.0, vec2(0.0), gm, gx, gy);
+  vec4 m1 = meadowTex(3.3, vec2(0.11), gm, gx, gy);
+  vec4 m2 = meadowTex(17.0, vec2(0.7), gm, gx, gy);
+  vec4 sky = meadowTex(640.0, vec2(0.21) - wd * t * 0.0016, gm, gx, gy);
+  float pat = (fields.r - 0.5) * 1.1 + (fields.a - 0.5) * 0.7;
+  vec3 k = vec3(1.0 + 0.45 * pat);
+  k *= pat > 0.0 ? mix(vec3(1.0), vec3(1.08, 1.05, 0.86), min(pat * 1.6, 1.0)) : mix(vec3(1.0), vec3(0.92, 1.0, 1.08), min(-pat * 1.6, 1.0));
+  float tf = m1.g * 0.35 + m2.g * 0.35 + fields.g * 0.3;
+  float c = 0.25 + 0.5 * fields.a;
+  k *= (1.0 + c * (tf - 0.3)) * (1.0 + 0.35 * (m1.b - 0.5)) * (1.0 + 0.3 * (m2.b - 0.5));
+  k *= mix(vec3(1.0), vec3(1.04, 1.06, 0.92), smoothstep(0.35, 0.7, tf));
+  k *= mix(vec3(1.0), uShade, smoothstep(0.5, 0.62, sky.r));
+  float far = (0.5 + 0.5 * sin(dot(gm, wd) * 0.11 - t * 0.5)) * smoothstep(0.35, 0.7, sky.a) * (1.0 - smoothstep(4.0, 16.0, px));
+  float near = (0.5 + 0.5 * sin(dot(gm, wd) * 1.3 - t * 1.6)) * smoothstep(0.3, 0.8, sky.a) * (1.0 - smoothstep(0.3, 1.2, px));
+  return k * mix(vec3(1.0), vec3(1.16, 1.18, 1.08), max(far, near) * 0.55 * uWindA);
+}
+vec3 under(vec2 gm, vec2 gx, vec2 gy) {
+  vec4 m = meadowTex(1.3, vec2(0.53), gm, gx, gy);
+  vec3 g = max(uGrassGround, vec3(0.02));
+  vec3 u = mix(vec3(1.0), uGrassMid / g, 0.55 * m.g);
+  u *= 1.0 + 0.5 * (m.b - 0.5);
+  return mix(u, uGrassTip / g, 0.35 * smoothstep(0.62, 0.9, m.b));
+}
+float speck(vec2 c) { return float(pcg(uint(int(c.x) + 50000) * 7919u ^ pcg(uint(int(c.y) + 50000)))) / 4294967295.0; }
+vec3 boots(vec2 gm, float px) {
+  float dent = 0.0;
+  float deep = 0.0;
+  for (int i = 0; i < ${MAX_PRINTS}; i++) {
+    if (i >= uPrintN) break;
+    vec4 pr = uPrints[i];
+    vec2 o = gm - pr.xy;
+    if (dot(o, o) > 0.04) continue;
+    float str = min(pr.w / 0.06, 1.0) * (1.0 - smoothstep(0.7, ${f(LIFE)}, pr.w));
+    if (str <= 0.0) continue;
+    vec2 fwd = vec2(sin(pr.z), cos(pr.z));
+    vec2 lr = vec2(dot(o, vec2(fwd.y, -fwd.x)) * uFoot[i], dot(o, fwd) + uBoot[0].x * 0.5);
+    float grit = smoothstep(0.009, 0.003, px);
+    float n = speck(floor(lr / 0.006) + float(i) * 17.0);
+    float w = max(px, 0.0008);
+    float sole = 1.0 - smoothstep(-w, w, bootOutline(lr) + (n - 0.5) * 0.004 * grit);
+    float tread = (1.0 - smoothstep(-w, w, bootTread(lr) + (n - 0.5) * 0.003 * grit)) * (1.0 - uBoot[2].z * grit * step(n, 0.45));
+    dent = max(dent, sole * str);
+    deep = max(deep, tread * str * uBoot[2].w);
+  }
+  return mix(vec3(1.0), vec3(0.78, 0.76, 0.72), dent) * mix(vec3(1.0), vec3(0.42, 0.39, 0.34), deep);
+}
+void main() {
+  // Match the lawn's frayed edge (HOUSE_FRAGMENT / HOUSE_DEPTH_FRAGMENT) so
+  // frayed ground pixels already tinted by MEADOW_PAINT_FLAT aren't double-tinted.
+  if (vWorld.y < 1.0 * pow(hash2(floor(gl_FragCoord.xy)), 0.7)) discard;
+  vec2 gm = vWorld.xz;
+  float dist = length(vWorld - uCamM);
+  vec2 gx = dFdx(gm);
+  vec2 gy = dFdy(gm);
+  float px = length(abs(gx) + abs(gy));
+  vec3 k = broad(gm, gx, gy, px);
+  vec3 near = mix(vec3(1.0), k, uMeadowA);
+  float u = 1.0 - smoothstep(10.0, 30.0, dist);
+  if (u > 0.0) near *= mix(vec3(1.0), under(gm, gx, gy), u);
+  if (uPrintN > 0 && px < 0.05) near *= boots(gm, px);
+  vec3 far = mix(vec3(1.0), k, uMeadowA * (1.0 - smoothstep(400.0, 3000.0, dist)));
+  vec3 m = mix(near, far, smoothstep(uHazeAt.x, uHazeAt.y, dist));
+  if (uPaintNear.y > 0.0) m = mix(m, vec3(1.0), max(smoothstep(uPaintNear.x, uPaintNear.y, dist), smoothstep(${f(SHELF.r * 0.97)}, ${f(SHELF.r * 1.02)}, rimDm(gm))));
+  outColor = vec4(clamp(m * 0.5, 0.0, 1.0), 1.0);
+}
+`;
 
 // The mist at the mountains' foot, blended over (premultiplied): where the
 // front ridge's fill met the ground in a ruled line, the ridges now stand in

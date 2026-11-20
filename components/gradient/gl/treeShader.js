@@ -576,6 +576,8 @@ void main() {
     const vec2 FAN[5] = vec2[5](vec2(0.9458, 0.3248), vec2(0.5810, 0.8139), vec2(-0.0000, 1.0000), vec2(-0.5810, 0.8139), vec2(-0.9458, 0.3248));
     const float REACH[5] = float[5](1.25, 1.5, 1.75, 1.5, 1.25);
     vec2 r = q - vec2(0.0, -0.95);
+    // Max leaf reach is 1.75 (1.75² = 3.0625): skip the 5-leaf loop on card corners.
+    if (dot(r, r) > 3.07) discard;
     for (int i = 0; i < 5; i++) {
       vec2 ax = FAN[i];
       float along = dot(r, ax) / REACH[i];
@@ -596,7 +598,8 @@ void main() {
     col = mix(col, col * (1.0 + 0.3 * uSky), smoothstep(0.2, 0.8, N.y) * 0.5);
     col *= mix(0.72, 1.0, smoothstep(-0.8, 0.4, vNorm.y));
     // Translucent: the low light through a leaf seen against it.
-    float through = pow(max(dot(vView, L), 0.0), 2.0) * smoothstep(-0.1, 0.5, dot(N, vView) + 0.3);
+    float tv = max(dot(vView, L), 0.0);
+    float through = tv * tv * smoothstep(-0.1, 0.5, dot(N, vView) + 0.3);
     col = mix(col, mix(uLit, uSun, 0.35) * 1.15, through * 0.5);
     col *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.12, abs(across)));
     col *= 0.9 + 0.2 * lv;
@@ -615,6 +618,75 @@ void main() {
     col = mix(col, uShadeC * 1.15, (1.0 - smoothstep(0.0, 0.6, vWy)) * 0.45);
     col *= mix(vec3(1.0), uSky, 0.25);
   }
+  col = mix(col, uHaze, vHaze);
+  if (uGrainA > 0.0) {
+    ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));
+    float gn = texelFetch(uGrain, g, 0).r;
+    vec3 ov = mix(2.0 * col * gn, 1.0 - 2.0 * (1.0 - col) * (1.0 - gn), step(0.5, col));
+    col = mix(col, ov, uGrainA);
+  }
+  outColor = vec4(col, 1.0);
+}
+`;
+
+// Opaque bark & shadow variant with zero `discard` so solid trunks and ground
+// shadows keep hardware Early-Z whenever fully faded in (uA >= 1, farM >= 1e4).
+export const TREE_OPAQUE_FRAGMENT = `#version 300 es
+precision highp float;
+
+uniform vec2 uSunDir;
+uniform vec3 uShadeC;
+uniform vec3 uBark;
+uniform vec3 uSky;
+uniform vec3 uHaze;
+uniform vec3 uShadow;
+uniform sampler2D uGrain;
+uniform float uGrainA;
+uniform float uCssPerPx;
+uniform float uResY;
+
+in float vKind;
+in float vHaze;
+in float vSeed;
+in float vFade;
+in float vWy;
+in vec2 vUV;
+in vec3 vNorm;
+out vec4 outColor;
+
+float h3(ivec3 p) {
+  uint n = uint(p.x) * 374761393u + uint(p.y) * 668265263u + uint(p.z) * 2147483647u;
+  n = (n ^ (n >> 13u)) * 1274126177u;
+  return float(n ^ (n >> 16u)) / 4294967295.0;
+}
+float noise3(vec3 p) {
+  ivec3 c = ivec3(floor(p));
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(h3(c), h3(c + ivec3(1, 0, 0)), f.x), mix(h3(c + ivec3(0, 1, 0)), h3(c + ivec3(1, 1, 0)), f.x), f.y);
+  float b = mix(mix(h3(c + ivec3(0, 0, 1)), h3(c + ivec3(1, 0, 1)), f.x), mix(h3(c + ivec3(0, 1, 1)), h3(c + ivec3(1, 1, 1)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+
+void main() {
+  if (vKind > 1.5 && vKind < 2.5) {
+    float ang = atan(vUV.y, vUV.x);
+    float d = length(vUV) + 0.06 * sin(ang * 5.0 + vSeed * 30.0);
+    float k = (1.0 - smoothstep(0.55, 1.0, d)) * (1.0 - vHaze) * 0.8 * vFade;
+    outColor = vec4(mix(vec3(1.0), uShadow, k), 1.0);
+    return;
+  }
+  vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
+  vec3 bn = normalize(vNorm);
+  float lam = dot(bn, L);
+  vec3 col = uBark * mix(0.5, 1.15, smoothstep(-0.45, 0.65, lam));
+  vec2 ring = vec2(cos(vUV.x), sin(vUV.x));
+  float ridge = noise3(vec3(ring * 1.3 + vSeed * 40.0, vWy * 0.9));
+  float fine = noise3(vec3(ring * 3.4 + vSeed * 17.0, vWy * 3.5));
+  col *= 0.82 + 0.3 * smoothstep(0.35, 0.7, ridge * 0.7 + fine * 0.3);
+  col *= 1.0 - 0.35 * smoothstep(0.62, 0.75, fine);
+  col = mix(col, uShadeC * 1.15, (1.0 - smoothstep(0.0, 0.6, vWy)) * 0.45);
+  col *= mix(vec3(1.0), uSky, 0.25);
   col = mix(col, uHaze, vHaze);
   if (uGrainA > 0.0) {
     ivec2 g = ivec2(mod(floor(vec2(gl_FragCoord.x, uResY - gl_FragCoord.y) * uCssPerPx), 256.0));

@@ -72,7 +72,17 @@ const MERGE = 2;
 const HILL_TOP = 3.2;
 const chunkUnderHouse = (x0, x1, z0, z1) =>
   x0 > -9.59 && x1 < 9.59 && z0 > -81.09 && (z1 < -57.46 || (x0 > -1.79 && x1 < 1.79 && z1 < -55.76));
-export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull = false, maxD = Infinity) {
+// Exact conservative lower bound on rimDm(pos) over [x0, x1] × [z0, z1]:
+// rimNoise ∈ [0, 1] → min scale 0.915; grass want is 0 past SHELF.r * 1.03
+// (1.03 / 0.915 = 1.1257 → 1.13 with margin).
+const RIM_CULL_R2 = (SHELF.r * 1.13) ** 2;
+const chunkPastRim = (x0, x1, z0, z1) => {
+  const cx = x0 > 0 ? x0 : x1 < 0 ? x1 : 0;
+  const cz = z0 > 0 ? z0 : z1 < 0 ? z1 : 0;
+  const sy = cz > 0 ? cz * (SHELF.r / SHELF.lip) : cz * (SHELF.r / SHELF.back);
+  return cx * cx + sy * sy > RIM_CULL_R2;
+};
+export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull = false, maxD = Infinity, rim = false) {
   const per = side * side * each;
   const runs = [];
   let open = null;
@@ -101,7 +111,7 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull =
         let topY = HILL_TOP;
         if (cull) {
           const maxAx = Math.max(Math.abs(col - half - 1), Math.abs(col + cols + 1 - half)) * c;
-          if ((ring > 0 && maxAx <= innerHole && maxAz <= innerHole) || chunkUnderHouse(x0, x1, z0, z1)) {
+          if ((ring > 0 && maxAx <= innerHole && maxAz <= innerHole) || chunkUnderHouse(x0, x1, z0, z1) || (rim && chunkPastRim(x0, x1, z0, z1))) {
             dead = true;
           } else {
             const mx = Math.max(x0, Math.min(x1, MOUND.at[0]));
@@ -138,7 +148,7 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull =
   return runs;
 }
 // A blade is at most 0.42 m tall.
-export const grassRanges = (cam, seen, cull = false) => ringRanges(GRASS, GRASS.blades, 0.6, cam, seen, cull, GRASS.reach);
+export const grassRanges = (cam, seen, cull = false, rim = false) => ringRanges(GRASS, GRASS.blades, 0.6, cam, seen, cull, GRASS.reach, rim);
 
 /**
  * The footprints' push on whatever grows from the meadow (the grass, and

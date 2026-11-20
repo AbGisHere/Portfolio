@@ -5,7 +5,7 @@ import { FRAGMENT, VERTEX } from '../../components/gradient/gl/mistShader.js';
 import { CREST_FRAGMENT, CREST_VERTEX } from '../../components/gradient/gl/crestShader.js';
 import { GRASS_FRAGMENT, GRASS_VERTEX } from '../../components/gradient/gl/grassShader.js';
 import { FLOWER_FRAGMENT, FLOWER_VERTEX } from '../../components/gradient/gl/flowerShader.js';
-import { TREE_FRAGMENT, TREE_VERTEX } from '../../components/gradient/gl/treeShader.js';
+import { TREE_FRAGMENT, TREE_OPAQUE_FRAGMENT, TREE_VERTEX } from '../../components/gradient/gl/treeShader.js';
 import { DESK_FRAGMENT, DESK_VERTEX } from '../../components/gradient/gl/deskShader.js';
 import { LAPTOP_FRAGMENT, LAPTOP_VERTEX } from '../../components/gradient/gl/laptopShader.js';
 import { TABLET_FRAGMENT, TABLET_VERTEX } from '../../components/gradient/gl/tabletShader.js';
@@ -20,7 +20,7 @@ import { GLASS_FRAGMENT, GLASS_VERTEX } from '../../components/gradient/gl/house
 import { PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX } from '../../components/gradient/gl/mirrorProbe.js';
 import { PROPS_FRAGMENT, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX } from '../../components/gradient/gl/propsShader.js';
 import { PEAKS_ALL_FS, PEAKS_BAKE_FS, PEAKS_COARSE_FS, PEAKS_CONSTS_FS, PEAKS_FAR_VS, PEAKS_FS, PEAKS_GEO_FS, PEAKS_HOR_FS, PEAKS_LIT_FS, PEAKS_MIX_FS, PEAKS_VS } from '../../components/gradient/gl/peaksShader.js';
-import { MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
+import { MEADOW_FLOWERS, MEADOW_FLOWERS_FLAT, MEADOW_FOOT, MEADOW_LAWN_FRAGMENT, MEADOW_LAWN_VERTEX, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from '../../components/gradient/gl/meadowShader.js';
 
 export const PROGRAMS = [
   ['scene', VERTEX, FRAGMENT],
@@ -39,6 +39,7 @@ export const PROGRAMS = [
   ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
   ['flowers', FLOWER_VERTEX, FLOWER_FRAGMENT],
   ['trees', TREE_VERTEX, TREE_FRAGMENT],
+  ['trees-opaque', TREE_VERTEX, TREE_OPAQUE_FRAGMENT],
   ['desk', DESK_VERTEX, DESK_FRAGMENT],
   ['laptop', LAPTOP_VERTEX, LAPTOP_FRAGMENT],
   ['tablet', TABLET_VERTEX, TABLET_FRAGMENT],
@@ -56,6 +57,8 @@ export const PROGRAMS = [
   ['steam', STEAM_VERTEX, STEAM_FRAGMENT],
   ['meadow paint', MEADOW_VERTEX, MEADOW_PAINT],
   ['meadow paint flat', MEADOW_VERTEX, MEADOW_PAINT_FLAT],
+  ['meadow lawn', MEADOW_LAWN_VERTEX, MEADOW_LAWN_FRAGMENT],
   ['painted flowers', MEADOW_VERTEX, MEADOW_FLOWERS],
+  ['painted flowers flat', MEADOW_VERTEX, MEADOW_FLOWERS_FLAT],
   ['foot mist', MEADOW_VERTEX, MEADOW_FOOT],
 ];
