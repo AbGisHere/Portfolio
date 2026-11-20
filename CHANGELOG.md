@@ -6,6 +6,12 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.23 — 2026-11-21
+
+Fixes 0.5.22's trees: the opaque tree pass failed to link (its fragment
+shader read `vKind` without `flat`, the vertex shader writes it `flat`),
+so the trees weren't drawn. Pushed without `qa`, on the owner's call.
+
 ## 0.5.22 — 2026-11-21
 
 Lower GPU, CPU and startup cost at rest, on the pool climb, and on initial load — full quality at rest.

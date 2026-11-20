@@ -307,6 +307,9 @@ startup at full settled quality:
   (`-34%`), Pool Night `16.80` (pre-`M2` `?still=0`) → `11.60` (`?still=0`)
   → `6.60 ms` at rest (`-61%`).
 
+**0.5.23** (2026-11-21) fixes 0.5.22's opaque tree pass, which failed
+to link (`vKind` not `flat` in its fragment shader).
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

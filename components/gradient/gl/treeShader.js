@@ -645,7 +645,7 @@ uniform float uGrainA;
 uniform float uCssPerPx;
 uniform float uResY;
 
-in float vKind;
+flat in float vKind;
 in float vHaze;
 in float vSeed;
 in float vFade;
