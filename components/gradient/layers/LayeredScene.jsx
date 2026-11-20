@@ -571,7 +571,10 @@ export default function LayeredScene({ recipe }) {
           width: px(2 * R),
           height: px(2 * R),
           transform: `translate(${x.x - R}px, ${x.y - R}px) scale(${hx}, ${hy})`,
-          opacity: String(g / k),
+          // (0.5.17) Never exactly 1: Chrome draws an element at opacity 1
+          // by another route than at 0.9998, and a switch easing its glow
+          // up to 1 stepped (~0.9/255) on the frame it landed.
+          opacity: String(Math.min(g / k, 0.999)),
         });
         paintRound(b.glow, x.face ? MOON_STOPS(col, k) : glowStops(col, k));
         const ry = x.r * (1 - (x.squash ?? 0));

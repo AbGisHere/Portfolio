@@ -266,10 +266,12 @@ fonts, and adds the frame at rest to `perf` (info): the pool at rest
 redraws the whole scene every frame (M4 night 71 fps, 174 calls). P2
 (reprojection) measured, not built.
 
+**0.5.18** (2026-11-21) fixes the switch's ×3.1 step: the fallback's moon
+glow eased to opacity exactly 1 on landing, which Chrome draws by another
+route; it stops at 0.999.
+
 **Next:** the frame at rest at the pool (draw the still scene once, only
 what moves each frame; a version of its own, on the owner's call); the
-switch's ×3.1 step at the moon glow's top edge (located, `CHANGELOG.md`
-0.5.17); the
 climb on phones (`devices -- --climb --costs peaks-behind`); then the
 owner's next steps on the valley flight, the cliffs' own detail and the
 fallback's stills.

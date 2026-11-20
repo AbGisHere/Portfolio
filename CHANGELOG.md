@@ -6,6 +6,18 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.18 — 2026-11-21
+
+The switch's one ×3.1 step, fixed.
+
+- On the frame a switch lands, the moon's glow in the layered fallback went
+  from opacity 0.99985 to exactly 1 (same pixels, 0.02 px of movement), and
+  Chrome draws an element at 1 by another route: a ~0.9/255 step on the
+  glow's top edge. Its opacity now stops at 0.999 (`LayeredScene.jsx`).
+  Found by logging the body layers inside `switch`'s own capture.
+- `switch` (layers, every scroll, both ways): 6/6; scroll 0 day → night
+  ×3.1 → ×1.3, its worst step now mid-switch.
+
 ## 0.5.17 — 2026-11-21
 
 The pool climb at half size while it moves (the owner's motion rule), with
