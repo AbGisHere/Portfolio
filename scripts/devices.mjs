@@ -111,6 +111,10 @@ const THEME = args.theme === 'day' ? 'day' : 'night';
 // Extra URL flags for the climb (profiling: `mirror=0`, `dpr=1`, …).
 const QUERY = args.query ? `&${String(args.query).replace(/^[?&]/, '')}` : '';
 const OUT = join('scripts', 'out', CLIMB ? 'devices-climb' : 'devices');
+// (0.5.13) `--costs peaks-behind,house-colour-depth`: with --climb, the climb
+// again with each pass skipped (`?skip=`), so each one's cost is a number
+// per phone (phones have no GPU timers).
+const COSTS = args.costs ? String(args.costs).split(',').filter(Boolean) : [];
 
 // The keys: the environment first, then .env.local.
 const env = { ...process.env };
@@ -310,6 +314,17 @@ try {
         row.passes = r.passes;
         const fps = [...row.sweeps.map(sw => sw.fps)].sort((a, b) => a - b)[1];
         row.fps = fps;
+        row.costs = {};
+        for (const pass of COSTS) {
+          await driver.get(`${BASE}/?contact=0.35&adapt=0&theme=${THEME}${QUERY}&skip=${encodeURIComponent(pass)}`);
+          const ok = await driver.wait(async () =>
+            driver.executeScript('return !!(window.__debugHouse && window.__debugHouse().ready);').catch(() => false), 180000).catch(() => false);
+          if (!ok) { row.costs[pass] = null; continue; }
+          const rc = await driver.executeAsyncScript(`(${climb.toString()})(arguments[arguments.length - 1]);`);
+          const f = rc.error ? null : [...rc.sweeps.map(sw => stats(sw.gaps, hz).fps)].sort((a, b) => a - b)[1];
+          row.costs[pass] = f == null ? null : Math.round((f - fps) * 10) / 10;
+        }
+        if (COSTS.length) console.log(`  ${d.deviceName}: ${fps.toFixed(1)} fps; without ${Object.entries(row.costs).map(([k, v]) => `${k} ${v == null ? '—' : `${v >= 0 ? '+' : ''}${v}`}`).join(', ')}`);
         for (const e of r.errors) row.failed.push(`page error: ${e}`);
         if (fps < hz * 0.95) row.failed.push(`${fps.toFixed(1)} fps on a ${hz} Hz screen`);
         row.status = row.failed.length ? 'FAIL' : 'pass';
@@ -329,6 +344,11 @@ try {
     }
     try {
       const url = `${BASE}${PATH.startsWith('/') ? PATH : `/${PATH}`}`;
+      // (0.5.13) The programs first, on a blank page: with the site's own
+      // context holding its targets, iOS and old Malis refused the probe a
+      // second one ("no WebGL2"), and their programs went unchecked.
+      await driver.get('about:blank');
+      const blank = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS).catch(() => null);
       await driver.get(url);
       await driver.sleep(8000);
       // (0.4.41) A house view is screenshotted once the house is drawn, so a
@@ -338,7 +358,8 @@ try {
           driver.executeScript('return !!window.__debugHouse().ready;').catch(() => false), 180000).catch(() => false);
         await driver.sleep(2000);
       }
-      const r =await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS);
+      const site = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, []);
+      const r = blank?.webgl2 ? { ...blank, renderer: site?.renderer, errors: site?.errors } : { ...site, programs: [] };
       row.gpu = r?.gpu;
       row.renderer = r?.renderer;
       row.programs = r?.programs;
@@ -351,8 +372,14 @@ try {
         // No WebGL2 here: the site must fall back to the layered scene.
         if (r?.renderer !== 'layers') row.failed.push(`site renderer ${r?.renderer ?? 'none'} (expected layers)`);
       } else {
-        if (!r.webgl2) row.failed.push('no WebGL2');
-        for (const p of r.programs) if (!p.link) row.failed.push(`${p.name} (${!p.vs ? 'vertex' : !p.fs ? 'fragment' : 'link'}${p.log ? `: ${p.log.split('\n')[0]}` : ''})`);
+        // (0.5.13) Where the site itself runs on GL but the probe gets no
+        // second WebGL2 context (iOS and old Malis under memory pressure),
+        // the programs can't be checked here: noted, not failed.
+        if (!r?.webgl2) {
+          if (r?.renderer === 'gl') row.note = 'probe: no second WebGL2 context (the site runs on GL)';
+          else row.failed.push('no WebGL2');
+        }
+        for (const p of r?.programs ?? []) if (!p.link) row.failed.push(`${p.name} (${!p.vs ? 'vertex' : !p.fs ? 'fragment' : 'link'}${p.log ? `: ${p.log.split('\n')[0]}` : ''})`);
         if (r?.renderer !== 'gl') row.failed.push(`site renderer ${r?.renderer ?? 'none'}`);
       }
       row.status = row.failed.length ? 'FAIL' : 'pass';
@@ -378,7 +405,10 @@ try {
 }
 
 const file = join(OUT, 'results.json');
-writeFileSync(file, JSON.stringify({ base: BASE, build, ...(CLIMB ? { climb: true, theme: THEME, query: QUERY } : {}), results }, null, 2));
+const json = JSON.stringify({ base: BASE, build, ...(CLIMB ? { climb: true, theme: THEME, query: QUERY, costs: COSTS } : {}), results }, null, 2);
+writeFileSync(file, json);
+// (0.5.13) Each run kept too (a retry no longer overwrites a run's logs).
+writeFileSync(join(OUT, `results-${new Date().toISOString().replace(/[:.]/g, '-')}.json`), json);
 const passed = results.filter(r => r.status === 'pass').length;
 const failed = results.filter(r => r.status === 'FAIL').length;
 const na = results.filter(r => r.status === 'unavailable').length;

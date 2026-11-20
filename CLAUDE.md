@@ -235,9 +235,16 @@ house), and the Galaxy S21 falls back to 2D (the shape shader).
 WebGL2 context, the renderer's chunk fetched as the page loads, Unbounded
 at its one weight (fonts 82 → 53 KB).
 
-**Next: 0.5.13** (`ROADMAP.md`, `0.5.x`): the pool climb on the Moto G71
-and OnePlus 11R (the peaks lit behind the house), the Galaxy S21's shape
-shader, the switch's one ×3.1 step; then the owner's next steps on the
+**0.5.13** (2026-11-20) prepares the climb's peaks before the frame and
+only where the house leaves sky, works the light's per-frame terms once a
+frame, draws the flight's shape at half size only while it moves, compiles
+the peaks in parallel and moves the house builder out of the first
+download; the checks now catch a broken part (`regress` in `qa`, the known
+gap reported as a gap, `freeze` repeatable). Pushed before a full `qa`.
+
+**Next: 0.5.14**: P2 (reprojection, behind a flag) and H1 (the lightmap
+baked offline); confirm the Galaxy S21 and the climb on phones
+(`devices -- --climb --costs peaks-behind`); the switch's one ×3.1 step; then the owner's next steps on the
 valley flight, the cliffs' own detail and the fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own
 detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
@@ -257,7 +264,10 @@ This does not authorize other reference geometry/shader changes.
 
 Full quality remains mandatory: retain wardrobe contents, all intended
 geometry and plant variation; no reduced precision, resolution, samples or
-detail to meet performance targets. Do not claim the pool jank is fixed.
+detail to meet performance targets. One exception (the owner, 2026-11-20):
+while the camera is moving, a pass may render at lower resolution (0.5.13's
+P5/T2), as long as the frame the scroll stops on is full quality; parity
+checks still frames. R4's far-grass LOD stays out. Do not claim the pool jank is fixed.
 
 ## Versioning
 

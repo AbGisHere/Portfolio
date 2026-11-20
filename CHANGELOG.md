@@ -6,6 +6,52 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.13 — 2026-11-20
+
+Faster again, with the same picture at rest (0.5.12 against 0.5.13 on
+the flight, every stop, day and night, laptop and phone: 22/22 at mean
+0.00, p99 0), and checks that catch a broken part.
+
+- **The climb's peaks before the frame** (`MistCanvas.jsx` `peaksPrepare`):
+  the shape behind the house is worked out before the frame's own pass
+  starts (phones' tile GPUs no longer store and reload the frame mid-way),
+  only where the house's depth leaves the far plane (`?peaksprep=0`,
+  `?peakscull=0` off).
+- **The light's per-frame terms once a frame** (`PEAKS_CONSTS_FS`): the
+  sky, sun and exposure terms every pixel worked out, now in a 12-texel
+  pass the light passes read (`?pconsts=0` off); the same GLSL, so the
+  same values.
+- **The horizons toward the bearings the light reads** while the camera
+  moves; all four once it settles (`?bearuse=0` off).
+- **The flight's shape at half size while it moves**, full size from the
+  first still frame (`?motionres=0` off; the owner's call, CLAUDE.md:
+  lower resolution in motion only).
+- **The moon's disc skipped off the disc**; the mountain shaders compiled
+  in parallel from load; the kept light's memory freed at the desk; the
+  moon decoded before it's uploaded; the water's and bloom's programs two
+  at a time; the outdoor lamp scan started where the room's ended.
+- **The shape pass's terrain compiled once, not nine times** (the
+  normal's four heights and the two marches in loops): for the Galaxy
+  S21's compiler, to be confirmed on the phone.
+- **The house builder out of the opening's chunk** (an unused re-export
+  in `houseShader.js` pulled it in), and the prebuilt house cached a year.
+- **Fixed before the push:** the desk vanished from the top-down view to
+  the open laptop (the pre-frame pass left a 12 × 1 viewport).
+- **Measured and left out:** sRGB storage for the kept light (2.31 →
+  2.25 ms, in the noise, not bit-exact); Brotli for the house (Vercel
+  doesn't compress `application/octet-stream`; the browser can't stream
+  Brotli); a WebP moon (lossy changes it, lossless is bigger).
+- **The checks** (`scripts/README.md`): parity reports the fallback's
+  known gap as a gap; `qa` runs `regress` (GL against the last release's
+  stills, the flight's and the desk's stops; `npm run baseline` after each
+  push); parity checks the shape is full size after a scroll; `freeze`
+  stops the sky's clock (a build now matches itself in `house-parity`);
+  `devices` compiles on a blank page first (iPhone 15, M32 and SE 2022
+  were the probe's failure, not the site's), keeps each run's logs and
+  gains `--climb --costs`; perf shows the change against the last run.
+- Pushed on the owner's call before a full `qa` (stopped partway:
+  parity's only failures the known gap).
+
 ## 0.5.12 — 2026-11-20
 
 The first load, lighter; the same picture (0.5.11 against 0.5.12: 0/255).

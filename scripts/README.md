@@ -25,7 +25,15 @@ uncommitted and untracked files):
 | Tier | When | Runs | Time (M4) |
 |---|---|---|---|
 | quick | only docs changed (`*.md`, `*.txt`, `LICENSE`, `.gitignore`, a version-only bump of `package.json` or its lockfile) | `parity --scrolls 0` | ~1 min |
-| full | anything else | parity at every scroll, then `perf --gate` (with its dropout pass) and `switch` | ~20 min (parity 4, perf 8, switch 8) |
+| full | anything else | parity at every scroll, `regress` (GL against the last release), then `perf --gate` (with its dropout pass) and `switch` | ~50 min on 0.5 (perf ~30) |
+
+**`regress` (0.5.13):** GL against the stills of the last release that
+were saved to `scripts/out/baseline/` (local, not committed): the flight's stops
+and the desk's (`--desks`, `?desk=`), at a laptop and a phone, mean ≤ 0.5
+and p99 ≤ 3. It catches a change that breaks a part outside parity's reach,
+such as 0.5.13's vanishing desk. After each push, save the new release's
+stills with `npm run baseline` (against `--base`); with no baseline, the
+first run saves one and passes.
 
 `test:adaptive`, `test:unit` and `hygiene` belong to both tiers but are
 left to CI, which runs them on every push (`.github/workflows/ci.yml`; the
@@ -138,6 +146,20 @@ Output in `scripts/out/parity/`: `index.html` shows a | b | diff for every case
 per-case PNGs and `results.json`. The script exits with 1 if any case or page
 breaks a threshold, logs a console error or warning, or overflows, and 2 if
 the script itself crashes.
+
+**Known gap (0.5.13):** with `layers` against `gl`, a case where the GL
+side drew the 3D opening (`data-opening="3d"`) and only the mean or p99
+fails is reported as `gap`, not as a failure: the fallback's stills are
+still the 2D opening's until they're redone. The summary counts the gaps.
+
+**Settle after a scroll (0.5.13):** parity also wheels into the flight and
+checks that the 3D shape is back at full size once the scroll stops
+(`data-peaks-scale` 1; it's drawn at half size only while moving).
+
+**Clocks under `?freeze=1`:** since 0.5.13 the sky's clock doesn't run under
+`freeze` even while the mountains fade in, so the pool's waves and the
+stars' twinkle repeat between captures. Before that a build differed from
+itself in `house-parity` (0.5.12 against itself failed 8 of 8 house views).
 
 What the numbers mean: a renderer against itself comes out at exactly 0. A
 mean under 2 with a p99 under 24 means two renderers look the same. A
@@ -281,7 +303,13 @@ npm run devices -- --only pixel,iphone
 npm run devices -- --list             # Automate's real devices (exact names for DEVICES)
 npm run devices -- --climb --only oneplus,pixel\ 7,moto   # the pool climb's frame times (0.4.39), and the house's load holds (0.4.40)
 npm run devices -- --climb --query dpr=1                   # …with a profiling flag
+npm run devices -- --climb --costs peaks-behind,house-colour-depth --only moto,oneplus   # each pass's cost (fps without it)
 ```
+
+(0.5.13) The programs are compiled on a blank page first, before the site
+loads: with the site holding its GPU memory, iOS and old Malis refused the
+probe a second WebGL2 context. Each run's results are also kept as
+`results-<time>.json`, so a retry doesn't overwrite a run's compile logs.
 
 Per device: the site at the desk's end (`?desk=0.6`), then, in the page,
 each program from the repo's shader sources (`lib/programs.mjs`: scene,

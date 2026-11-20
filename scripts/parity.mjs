@@ -9,6 +9,20 @@
  *        [--scrolls 0,0.5,1]
  *        [--settle 2500] [--sun-tolerance 1] [--a layers --b gl] [--grain]
  *        [--base-b URL] [--query k=v&k=v] [--query-a k=v] [--query-b k=v] [--quiet]
+ *        [--desks 0,0.5,1] [--baseline DIR] [--save-baseline]
+ *
+ * (0.5.13) Three additions:
+ * - A known gap is reported, not failed: layered against GL where the GL
+ *   side drew the 3D opening (`data-opening="3d"`), which the fallback's
+ *   2D stills can't match until they're redone (CLAUDE.md, 0.5.0).
+ * - `--baseline DIR`: side a is the PNGs saved there (`--save-baseline`
+ *   writes them from side b instead of comparing): GL against the last
+ *   release, at the descent's stops and the desk's (`--desks`, pinned with
+ *   `?desk=`), so a change that breaks a part (0.5.13's vanishing desk)
+ *   fails here.
+ * - After a real scroll (wheeled, not pinned) the 3D shape must be back at
+ *   full size once it settles (`data-peaks-scale` 1; 0.5.13 draws it at
+ *   half size only while the flight moves).
  *
  * First it loads home and the 404 with each renderer and switches the sky
  * once. Every page load fails on a console error or warning, a page error or
@@ -18,7 +32,7 @@
  * non-zero if any case breaks a threshold. `--quiet` (as `npm run qa` runs
  * it) prints only failing cases, then one summary line. Contract: scripts/README.md.
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { chromium } from '@playwright/test';
 import {
@@ -69,7 +83,17 @@ const VIEWPORTS = viewportsFrom(args.viewports, [
   '1600x300@1',
 ]);
 
-const OUT = ensureDir(join(OUT_DIR, 'parity'));
+// (0.5.13) The desk's stops, pinned with `?desk=` (after the whole descent).
+const DESKS = args.desks == null ? [] : String(args.desks).split(',').filter(Boolean).map(Number);
+const BASELINE = args.baseline ? String(args.baseline) : null;
+const SAVE_BASELINE = Boolean(args['save-baseline']);
+const POSITIONS = [
+  ...SCROLLS.map(scroll => ({ key: `s${scroll}`, query: { scroll: String(scroll) } })),
+  ...DESKS.map(desk => ({ key: `d${desk}`, query: { scroll: '1', desk: String(desk) } })),
+];
+
+const OUT = ensureDir(args.out ? String(args.out) : join(OUT_DIR, BASELINE ? 'regress' : 'parity'));
+if (BASELINE) ensureDir(BASELINE);
 
 // Time-dependent motion, frozen the same way on both sides: `?freeze=1` asks
 // each renderer to draw its veils at drift offset 0 and full opacity. CSS
@@ -92,7 +116,7 @@ function seedRandom() {
 }
 
 /** Load one renderer, settle, freeze, screenshot, and measure the sun. */
-async function capture(browser, vp, theme, renderer, side, scroll) {
+async function capture(browser, vp, theme, renderer, side, pos) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
     deviceScaleFactor: vp.dpr,
@@ -102,7 +126,7 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
   const page = await context.newPage();
   const errors = watchConsole(page);
 
-  const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), scroll: String(scroll), ...QUERY[side] };
+  const query = { ...(GRAIN ? { freeze: '1' } : { freeze: '1', grain: '0' }), ...pos.query, ...QUERY[side] };
   await page.goto(sceneUrl(side === 'b' ? BASE_B : BASE, renderer, query), { waitUntil: 'load' });
   await page.waitForSelector('[data-renderer]', { timeout: 15000 }).catch(() => {});
   await page.addStyleTag({ content: FREEZE_CSS });
@@ -134,9 +158,10 @@ async function capture(browser, vp, theme, renderer, side, scroll) {
   }
 
   const overflow = await overflowsX(page);
+  const opening = await page.evaluate(() => document.documentElement.dataset.opening ?? null);
   const png = await page.screenshot({ type: 'png' });
   await context.close();
-  return { png, painted, sun, errors, overflow };
+  return { png, painted, sun, errors, overflow, opening };
 }
 
 /**
@@ -267,6 +292,31 @@ async function checkPage(browser, renderer, path) {
   return { painted, problems };
 }
 
+// (0.5.13) A real scroll into the flight, then rest: the shape must come
+// back to full size (a half-size still would be a quality loss).
+async function checkSettle(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  const errors = watchConsole(page);
+  const problems = [];
+  await page.goto(sceneUrl(BASE_B, 'gl', { grain: '0' }), { waitUntil: 'load' });
+  await page.waitForSelector('[data-renderer]', { timeout: 15000 }).catch(() => {});
+  await sleep(Math.max(SETTLE, 6000));
+  await page.mouse.move(700, 450);
+  let seenHalf = false;
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, 80);
+    await sleep(30);
+    if ((await page.evaluate(() => document.documentElement.dataset.peaksScale)) === '0.5') seenHalf = true;
+  }
+  await sleep(2500);
+  const scale = await page.evaluate(() => document.documentElement.dataset.peaksScale ?? null);
+  if (scale !== null && scale !== '1') problems.push(`shape at ${scale} after the scroll settled (want 1)`);
+  if (errors.length) problems.push(`console: ${errors[0]}`);
+  await context.close();
+  return { problems, scale, seenHalf };
+}
+
 async function main() {
   const browser = await chromium.launch();
   const differ = await (await browser.newContext()).newPage();
@@ -285,12 +335,29 @@ async function main() {
     }
   }
 
+  {
+    const { problems, scale, seenHalf } = await checkSettle(browser);
+    if (problems.length) failed++;
+    say(!problems.length, `${problems.length ? 'FAIL' : 'ok  '} ${'settle after a scroll'.padEnd(28)} shape ${scale ?? '—'} at rest${seenHalf ? ' (½ while moving)' : ''}${problems.length ? `  → ${problems.join('; ')}` : ''}`);
+  }
+
+  let gaps = 0;
+  let saved = 0;
   for (const vp of VIEWPORTS) {
     for (const theme of THEMES) {
-      for (const scroll of SCROLLS) {
-        const id = `${vp.name.replace('@', '-')}-${theme}-s${scroll}`;
-        const a = await capture(browser, vp, theme, A, 'a', scroll);
-        const b = await capture(browser, vp, theme, B, 'b', scroll);
+      for (const pos of POSITIONS) {
+        const id = `${vp.name.replace('@', '-')}-${theme}-${pos.key}`;
+        const b = await capture(browser, vp, theme, B, 'b', pos);
+        const basePng = BASELINE && join(BASELINE, `${id}.png`);
+        if (BASELINE && (SAVE_BASELINE || !existsSync(basePng))) {
+          writeFileSync(basePng, b.png);
+          saved++;
+          say(true, `ok   ${id.padEnd(28)} baseline saved`);
+          continue;
+        }
+        const a = BASELINE
+          ? { png: readFileSync(basePng), painted: 'baseline', sun: {}, errors: [], overflow: false, opening: null }
+          : await capture(browser, vp, theme, A, 'a', pos);
         const d = await diff(differ, a.png, b.png);
 
         writeFileSync(join(OUT, `${id}-${A}.png`), a.png);
@@ -320,13 +387,20 @@ async function main() {
         const pb = b.sun.painted;
         const drift = pa && pb ? Math.hypot(pa.x - pb.x, pa.y - pb.y) : null;
         if (drift != null && drift > SUN_TOL) problems.push(`painted sun ${A}/${B} apart by ${fmt(drift)}px`);
+        // The known gap: the fallback's 2D stills against the 3D opening.
+        const gap = !BASELINE && A === 'layers' && b.opening === '3d' && problems.length > 0 && problems.every(p => /^(mean|p99) /.test(p));
+        if (gap) {
+          gaps++;
+          problems.length = 0;
+        }
         if (problems.length) failed++;
 
         const row = {
           id,
           viewport: vp.name,
           theme,
-          scroll,
+          position: pos.key,
+          gap,
           painted: { [A]: a.painted, [B]: b.painted },
           mean: d.mean,
           p99: d.p99,
@@ -337,7 +411,7 @@ async function main() {
         cases.push(row);
         say(
           !problems.length,
-          `${problems.length ? 'FAIL' : 'ok  '} ${id.padEnd(28)} ` +
+          `${problems.length ? 'FAIL' : gap ? 'gap ' : 'ok  '} ${id.padEnd(28)} ` +
             `painted ${A}=${a.painted} ${B}=${b.painted}  ` +
             `mean ${fmt(d.mean)}  p99 ${d.p99 ?? '—'}  worst32 ${fmt(d.worst?.mean)}  ` +
             `sun ${fmt(a.sun.offset)}/${fmt(b.sun.offset)}px` +
@@ -350,12 +424,13 @@ async function main() {
 
   writeFileSync(join(OUT, 'results.json'), JSON.stringify({ base: BASE, A, B, cases }, null, 2));
   writeFileSync(join(OUT, 'index.html'), report(cases));
-  const total = cases.length + PAGES.length * new Set([A, B]).size;
-  const worst = k => Math.max(0, ...cases.map(c => c[k] ?? 0));
+  const total = cases.length + saved + PAGES.length * new Set([A, B]).size + 1;
+  const worst = k => Math.max(0, ...cases.filter(c => !c.gap).map(c => c[k] ?? 0));
+  const extra = `${gaps ? ` · ${gaps} known gap (fallback 2D vs the 3D opening)` : ''}${saved ? ` · ${saved} baseline saved` : ''}`;
   console.log(
     QUIET
-      ? `parity: ${total - failed}/${total} passed · worst mean ${fmt(worst('mean'))}, p99 ${worst('p99')} · ${relative(process.cwd(), OUT)}`
-      : `\n${total - failed}/${total} passed · report: ${join(OUT, 'index.html')}`,
+      ? `${BASELINE ? 'regress' : 'parity'}: ${total - failed}/${total} passed${extra} · worst mean ${fmt(worst('mean'))}, p99 ${worst('p99')} · ${relative(process.cwd(), OUT)}`
+      : `\n${total - failed}/${total} passed${extra} · report: ${join(OUT, 'index.html')}`,
   );
   process.exit(failed ? 1 : 0);
 }

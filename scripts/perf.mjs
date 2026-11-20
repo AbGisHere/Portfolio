@@ -37,7 +37,7 @@
  * Absolute numbers depend on the machine and on headless GPU support; compare
  * renderers within one run, not across machines. See scripts/README.md.
  */
-import { writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { chromium } from '@playwright/test';
 import {
@@ -420,6 +420,15 @@ async function main() {
   await browser.close();
   const dropout = DROPOUT_ON ? await dropoutPass() : null;
 
+  // (0.5.13) The last full run before this one, to show the change beside
+  // the gate (the gate's 118 fps is a goal the opening doesn't reach yet).
+  let prev = null;
+  try {
+    const last = readdirSync(OUT).filter(f => /^perf-.*\.json$/.test(f)).sort().at(-1);
+    if (last) prev = JSON.parse(readFileSync(join(OUT, last), 'utf8'));
+  } catch {
+    prev = null;
+  }
   const file = join(OUT, `perf-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   const slim = dropout?.map(({ bad, ...d }) => ({ ...d, bad: describeBad(bad) }));
   writeFileSync(file, JSON.stringify({ base: BASE, gpu, switches: SWITCHES, results, sharpness: sharp, dropout: slim }, null, 2));
@@ -489,8 +498,10 @@ async function main() {
       }
     }
     const fps = results.map(r => r.scroll?.fps ?? 0);
+    const prevFps = prev?.results?.length === results.length ? prev.results.map(r => r.scroll?.fps ?? 0) : null;
     const summary =
       `gate ${results.length - failed}/${results.length} passed, min scroll ${n1(Math.min(...fps))} fps` +
+      (prevFps ? ` (last run ${n1(Math.min(...prevFps))}; per size ${results.map((r, i) => `${r.viewport ?? i} ${n1(fps[i] - prevFps[i]) >= 0 ? '+' : ''}${n1(fps[i] - prevFps[i])}`).join(', ')})` : '') +
       (dropout ? ` · dropout ${dropout.length - dropped}/${dropout.length} clean` : '') +
       ` · sharpness (info) ${sharp.map(s => `${s.viewport} ${pct(s)}`).join(', ')}`;
     failed += dropped;

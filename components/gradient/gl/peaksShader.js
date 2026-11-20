@@ -36,6 +36,8 @@ const COMMON = `
 precision highp float;
 precision highp int;
 uniform vec2 uRes;
+// (0.5.13) 4, from the page: a loop bound the compiler can't fold.
+uniform int uLoop4;
 uniform vec3 uCam, uLook, uRight;
 uniform float uFov;
 // (0.5.3) Where the lens's axis meets the frame, in view units (0 but on
@@ -289,8 +291,15 @@ vec3 nrm(vec3 p, float t) {
   bool inNear = all(greaterThan(un, vec2(.003))) && all(lessThan(un, vec2(.997)));
   float e = inNear ? max(8.0, t * .0016) : max(64.0, t * .004);
   int oc = t < 5000. ? 8 : 6;
-  return normalize(vec3(H(p.xz - vec2(e, 0), oc) - H(p.xz + vec2(e, 0), oc), 2. * e,
-                        H(p.xz - vec2(0, e), oc) - H(p.xz + vec2(0, e), oc)));
+  // (0.5.13) The four heights in a loop the compiler can't unroll (uLoop4
+  // is 4): one copy of the terrain in the shader, not four (old Mali
+  // compilers gave up on the shape pass). The same sums.
+  float hs[4];
+  for (int k = 0; k < uLoop4; k++) {
+    vec2 o = k == 0 ? vec2(-e, 0) : k == 1 ? vec2(e, 0) : k == 2 ? vec2(0, -e) : vec2(0, e);
+    hs[k] = H(p.xz + o, oc);
+  }
+  return normalize(vec3(hs[0] - hs[1], 2. * e, hs[2] - hs[3]));
 }
 
 // ---- the mist: soft banks pooled low in the alpine valley trough
@@ -368,10 +377,15 @@ G geo(vec3 rd, float tStart) {
   // (0.5.10) The coarse pass saw only sky round this block (its cone
   // covers the block three times over): nothing to march.
   if (tStart >= 70000.) { g.t = -1.; g.hit = 0.; return g; }
-  g.t = march(uCam, rd, 80000., max(tStart, tn));
   // The coarse start can't be trusted on a miss (a grazing ray, a thin
-  // crest between its corners): look again from the eye.
-  if (g.t < 0. && tStart > max(tn, 1.)) g.t = march(uCam, rd, 80000., max(tn, 1.));
+  // crest between its corners): look again from the eye. (0.5.13) Both
+  // marches through one call in a loop (one copy of the march compiled).
+  int tries = tStart > max(tn, 1.) ? 2 : 1;
+  g.t = -1.;
+  for (int k = 0; k < tries; k++) {
+    g.t = march(uCam, rd, 80000., k == 0 ? max(tStart, tn) : max(tn, 1.));
+    if (g.t >= 0.) break;
+  }
   g.hit = g.t > 0. ? 1. : 0.;
   vec3 p = uCam + rd * max(g.t, 0.);
   if (g.hit > 0.) {
@@ -800,6 +814,13 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   q.y *= 1. + .18 * smoothstep(.06, 0., malt);
   float d = length(q), px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, uMoonDir.y);
+  // (0.5.13) Off the disc only its halo: the disc's colour is never mixed in.
+  if (d >= 1. + px) {
+    float high0 = smoothstep(.02, .3, malt);
+    float o0 = d - 1.;
+    vec3 haloC0 = mix(vec3(.9, .68, .4), vec3(.85, .76, .52), high0);
+    return c + haloC0 * up * (.2 * exp(-o0 * 3.5) + .07 * exp(-o0 * .7) + .035 * exp(-o0 * .15));
+  }
   // (0.5.7) Stylised, like the desk: a flat cream disc, its seas in one
   // flat cooler tone with soft edges (from the real map where it's
   // loaded), a few bright craters, a clean terminator, a flat halo.
@@ -843,11 +864,26 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
 // The light, in two parts: what's there (the ground or the sky, with the
 // bodies) and the mist before it, with how much of the first shows
 // through. The composite (PEAKS_MIX_FS) moves the mist over them each frame.
-void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
+// (0.5.13) The same for every pixel of a frame: worked once a frame into a
+// 12-texel float target (PEAKS_CONSTS_FS) and read back here, where there.
+uniform sampler2D uConsts;
+uniform float uHaveConsts;
+void frameConsts() {
   for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
   LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
   EXPO = 1.25 * pow(16., uNight);
   TAU0 = tau0(); BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
+}
+void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
+  if (uHaveConsts > .5) {
+    for (int i = 0; i < 6; i++) S[i] = texelFetch(uConsts, ivec2(i, 0), 0).rgb;
+    LIGHT = texelFetch(uConsts, ivec2(6, 0), 0).rgb;
+    EXPO = texelFetch(uConsts, ivec2(7, 0), 0).r;
+    TAU0 = texelFetch(uConsts, ivec2(8, 0), 0).rgb;
+    BODYL = texelFetch(uConsts, ivec2(9, 0), 0).rgb;
+    SUNL = texelFetch(uConsts, ivec2(10, 0), 0).rgb;
+    SKYL = texelFetch(uConsts, ivec2(11, 0), 0).rgb;
+  } else frameConsts();
   if (g.hit > 0.) base = ground(g, rd);
   else {
     base = sky(rd);
@@ -890,6 +926,9 @@ void main() {
 export const PEAKS_HOR_FS = `#version 300 es
 ${COMMON}
 uniform sampler2D uG0;
+// (0.5.13) Which bearings the light reads this frame (1) — while the camera
+// moves only those are marched; all four once it settles.
+uniform vec4 uBearUse;
 out vec4 o;
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy) * 2;
@@ -903,7 +942,8 @@ void main() {
   vec3 n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z);
   vec3 p = uCam + rd * a.x * 1000. + n * 3.;
   if (p.y <= ${f(SHELF.y + 6)} && shelfMask(p.xz) > .95) { o = vec4(-1); return; }
-  o = vec4(horizon(p, uBear[0]), horizon(p, uBear[1]), horizon(p, uBear[2]), horizon(p, uBear[3]));
+  o = vec4(uBearUse.x > .5 ? horizon(p, uBear[0]) : -1., uBearUse.y > .5 ? horizon(p, uBear[1]) : -1.,
+           uBearUse.z > .5 ? horizon(p, uBear[2]) : -1., uBearUse.w > .5 ? horizon(p, uBear[3]) : -1.);
 }`;
 
 // (0.5.3) The bake: one box's texels — exact ground height (split in r+g),
@@ -944,6 +984,8 @@ void main() {
 const READ_G = `
 uniform sampler2D uG0, uG1, uG2;
 uniform float uReady, uReveal;
+// (0.5.13) The shape's size against the frame's (½ while the flight moves).
+uniform float uGeoScale;
 G readG(vec3 rd) {
   if (uSkipGeo > .5 || uReady < .5) {
     G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.hor = vec4(-1);
@@ -953,12 +995,12 @@ G readG(vec3 rd) {
     }
     return s;
   }
-  ivec2 px = ivec2(gl_FragCoord.xy);
+  ivec2 px = ivec2(gl_FragCoord.xy * uGeoScale);
   vec4 a = texelFetch(uG0, px, 0), b = texelFetch(uG1, px, 0);
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
   g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = b.w;
-  g.hor = texture(uG2, gl_FragCoord.xy / uRes);
+  g.hor = texture(uG2, gl_FragCoord.xy / uRes * uGeoScale);
   return g;
 }`;
 
@@ -1050,6 +1092,18 @@ void main() {
   if (g.hit > 0. && uReveal < 1. && uSkipGeo < .5 && uNear <= 0.) lin = mix(sky(rd), lin, uReveal);
   vec3 c = pow(lin, vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;
   o = vec4(dayGrade(c) * uA, uA);
+}`;
+
+// (0.5.13) The frame's constants (lightParts), one texel each.
+export const PEAKS_CONSTS_FS = `#version 300 es
+${COMMON}
+${SHADE}
+out vec4 o;
+void main() {
+  frameConsts();
+  int i = int(gl_FragCoord.x);
+  vec3 v = i < 6 ? S[min(i, 5)] : i == 6 ? LIGHT : i == 7 ? vec3(EXPO) : i == 8 ? TAU0 : i == 9 ? BODYL : i == 10 ? SUNL : SKYL;
+  o = vec4(v, 1.);
 }`;
 
 // Both in one, where float targets can't be drawn into.

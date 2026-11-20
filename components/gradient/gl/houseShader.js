@@ -15,7 +15,6 @@ import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { FLOOR, HOUSE_PART, PLAN, POOL, MATCH_AXES, ROOF_DECK, STOREY, TERRACE, WALL, ZONES } from './houseShape';
 import { FITTING_PER_PIXEL, LIGHTS, LIGHT_RANGE, lightCellGrid, lightCells, ROOM_CONSTANT_FILLS, ROOM_GLOW_DAY, ROOM_GLOW_TONE, STRIPS, STRIP_RANGE, ZONE_BOXES } from './houseLights';
-import { houseLayout } from './houseMesh';
 import { TURNED_HAZE_GLSL } from '../deskCamera';
 import { PROBE_GLSL } from './mirrorProbe';
 import { HOUSE_VERTEX_GLSL } from './houseVertices';
@@ -25,9 +24,6 @@ export const HOUSE_STRIDE = 9;
 const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const v3 = a => `vec3(${a.map(f).join(', ')})`;
 const v2 = a => `vec2(${a.map(f).join(', ')})`;
-
-/** The house's opaque mesh (`{ data, count, glass }`), built once. */
-export const houseMesh = houseLayout;
 
 // (0.4.40) The light cells' grid (houseLights.js lightCellGrid), and where
 // their heads and lists start in the lights' data.
@@ -452,10 +448,13 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   // (0.4.66) The list's texel fetched once per four entries.
   vec4 lt = vec4(0.0);
   int lq = -1;
+  // (0.5.13) Where the room's own lights end in the list: outside (room 0,
+  // whose lights come first), the front rooms' are all past it.
+  int jb = cn;
   for (int j = 0; j < cn; j++) {
     if (((c0 + j) >> 2) != lq) { lq = (c0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
     int i = listPick(lt, (c0 + j) & 3);
-    if (i >= lr.y) break;
+    if (i >= lr.y) { jb = j; break; }
     if (i < lr.x) continue;
     vec4 lk = L_K(i);
     if (lk.x <= 0.0) continue;
@@ -465,7 +464,7 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   }
   if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
     lq = -1;
-    for (int j = 0; j < cn; j++) {
+    for (int j = lr.x == 0 ? jb : 0; j < cn; j++) {
       if (((c0 + j) >> 2) != lq) { lq = (c0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
       int i = listPick(lt, (c0 + j) & 3);
       if (LD(3, i).w < 0.5) continue;

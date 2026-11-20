@@ -1,6 +1,6 @@
 {
   "name": "portfolio",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "description": "Abhinav Gupta's personal site: one continuous, scroll-driven scene.",
   "private": true,
   "scripts": {
@@ -17,7 +17,8 @@
     "test:adaptive": "node --test scripts/adaptive-test.mjs",
     "test:unit": "node --import ./scripts/lib/resolve-js.mjs --test scripts/unit-test.mjs",
     "hygiene": "node scripts/hygiene.mjs",
-    "qa": "node scripts/qa.mjs"
+    "qa": "node scripts/qa.mjs",
+    "baseline": "node scripts/parity.mjs --a gl --b gl --baseline scripts/out/baseline --save-baseline --viewports 1440x900@2,393x852@2 --scrolls 0,0.3,0.6,0.9,1 --desks 0,0.3,0.6,1 --settle 6000 --quiet"
   },
   "keywords": [],
   "author": "Abhinav Gupta",

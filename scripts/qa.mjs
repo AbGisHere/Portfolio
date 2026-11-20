@@ -57,6 +57,10 @@ const CHECKS = [
   { name: 'test:unit', cmd: node('--import', './scripts/lib/resolve-js.mjs', '--test', 'scripts/unit-test.mjs'), tiers: ['quick', 'full'], ci: true },
   { name: 'hygiene', cmd: harness('hygiene'), tiers: ['quick', 'full'], ci: true, server: true },
   { name: 'parity', cmd: harness('parity', ...(TIER === 'quick' ? ['--scrolls', '0'] : [])), tiers: ['quick', 'full'], server: true },
+  // (0.5.13) GL against the last release's stills (scripts/out/baseline,
+  // saved with `npm run baseline` after each push): the flight's stops and
+  // the desk's, so a change that breaks a part shows.
+  { name: 'regress', cmd: harness('parity', '--a', 'gl', '--b', 'gl', '--baseline', 'scripts/out/baseline', '--viewports', '1440x900@2,393x852@2', '--scrolls', '0,0.3,0.6,0.9,1', '--desks', '0,0.3,0.6,1', '--threshold', '0.5', '--p99', '3', '--settle', '6000'), tiers: ['full'], server: true },
   { name: 'perf', cmd: harness('perf', '--gate'), tiers: ['full'], server: true },
   { name: 'switch', cmd: harness('switch'), tiers: ['full'], server: true },
 ];
