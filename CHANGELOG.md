@@ -6,6 +6,22 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.14 — 2026-11-20
+
+A fix to 0.5.13 (from the owner's review).
+
+- **Full size again after a scroll** (`MistCanvas.jsx`): 0.5.13 drew the
+  flight's shape at half size while moving but left its scale at ½ when the
+  view settled, so after any real scroll the still frame stayed half size
+  and was marched again every idle frame. Pinned stills (parity) never
+  scrolled, so they never saw it; parity's new settle check is for this.
+- **No seam at half size**: the horizons' filtered reads stop half a texel
+  inside the corner they fill (`uHorMax`; 1 at full size, so stills are
+  unchanged).
+- **Freed on unmount**: the far-plane shape and constants programs and the
+  constants' target.
+- Pushed while `qa` runs, on the owner's call.
+
 ## 0.5.13 — 2026-11-20
 
 Faster again, with the same picture at rest (0.5.12 against 0.5.13 on

@@ -986,6 +986,7 @@ uniform sampler2D uG0, uG1, uG2;
 uniform float uReady, uReveal;
 // (0.5.13) The shape's size against the frame's (½ while the flight moves).
 uniform float uGeoScale;
+uniform vec2 uHorMax;
 G readG(vec3 rd) {
   if (uSkipGeo > .5 || uReady < .5) {
     G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.hor = vec4(-1);
@@ -1000,7 +1001,7 @@ G readG(vec3 rd) {
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
   g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = b.w;
-  g.hor = texture(uG2, gl_FragCoord.xy / uRes * uGeoScale);
+  g.hor = texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale, uHorMax));
   return g;
 }`;
 

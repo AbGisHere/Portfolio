@@ -242,8 +242,13 @@ the peaks in parallel and moves the house builder out of the first
 download; the checks now catch a broken part (`regress` in `qa`, the known
 gap reported as a gap, `freeze` repeatable). Pushed before a full `qa`.
 
-**Next: 0.5.14**: P2 (reprojection, behind a flag) and H1 (the lightmap
-baked offline); confirm the Galaxy S21 and the climb on phones
+**0.5.14** (2026-11-20) fixes 0.5.13's flight left at half size after a
+scroll (and marched every idle frame), a seam at half size, and frees the
+new programs on unmount.
+
+**Next: 0.5.15**: P2 (reprojection, behind a flag), H1 (the lightmap
+baked offline), the climb at half size while moving (the owner's motion
+rule), more sky terms in the constants pass; confirm the Galaxy S21 and the climb on phones
 (`devices -- --climb --costs peaks-behind`); the switch's one ×3.1 step; then the owner's next steps on the
 valley flight, the cliffs' own detail and the fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own

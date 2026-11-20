@@ -3734,6 +3734,13 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(u('uReady'), peaksGeo?.ready ? 1 : 0);
       gl.uniform1f(u('uReveal'), peaksReveal);
       gl.uniform1f(u('uGeoScale'), peaksGeo?.scale ?? 1);
+      // (0.5.14) At half size the horizons fill a corner of their target:
+      // its filtered reads stop half a texel inside it (no seam at the edge).
+      if (peaksGeo?.scale < 1) {
+        const tw = Math.ceil(peaksGeo.w / 2);
+        const th = Math.ceil(peaksGeo.h / 2);
+        gl.uniform2f(u('uHorMax'), (Math.ceil(Math.ceil(peaksGeo.w / 2) / 2) - 0.5) / tw, (Math.ceil(Math.ceil(peaksGeo.h / 2) / 2) - 0.5) / th);
+      } else gl.uniform2f(u('uHorMax'), 1, 1);
       if (p === peaksMode.lit || p === peaksMode.direct || p === peaksMode.behind) {
         gl.uniform1i(u('uG0'), PEAKS_G0);
         gl.uniform1i(u('uG1'), PEAKS_G1);
@@ -3902,6 +3909,10 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.ready = false;
         } else if (peaksGeo.ready && peaksGeo.scale < 1) {
           // (0.5.13) Settled after a half-size view: all of it again, full size.
+          // (0.5.14) Back to full size here: 0.5.13 left the scale at ½, so
+          // after a scroll the still frame stayed half size, marched again
+          // every idle frame.
+          peaksGeo.scale = 1;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
         } else if (peaksGeo.ready && peaksGeo.use) {
@@ -4568,7 +4579,11 @@ export default function MistCanvas({ recipe, onFail }) {
       if (peaksMoon?.tex) gl.deleteTexture(peaksMoon.tex);
       if (peaksMode) {
         if (peaksMode.flowTex) gl.deleteTexture(peaksMode.flowTex);
-        for (const k of ['geo', 'lit', 'mix', 'direct', 'coarse', 'hor', 'bake', 'behind', 'all']) if (peaksMode[k]) gl.deleteProgram(peaksMode[k]);
+        for (const k of ['geo', 'lit', 'mix', 'direct', 'coarse', 'hor', 'bake', 'behind', 'geoFar', 'consts', 'all']) if (peaksMode[k]) gl.deleteProgram(peaksMode[k]);
+      }
+      if (peaksConsts) {
+        gl.deleteTexture(peaksConsts.tex);
+        gl.deleteFramebuffer(peaksConsts.fbo);
       }
       if (birdPass) {
         for (const k of birdPass.kinds) {
