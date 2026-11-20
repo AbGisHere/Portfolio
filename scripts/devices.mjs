@@ -160,7 +160,16 @@ function probe(programs) {
   out.webgl2 = true;
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
   out.gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  // (0.5.15) Float targets: with them the site never uses peaks-all.
+  out.floatTargets = !!gl.getExtension('EXT_color_buffer_float');
+  // (0.5.15) After a program fails, the rest go on in a fresh context: a
+  // compiler giving up on one (the S21's Mali on peaks-all) must not fail
+  // the ones after it. One context otherwise: a context per program took
+  // iOS 15 Safari's session down.
+  let ctx = gl;
   for (const [name, vsSrc, fsSrc] of programs) {
+    const gl = ctx;
+    if (!gl) { out.programs.push({ name, vs: false, fs: false, link: false, log: 'no WebGL2 context for this program' }); continue; }
     const stage = (type, src) => {
       const s = gl.createShader(type);
       gl.shaderSource(s, src);
@@ -180,6 +189,10 @@ function probe(programs) {
       log = gl.getProgramInfoLog(p) || '';
     }
     out.programs.push({ name, vs: vs.ok, fs: fs.ok, link, log: (vs.log || fs.log || log).slice(0, 400) });
+    if (!link) {
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      ctx = document.createElement('canvas').getContext('webgl2');
+    }
   }
   return out;
 }
@@ -344,13 +357,11 @@ try {
     }
     try {
       const url = `${BASE}${PATH.startsWith('/') ? PATH : `/${PATH}`}`;
-      // (0.5.13) The programs first, on a blank page: with the site's own
-      // context holding its targets, iOS and old Malis refused the probe a
-      // second one ("no WebGL2"), and their programs went unchecked.
-      await driver.get('about:blank');
-      const blank = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS).catch(() => null);
       await driver.get(url);
       await driver.sleep(8000);
+      // (0.5.15) Slow phones (iOS 15) pick their renderer later than 8 s.
+      await driver.wait(async () => driver.executeScript(
+        "const h = document.querySelector('[data-renderer]'); return !!(h && h.getAttribute('data-renderer'));").catch(() => false), 120000).catch(() => false);
       // (0.4.41) A house view is screenshotted once the house is drawn, so a
       // phone GPU's lighting can be checked by eye (0.4.40's Adreno bug).
       if (await driver.executeScript('return !!window.__debugHouse;').catch(() => false)) {
@@ -358,7 +369,26 @@ try {
           driver.executeScript('return !!window.__debugHouse().ready;').catch(() => false), 180000).catch(() => false);
         await driver.sleep(2000);
       }
-      const site = await driver.executeScript(`return (${probe.toString()})(arguments[0]);`, []);
+      // (0.5.15) Only the renderer and errors from the site: the whole probe
+      // there failed on iOS 15's busy page (a server-side error), so a small
+      // read, retried.
+      const siteRead = () => driver.executeScript(
+        "const h = document.querySelector('[data-renderer]'); return { renderer: h ? h.getAttribute('data-renderer') : null, errors: (window.__errors || []).slice(0, 5) };");
+      let site = null;
+      for (let i = 0; i < 3 && !site; i++) site = await siteRead().catch(async () => { await driver.sleep(3000); return null; });
+      const shot = join(OUT, `${slug(d.deviceName)}.png`);
+      writeFileSync(shot, await driver.takeScreenshot(), 'base64');
+      row.shot = relative(process.cwd(), shot);
+      // (0.5.13) The programs on a blank page, not beside the site's own
+      // context (iOS and old Malis refused a second one). (0.5.15) After the
+      // site, not before: on iOS 15 the probe's compiles left Safari unable
+      // to run the site's page (every script call failed).
+      // (0.5.15) On iOS 15 the probe's compiles can take Safari's session
+      // down ("Unable to communicate to node"): the site's own result stands,
+      // and the probe is noted as not run.
+      const blank = await driver.get('about:blank')
+        .then(() => driver.executeScript(`return (${probe.toString()})(arguments[0]);`, PROGRAMS))
+        .catch(err => ({ webgl2: false, probeError: String(err.message ?? err).split('\n')[0].slice(0, 120) }));
       const r = blank?.webgl2 ? { ...blank, renderer: site?.renderer, errors: site?.errors } : { ...site, programs: [] };
       row.gpu = r?.gpu;
       row.renderer = r?.renderer;
@@ -376,19 +406,20 @@ try {
         // second WebGL2 context (iOS and old Malis under memory pressure),
         // the programs can't be checked here: noted, not failed.
         if (!r?.webgl2) {
-          if (r?.renderer === 'gl') row.note = 'probe: no second WebGL2 context (the site runs on GL)';
+          if (r?.renderer === 'gl') row.note = blank?.probeError ? `probe not run (${blank.probeError}); the site runs on GL` : 'probe: no second WebGL2 context (the site runs on GL)';
           else row.failed.push('no WebGL2');
         }
-        for (const p of r?.programs ?? []) if (!p.link) row.failed.push(`${p.name} (${!p.vs ? 'vertex' : !p.fs ? 'fragment' : 'link'}${p.log ? `: ${p.log.split('\n')[0]}` : ''})`);
+        // (0.5.15) peaks-all is only the fallback for GPUs without float
+        // targets; where they exist a rejection is noted, not failed.
+        const unused = p => p.name === 'peaks-all' && r?.floatTargets;
+        for (const p of r?.programs ?? []) if (!p.link && unused(p)) row.note = 'peaks-all rejected (unused here: float targets)';
+        for (const p of r?.programs ?? []) if (!p.link && !unused(p)) row.failed.push(`${p.name} (${!p.vs ? 'vertex' : !p.fs ? 'fragment' : 'link'}${p.log ? `: ${p.log.split('\n')[0]}` : ''})`);
         if (r?.renderer !== 'gl') row.failed.push(`site renderer ${r?.renderer ?? 'none'}`);
       }
       row.status = row.failed.length ? 'FAIL' : 'pass';
-      const shot = join(OUT, `${slug(d.deviceName)}.png`);
-      writeFileSync(shot, await driver.takeScreenshot(), 'base64');
-      row.shot = relative(process.cwd(), shot);
       await driver.executeScript(
         `browserstack_executor: ${JSON.stringify({ action: 'setSessionStatus', arguments: { status: row.status === 'pass' ? 'passed' : 'failed', reason: row.failed.join('; ').slice(0, 250) || 'all programs link' } })}`,
-      );
+      ).catch(() => {});
     } catch (err) {
       row.note = String(err.message ?? err).split('\n')[0].slice(0, 160);
       row.failed.push(`run: ${row.note}`);

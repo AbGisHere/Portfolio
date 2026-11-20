@@ -349,10 +349,17 @@ async function main() {
         const id = `${vp.name.replace('@', '-')}-${theme}-${pos.key}`;
         const b = await capture(browser, vp, theme, B, 'b', pos);
         const basePng = BASELINE && join(BASELINE, `${id}.png`);
-        if (BASELINE && (SAVE_BASELINE || !existsSync(basePng))) {
+        if (BASELINE && SAVE_BASELINE) {
           writeFileSync(basePng, b.png);
           saved++;
           say(true, `ok   ${id.padEnd(28)} baseline saved`);
+          continue;
+        }
+        // (0.5.15) No baseline is a failure, not a silent save: a regress
+        // run with nothing to compare against must not pass.
+        if (BASELINE && !existsSync(basePng)) {
+          failed++;
+          say(false, `FAIL ${id.padEnd(28)} no baseline (run npm run baseline against the last release)`);
           continue;
         }
         const a = BASELINE
@@ -376,7 +383,9 @@ async function main() {
           [A, a],
           [B, b],
         ]) {
-          if (cap.sun.offset != null && cap.sun.offset > SUN_TOL) {
+          // (0.5.15) Not at the desk: there the lamp is the switch (LampToggle)
+          // and the sun's button is left where the body went off-screen.
+          if (!pos.key.startsWith('d') && cap.sun.offset != null && cap.sun.offset > SUN_TOL) {
             problems.push(`${label} sun target off by ${fmt(cap.sun.offset)}px`);
           }
           if (cap.errors.length) problems.push(`${label} console: ${cap.errors[0]}`);
@@ -388,7 +397,7 @@ async function main() {
         const drift = pa && pb ? Math.hypot(pa.x - pb.x, pa.y - pb.y) : null;
         if (drift != null && drift > SUN_TOL) problems.push(`painted sun ${A}/${B} apart by ${fmt(drift)}px`);
         // The known gap: the fallback's 2D stills against the 3D opening.
-        const gap = !BASELINE && A === 'layers' && b.opening === '3d' && problems.length > 0 && problems.every(p => /^(mean|p99) /.test(p));
+        const gap = !BASELINE && A === 'layers' && b.opening === '3d' && problems.length > 0 && problems.every(p => /^(mean|p99) |^painted sun /.test(p));
         if (gap) {
           gaps++;
           problems.length = 0;

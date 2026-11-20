@@ -6,6 +6,30 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.15 — 2026-11-20
+
+The checks fixed; no change to the site. 0.5.14 draws the same picture as
+0.5.12 (regress: worst mean 0.04, p99 0, every scroll and desk position,
+1440×900@2 and 393×852@2, day and night).
+
+- `devices`: the Galaxy S21 was never on the 2D fallback. Its Mali compiler
+  gives up (~5.5 s, empty log) only on `peaks-all`, the one-pass fallback
+  the site uses only without float targets; the S21 has them and runs the
+  split passes in 3D. The probe now goes on in a fresh context after a
+  failed program (the ~35 after it had failed with it), and a `peaks-all`
+  rejection beside float targets is a note. On iOS 15 the probe's compiles
+  left Safari unable to run the site's page ("site renderer none"): the
+  site is now read first (renderer and errors, a small retried read, up to
+  2 min for the renderer), the probe after on a blank page, and a probe that
+  takes the session down is noted, not failed. S21 and iPad 9th pass; the
+  iPhone SE 2022 fails at BrowserStack's end before the page (also on
+  0.5.12).
+- `parity`: a regress run with no baseline fails (it saved one and passed);
+  the known gap allows the painted sun's place too (2D and 3D suns differ);
+  the sun-button check is off at desk positions (the lamp is the switch).
+- `qa` on 0.5.14 (full): perf flat against the last run (gate 4/6 as
+  through 0.5.x), switch's one ×3.1 step as before.
+
 ## 0.5.14 — 2026-11-20
 
 A fix to 0.5.13 (from the owner's review).

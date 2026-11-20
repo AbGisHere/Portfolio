@@ -229,7 +229,8 @@ read by the march while well above them: the flight ~1.5× faster with the
 same picture (M4 1728×1117@2 scroll 34 → 58 fps since 0.5.9). Each
 opening pass can be costed with `?skip=peaks-geo,…`. Found: the climb is
 slower in 0.5.x on the Moto G71 and OnePlus 11R (the peaks behind the
-house), and the Galaxy S21 falls back to 2D (the shape shader).
+house). (0.5.15: the Galaxy S21 runs the 3D opening; only the unused
+one-pass `peaks-all` fails there.)
 
 **0.5.12** (2026-11-20) makes the first load lighter: no throwaway
 WebGL2 context, the renderer's chunk fetched as the page loads, Unbounded
@@ -246,9 +247,14 @@ gap reported as a gap, `freeze` repeatable). Pushed before a full `qa`.
 scroll (and marched every idle frame), a seam at half size, and frees the
 new programs on unmount.
 
-**Next: 0.5.15**: P2 (reprojection, behind a flag), H1 (the lightmap
+**0.5.15** (2026-11-20) fixes the checks, not the site: `devices` on the
+S21 (a fresh context after a failed program; `peaks-all` unused with float
+targets) and iOS 15 (the site read first), `parity`'s regress (no baseline
+fails) and its known gap; 0.5.14 is the same picture as 0.5.12.
+
+**Next: 0.5.16**: P2 (reprojection, behind a flag), H1 (the lightmap
 baked offline), the climb at half size while moving (the owner's motion
-rule), more sky terms in the constants pass; confirm the Galaxy S21 and the climb on phones
+rule), more sky terms in the constants pass; the climb on phones
 (`devices -- --climb --costs peaks-behind`); the switch's one ×3.1 step; then the owner's next steps on the
 valley flight, the cliffs' own detail and the fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own
