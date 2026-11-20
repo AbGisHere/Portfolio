@@ -647,6 +647,18 @@ Nothing should load all at once, and nobody should have to scroll and wait.
 - **Repeat visits.** Content-hashed file names with long cache lifetimes, so
   a second visit is near-instant.
 
+### Device tiers (0.6, 0.7 or before 1.0.0)
+
+Loading tiers, agreed 2026-11-20: they choose how a device gets to the
+picture (download or compute), never what's drawn; the full-quality rule
+stands. From `components/gradient/gl/deviceProfile.js` (0.5.16), which
+today gives every device the same answers but the connection's: add the
+GPU class (from its name: Apple M, discrete NVIDIA/AMD, Intel integrated,
+Mali/Adreno/PowerVR, software; unknown takes the safe path), memory and
+cores there, and the choices follow. First rules: the shipped lightmap
+(H1) for integrated GPUs and phones, baked on fast GPUs; the prebuilt
+house (touch only today) and the compile pacing on the same profile.
+
 ### Performance and feel
 
 The rule: it must never feel slow, laggy or buggy.

@@ -72,6 +72,7 @@ import { LEAF_INSTANCE_STRIDE, LEAF_TEMPLATES, LEAF_TEMPLATE_STRIDE, leafTemplat
 import { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, lightmapHash, makeLightmap, startLightmapReadback, uploadLightmap } from './houseLightmap';
 import { storeLightmap, validLightmap } from './lightmapCache';
 import { bakedLightmapUrl } from './lightmapBaked';
+import { wantsShippedLightmap } from './deviceProfile';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -741,8 +742,10 @@ export default function MistCanvas({ recipe, onFail }) {
           lightmap = null;
         }
         // (0.5.16) The bake shipped with the site, where the mesh is the
-        // indexed one it was baked from (`?lmbaked=0` bakes here).
-        const baked = useLightmap && !noHouse && indexedHouse && params.get('lmbaked') !== '0' ? bakedLightmapUrl() : null;
+        // indexed one it was baked from (`?lmbaked=0` bakes here, `=1` always
+        // takes it; deviceProfile.js chooses otherwise: not on a slow link).
+        const lmb = params.get('lmbaked');
+        const baked = useLightmap && !noHouse && indexedHouse && lmb !== '0' && (lmb === '1' || wantsShippedLightmap()) ? bakedLightmapUrl() : null;
         houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch), lightmap, baked });
       } catch {
         here();
