@@ -270,8 +270,13 @@ redraws the whole scene every frame (M4 night 71 fps, 174 calls). P2
 glow eased to opacity exactly 1 on landing, which Chrome draws by another
 route; it stops at 0.999.
 
-**Next:** the frame at rest at the pool (draw the still scene once, only
-what moves each frame; a version of its own, on the owner's call); the
+**0.5.19** (2026-11-21) draws less at rest, same picture: the opening
+alone redraws at 10 Hz (`PEAKS_REST_HZ`), and the pool keeps a still frame
+(the house, the desk; `still`, `?still=0` off, `?stillcheck=1` to compare):
+pool by night 10.6 → 8.9 GPU ms. Pushed without `qa`, on the owner's call.
+
+**Next:** the rest of the frame at rest, as low as it goes with nothing
+lost (the moving parts' cost and rate, the bloom, the desk); the
 climb on phones (`devices -- --climb --costs peaks-behind`); then the
 owner's next steps on the valley flight, the cliffs' own detail and the
 fallback's stills.

@@ -6,6 +6,30 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.19 — 2026-11-21
+
+The frame at rest draws less, with the same picture.
+
+- The 3D opening alone on screen redraws 10 times a second at rest, not
+  120 (`PEAKS_REST_HZ`): its mist changes 4% of pixels by at most 5 levels a
+  second, so each step is at most a level.
+- The pool at rest keeps a still frame (`MistCanvas.jsx`, `still`): the
+  house, the desk and what's on it drawn once with their depth and kept;
+  each frame starts from a copy and draws only what moves. The shadow map,
+  the AO's depth and the pool's reflection are skipped while it holds. By
+  day the house is drawn again inside the water's rectangle (its caustics
+  move), in its own order so ties at equal depth go as before. Kept by a
+  key (size, night, the lamp's light and pose, the house's readiness),
+  never across a scroll, switch or probe step, redrawn every 2 s at most;
+  one buffer, freed when the house leaves the view and on unmount.
+  `?still=0` off; `?stillcheck=1` gives `window.__stillCheck()`, the same
+  instant drawn both ways and compared.
+- Same picture: 0 pixels differ between the full and kept frame at 10 pool
+  views by day and by night (1440×900@2).
+- GPU ms at rest (M4 1440×900@2, less the bench's readback): pool by night
+  10.6 → 8.9, by day 8.7 → 7.5; the opening 0.9 ms at 10 Hz, not 120.
+- Pushed on the owner's call without `qa`.
+
 ## 0.5.18 — 2026-11-21
 
 The switch's one ×3.1 step, fixed.

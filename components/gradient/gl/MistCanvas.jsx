@@ -107,6 +107,11 @@ const MAX_PIXELS = 3840 * 2160;
 // and every frame a veil moved). At the drift's fastest a ridge moves about
 // .09 px per update, so it looks the same, and the GPU gets to rest between.
 const IDLE_HZ = 30;
+// (0.5.19) The 3D opening alone at rest: its mist drifts so slowly that a
+// second changes 4% of pixels by at most 5 levels in 255, so at 120 Hz
+// nearly every frame wrote the same pixels. It redraws this often, each
+// step at most a level: the same picture for a tenth of the work.
+const PEAKS_REST_HZ = 10;
 
 // Everything the transition springs, in the SVG engine's order (its `Wl`
 // call): geometry dials, then the sun colour, then each colour stop, colours
@@ -227,6 +232,8 @@ export default function MistCanvas({ recipe, onFail }) {
     const noEarlyZ = params.get('earlyz') === '0';
     // (0.4.57) `?bloommerge=0`: the frame copied over before the glow.
     const noBloomMerge = params.get('bloommerge') === '0';
+    // (0.5.19) `?still=0`: no kept still frame at rest.
+    const noStill = params.get('still') === '0';
     const noInvalidate = params.get('invalidate') === '0';
     // (0.5.13) The climb's peaks shape before the frame (`?peaksprep=0` off)
     // and only where the house leaves the far plane (`?peakscull=0` off).
@@ -1122,6 +1129,72 @@ export default function MistCanvas({ recipe, onFail }) {
       houseDepthIn = false;
       return aoPass.frame.tex;
     }
+    // (0.5.19) The kept still frame. At rest, the parts that don't move (the
+    // house, the desk and what's on it, the house's lawn) are drawn once,
+    // their colour and depth kept here; each frame after starts from a copy
+    // of it and draws only what moves. Kept while its key holds (the frame's
+    // size, the lamp's light and pose, the house's readiness, the night) and
+    // never across a scroll, a switch or a probe step; drawn fresh every
+    // STILL_MAX_MS whatever happens, a backstop.
+    const STILL_MAX_MS = 2000;
+    let restFrame = false;
+    let still = null;
+    let stillKey = null;
+    let stillAt = 0;
+    let stillHit = false;
+    let reflectKept = false;
+    const stillTarget = () => {
+      const [cw, ch] = aoPass.size;
+      if (still && still.size[0] === cw && still.size[1] === ch) return still;
+      if (still === false) return null;
+      if (!still) still = { fbo: gl.createFramebuffer(), tex: gl.createTexture(), depth: gl.createRenderbuffer(), size: [0, 0] };
+      still.size = [cw, ch];
+      gl.activeTexture(gl.TEXTURE0);
+      const was = gl.getParameter(gl.TEXTURE_BINDING_2D);
+      gl.bindTexture(gl.TEXTURE_2D, still.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cw, ch, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.bindTexture(gl.TEXTURE_2D, was);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, still.depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, cw, ch);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, still.fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, still.tex, 0);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, still.depth);
+      const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (!ok) {
+        gl.deleteFramebuffer(still.fbo);
+        gl.deleteTexture(still.tex);
+        gl.deleteRenderbuffer(still.depth);
+        still = false;
+        return null;
+      }
+      stillKey = null;
+      return still;
+    };
+    const stillKeyNow = () => {
+      const g = house || null;
+      return [canvas.width, canvas.height, houseNight(), lampLight().join(','), JSON.stringify(lampPoseNow()), houseComplete, !!g?.lightmap, g?.variants ? g.variants.filter(Boolean).length : -1, meadowAt?.device, grainOut, noGrain].join('|');
+    };
+    // Freed when the house leaves the view (and on unmount): no frame kept
+    // that nothing will show again.
+    const freeStill = () => {
+      if (!still) return;
+      gl.deleteFramebuffer(still.fbo);
+      gl.deleteTexture(still.tex);
+      gl.deleteRenderbuffer(still.depth);
+      still = null;
+      stillKey = null;
+    };
+    // From the kept frame into `to` (or the reverse), colour and depth.
+    const copyStill = toStill => {
+      const [cw, ch] = aoPass.size;
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, toStill ? aoPass.frame.fbo : still.fbo);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, toStill ? still.fbo : aoPass.frame.fbo);
+      gl.blitFramebuffer(0, 0, cw, ch, 0, 0, cw, ch, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+    };
     // (0.4.2) The pool's mirror image's target: a quarter of the canvas (the
     // water's ripples blur it anyway), its depth.
     let reflect = null;
@@ -1797,6 +1870,7 @@ export default function MistCanvas({ recipe, onFail }) {
     let idleT = 0;
     let builtOffset = 0;
     let lastIdleAt = -Infinity;
+    let lastPeaksAt = -Infinity;
     // `?driftAt=0.25` pins the drift offset (harness: compare crest paths
     // mid-drift); it applies even with `?freeze=1`.
     const driftAt = params.has('driftAt') ? Number(params.get('driftAt')) : null;
@@ -3170,7 +3244,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // the ground (meadowShader.js writes the hill's depth).
     // (0.4.18) `view`: drawn for a mirror's probe instead, from its camera
     // ({ P, c, size }: no shadow map redrawn, no occlusion, no grain).
-    function drawHouse(mirror = false, lawn = false, view = null, who = false) {
+    function drawHouse(mirror = false, lawn = false, view = null, who = false, under = false) {
       const g = houseProgram();
       if (!g) return;
       const sky = meadowAt?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
@@ -3241,7 +3315,26 @@ export default function MistCanvas({ recipe, onFail }) {
       if (g.variants) for (const vp of g.variants) if (vp) setUniforms(vp);
       setUniforms(g);
       const ctx = { mirror, view, P, c, fw: vw, fh: vh, keep: mirror || view ? null : pathKeep(g) };
-      if (who) {
+      if (under) {
+        // (0.5.19) Over the kept frame's depth, inside the water's rectangle
+        // on screen: the whole house in its own order (so every tie at equal
+        // depth goes as it did), shaded again with this frame's caustics.
+        const r = poolRect();
+        if (r) {
+          const kx = fw() / w;
+          const ky = fh() / h;
+          const x0 = Math.floor(r[0] * kx);
+          const y0 = Math.floor((h - r[3]) * ky);
+          gl.enable(gl.SCISSOR_TEST);
+          gl.scissor(x0, y0, Math.ceil(r[2] * kx) - x0, Math.ceil((h - r[1]) * ky) - y0);
+          gl.depthFunc(gl.LEQUAL);
+          if (!noEarlyZ) gl.depthMask(false);
+          houseGeometry(g, g.u, 'solid', ctx);
+          gl.depthMask(true);
+          gl.depthFunc(gl.LESS);
+          gl.disable(gl.SCISSOR_TEST);
+        }
+      } else if (who) {
         const pb = personBuffer();
         gl.uniform1f(g.u('uAOOn'), 0);
         gl.uniform1f(g.u('uMorph'), 0);
@@ -4237,15 +4330,23 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.4.18, 0.4.36) Mirror probes: warmed in idle queue; at rest, step if any face is still needed.
         probing = !dirty && settled() && !!meadowAt && !noDesk && !noHouse && houseSeen && probeStep(false);
         const deskOn = !!meadowAt && !noDesk && !!deskProgram(true);
+        // (0.5.19) At rest, the kept still frame when its key holds.
+        const stillOk = restFrame && !noStill && !probing && deskOn && !noHouse && !noAO && houseSeen && !!meadowAt && frameScale === 1 && !!aoPass?.frameOk && !noEarlyZ;
+        if (!stillOk) stillKey = null;
+        if (still && !(deskOn && houseSeen)) freeStill();
+        const keyNow = stillOk ? stillKeyNow() : null;
+        stillHit = stillOk && stillKey !== null && stillKey === keyNow && performance.now() - stillAt < STILL_MAX_MS && !!still && still.size[0] === canvas.width && still.size[1] === canvas.height;
         // (0.4.2) Offscreen house passes (shadow map, AO depth, pool reflection)
         // run before the default framebuffer pass starts so mobile tile GPUs
         // never spill and reload tile memory mid-frame.
-        if (deskOn && !noHouse && (houseSeen || lawnSeen) && meadowAt?.colours) {
+        if (!stillHit && deskOn && !noHouse && (houseSeen || lawnSeen) && meadowAt?.colours) {
           const hg = houseProgram(false);
           const sh = houseShadow(false);
           if (hg && sh) houseShadowMap(hg, sh, meadowAt.colours);
         }
-        aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && timed('house-depth-ao', drawHouseDepth);
+        // (Kept: the AO's texture is the last one drawn, read only by the
+        // house, which the kept frame holds.)
+        aoReady = stillHit || (!!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && timed('house-depth-ao', drawHouseDepth));
         // (Without the AO's depth there's no frame target: full size.)
         if (!aoReady && frameScale < 1) {
           frameScale = 1;
@@ -4255,7 +4356,7 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.uniform2f(uniform('uRes'), fw(), fh());
           gl.uniform1f(uniform('uDpr'), fw() / w);
         }
-        const mirroredPool = deskOn && !noHouse && !noGlass && houseSeen && drawPoolReflection();
+        const mirroredPool = stillHit ? reflectKept : (reflectKept = deskOn && !noHouse && !noGlass && houseSeen && drawPoolReflection());
         peaksPrepare();
         const grassOn = !!grassAt && !!grassProgram(true);
         // (0.3.5) The trees show as soon as the meadow's paint does.
@@ -4296,24 +4397,38 @@ export default function MistCanvas({ recipe, onFail }) {
           if (!skipped.has('scene')) drop(gl.COLOR_ATTACHMENT0);
         } else gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
-        // (0.3.10) The device before the desk, so the desk's top isn't shaded
-        // behind it.
-        timed('desk-things', () => {
-          if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
-          if (deskOn && !noLamp) drawLamp();
-          if (deskOn && !noProps) drawProps();
-        });
-        if (deskOn && !noHouse && houseSeen) {
-          timed('house-colour-depth', drawHouse);
+        // (0.5.19) What doesn't move first, kept at rest; then what moves.
+        if (stillHit && houseDepthIn) {
+          copyStill(false);
+          // The caustics on the pool's tiles move: those runs again.
+          if (deskOn && !noHouse && houseSeen && causticsReady && poolSeen) timed('house-under', () => drawHouse(false, false, null, false, true));
+        } else {
+          // (0.3.10) The device before the desk, so the desk's top isn't shaded
+          // behind it.
+          timed('desk-things', () => {
+            if (deskOn && !noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
+            if (deskOn && !noLamp) drawLamp();
+            if (deskOn && !noProps) drawProps();
+          });
+          if (deskOn && !noHouse && houseSeen) {
+            timed('house-colour-depth', drawHouse);
+          }
+          if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
+          if (deskOn) timed('desk', () => drawDesk(false));
+          if (stillOk && houseDepthIn && stillTarget()) {
+            copyStill(true);
+            stillKey = keyNow;
+            stillAt = performance.now();
+          }
         }
-        if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
-        if (deskOn) timed('desk', () => drawDesk(false));
         if (grassOn) {
           timed('grass', () => drawGrass(prints));
           timed('flowers', () => drawFlowers(prints));
         }
         if (treesOn) timed('trees', () => drawTrees(false));
         if (birdWeight > 0 && meadowAt) timed('birds', drawBirds);
+        // (After the grass, every frame: where a blade's foot meets the lawn
+        // exactly, the first drawn keeps the pixel.)
         if (deskOn && !noHouse && lawnSeen) timed('lawn', () => drawHouse(false, true));
         gl.useProgram(prog);
         gl.bindVertexArray(null);
@@ -4389,9 +4504,41 @@ export default function MistCanvas({ recipe, onFail }) {
         return `${ms[ms.length >> 1].toFixed(3)} ${ms[Math.floor(ms.length * 0.9)].toFixed(3)}`;
       };
       host.dataset.benchBase = time(() => gl.clear(gl.COLOR_BUFFER_BIT));
-      host.dataset.bench = time(() => draw(lastDrawn));
+      // (0.5.19) As at rest: the kept still frame where it holds.
+      host.dataset.bench = time(() => {
+        restFrame = true;
+        draw(lastDrawn);
+        restFrame = false;
+      });
     }
     if (benchN) setTimeout(bench, 2500);
+    // (0.5.19) Harness only, `?stillcheck=1`: the same instant drawn in full
+    // and from the kept still frame, read back; `window.__stillCheck()`
+    // gives [pixels that differ, the largest difference, whether it hit].
+    if (params.get('stillcheck') === '1') window.__stillCheck = () => {
+      if (!lastDrawn) return null;
+      const read = () => {
+        const px = new Uint8Array(canvas.width * canvas.height * 4);
+        gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        return px;
+      };
+      draw(lastDrawn);
+      const full = read();
+      restFrame = true;
+      draw(lastDrawn);
+      draw(lastDrawn);
+      const hit = stillHit;
+      restFrame = false;
+      const kept = read();
+      let n = 0;
+      let max = 0;
+      for (let i = 0; i < full.length; i += 4) {
+        const d = Math.max(Math.abs(full[i] - kept[i]), Math.abs(full[i + 1] - kept[i + 1]), Math.abs(full[i + 2] - kept[i + 2]));
+        if (d) n++;
+        if (d > max) max = d;
+      }
+      return [n, max, hit];
+    };
 
     // Redraw at rest only once a veil has moved a visible amount.
     const changed = vs =>
@@ -4484,7 +4631,15 @@ export default function MistCanvas({ recipe, onFail }) {
           : water.caustics(lightDir(meadowAt.colours.dir), 10, skyT);
         gl.useProgram(prog);
       }
-      if (busy || crestMoved || windMoved || living || probing || (tick && changed(vs))) draw(vs);
+      // (0.5.19) Only the opening's slow mist alive: PEAKS_REST_HZ.
+      const peaksAlone = living && !!peaksNow && peaksReveal >= 1 && !orbit && !lifeShown && !grassAt && !meadowShown && !poolSeen && !fliesOn;
+      const slowRest = peaksAlone && !busy && !crestMoved && !windMoved && !probing && now - lastPeaksAt < 1000 / PEAKS_REST_HZ;
+      if (!slowRest && (busy || crestMoved || windMoved || living || probing || (tick && changed(vs)))) {
+        if (peaksAlone) lastPeaksAt = now;
+        restFrame = !busy && !frozen;
+        draw(vs);
+        restFrame = false;
+      }
 
       syncHouseReadiness();
       const moving = !settled();
@@ -4695,6 +4850,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.deleteRenderbuffer(reflect.depth);
         gl.deleteFramebuffer(reflect.fbo);
       }
+      freeStill();
       if (meadowVao) gl.deleteVertexArray(meadowVao);
       if (backdrop) {
         gl.deleteVertexArray(backdrop.vao);
