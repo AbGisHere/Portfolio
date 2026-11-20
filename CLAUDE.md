@@ -279,7 +279,12 @@ pool by night 10.6 → 8.9 GPU ms. Pushed without `qa`, on the owner's call.
 owner's call: too soft; `?climbres=1` on), keeps the mountains behind the
 house with the still frame and redraws the opening at 4 Hz at rest.
 
-**Next:** the rest of the frame at rest, as low as it goes with nothing
+**0.5.21** (2026-11-21) rebuilds the kept frame only when its key
+changes (no 2 s refresh; the lamp only with the desk in frame): no late
+frames at the pool at rest. `?framegrab=1` measures change per frame.
+
+**Next:** the grass drawn last over a kept frame holding everything else
+(the meadow and trees at their own measured rates); the rest of the frame at rest, as low as it goes with nothing
 lost (the moving parts' cost and rate, the bloom, the desk); the
 climb on phones (`devices -- --climb --costs peaks-behind`); then the
 owner's next steps on the valley flight, the cliffs' own detail and the

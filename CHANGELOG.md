@@ -6,6 +6,25 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.21 — 2026-11-21
+
+No late frames at the pool at rest.
+
+- The kept still frame has no timed refresh (it cost a whole frame every
+  2 s): it's rebuilt only when its key changes, which now also holds the
+  mountains' build behind the house.
+- The lamp's light and pose count in the key only while the desk can be in
+  the frame: a flicker at the pool no longer rebuilds the house.
+- `?framegrab=1` (harness): `window.__grab(n)` reads back each frame as
+  it's drawn and counts the pixels that changed. Per frame at the desk by
+  day: the grass ~10% (1.4% by more than 2 levels), the meadow's paint
+  0.3% (none by more than 2), the trees none; at the pool by night the
+  trees 0.3%, the meadow 0.3–0.6%.
+- Pool at rest, 10 s at 120 Hz (M4 1440×900@2): by night 0 frames over
+  12 ms (103 with `?still=0`), worst 11.6 ms; by day 1, worst 12.5.
+- Same picture: 0 pixels differ, full vs kept frame, at 10 pool views.
+- Pushed on the owner's call without `qa`.
+
 ## 0.5.20 — 2026-11-21
 
 The pool climb full size again, and less at rest.

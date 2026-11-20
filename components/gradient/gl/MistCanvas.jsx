@@ -1137,14 +1137,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // house, the desk and what's on it, the house's lawn) are drawn once,
     // their colour and depth kept here; each frame after starts from a copy
     // of it and draws only what moves. Kept while its key holds (the frame's
-    // size, the lamp's light and pose, the house's readiness, the night) and
-    // never across a scroll, a switch or a probe step; drawn fresh every
-    // STILL_MAX_MS whatever happens, a backstop.
-    const STILL_MAX_MS = 2000;
+    // size, the lamp's light and pose, the house's and the mountains'
+    // readiness, the night) and never across a scroll, a switch or a probe
+    // step. (0.5.21) No timed refresh: it cost a whole frame every 2 s.
     let restFrame = false;
     let still = null;
     let stillKey = null;
-    let stillAt = 0;
     let stillHit = false;
     let reflectKept = false;
     // (0.5.19) The mountains behind the house, in the kept frame too (they
@@ -1185,7 +1183,11 @@ export default function MistCanvas({ recipe, onFail }) {
     };
     const stillKeyNow = () => {
       const g = house || null;
-      return [canvas.width, canvas.height, houseNight(), lampLight().join(','), JSON.stringify(lampPoseNow()), houseComplete, !!g?.lightmap, g?.variants ? g.variants.filter(Boolean).length : -1, meadowAt?.device, grainOut, noGrain].join('|');
+      // (0.5.21) The lamp's light and pose only while what it lights (the
+      // desk and what's on it) can be in the frame: a flicker at the pool,
+      // the desk out of sight, doesn't redraw the house.
+      const deskLit = !!meadowAt && boxSeen(meadowAt.pitch, meadowAt.cm, w, h, [-1.2, 0, -1], [1.2, 1.6, 1]);
+      return [canvas.width, canvas.height, houseNight(), deskLit && lampLight().join(','), deskLit && JSON.stringify(lampPoseNow()), houseComplete, !!g?.lightmap, g?.variants ? g.variants.filter(Boolean).length : -1, meadowAt?.device, grainOut, noGrain, peaksGeo?.ready, peaksLastKey, peaksMoon?.ready].join('|');
     };
     // Freed when the house leaves the view (and on unmount): no frame kept
     // that nothing will show again.
@@ -4345,7 +4347,7 @@ export default function MistCanvas({ recipe, onFail }) {
         if (!stillOk) stillKey = null;
         if (still && !(deskOn && houseSeen)) freeStill();
         const keyNow = stillOk ? stillKeyNow() : null;
-        stillHit = stillOk && stillKey !== null && stillKey === keyNow && performance.now() - stillAt < STILL_MAX_MS && !!still && still.size[0] === canvas.width && still.size[1] === canvas.height;
+        stillHit = stillOk && stillKey !== null && stillKey === keyNow && !!still && still.size[0] === canvas.width && still.size[1] === canvas.height;
         // (0.4.2) Offscreen house passes (shadow map, AO depth, pool reflection)
         // run before the default framebuffer pass starts so mobile tile GPUs
         // never spill and reload tile memory mid-frame.
@@ -4431,7 +4433,6 @@ export default function MistCanvas({ recipe, onFail }) {
             peaksIn = stillHasPeaks = !!peaksNow?.behind && drawPeaks(frameTarget());
             copyStill(true);
             stillKey = keyNow;
-            stillAt = performance.now();
           }
         }
         if (grassOn) {
@@ -4525,6 +4526,36 @@ export default function MistCanvas({ recipe, onFail }) {
       });
     }
     if (benchN) setTimeout(bench, 2500);
+    // (0.5.21) Harness only, `?framegrab=1`: `window.__grab(n)` reads back
+    // the next n frames drawn, as they're drawn, and gives for each the
+    // milliseconds since the first, the pixels that changed since the last
+    // one drawn, and those that changed by more than 2 levels.
+    let grabFrame = null;
+    if (params.get('framegrab') === '1') window.__grab = n => new Promise(res => {
+      let prev = null;
+      let t0 = null;
+      const out = [];
+      grabFrame = now => {
+        const px = new Uint8Array(canvas.width * canvas.height * 4);
+        gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        t0 ??= now;
+        if (prev) {
+          let a = 0;
+          let b = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            const d = Math.max(Math.abs(px[i] - prev[i]), Math.abs(px[i + 1] - prev[i + 1]), Math.abs(px[i + 2] - prev[i + 2]));
+            if (d) a++;
+            if (d > 2) b++;
+          }
+          out.push([Math.round(now - t0), a, b]);
+        }
+        prev = px;
+        if (out.length >= n) {
+          grabFrame = null;
+          res(out);
+        }
+      };
+    });
     // (0.5.19) Harness only, `?stillcheck=1`: the same instant drawn in full
     // and from the kept still frame, read back; `window.__stillCheck()`
     // gives [pixels that differ, the largest difference, whether it hit].
@@ -4652,6 +4683,7 @@ export default function MistCanvas({ recipe, onFail }) {
         restFrame = !busy && !frozen;
         draw(vs);
         restFrame = false;
+        grabFrame?.(now);
       }
 
       syncHouseReadiness();
