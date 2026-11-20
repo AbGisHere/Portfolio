@@ -252,8 +252,12 @@ S21 (a fresh context after a failed program; `peaks-all` unused with float
 targets) and iOS 15 (the site read first), `parity`'s regress (no baseline
 fails) and its known gap; 0.5.14 is the same picture as 0.5.12.
 
-**Next: 0.5.16**: P2 (reprojection, behind a flag), H1 (the lightmap
-baked offline), the climb at half size while moving (the owner's motion
+**0.5.16** (2026-11-20) ships the house's lightmap baked (H1:
+`npm run lightmap-bake`, `public/lightmap/`; `?lmbaked=0` bakes on the
+device; the unit test fails when it's stale) and adds `deviceProfile.js`,
+where loading choices live until the device tiers (`ROADMAP.md`).
+
+**Next: 0.5.17**: P2 (reprojection, behind a flag), the climb at half size while moving (the owner's motion
 rule), more sky terms in the constants pass; the climb on phones
 (`devices -- --climb --costs peaks-behind`); the switch's one ×3.1 step; then the owner's next steps on the
 valley flight, the cliffs' own detail and the fallback's stills.

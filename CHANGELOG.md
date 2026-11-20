@@ -6,6 +6,24 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.16 — 2026-11-20
+
+H1: the house's lightmap shipped baked, with the same picture.
+
+- `npm run lightmap-bake` bakes it on the M4 against a production server
+  into `public/lightmap/lightmap.bin.gz` (8.4 MB of half floats → 1.25 MB
+  gzipped, cached for good by its hash). The house worker fetches it where
+  the browser has no bake of its own, in place of two compiles, the bake
+  and its ~22 s read-back to store it (M4). Kept as half floats, not
+  RGB9_E5: bit for bit the bake. Its hash (`lightmapBaked.js`) names the
+  shaders, bounds, lights and mesh; the unit test fails when it's stale,
+  and a stale one bakes on the device. `?lmbaked=0` bakes, `=1` downloads.
+- The same picture: shipped against baked on the device, mean 0.156, max
+  10, the same as either against itself (frame noise).
+- `deviceProfile.js`: one place for loading choices (download or compute,
+  never what's drawn). Universal today: the shipped bake but on Save-Data or
+  a slow link. The device tiers plug in there (ROADMAP.md, "Device tiers").
+
 ## 0.5.15 — 2026-11-20
 
 The checks fixed; no change to the site. 0.5.14 draws the same picture as
