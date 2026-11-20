@@ -6,6 +6,20 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.12 — 2026-11-20
+
+The first load, lighter; the same picture (0.5.11 against 0.5.12: 0/255).
+
+- **One WebGL2 context** (`AtmosphereField.jsx`): the renderer is picked
+  by asking whether the browser knows WebGL2, not by making a throwaway
+  context (30–100 ms on phones); where the real one fails, the renderer
+  falls back itself, as before (`onFail`). A context lost mid-visit still
+  probes before trying again.
+- **The renderer's chunk asked for as the page loads**, not after
+  hydration and the pick.
+- **Unbounded at its one weight** (`app/fonts.js`: only the `h1` uses it,
+  at 800): the preloaded fonts 82 → 53 KB.
+
 ## 0.5.11 — 2026-11-20
 
 The flight over the peaks ~1.5× faster, with the same picture (0.5.10

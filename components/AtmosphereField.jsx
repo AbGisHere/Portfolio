@@ -13,6 +13,9 @@ import styles from './AtmosphereField.module.css';
 // initial bundle: WebGL (default) and the layered DOM fallback.
 const MistCanvas = dynamic(() => import('./gradient/gl/MistCanvas'), { ssr: false });
 const LayeredScene = dynamic(() => import('./gradient/layers/LayeredScene'), { ssr: false });
+// (0.5.12) The WebGL renderer's chunk asked for as this module loads, not
+// after hydration and the renderer pick: the mountains come first.
+if (typeof window !== 'undefined' && typeof WebGL2RenderingContext !== 'undefined') import('./gradient/gl/MistCanvas');
 
 const RENDERERS = ['gl', 'layers'];
 // After a lost WebGL context, how long to wait before trying WebGL again, and
@@ -31,11 +34,14 @@ const hasWebGL2 = () => {
 };
 
 // `?renderer=gl|layers` forces one (parity checks, debugging); otherwise
-// WebGL2 when the browser has it, else the layered fallback.
+// WebGL2 when the browser has it, else the layered fallback. (0.5.12) The
+// first pick only asks whether the browser knows WebGL2, without making a
+// throwaway context (30–100 ms on phones); where the real one then fails,
+// the renderer falls back itself (MistCanvas `onFail`).
 function pickRenderer() {
   const forced = new URLSearchParams(window.location.search).get('renderer');
   if (RENDERERS.includes(forced)) return forced;
-  return hasWebGL2() ? 'gl' : 'layers';
+  return typeof WebGL2RenderingContext !== 'undefined' ? 'gl' : 'layers';
 }
 
 /**

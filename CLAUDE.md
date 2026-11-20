@@ -231,7 +231,14 @@ opening pass can be costed with `?skip=peaks-geo,…`. Found: the climb is
 slower in 0.5.x on the Moto G71 and OnePlus 11R (the peaks behind the
 house), and the Galaxy S21 falls back to 2D (the shape shader).
 
-**Next: 0.5.12** (`ROADMAP.md`, `0.5.x`): one WebGL2 context, the fonts.
+**0.5.12** (2026-11-20) makes the first load lighter: no throwaway
+WebGL2 context, the renderer's chunk fetched as the page loads, Unbounded
+at its one weight (fonts 82 → 53 KB).
+
+**Next: 0.5.13** (`ROADMAP.md`, `0.5.x`): the pool climb on the Moto G71
+and OnePlus 11R (the peaks lit behind the house), the Galaxy S21's shape
+shader, the switch's one ×3.1 step; then the owner's next steps on the
+valley flight, the cliffs' own detail and the fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own
 detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom
@@ -435,7 +442,7 @@ npm run devices        # every shader on 31 real phones and tablets (BrowserStac
   like `.visually-hidden`. No Tailwind. New component styles go in the
   component's own module, never in `globals.css`.
 - Fonts via `next/font/google` in `app/fonts.js`: **Unbounded** (display,
-  variable, no weight list) + **JetBrains Mono** (body/labels, weights
+  weight 800 only, the `h1`'s; 0.5.12) + **JetBrains Mono** (body/labels, weights
   400–600: its whole axis is 9 KB more to preload), exposed as
   `--font-display` / `--font-mono` on `<html>`. Don't redefine those
   variables in CSS, because that bypasses next/font's size-adjusted
