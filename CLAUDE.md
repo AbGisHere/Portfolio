@@ -275,6 +275,10 @@ alone redraws at 10 Hz (`PEAKS_REST_HZ`), and the pool keeps a still frame
 (the house, the desk; `still`, `?still=0` off, `?stillcheck=1` to compare):
 pool by night 10.6 → 8.9 GPU ms. Pushed without `qa`, on the owner's call.
 
+**0.5.20** (2026-11-21) turns the climb's half-size frame off (the
+owner's call: too soft; `?climbres=1` on), keeps the mountains behind the
+house with the still frame and redraws the opening at 4 Hz at rest.
+
 **Next:** the rest of the frame at rest, as low as it goes with nothing
 lost (the moving parts' cost and rate, the bloom, the desk); the
 climb on phones (`devices -- --climb --costs peaks-behind`); then the
@@ -301,7 +305,8 @@ geometry and plant variation; no reduced precision, resolution, samples or
 detail to meet performance targets. One exception (the owner, 2026-11-20):
 while the camera is moving, a pass may render at lower resolution (0.5.13's
 P5/T2), as long as the frame the scroll stops on is full quality; parity
-checks still frames. R4's far-grass LOD stays out. Do not claim the pool jank is fixed.
+checks still frames. Not the whole frame on the desk-to-pool climb, though
+(0.5.17's half size, off since 0.5.20 on the owner's call: too soft). R4's far-grass LOD stays out. Do not claim the pool jank is fixed.
 
 ## Versioning
 

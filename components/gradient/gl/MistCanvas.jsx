@@ -107,11 +107,11 @@ const MAX_PIXELS = 3840 * 2160;
 // and every frame a veil moved). At the drift's fastest a ridge moves about
 // .09 px per update, so it looks the same, and the GPU gets to rest between.
 const IDLE_HZ = 30;
-// (0.5.19) The 3D opening alone at rest: its mist drifts so slowly that a
-// second changes 4% of pixels by at most 5 levels in 255, so at 120 Hz
-// nearly every frame wrote the same pixels. It redraws this often, each
-// step at most a level: the same picture for a tenth of the work.
-const PEAKS_REST_HZ = 10;
+// (0.5.19) The 3D opening alone at rest: its mist doesn't slide, it
+// thickens and thins in place, at most ~3 levels in 255 a second at its
+// fastest pixel (61 in 20 s), so at 120 Hz nearly every frame wrote the
+// same pixels. It redraws this often, each step at most a level.
+const PEAKS_REST_HZ = 4;
 
 // Everything the transition springs, in the SVG engine's order (its `Wl`
 // call): geometry dials, then the sun colour, then each colour stop, colours
@@ -243,6 +243,10 @@ export default function MistCanvas({ recipe, onFail }) {
     const noBearUse = params.get('bearuse') === '0';
     // (0.5.13) The flight's shape at half size while it moves (`?motionres=0` off).
     const noMotionRes = params.get('motionres') === '0';
+    // (0.5.20) The pool climb's frame at half size while it moves (0.5.17)
+    // is off, the owner's call (too soft on the desk-to-pool scroll):
+    // `?climbres=1` on, for measuring only.
+    const climbRes = params.get('climbres') === '1';
     const noPvs = params.get('pvs') === '0';
     // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
     // cost from geometry on a device (0.4.39).
@@ -1143,6 +1147,12 @@ export default function MistCanvas({ recipe, onFail }) {
     let stillAt = 0;
     let stillHit = false;
     let reflectKept = false;
+    // (0.5.19) The mountains behind the house, in the kept frame too (they
+    // fill every pixel nothing stands on, opaque): at rest from the pool
+    // not one of their pixels changes in 20 s, day or night, so they're
+    // drawn with it and kept as long as it is. `peaksIn`: they're there.
+    let peaksIn = false;
+    let stillHasPeaks = false;
     const stillTarget = () => {
       const [cw, ch] = aoPass.size;
       if (still && still.size[0] === cw && still.size[1] === ch) return still;
@@ -4293,7 +4303,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const at = `${d.about},${d.desk},${d.contact}`;
       const moving = lastCamAt !== null && at !== lastCamAt;
       lastCamAt = at;
-      const ok = moving && !noMotionRes && !noEarlyZ && !noHouse && !noDesk && !noAO && d.contact > 0 && houseSeen
+      const ok = moving && climbRes && !noMotionRes && !noEarlyZ && !noHouse && !noDesk && !noAO && d.contact > 0 && houseSeen
         && !!aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height;
       return ok ? 0.5 : 1;
     }
@@ -4398,8 +4408,10 @@ export default function MistCanvas({ recipe, onFail }) {
         } else gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.depthFunc(gl.LESS);
         // (0.5.19) What doesn't move first, kept at rest; then what moves.
+        peaksIn = false;
         if (stillHit && houseDepthIn) {
           copyStill(false);
+          peaksIn = stillHasPeaks;
           // The caustics on the pool's tiles move: those runs again.
           if (deskOn && !noHouse && houseSeen && causticsReady && poolSeen) timed('house-under', () => drawHouse(false, false, null, false, true));
         } else {
@@ -4416,6 +4428,7 @@ export default function MistCanvas({ recipe, onFail }) {
           if (deskOn && personAt && houseProgram(true)) drawHouse(false, false, null, true);
           if (deskOn) timed('desk', () => drawDesk(false));
           if (stillOk && houseDepthIn && stillTarget()) {
+            peaksIn = stillHasPeaks = !!peaksNow?.behind && drawPeaks(frameTarget());
             copyStill(true);
             stillKey = keyNow;
             stillAt = performance.now();
@@ -4435,7 +4448,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
         // (0.5.3) The 3D peaks and sky in the 2D scene's place.
-        if (!(peaksNow?.behind && drawPeaks(frameTarget()))) timed('scene', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
+        if (!peaksIn && !(peaksNow?.behind && drawPeaks(frameTarget()))) timed('scene', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
         gl.depthMask(true);
         gl.depthFunc(gl.LESS);
         if (deskOn) timed('shadows', () => drawDesk(true));

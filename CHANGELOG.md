@@ -6,6 +6,23 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.20 — 2026-11-21
+
+The pool climb full size again, and less at rest.
+
+- The climb's frame at half size while it moves (0.5.17) is off, on the
+  owner's call: too soft on the desk-to-pool scroll. `?climbres=1` turns it
+  on for measuring. The M4 night climb is back to 0.5.16's ~36–50 fps.
+- The mountains behind the house go into the kept still frame: from the
+  pool not one of their pixels changes in 20 s at rest, day or night.
+- The opening alone redraws 4 times a second at rest, not 10: its mist
+  thickens and thins in place (no measurable slide), at most ~3 levels a
+  second at its fastest pixel.
+- Same picture: 0 pixels differ, full vs kept frame, at 10 pool views.
+- GPU ms at rest, kept frame on vs off (M4 1440×900@2, interleaved,
+  median of three): pool by night ~6.4 vs ~12.3, by day ~5.8 vs ~9.6.
+- Pushed on the owner's call without `qa`.
+
 ## 0.5.19 — 2026-11-21
 
 The frame at rest draws less, with the same picture.
