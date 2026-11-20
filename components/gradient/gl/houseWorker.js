@@ -15,6 +15,10 @@
  * under its own URL and the message's `lightmap` (the bake's hash; null:
  * `?lmcache=0`), sent with the mesh as `lightmapData`, with `key` (that URL)
  * for the page to store a fresh bake under.
+ *
+ * (0.5.16) Without a stored bake, the one shipped with the site
+ * (lightmapBaked.js; the message's `baked`, its URL, or null), fetched and
+ * unzipped here; any failure leaves the page to bake.
  */
 import { buildHouse } from './houseBuild';
 import { decodeHouse } from './houseBlob';
@@ -84,13 +88,26 @@ const send = ({ house, curtains }, cached, key, lightmapData) => self.postMessag
   [...(lightmapData ? [lightmapData.buffer] : []), house.vertices.buffer, house.tables.normals.buffer, house.tables.scalars.buffer, house.indices.buffer, house.runs.first.buffer, house.runs.count.buffer, house.runs.box.buffer, house.runs.variant.buffer, ...house.leaves.flatMap(l => [l.data.buffer, l.runs.first.buffer, l.runs.count.buffer, l.runs.box.buffer]), curtains.vertices.buffer, curtains.indices.buffer],
 );
 
+const shippedLightmap = async url => {
+  if (!url || typeof DecompressionStream === 'undefined') return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok || !res.body) return null;
+    const buf = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    return new Uint16Array(buf);
+  } catch {
+    return null;
+  }
+};
+
 // (Only inside a worker: the unit tests import every module here.)
 if (typeof self !== 'undefined') {
   self.onmessage = async e => {
     const useCache = e.data?.cache !== false && typeof indexedDB !== 'undefined';
     const key = self.location.href;
     // (Read beside the mesh; null on any failure.)
-    const lightmap = e.data?.lightmap ? loadStoredLightmap(`${key}#${e.data.lightmap}`) : Promise.resolve(null);
+    const kept = e.data?.lightmap ? loadStoredLightmap(`${key}#${e.data.lightmap}`).catch(() => null) : Promise.resolve(null);
+    const lightmap = kept.then(d => d ?? shippedLightmap(e.data?.baked));
     let db = null;
     if (useCache) {
       try {

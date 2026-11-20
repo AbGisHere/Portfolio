@@ -8,6 +8,8 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/house/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
+      // (0.5.16) The shipped lightmap, named by its hash in the query.
+      { source: '/lightmap/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
       { source: '/moon.jpg', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }] },
     ];
   },

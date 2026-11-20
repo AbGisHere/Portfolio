@@ -54,3 +54,11 @@ test('hashParts moves with every part and is stable', () => {
   // (Parts don't run into each other.)
   assert.notEqual(hashParts(['ab', 'c']), hashParts(['a', 'bc']));
 });
+
+// (0.5.16, H1) The shipped bake must be the bake of what the house is now.
+test('the shipped lightmap matches its inputs (else: npm run lightmap-bake)', async () => {
+  const { LIGHTMAP_BAKED, bakedLightmapHash } = await import('../components/gradient/gl/lightmapBaked.js');
+  const { existsSync } = await import('node:fs');
+  assert.equal(LIGHTMAP_BAKED.hash, bakedLightmapHash());
+  assert.ok(existsSync('public/lightmap/lightmap.bin.gz'));
+});

@@ -18,6 +18,7 @@
     "test:unit": "node --import ./scripts/lib/resolve-js.mjs --test scripts/unit-test.mjs",
     "hygiene": "node scripts/hygiene.mjs",
     "qa": "node scripts/qa.mjs",
+    "lightmap-bake": "node --import ./scripts/lib/resolve-js.mjs scripts/lightmap-bake.mjs",
     "baseline": "node scripts/parity.mjs --a gl --b gl --baseline scripts/out/baseline --save-baseline --viewports 1440x900@2,393x852@2 --scrolls 0,0.3,0.6,0.9,1 --desks 0,0.3,0.6,1 --settle 6000 --quiet"
   },
   "keywords": [],

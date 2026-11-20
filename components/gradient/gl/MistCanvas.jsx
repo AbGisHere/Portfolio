@@ -71,6 +71,7 @@ import { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseSha
 import { LEAF_INSTANCE_STRIDE, LEAF_TEMPLATES, LEAF_TEMPLATE_STRIDE, leafTemplate } from './leafInstances';
 import { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, lightmapHash, makeLightmap, startLightmapReadback, uploadLightmap } from './houseLightmap';
 import { storeLightmap, validLightmap } from './lightmapCache';
+import { bakedLightmapUrl } from './lightmapBaked';
 import { PROPS_FRAGMENT, PROPS_STRIDE, PROPS_VERTEX, STEAM_FRAGMENT, STEAM_VERTEX, STEAM_WISPS, propsMesh } from './propsShader';
 import { FOOT_MIST, MEADOW_FLOWERS, MEADOW_FOOT, MEADOW_PAINT, MEADOW_PAINT_FLAT, MEADOW_VERTEX } from './meadowShader';
 import {
@@ -712,7 +713,7 @@ export default function MistCanvas({ recipe, onFail }) {
           if (stopped) return worker.terminate();
           houseBuilt = e.data;
           // (0.4.57) A stored bake that isn't whole is dropped: baked instead.
-          if (houseBuilt.lightmapData && (!useLmCache || !validLightmap(houseBuilt.lightmapData, ...LIGHTMAP_BOUNDS.size))) houseBuilt.lightmapData = null;
+          if (houseBuilt.lightmapData && !validLightmap(houseBuilt.lightmapData, ...LIGHTMAP_BOUNDS.size)) houseBuilt.lightmapData = null;
           if (!houseComplete) setHouseReadiness('mesh-ready');
           houseWorker = null;
           updateHouseBuffer();
@@ -739,7 +740,10 @@ export default function MistCanvas({ recipe, onFail }) {
         } catch {
           lightmap = null;
         }
-        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch), lightmap });
+        // (0.5.16) The bake shipped with the site, where the mesh is the
+        // indexed one it was baked from (`?lmbaked=0` bakes here).
+        const baked = useLightmap && !noHouse && indexedHouse && params.get('lmbaked') !== '0' ? bakedLightmapUrl() : null;
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch), lightmap, baked });
       } catch {
         here();
       }
