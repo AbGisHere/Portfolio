@@ -9,6 +9,7 @@
  *        [--viewports 1440x900@2,393x852@2] [--switches 4] [--window ms]
  *        [--idle 3000] [--scroll 1] [--house] [--headed] [--query k=v&k=v]
  *        [--gate [--min-fps 118] [--max-long 3] [--retries 1] [--dropout 0]]
+ *        [--rest 0] [--rest-ms 4000]
  *        [--quiet]
  *
  * Prints a table and writes scripts/out/perf/perf-<timestamp>.json.
@@ -99,6 +100,22 @@ const CASES =
 const SHARP_VIEWPORTS = viewportsFrom(null, ['2560x1440@2', '3008x1692@2']);
 
 const OUT = ensureDir(join(OUT_DIR, 'perf'));
+
+// (0.5.17) At rest (info, not gated): GL holding still at views a visitor
+// stops on, with every clock running. A frame that only animates (the wind,
+// the water, the fireflies, the sky's drift) still redraws the whole scene,
+// so per view: frames a second that drew anything, draw calls a drawn frame,
+// and the frame gaps. `freeze=1` stops the clocks: there it should draw
+// nothing. `--rest 0` skips it; `--rest-ms` sets each view's window.
+const REST_ON = args.rest !== '0';
+const REST_MS = Number(args['rest-ms'] ?? (GATE ? 2000 : 4000));
+const REST_VIEWS = [
+  ['opening', 'scroll=0&theme=night'],
+  ['desk', 'desk=0.6&theme=night'],
+  ['pool-night', 'contact=0.6&theme=night'],
+  ['pool-day', 'contact=0.6&theme=day'],
+  ['pool-frozen', 'contact=0.6&theme=night&freeze=1'],
+];
 
 // CDP Performance metrics (seconds, cumulative); deltas give main-thread time
 // spent per phase. Paint/raster isn't split out, but lands in TaskDuration.
@@ -389,6 +406,51 @@ async function dropoutPass() {
   return rows;
 }
 
+async function restPass(browser) {
+  const vp = viewportsFrom('1440x900@2', [])[0];
+  const out = [];
+  for (const [name, q] of REST_VIEWS) {
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: vp.dpr });
+    const page = await context.newPage();
+    try {
+      await page.goto(`${BASE}/?renderer=gl&adapt=0&${q}`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-renderer="gl"] canvas', { timeout: 60000 });
+      // Ready: the house where it's in view, then the scene settled.
+      await page.waitForFunction(() => { const h = window.__debugHouse?.(); return !h || !h.houseBuilt || h.ready; }, null, { timeout: 90000 }).catch(() => {});
+      await sleep(3000);
+      const r = await page.evaluate(ms => new Promise(res => {
+        const gl = document.querySelector('[data-renderer="gl"] canvas').getContext('webgl2');
+        let calls = 0;
+        for (const f of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
+          const o = gl[f].bind(gl);
+          gl[f] = (...a) => { calls++; return o(...a); };
+        }
+        const gaps = [];
+        let drawn = 0, total = 0, seen = 0, last = performance.now();
+        const t0 = last;
+        const tick = now => {
+          gaps.push(now - last);
+          last = now;
+          if (calls > seen) { drawn++; total += calls - seen; seen = calls; }
+          if (now - t0 < ms) requestAnimationFrame(tick);
+          else {
+            gaps.sort((a, b) => a - b);
+            const s = (now - t0) / 1000;
+            res({ drawnPerSec: drawn / s, callsPerFrame: drawn ? total / drawn : 0, p50: gaps[gaps.length >> 1], p95: gaps[Math.floor(gaps.length * 0.95)] });
+          }
+        };
+        requestAnimationFrame(tick);
+      }), REST_MS);
+      out.push({ name, query: q, ...r });
+    } catch (e) {
+      out.push({ name, query: q, error: String(e).slice(0, 200) });
+    } finally {
+      await context.close();
+    }
+  }
+  return out;
+}
+
 async function main() {
   const browser = await chromium.launch({
     headless: !args.headed,
@@ -406,6 +468,7 @@ async function main() {
     results.push(r);
   }
   const sharp = GATE ? await sharpness(browser) : null;
+  const rest = REST_ON && RENDERERS.includes('gl') ? await restPass(browser) : null;
   const gpu = await (async () => {
     const p = await browser.newPage();
     const info = await p.evaluate(() => {
@@ -431,7 +494,7 @@ async function main() {
   }
   const file = join(OUT, `perf-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   const slim = dropout?.map(({ bad, ...d }) => ({ ...d, bad: describeBad(bad) }));
-  writeFileSync(file, JSON.stringify({ base: BASE, gpu, switches: SWITCHES, results, sharpness: sharp, dropout: slim }, null, 2));
+  writeFileSync(file, JSON.stringify({ base: BASE, gpu, switches: SWITCHES, results, sharpness: sharp, dropout: slim, rest }, null, 2));
   const say = QUIET ? () => {} : console.log;
 
   const head =
@@ -452,6 +515,16 @@ async function main() {
     );
   }
 
+  if (rest) {
+    const line = v => v.error ? `${v.name} error` : `${v.name} ${n1(v.drawnPerSec)}/s×${Math.round(v.callsPerFrame)}`;
+    say('\nat rest (info, not gated): GL 1440x900@2 holding still; frames a second that drew, draw calls each, frame gaps');
+    for (const v of rest) {
+      say(v.error
+        ? `info ${v.name.padEnd(12)} ${v.error}`
+        : `info ${v.name.padEnd(12)} ${n1(v.drawnPerSec).padStart(6)} drawn/s  ${String(Math.round(v.callsPerFrame)).padStart(5)} calls  p50 ${n1(v.p50)}  p95 ${n1(v.p95)} ms`);
+    }
+    if (QUIET) console.log(`perf at rest (info): ${rest.map(line).join(', ')}`);
+  }
   for (const r of results) {
     if (r.errors.length && !GATE) console.log(`console ${r.viewport} ${r.renderer}: ${r.errors.join(' | ')}`);
   }

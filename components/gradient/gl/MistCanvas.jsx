@@ -240,6 +240,15 @@ export default function MistCanvas({ recipe, onFail }) {
     // Profiling (harness only): `?dpr=1` caps the pixel ratio, to tell pixel
     // cost from geometry on a device (0.4.39).
     const dprCap = Number(params.get('dpr')) || Infinity;
+    // (0.5.17) The frame's size: the canvas's, or (while the climb moves, the
+    // owner's motion rule) a part of it, drawn into the corner of the
+    // full-size targets and scaled up onto the canvas (showFrame). Passes
+    // size their viewports, scissors and screen uniforms by it, never by
+    // the canvas; targets are still allocated at the canvas's size.
+    let frameScale = 1;
+    const fw = () => (frameScale < 1 ? Math.max(1, Math.ceil(canvas.width * frameScale)) : canvas.width);
+    const fh = () => (frameScale < 1 ? Math.max(1, Math.ceil(canvas.height * frameScale)) : canvas.height);
+
     const indexedHouse = params.get('houseindexed') !== '0';
     let gl;
     let prog;
@@ -1034,7 +1043,9 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!a) return false;
       const { pitch: P, cm: c } = meadowAt;
       gl.bindFramebuffer(gl.FRAMEBUFFER, a.fbo);
-      gl.viewport(0, 0, a.size[0], a.size[1]);
+      // (0.5.17) At the frame's size: its depth is the frame's own
+      // (climbScale only halves it where the target is the canvas's size).
+      gl.viewport(0, 0, frameScale < 1 ? fw() : a.size[0], frameScale < 1 ? fh() : a.size[1]);
       gl.clearColor(1e4, 0, 0, 1);
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
@@ -1065,7 +1076,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthMask(true);
       } else houseGeometry(g, a.u, 'all', ctx);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       gl.activeTexture(gl.TEXTURE13);
       gl.bindTexture(gl.TEXTURE_2D, a.tex);
       gl.activeTexture(gl.TEXTURE0);
@@ -1099,10 +1110,12 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.50) Returns the frame's texture if it was drawn in it.
     function showFrame() {
       if (!houseDepthIn) return null;
-      const [fw, fh] = aoPass.size;
+      const [cw, ch] = aoPass.size;
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, aoPass.frame.fbo);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-      gl.blitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      // (0.5.17) The frame's part, scaled up onto the whole canvas.
+      const [sw, sh] = [fw(), fh()];
+      gl.blitFramebuffer(0, 0, sw, sh, 0, 0, cw, ch, gl.COLOR_BUFFER_BIT, sw === cw && sh === ch ? gl.NEAREST : gl.LINEAR);
       gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
       drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1112,6 +1125,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.2) The pool's mirror image's target: a quarter of the canvas (the
     // water's ripples blur it anyway), its depth.
     let reflect = null;
+    let reflectUV = [1, 1];
     const reflectTarget = () => {
       const size = [Math.max(1, canvas.width >> 2), Math.max(1, canvas.height >> 2)];
       if (reflect && reflect.size[0] === size[0] && reflect.size[1] === size[1]) return reflect;
@@ -1155,7 +1169,7 @@ export default function MistCanvas({ recipe, onFail }) {
         const dz = p[2] - c.z;
         const q = [dx * P.yc - dz * P.ys, p[1] - c.y, dx * P.ys + dz * P.yc];
         const zp = -q[1] * P.sin + q[2] * P.cos;
-        if (zp <= 0.05) return [0, 0, canvas.width, canvas.height];
+        if (zp <= 0.05) return [0, 0, fw(), fh()];
         const vp = -q[1] * P.cos - q[2] * P.sin;
         const sx = P.sx + (P.zoom * P.f * q[0]) / zp;
         const sy = P.sy + (P.zoom * P.f * vp) / zp;
@@ -1164,11 +1178,11 @@ export default function MistCanvas({ recipe, onFail }) {
         y0 = Math.min(y0, sy);
         y1 = Math.max(y1, sy);
       }
-      const k = canvas.width / w;
+      const k = fw() / w;
       const X0 = Math.max(0, Math.floor(x0 * k) - 4);
-      const X1 = Math.min(canvas.width, Math.ceil(x1 * k) + 4);
-      const Y0 = Math.max(0, canvas.height - Math.ceil(y1 * k) - 4);
-      const Y1 = Math.min(canvas.height, canvas.height - Math.floor(y0 * k) + 4);
+      const X1 = Math.min(fw(), Math.ceil(x1 * k) + 4);
+      const Y0 = Math.max(0, fh() - Math.ceil(y1 * k) - 4);
+      const Y1 = Math.min(fh(), fh() - Math.floor(y0 * k) + 4);
       return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : null;
     };
     const prepareFrameCopy = g => {
@@ -1225,7 +1239,7 @@ export default function MistCanvas({ recipe, onFail }) {
       prepareFrameCopy(g);
       gl.activeTexture(gl.TEXTURE11);
       gl.bindTexture(gl.TEXTURE_2D, g.tex);
-      const r = full ? [0, 0, canvas.width, canvas.height] : houseRect();
+      const r = full ? [0, 0, fw(), fh()] : houseRect();
       if (r) gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, r[0], r[1], r[0], r[1], r[2], r[3]);
       gl.activeTexture(gl.TEXTURE0);
     };
@@ -1288,8 +1302,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uNight'), houseNight());
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       if (glow) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE);
@@ -1395,7 +1409,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const cleanGL = () => {
       // (Leaving the state as the frame loop expects it.)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       gl.activeTexture(gl.TEXTURE0);
@@ -2208,8 +2222,8 @@ export default function MistCanvas({ recipe, onFail }) {
       };
       const rc = view.ridges;
       gl.uniform2f(uniform('uSize'), w, h);
-      gl.uniform2f(uniform('uRes'), canvas.width, canvas.height);
-      gl.uniform1f(uniform('uDpr'), canvas.width / w);
+      gl.uniform2f(uniform('uRes'), fw(), fh());
+      gl.uniform1f(uniform('uDpr'), fw() / w);
       gl.uniform1i(uniform('uBodies'), lit.length);
       gl.uniform3fv(uniform('uBody'), lit.flatMap(b => [b.x, b.y, b.r]).concat([0, 0, 0]).slice(0, 6));
       gl.uniform3fv(uniform('uBodyCol'), lit.flatMap(b => rgb01(b.col)).concat([0, 0, 0]).slice(0, 6));
@@ -2460,15 +2474,15 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uSun'), rgb01(colours.sun));
       gl.uniform3fv(g.u('uSky'), colours.sky);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
-      gl.uniform1f(g.u('uPxCss'), w / canvas.width);
+      gl.uniform1f(g.u('uPxCss'), w / fw());
       gl.uniform4fv(g.u('uTreeShadow'), noTrees ? [0, 0, 0, 1e-3] : LONE_SHADOW);
       gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
       gl.uniform3fv(g.u('uHaze'), rgb01(haze));
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       // (0.4.39) Only the runs of blades the camera can see, in their order.
       for (const [first, count] of grassRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi), true)) {
         gl.uniform1i(g.u('uFirst'), first);
@@ -2496,7 +2510,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uWindA'), motion.matches || frozen ? 0 : 1);
       gl.uniform1f(g.u('uRebound'), motion.matches ? 0 : 1);
       gl.uniform2fv(g.u('uSunDir'), colours.dir);
-      gl.uniform1f(g.u('uPxCss'), w / canvas.width);
+      gl.uniform1f(g.u('uPxCss'), w / fw());
       gl.uniform4fv(g.u('uTreeShadow'), noTrees ? [0, 0, 0, 1e-3] : LONE_SHADOW);
       gl.uniform3fv(g.u('uShade'), rgb01(colours.shade));
       gl.uniform1i(g.u('uMeadow'), 5);
@@ -2512,8 +2526,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform2f(g.u('uHazeAt'), ...GRASS_HAZE);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       // (0.4.39) Only the runs of flowers the camera can see, in their order.
       for (const [first, count] of flowerRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi), true)) {
         gl.uniform1i(g.u('uFirst'), first);
@@ -2571,8 +2585,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uHaze'), rgb01(mist));
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       gl.uniform3fv(g.u('uShadow'), rgb01(colours.shade));
       if (shade) {
         // The shadows, multiplied into the ground (the blades in front of
@@ -2616,8 +2630,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform3fv(g.u('uShadow'), rgb01(colours.shade));
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       const lid = ((meadowAt.lid ?? 0) * Math.PI) / 180;
       gl.uniform2f(g.u('uLid'), Math.cos(lid), Math.sin(lid));
       gl.uniform3fv(g.u('uGlow'), laptopLight().glow);
@@ -2729,8 +2743,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uNight'), laptopLight().night);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
@@ -2774,8 +2788,8 @@ export default function MistCanvas({ recipe, onFail }) {
       lampUniforms(g);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
@@ -3089,7 +3103,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthFunc(gl.LESS);
         gl.useProgram(prog);
       });
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       m.faces = f + 1;
       if (m.faces === 6) m.night = night;
       return true;
@@ -3146,7 +3160,7 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         drawLeaves(g, null, null, sh.leaf);
       }, lightDir(colours.dir));
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       sh.map.bind();
     }
 
@@ -3171,7 +3185,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const P = view ? view.P : meadowAt?.pitch;
       const c = view ? view.c : meadowAt?.cm;
       if (!P || !c) return;
-      const [fw, fh] = view ? [view.size, view.size] : [w, h];
+      const [vw, vh] = view ? [view.size, view.size] : [w, h];
       // (0.4.2) The sun's shadow map, redrawn when the light moves.
       const sh = houseShadow();
       if (sh && !mirror && !lawn && !view) {
@@ -3185,7 +3199,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1f(p.u('uMorph'), 0);
         gl.uniform4f(p.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
         gl.uniform2f(p.u('uYaw'), P.yc, P.ys);
-        gl.uniform4f(p.u('uScreen'), P.sx, P.sy, fw, fh);
+        gl.uniform4f(p.u('uScreen'), P.sx, P.sy, vw, vh);
         gl.uniform3f(p.u('uCam'), c.x, c.y, c.z);
         gl.uniform2f(p.u('uDepthAB'), ...DEPTH_AB);
         gl.uniform2fv(p.u('uSunDir'), colours.dir);
@@ -3217,16 +3231,16 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform2f(p.u('uMirror'), mirror ? 1 : 0, POOL.at[1]);
         gl.uniform1i(p.u('uAO'), 13);
         gl.uniform1f(p.u('uAOOn'), aoReady && !mirror && !view ? 1 : 0);
-        gl.uniform2f(p.u('uAORes'), canvas.width, canvas.height);
+        gl.uniform2f(p.u('uAORes'), aoPass?.size?.[0] ?? fw(), aoPass?.size?.[1] ?? fh());
         gl.uniform1i(p.u('uGrain'), 2);
         gl.uniform1f(p.u('uGrainA'), noGrain || grainOut || view ? 0 : grainOpacity(recipeRef.current));
-        gl.uniform1f(p.u('uCssPerPx'), w / canvas.width);
-        gl.uniform1f(p.u('uResY'), canvas.height);
+        gl.uniform1f(p.u('uCssPerPx'), w / fw());
+        gl.uniform1f(p.u('uResY'), fh());
         mirrorUniforms(p, !view && !mirror);
       };
       if (g.variants) for (const vp of g.variants) if (vp) setUniforms(vp);
       setUniforms(g);
-      const ctx = { mirror, view, P, c, fw, fh, keep: mirror || view ? null : pathKeep(g) };
+      const ctx = { mirror, view, P, c, fw: vw, fh: vh, keep: mirror || view ? null : pathKeep(g) };
       if (who) {
         const pb = personBuffer();
         gl.uniform1f(g.u('uAOOn'), 0);
@@ -3245,7 +3259,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.useProgram(a.prog);
         gl.uniform4f(a.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
         gl.uniform2f(a.u('uYaw'), P.yc, P.ys);
-        gl.uniform4f(a.u('uScreen'), P.sx, P.sy, fw, fh);
+        gl.uniform4f(a.u('uScreen'), P.sx, P.sy, vw, vh);
         gl.uniform3f(a.u('uCam'), c.x, c.y, c.z);
         gl.uniform2f(a.u('uDepthAB'), ...DEPTH_AB);
         gl.uniformMatrix4fv(a.u('uLightVP'), false, IDENTITY);
@@ -3275,7 +3289,11 @@ export default function MistCanvas({ recipe, onFail }) {
       const rt = reflectTarget();
       if (!rt) return false;
       gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
-      gl.viewport(0, 0, rt.size[0], rt.size[1]);
+      // (0.5.17) At the frame's scale, in the target's corner.
+      const rw = frameScale < 1 ? Math.max(1, Math.ceil(rt.size[0] * frameScale)) : rt.size[0];
+      const rh = frameScale < 1 ? Math.max(1, Math.ceil(rt.size[1] * frameScale)) : rt.size[1];
+      reflectUV = [rw / rt.size[0], rh / rt.size[1]];
+      gl.viewport(0, 0, rw, rh);
       gl.clearColor(0, 0, 0, 0);
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
@@ -3286,7 +3304,7 @@ export default function MistCanvas({ recipe, onFail }) {
       mirrorRect = null;
       drop(gl.DEPTH_ATTACHMENT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       gl.activeTexture(gl.TEXTURE12);
       gl.bindTexture(gl.TEXTURE_2D, rt.tex);
       gl.activeTexture(gl.TEXTURE0);
@@ -3324,6 +3342,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uWaterOn'), sim ? 1 : 0);
       gl.uniform1f(g.u('uWaterT'), skyT);
       gl.uniform1i(g.u('uReflect'), 12);
+      gl.uniform2f(g.u('uFrameUV'), fw() / (glass?.size?.[0] || fw()), fh() / (glass?.size?.[1] || fh()));
+      gl.uniform2f(g.u('uReflectUV'), reflectUV[0], reflectUV[1]);
       gl.uniform1f(g.u('uReflectOn'), mirrored ? 1 : 0);
       gl.uniform3fv(g.u('uSky'), colours.sky);
       gl.uniformMatrix4fv(g.u('uLightVP'), false, shadow ? shadow.map.matrix : IDENTITY);
@@ -3402,8 +3422,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(g.u('uDeck'), 6);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
@@ -3440,8 +3460,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(g.u('uBack'), 7);
       gl.uniform1i(g.u('uGrain'), 2);
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
-      gl.uniform1f(g.u('uCssPerPx'), w / canvas.width);
-      gl.uniform1f(g.u('uResY'), canvas.height);
+      gl.uniform1f(g.u('uCssPerPx'), w / fw());
+      gl.uniform1f(g.u('uResY'), fh());
       gl.bindVertexArray(g.vao);
       gl.drawArrays(gl.TRIANGLES, 0, g.count);
       gl.bindVertexArray(null);
@@ -3462,7 +3482,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // Each pass only over the rows it can touch (scissor rows count up
       // from the canvas's foot, in device px).
       gl.enable(gl.SCISSOR_TEST);
-      const rows = y => Math.min(canvas.height, Math.ceil(((h - y) / h) * canvas.height) + 2);
+      const rows = y => Math.min(fh(), Math.ceil(((h - y) / h) * fh()) + 2);
       const paintPass = !lawnSeen && M.paintFlat ? M.paintFlat : M.paint;
       const passes = grassAt ? [paintPass, M.flowers] : [paintPass];
       // (0.5.3) Not before the 3D peaks: the real mist stands at their feet.
@@ -3471,23 +3491,23 @@ export default function MistCanvas({ recipe, onFail }) {
         if (!g) continue;
         if (g === paintPass) {
           gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
-          gl.scissor(0, 0, canvas.width, rows(top));
+          gl.scissor(0, 0, fw(), rows(top));
         } else if (g === M.foot) {
           const [y0, y1] = mistRows;
           if (y0 >= h || y1 <= y0) continue;
           gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-          gl.scissor(0, Math.max(0, rows(y1) - 4), canvas.width, rows(y0) - Math.max(0, rows(y1) - 4));
+          gl.scissor(0, Math.max(0, rows(y1) - 4), fw(), rows(y0) - Math.max(0, rows(y1) - 4));
         } else {
           if (near >= h) continue;
           const yBot = flowers ? Math.max(0, rows(nearBot) - 4) : 0;
           const yTop = rows(near);
           if (yTop <= yBot) continue;
           gl.blendFunc(gl.ONE, gl.ONE);
-          gl.scissor(0, yBot, canvas.width, yTop - yBot);
+          gl.scissor(0, yBot, fw(), yTop - yBot);
         }
         gl.useProgram(g.prog);
         if (g === M.foot) gl.uniform3fv(g.u('uFootMist'), rgb01(mist));
-        gl.uniform2f(g.u('uRes'), canvas.width, canvas.height);
+        gl.uniform2f(g.u('uRes'), fw(), fh());
         gl.uniform2f(g.u('uSize'), w, h);
         gl.uniform4f(g.u('uPitch'), P.cos, P.sin, P.f, P.zoom);
         gl.uniform2f(g.u('uYaw'), P.yc, P.ys);
@@ -3631,7 +3651,7 @@ export default function MistCanvas({ recipe, onFail }) {
     }
     function peaksView(p, pk) {
       const u = peaksU(p);
-      gl.uniform2f(u('uRes'), canvas.width, canvas.height);
+      gl.uniform2f(u('uRes'), fw(), fh());
       gl.uniform1i(u('uLoop4'), 4);
       gl.uniform3fv(u('uCam'), pk.cam.pos);
       gl.uniform3fv(u('uLook'), pk.cam.look);
@@ -3694,7 +3714,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform4f(peaksU(P.bake)('uBox'), x0, z0, box === peaksBake.outer ? 1 : 0, size / box.N);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.disable(gl.SCISSOR_TEST);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       peaksBake.step++;
       if (peaksBake.step >= 18 && peaksBake.outer) {
         peaksBake.outerReady = true;
@@ -3740,13 +3760,17 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1i(u('uFlow'), PEAKS_FLOW);
       gl.uniform1f(u('uReady'), peaksGeo?.ready ? 1 : 0);
       gl.uniform1f(u('uReveal'), peaksReveal);
-      gl.uniform1f(u('uGeoScale'), peaksGeo?.scale ?? 1);
+      gl.uniform1f(u('uGeoScale'), (peaksGeo?.scale ?? 1) / frameScale);
+      gl.uniform1f(u('uFrameScale'), frameScale);
       // (0.5.14) At half size the horizons fill a corner of their target:
       // its filtered reads stop half a texel inside it (no seam at the edge).
       if (peaksGeo?.scale < 1) {
         const tw = Math.ceil(peaksGeo.w / 2);
         const th = Math.ceil(peaksGeo.h / 2);
-        gl.uniform2f(u('uHorMax'), (Math.ceil(Math.ceil(peaksGeo.w / 2) / 2) - 0.5) / tw, (Math.ceil(Math.ceil(peaksGeo.h / 2) / 2) - 0.5) / th);
+        // (0.5.17) Any scale: the shape GW = ⌈w·s⌉ wide, its horizons ⌈GW/2⌉.
+        const gw = Math.ceil(peaksGeo.w * peaksGeo.scale);
+        const gh = Math.ceil(peaksGeo.h * peaksGeo.scale);
+        gl.uniform2f(u('uHorMax'), (Math.ceil(gw / 2) - 0.5) / tw, (Math.ceil(gh / 2) - 0.5) / th);
       } else gl.uniform2f(u('uHorMax'), 1, 1);
       if (p === peaksMode.lit || p === peaksMode.direct || p === peaksMode.behind) {
         gl.uniform1i(u('uG0'), PEAKS_G0);
@@ -3795,7 +3819,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!peaksConsts) {
         gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
         const tex = texture(gl, gl.NEAREST);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 12, 1, 0, gl.RGBA, gl.FLOAT, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 16, 1, 0, gl.RGBA, gl.FLOAT, null);
         gl.bindTexture(gl.TEXTURE_2D, null);
         gl.activeTexture(gl.TEXTURE0);
         const fbo = gl.createFramebuffer();
@@ -3813,7 +3837,7 @@ export default function MistCanvas({ recipe, onFail }) {
       peaksConsts.key = null;
       gl.bindFramebuffer(gl.FRAMEBUFFER, peaksConsts.fbo);
       gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-      gl.viewport(0, 0, 12, 1);
+      gl.viewport(0, 0, 16, 1);
       gl.useProgram(P.consts);
       peaksLight(P.consts, pk);
       timed('peaks-consts', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
@@ -3852,7 +3876,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // The frame's state back as it was (its passes assume the full
       // viewport and the scene's program; the constants pass left 12 × 1).
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, fw(), fh());
       gl.disable(gl.SCISSOR_TEST);
       gl.useProgram(prog);
       gl.bindVertexArray(null);
@@ -3883,12 +3907,14 @@ export default function MistCanvas({ recipe, onFail }) {
       const half = (n, k) => Math.ceil(n / k);
       // (0.5.13) The target the caller draws into, not a synchronous read.
       const prev = target;
+      // (Its targets at the canvas's size; the shape drawn at the frame's
+      // scale in their corner while the climb moves, 0.5.17.)
       const W = canvas.width;
       const H = canvas.height;
       gl.bindVertexArray(null);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.SCISSOR_TEST);
-      const viewKey = [W, H, ...pk.cam.pos, ...pk.cam.look, ...(pk.cam.right ?? []), pk.cam.fov, ...(pk.cam.shift ?? []), ...pk.bearings.flat()].join();
+      const viewKey = [W, H, frameScale, ...pk.cam.pos, ...pk.cam.look, ...(pk.cam.right ?? []), pk.cam.fov, ...(pk.cam.shift ?? []), ...pk.bearings.flat()].join();
       if (P.geo && !pk.skipGeo && !prepped) {
         if (!peaksGeo || peaksGeo.w !== W || peaksGeo.h !== H) {
           if (peaksGeo) for (const t of [peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
@@ -3933,9 +3959,9 @@ export default function MistCanvas({ recipe, onFail }) {
         // (0.5.13) The flight (the opening up, the view moving, not behind
         // the desk): the shape at half size each way, in the corner of its
         // targets (no new targets); full size again on the first still frame.
-        if (moved || peaksGeo.scale === undefined) peaksGeo.scale = moved && peaksShown && !pk.behind && !noMotionRes ? 0.5 : 1;
-        const GW = peaksGeo.scale < 1 ? half(W, 2) : W;
-        const GH = peaksGeo.scale < 1 ? half(H, 2) : H;
+        if (moved || peaksGeo.scale === undefined) peaksGeo.scale = moved && peaksShown && !pk.behind && !noMotionRes ? 0.5 : pk.behind && frameScale < 1 ? frameScale : 1;
+        const GW = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(W * peaksGeo.scale)) : W;
+        const GH = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(H * peaksGeo.scale)) : H;
         const BANDS = 8;
         const HBANDS = 4;
         const STEPS = 1 + BANDS + HBANDS;
@@ -4081,7 +4107,7 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         gl.useProgram(P.behind);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
-        gl.viewport(0, 0, W, H);
+        gl.viewport(0, 0, fw(), fh());
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
@@ -4162,8 +4188,27 @@ export default function MistCanvas({ recipe, onFail }) {
       return true;
     }
 
+    // (0.5.17) The climb at half size each way while the camera moves (the
+    // owner's motion rule): its passes draw into the corner of the
+    // full-size targets and the frame is scaled up onto the canvas
+    // (showFrame, the bloom). Only where the frame has its own target (the
+    // house's early depth); the first still frame is full size again.
+    // `?motionres=0` off (with the flight's).
+    let lastCamAt = null;
+    function climbScale() {
+      const d = getDescent();
+      const at = `${d.about},${d.desk},${d.contact}`;
+      const moving = lastCamAt !== null && at !== lastCamAt;
+      lastCamAt = at;
+      const ok = moving && !noMotionRes && !noEarlyZ && !noHouse && !noDesk && !noAO && d.contact > 0 && houseSeen
+        && !!aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height;
+      return ok ? 0.5 : 1;
+    }
     function draw(vs) {
       peaksFrameNo++;
+      // (frameScale is decided in the tick, before rebuild() sends the
+      // scene's resolution from it.)
+      document.documentElement.dataset.frameScale = String(frameScale);
       const wasRequired = requiredPass;
       requiredPass = true;
       try {
@@ -4180,7 +4225,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform1fv(uniform('uVeilA'), veilAlphaBuf);
         const prints = printsNow();
         gl.disable(gl.SCISSOR_TEST);
-        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.viewport(0, 0, fw(), fh());
         // (0.5.3) Over the drop the 3D opening is the whole frame.
         if (peaksNow?.a >= 1 && !peaksNow.behind) {
           gl.disable(gl.DEPTH_TEST);
@@ -4201,6 +4246,15 @@ export default function MistCanvas({ recipe, onFail }) {
           if (hg && sh) houseShadowMap(hg, sh, meadowAt.colours);
         }
         aoReady = !!meadowAt && !noDesk && !noHouse && !noAO && houseSeen && timed('house-depth-ao', drawHouseDepth);
+        // (Without the AO's depth there's no frame target: full size.)
+        if (!aoReady && frameScale < 1) {
+          frameScale = 1;
+          document.documentElement.dataset.frameScale = '1';
+          gl.viewport(0, 0, fw(), fh());
+          gl.useProgram(prog);
+          gl.uniform2f(uniform('uRes'), fw(), fh());
+          gl.uniform1f(uniform('uDpr'), fw() / w);
+        }
         const mirroredPool = deskOn && !noHouse && !noGlass && houseSeen && drawPoolReflection();
         peaksPrepare();
         const grassOn = !!grassAt && !!grassProgram(true);
@@ -4227,6 +4281,14 @@ export default function MistCanvas({ recipe, onFail }) {
         // lawn, the solid part and the leaves: what the colour pass's own
         // depth pass drew again), where the frame target is there.
         houseDepthIn = !!(aoReady && deskOn && !noHouse && houseSeen && aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height);
+        if (!houseDepthIn && frameScale < 1) {
+          frameScale = 1;
+          document.documentElement.dataset.frameScale = '1';
+          gl.viewport(0, 0, fw(), fh());
+          gl.useProgram(prog);
+          gl.uniform2f(uniform('uRes'), fw(), fh());
+          gl.uniform1f(uniform('uDpr'), fw() / w);
+        }
         if (houseDepthIn) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
           // (0.4.57) The scene's pass covers every pixel: last frame's colour
@@ -4288,8 +4350,8 @@ export default function MistCanvas({ recipe, onFail }) {
           if (!frameTex) copyFrame(glass, true);
           const src = frameTex || glass.tex;
           const base = mergedFrame ? frameTex : null;
-          if (profiler) profiler.measure('bloom', () => bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base));
-          else bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base);
+          if (profiler) profiler.measure('bloom', () => bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base, [fw() / canvas.width, fh() / canvas.height]));
+          else bloom.apply(src, canvas.width, canvas.height, 0.7 * night, base, [fw() / canvas.width, fh() / canvas.height]);
           mergedFrame = false;
           gl.useProgram(prog);
         }
@@ -4297,6 +4359,10 @@ export default function MistCanvas({ recipe, onFail }) {
         lastDrawn = vs;
       } finally {
         showFrame();
+        // (0.5.17) A part-size frame is followed by a full one, whether or
+        // not the camera moves again.
+        if (frameScale < 1) dirty = true;
+        frameScale = 1;
         requiredPass = wasRequired;
       }
     }
@@ -4386,6 +4452,10 @@ export default function MistCanvas({ recipe, onFail }) {
         pendingResize = false;
         resize();
       }
+      // (0.5.17) The frame's size, before rebuild() sends the scene's
+      // resolution: half while the camera moves (climbScale), and always
+      // full under `?freeze=1` (a harness's one draw after a jump is its still).
+      frameScale = busy && !frozen ? climbScale() : 1;
       if (busy) rebuild();
       profiler?.frame({ gapMs: gap, poolSeen, houseSeen, ready: houseComplete, ...getDescent() });
       const tick = !busy && now - lastIdleAt >= 1000 / IDLE_HZ;

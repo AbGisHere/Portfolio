@@ -20,12 +20,15 @@ const BRIGHT = `#version 300 es
 precision highp float;
 uniform sampler2D uFrom;
 uniform vec2 uTexel;
+// (0.5.17) The part of the frame's texture it fills (1, 1 but while the
+// climb moves at a part size).
+uniform vec2 uScale;
 in vec2 vUv;
 out vec4 outColor;
 void main() {
   vec3 c = vec3(0.0);
   for (int i = -1; i <= 1; i++)
-    for (int j = -1; j <= 1; j++) c += texture(uFrom, vUv + vec2(i, j) * uTexel).rgb;
+    for (int j = -1; j <= 1; j++) c += texture(uFrom, vUv * uScale + vec2(i, j) * uTexel).rgb;
   c /= 9.0;
   float l = max(c.r, max(c.g, c.b));
   // (Only what burns: the lamps, the strips, the shades; a lit wall rolls
@@ -61,10 +64,11 @@ uniform float uAmount;
 // blending off: one full-screen pass in place of a copy and a blend.
 uniform sampler2D uBase;
 uniform float uBaseOn;
+uniform vec2 uScale;
 in vec2 vUv;
 out vec4 outColor;
 void main() {
-  vec3 b = uBaseOn > 0.5 ? texture(uBase, vUv).rgb : vec3(0.0);
+  vec3 b = uBaseOn > 0.5 ? texture(uBase, vUv * uScale).rgb : vec3(0.0);
   outColor = vec4(b + texture(uFrom, vUv).rgb * uAmount, 1.0);
 }
 `;
@@ -145,13 +149,16 @@ export function makeBloom(gl, unit, pre = null) {
     prepare: resize,
     // (0.4.57) `base`: the frame's texture, to write it and the glow onto
     // the canvas in one pass (blending off); else the glow is added on.
-    apply(frame, w, h, amount, base = null) {
+    apply(frame, w, h, amount, base = null, scale = [1, 1]) {
       resize(w, h);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       gl.bindVertexArray(vao);
       gl.viewport(0, 0, size[0], size[1]);
-      run(progs.bright, targets[0], frame, p => gl.uniform2f(u(p, 'uTexel'), 1 / w, 1 / h));
+      run(progs.bright, targets[0], frame, p => {
+        gl.uniform2f(u(p, 'uTexel'), 1 / w, 1 / h);
+        gl.uniform2f(u(p, 'uScale'), scale[0], scale[1]);
+      });
       for (let k = 0; k < 2; k++) {
         const r = 1.6 + k * 1.4;
         run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(u(p, 'uDir'), r / size[0], 0));
@@ -167,6 +174,7 @@ export function makeBloom(gl, unit, pre = null) {
       run(progs.add, null, targets[0].tex, p => {
         gl.uniform1f(u(p, 'uAmount'), amount);
         gl.uniform1f(u(p, 'uBaseOn'), base ? 1 : 0);
+        gl.uniform2f(u(p, 'uScale'), scale[0], scale[1]);
         gl.uniform1i(u(p, 'uBase'), base ? BASE_UNIT : unit);
         if (base) {
           gl.activeTexture(gl.TEXTURE0 + BASE_UNIT);

@@ -142,6 +142,10 @@ uniform float uWaterOn;
 uniform float uWaterT;
 uniform sampler2D uReflect;  // the house mirrored in the water (a: there)
 uniform float uReflectOn;
+// (0.5.17) The part of uScene and uReflect the frame fills (1, 1 but while
+// the climb moves at a part size: MistCanvas.jsx frameScale).
+uniform vec2 uFrameUV;
+uniform vec2 uReflectUV;
 uniform vec3 uSky;
 
 in vec3 vWorld;
@@ -225,7 +229,7 @@ void main() {
       if (d.z > 1e-4) t = min(t, (${f(PMAX[1])} - vWorld.z) / d.z);
       if (d.z < -1e-4) t = min(t, (${f(PMIN[1])} - vWorld.z) / d.z);
       vec3 hit = vWorld + d * max(t, 0.0);
-      float s = texture(uScene, screenOf(hit))[c];
+      float s = texture(uScene, screenOf(hit) * uFrameUV)[c];
       // Absorbed along the way down and back up toward the light's way in
       // (pure water: a = 0.34, 0.056, 0.012 per metre), and a little light
       // scattered back toward the eye from the water itself.
@@ -240,7 +244,7 @@ void main() {
     vec3 refl = mirrored(R, 0.0025);
     if (uReflectOn > 0.5) {
       // The house mirrored, where it's there, nudged by the surface's slope.
-      vec4 m = texture(uReflect, here + slope * 0.03);
+      vec4 m = texture(uReflect, (here + slope * 0.03) * uReflectUV);
       refl = mix(refl, m.rgb, m.a);
     }
     col = mix(through, refl, Fr);
@@ -270,7 +274,7 @@ void main() {
       float shift = ${f(GLASS_THICK)} * si * (1.0 - ci / (n * ct));
       float path = face ? ${f(GLASS_THICK)} / ct : 0.6;
       vec2 at = here + (screenOf(vWorld - side * shift) - here) + vec2(0.0, wave * 0.35);
-      float s = texture(uScene, at)[c];
+      float s = texture(uScene, at * uFrameUV)[c];
       // Float glass's iron: a faint green that deepens along the path.
       float a = c == 0 ? 3.2 : c == 1 ? 1.1 : 2.4;
       float r = fresnel(ci, n);
@@ -287,7 +291,7 @@ void main() {
     // polished edge seen end on, the glass's own deep green, and at it the
     // light bent by the edge's arris, what's behind shifted and dimmed. The
     // balustrade's top edge catches the sky and the sun as a bright line.
-    vec3 edgeCol = texture(uScene, here).rgb * vec3(0.22, 0.4, 0.34) + vec3(0.1, 0.24, 0.2) * (uEnvTop * 0.6 + uSun * 0.5) * mix(1.0, 0.35, uNight);
+    vec3 edgeCol = texture(uScene, here * uFrameUV).rgb * vec3(0.22, 0.4, 0.34) + vec3(0.1, 0.24, 0.2) * (uEnvTop * 0.6 + uSun * 0.5) * mix(1.0, 0.35, uNight);
     if (!face) col = edgeCol + refl * 0.08;
     else {
       float px = max(vWide * fwidth(vST.x), 1e-5);
@@ -296,7 +300,7 @@ void main() {
       float near = 1.0 - smoothstep(0.012, 0.035, dEdge);
       if (near > 0.0) {
         vec2 bend = (vST.x < 0.5 ? -1.0 : 1.0) * vec2(dFdx(vST.x), dFdy(vST.x)) / max(length(vec2(dFdx(vST.x), dFdy(vST.x))), 1e-6) * 0.004;
-        col = mix(col, texture(uScene, here + bend * near).rgb * 0.8 * vec3(0.85, 0.95, 0.9) + refl * Rs, near * 0.6);
+        col = mix(col, texture(uScene, (here + bend * near) * uFrameUV).rgb * 0.8 * vec3(0.85, 0.95, 0.9) + refl * Rs, near * 0.6);
       }
       col = mix(col, edgeCol, side);
       if (rail) {

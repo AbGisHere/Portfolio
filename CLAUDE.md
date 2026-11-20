@@ -257,10 +257,22 @@ fails) and its known gap; 0.5.14 is the same picture as 0.5.12.
 device; the unit test fails when it's stale) and adds `deviceProfile.js`,
 where loading choices live until the device tiers (`ROADMAP.md`).
 
-**Next: 0.5.17**: P2 (reprojection, behind a flag), the climb at half size while moving (the owner's motion
-rule), more sky terms in the constants pass; the climb on phones
-(`devices -- --climb --costs peaks-behind`); the switch's one ×3.1 step; then the owner's next steps on the
-valley flight, the cliffs' own detail and the fallback's stills.
+**0.5.17** (2026-11-21) draws the pool climb at half size while the camera
+moves (`climbScale`, `frameScale`, `fw()`/`fh()` in `MistCanvas.jsx`; the
+frame scaled up in `showFrame` and the bloom; full size at rest and under
+`?freeze=1`; `?motionres=0` off): M4 night climb 36–50 → 93–101 fps, stills
+identical. It moves more sky terms into the constants pass, stops preloading the
+fonts, and adds the frame at rest to `perf` (info): the pool at rest
+redraws the whole scene every frame (M4 night 71 fps, 174 calls). P2
+(reprojection) measured, not built.
+
+**Next:** the frame at rest at the pool (draw the still scene once, only
+what moves each frame; a version of its own, on the owner's call); the
+switch's ×3.1 step at the moon glow's top edge (located, `CHANGELOG.md`
+0.5.17); the
+climb on phones (`devices -- --climb --costs peaks-behind`); then the
+owner's next steps on the valley flight, the cliffs' own detail and the
+fallback's stills.
 After that: the owner's next steps on the valley flight, the cliffs' own
 detail, the phones and the fallback's stills. The pool climb work stays open (`ROADMAP.md`, Planned), toward the pool climb at the screen's rate: 60 fps on 60 Hz
 phones and 120 on 120 Hz, on normal phones, and 120 on the M4 with headroom

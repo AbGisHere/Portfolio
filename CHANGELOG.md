@@ -6,6 +6,49 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.17 — 2026-11-21
+
+The pool climb at half size while it moves (the owner's motion rule), with
+the same still frames.
+
+- The climb draws at half size each way while the camera moves: its
+  passes draw into the corner of the full-size targets (the house's early
+  depth, the frame, the pool's reflection, the peaks behind the house) and
+  the frame is scaled up onto the canvas (`showFrame`, the bloom). The
+  frame the scroll stops on is full size, and so is every frame under
+  `?freeze=1` (the harnesses' stills). Only where the frame has its own
+  target; `?motionres=0` off (with the flight's). M4 1440×900@2, night
+  climb (paired sweeps, 3 each): 36–50 → 93–101 fps.
+- The sky's per-frame terms (the bodies' transmittance and light) move into
+  the constants pass (`PEAKS_CONSTS_FS`, 12 → 16 texels).
+- The switch's one ×3.1 step (the fallback at scroll 0, day → night)
+  stays open, located but not fixed: on the frame the switch lands, the
+  top edge of the moon's glow (around (1088, 112) at 1440×900) moves by a
+  worst 32 px block of 0.88/255, after steps of 0.57 and 0.36. It's in
+  the harness's frames, not in a capture stepped the same way by hand
+  (the moon there eases out 0.33 → 0.07 → 0). Two fixes were tried and
+  reverted (the rims' paint, the glow on its own layer); neither was the
+  cause.
+- The fonts aren't preloaded (`app/fonts.js`, `preload: false`): no text
+  shows on the first screen yet, so Safari warned both preloads unused,
+  ~53 KB fetched for nothing. Fetched when text first needs them.
+- `perf` times the frame at rest (info, not gated; `--rest 0` skips it):
+  GL holding still at the opening, the desk and the pool, frames a second
+  that drew and their draw calls. M4 1440×900@2: the opening and the desk
+  hold 120 (1 and 37 calls), the pool by night 71 fps (174 calls, the whole
+  scene redrawn for the wind, the water and the fireflies), by day 78;
+  frozen, 0.5 frames a second (the loop idles). The pool at rest is the
+  next speed item.
+- Found on the way, fixed before release: the half-size frame's scene
+  resolution was sent before its size was decided (the sky drawn as
+  ground), the house's early depth stayed full size, and the peaks behind
+  the house read their shape at a quarter.
+- P2 (reprojection) measured, not built: at half size the moving climb is
+  already ~2× faster on the M4, which is the frames reprojection would
+  help; it stays in `ROADMAP.md`.
+- Checks (M4): regress 39/39 (worst mean 0.00), house parity 104/104 against
+  0.5.16.
+
 ## 0.5.16 — 2026-11-20
 
 H1: the house's lightmap shipped baked, with the same picture.

@@ -508,18 +508,20 @@ vec3 TAU0, SKYL, BODYL, SUNL;
 // A body's light where it reaches (reddened by the air on the way), and
 // fading out as it goes under.
 vec3 reach(vec3 L, float I) { return I * exp(-TAU0 * airmass(max(L.y, 0.) + .004)) * smoothstep(-.1, .02, L.y); }
-vec3 scatter(vec3 rd, vec3 L, float I) {
+// (0.5.17) The air's depths at the camera and each body's light at the top
+// of it: the same for every pixel, worked once a frame (frameConsts).
+vec3 TR, TM, LITS, LITM;
+vec3 bodyLit(vec3 L, float I) { return I * exp(-TAU0 * airmass(max(L.y, 0.) + .004) * .9) * smoothstep(-.07, .01, L.y); }
+vec3 scatter(vec3 rd, vec3 L, float I, vec3 lit) {
   float mu = dot(rd, L);
   float phR = 3. / (16. * PI) * (1. + mu * mu);
   float g = .76;
   float phM = (1. - g * g) / (4. * PI * pow(1. + g * g - 2. * g * mu, 1.5));
-  float a = uCam.y;
-  vec3 tR = BR * HR * exp(-a / HR), tM = vec3(BM * HM * exp(-a / HM));
+  vec3 tR = TR, tM = TM;
   vec3 tau = (tR + tM) * airmass(max(rd.y, 0.) + .01);
   vec3 oz = exp(-OZONE * airmass(max(rd.y, 0.) + .01) * .5);
   vec3 ph = (tR * phR + tM * phM) / (tR + tM);
-  vec3 lit = I * exp(-TAU0 * airmass(max(L.y, 0.) + .004) * .9);
-  vec3 c = lit * ph * (1. - exp(-tau)) * oz * smoothstep(-.07, .01, L.y);
+  vec3 c = lit * ph * (1. - exp(-tau)) * oz;
   // Twilight: after the body is down the sky stays lit from above the
   // horizon, overhead longest, blue, until it is some 10° under.
   float tw = smoothstep(-.18, -.02, L.y) * (1. - smoothstep(0., .08, L.y));
@@ -542,7 +544,7 @@ vec3 toScreen(vec3 c) {
 }
 // The sky in physical light.
 vec3 skyRaw(vec3 rd) {
-  vec3 c = scatter(rd, uSunDir, SUN_I) + scatter(rd, uMoonDir, MOON_I);
+  vec3 c = scatter(rd, uSunDir, SUN_I, LITS) + scatter(rd, uMoonDir, MOON_I, LITM);
   // The Belt of Venus: a pink band low opposite a sun at the horizon, over
   // the blue of the earth's own shadow.
   vec2 rf = normalize(rd.xz + 1e-5), sf = normalize(uSunDir.xz + 1e-5);
@@ -865,14 +867,17 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
 // bodies) and the mist before it, with how much of the first shows
 // through. The composite (PEAKS_MIX_FS) moves the mist over them each frame.
 // (0.5.13) The same for every pixel of a frame: worked once a frame into a
-// 12-texel float target (PEAKS_CONSTS_FS) and read back here, where there.
+// 16-texel float target (PEAKS_CONSTS_FS; 0.5.17: 16) and read back here, where there.
 uniform sampler2D uConsts;
 uniform float uHaveConsts;
 void frameConsts() {
   for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
   LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
   EXPO = 1.25 * pow(16., uNight);
-  TAU0 = tau0(); BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
+  TAU0 = tau0();
+  TR = BR * HR * exp(-uCam.y / HR); TM = vec3(BM * HM * exp(-uCam.y / HM));
+  LITS = bodyLit(uSunDir, SUN_I); LITM = bodyLit(uMoonDir, MOON_I);
+  BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
 }
 void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
   if (uHaveConsts > .5) {
@@ -883,6 +888,10 @@ void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out v
     BODYL = texelFetch(uConsts, ivec2(9, 0), 0).rgb;
     SUNL = texelFetch(uConsts, ivec2(10, 0), 0).rgb;
     SKYL = texelFetch(uConsts, ivec2(11, 0), 0).rgb;
+    TR = texelFetch(uConsts, ivec2(12, 0), 0).rgb;
+    TM = texelFetch(uConsts, ivec2(13, 0), 0).rgb;
+    LITS = texelFetch(uConsts, ivec2(14, 0), 0).rgb;
+    LITM = texelFetch(uConsts, ivec2(15, 0), 0).rgb;
   } else frameConsts();
   if (g.hit > 0.) base = ground(g, rd);
   else {
@@ -986,6 +995,9 @@ uniform sampler2D uG0, uG1, uG2;
 uniform float uReady, uReveal;
 // (0.5.13) The shape's size against the frame's (½ while the flight moves).
 uniform float uGeoScale;
+// (0.5.17) The frame's own size against the canvas's (½ while the climb
+// moves): uGeoScale is then the shape's against the frame's.
+uniform float uFrameScale;
 uniform vec2 uHorMax;
 G readG(vec3 rd) {
   if (uSkipGeo > .5 || uReady < .5) {
@@ -1001,7 +1013,7 @@ G readG(vec3 rd) {
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
   g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = b.w;
-  g.hor = texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale, uHorMax));
+  g.hor = texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale * uFrameScale, uHorMax));
   return g;
 }`;
 
@@ -1103,7 +1115,7 @@ out vec4 o;
 void main() {
   frameConsts();
   int i = int(gl_FragCoord.x);
-  vec3 v = i < 6 ? S[min(i, 5)] : i == 6 ? LIGHT : i == 7 ? vec3(EXPO) : i == 8 ? TAU0 : i == 9 ? BODYL : i == 10 ? SUNL : SKYL;
+  vec3 v = i < 6 ? S[min(i, 5)] : i == 6 ? LIGHT : i == 7 ? vec3(EXPO) : i == 8 ? TAU0 : i == 9 ? BODYL : i == 10 ? SUNL : i == 11 ? SKYL : i == 12 ? TR : i == 13 ? TM : i == 14 ? LITS : LITM;
   o = vec4(v, 1.);
 }`;
 

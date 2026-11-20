@@ -10,6 +10,11 @@ export const unbounded = Unbounded({
   weight: ['800'],
   variable: '--font-display',
   display: 'swap',
+  // (0.5.17) Not preloaded: no text shows on the first screen yet (the h1
+  // and intro are visually hidden), so Safari warned the preload unused.
+  // Fetched when text first needs it; next/font's adjusted fallback holds
+  // the layout meanwhile.
+  preload: false,
 });
 
 export const jetbrainsMono = JetBrains_Mono({
@@ -20,6 +25,7 @@ export const jetbrainsMono = JetBrains_Mono({
   weight: ['400', '500', '600'],
   variable: '--font-mono',
   display: 'swap',
+  preload: false,
 });
 
 export const fontVariables = `${unbounded.variable} ${jetbrainsMono.variable}`;
