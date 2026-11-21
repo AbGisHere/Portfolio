@@ -213,6 +213,14 @@ uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
 uniform float uPxCss;   // one device pixel, CSS px
 uniform float uRim;     // (0.5.6) 1: on the plateau under the 3D mountains, grown to its rim
 uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
+// (0.5.26) At rest the camera holds, so which blades grow holds too: one
+// pass (uLive 1, transform feedback, the rasterizer off) writes vLive per
+// blade from the very culls below; then each frame draws only the blades
+// that grow, by number (uList 1: aId), in the same order.
+uniform int uLive;
+uniform int uList;
+layout(location = 1) in uint aId;
+flat out uint vLive;
 
 // (0.4.0) A world offset in the camera's frame before its pitch: turned
 // back by the yaw (uYaw: cos, sin; 0 faces the mountains, +z).
@@ -253,7 +261,7 @@ ${MOUND_GLSL}
 ${RIM_GLSL}
 void main() {
   int per = ${GRASS.side * GRASS.side * GRASS.blades};
-  int id = gl_InstanceID + uFirst;
+  int id = uList == 1 ? int(aId) : gl_InstanceID + uFirst;
   int ring = id / per;
   int r = id - ring * per;
   int cell = r / ${GRASS.blades};
@@ -265,6 +273,7 @@ void main() {
   // (0.4.2) The ground rises under the house's lawn (none grows under its
   // stone base).
   if (underHouse(pos)) {
+    vLive = 0u;
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -287,6 +296,7 @@ void main() {
   float p = own * want * c * c / ${f(GRASS.blades)};
   float grow = clamp((p - rnd(s)) / 0.08, 0.0, 1.0);
   if (grow <= 0.0) {
+    vLive = 0u;
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -297,10 +307,16 @@ void main() {
   float z0 = -q0.y * uPitch.y + q0.z * uPitch.x;
   // (0.4.64) And one wholly behind the eye (a blade is at most 0.42 m).
   if (z0 < -0.5 || (z0 > 0.0 && 0.16 * uPitch.w * uPitch.z / z0 < uPxCss)) {
+    vLive = 0u;
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
 
+  vLive = 1u;
+  if (uLive == 1) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   // The blade: height in tufts, its own lean and facing.
   // Short, even grass (a gentle swell in height across the meadow only),
   // every blade its own: a kind (mostly ordinary blades, some broad leaves,

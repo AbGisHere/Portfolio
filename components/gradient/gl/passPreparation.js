@@ -16,7 +16,7 @@ export function disposePassProgram(gl, handle) {
   handle.disposed = true;
 }
 
-export function startPassProgram(gl, name, vs, fs) {
+export function startPassProgram(gl, name, vs, fs, varyings = null) {
   const handle = { name, prog: null, vs: null, fs: null, ready: false, failed: false };
   try {
     handle.prog = gl.createProgram();
@@ -29,6 +29,8 @@ export function startPassProgram(gl, name, vs, fs) {
       gl.attachShader(handle.prog, handle[key]);
     }
     gl.bindAttribLocation(handle.prog, 0, 'aPos');
+    // (0.5.26) Outputs a transform feedback pass reads back (the grass's vLive).
+    if (varyings) gl.transformFeedbackVaryings(handle.prog, varyings, gl.SEPARATE_ATTRIBS);
     gl.linkProgram(handle.prog);
   } catch (err) {
     console.warn(`[atmosphere] the ${name} pass failed to start:`, err.message || 'no log');

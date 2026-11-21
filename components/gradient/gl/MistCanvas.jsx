@@ -202,6 +202,9 @@ export default function MistCanvas({ recipe, onFail }) {
     const params = new URLSearchParams(window.location.search);
     const noGrain = params.get('grain') === '0';
     const noGrass = params.get('grass') === '0';
+    // (0.5.26) `?grasslist=0`: every blade through the shader every frame,
+    // not only those that grow (the list made once the camera holds).
+    const noGrassList = params.get('grasslist') === '0';
     const noTrees = params.get('trees') === '0';
     const noDesk = params.get('table') === '0';
     const noLaptop = params.get('laptop') === '0';
@@ -313,8 +316,8 @@ export default function MistCanvas({ recipe, onFail }) {
     setHouseReadiness('idle');
     let requiredPass = false;
     const asyncPrograms = new Set();
-    const startProgram = (name, vs, fs) => {
-      const handle = startPassProgram(gl, name, vs, fs);
+    const startProgram = (name, vs, fs, varyings) => {
+      const handle = startPassProgram(gl, name, vs, fs, varyings);
       asyncPrograms.add(handle);
       return handle;
     };
@@ -344,7 +347,7 @@ export default function MistCanvas({ recipe, onFail }) {
     let meadowFootAsync = null;
     let probeBackdropAsync = null;
 
-    const startGrassAsync = () => (grassAsync ??= !noGrass ? startProgram('grass', GRASS_VERTEX, GRASS_FRAGMENT) : null);
+    const startGrassAsync = () => (grassAsync ??= !noGrass ? startProgram('grass', GRASS_VERTEX, GRASS_FRAGMENT, ['vLive']) : null);
     const startFlowerAsync = () => (flowerAsync ??= !noGrass ? startProgram('flowers', FLOWER_VERTEX, FLOWER_FRAGMENT) : null);
     const startTreeAsync = () => {
       if (!noTrees) treeOpaqueAsync ??= startProgram('trees-opaque', TREE_VERTEX, TREE_OPAQUE_FRAGMENT);
@@ -2728,13 +2731,109 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uGrainA'), noGrain || grainOut ? 0 : grainOpacity(recipeRef.current));
       gl.uniform1f(g.u('uCssPerPx'), w / fw());
       gl.uniform1f(g.u('uResY'), fh());
-      // (0.4.39) Only the runs of blades the camera can see, in their order.
-      for (const [first, count] of grassRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi), true, !!peaksNow?.behind)) {
-        gl.uniform1i(g.u('uFirst'), first);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, count);
+      gl.uniform1i(g.u('uLive'), 0);
+      // aId is a uint: with no list bound, its constant must be one too (WebGL
+      // checks the type), put back to the float default after.
+      gl.vertexAttribI4ui(1, 0, 0, 0, 0);
+      // (0.5.26) At rest, only the blades that grow, from the list (below).
+      const key = noGrassList ? null : `${c.x},${c.y},${c.z},${P.cos},${P.sin},${P.f},${P.zoom},${P.yc},${P.ys},${P.sx},${P.sy},${w},${h},${fw()},${!!peaksNow?.behind}`;
+      if (key) grassListPoll(g);
+      const list = key && grassList?.key === key ? grassList : null;
+      if (list) {
+        gl.uniform1i(g.u('uList'), 1);
+        gl.bindVertexArray(list.vao);
+        if (list.n) gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, list.n);
+      } else {
+        gl.uniform1i(g.u('uList'), 0);
+        // (0.4.39) Only the runs of blades the camera can see, in their order.
+        const runs = grassRanges(c, (lo, hi) => boxSeen(P, c, w, h, lo, hi), true, !!peaksNow?.behind);
+        for (const [first, count] of runs) {
+          gl.uniform1i(g.u('uFirst'), first);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, GRASS_VERTS, count);
+        }
+        if (key && restFrame && grassListPending?.key !== key) grassLivePass(g, key, runs);
       }
+      gl.vertexAttrib4f(1, 0, 0, 0, 1);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
+    }
+
+    // (0.5.26) The blades that grow, while the camera holds: one pass of the
+    // grass's own program (its uniforms as set, uLive 1) writes vLive per
+    // blade by transform feedback, read back once a fence says the GPU is
+    // done (no stall); drawGrass then draws just those, by number (aId), in
+    // the runs' order. A new view (key) makes a new list.
+    let grassList = null;
+    let grassListPending = null;
+    let grassTf = null;
+    function grassLivePass(g, key, runs) {
+      let total = 0;
+      for (const [, count] of runs) total += count;
+      if (!total) return;
+      grassTf ??= { tf: gl.createTransformFeedback(), buf: gl.createBuffer(), size: 0 };
+      if (grassListPending) {
+        gl.deleteSync(grassListPending.fence);
+        grassListPending = null;
+      }
+      if (grassTf.size < total) {
+        gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, grassTf.buf);
+        gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, total * 4, gl.STREAM_READ);
+        gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
+        grassTf.size = total;
+      }
+      gl.uniform1i(g.u('uLive'), 1);
+      gl.enable(gl.RASTERIZER_DISCARD);
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, grassTf.tf);
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, grassTf.buf);
+      gl.beginTransformFeedback(gl.POINTS);
+      for (const [first, count] of runs) {
+        gl.uniform1i(g.u('uFirst'), first);
+        gl.drawArraysInstanced(gl.POINTS, 0, 1, count);
+      }
+      gl.endTransformFeedback();
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+      gl.disable(gl.RASTERIZER_DISCARD);
+      gl.uniform1i(g.u('uLive'), 0);
+      const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      grassListPending = { key, runs: runs.map(r => [r[0], r[1]]), total, fence };
+    }
+    function grassListPoll(g) {
+      const p = grassListPending;
+      if (!p) return;
+      const st = gl.clientWaitSync(p.fence, 0, 0);
+      if (st === gl.TIMEOUT_EXPIRED) return;
+      gl.deleteSync(p.fence);
+      grassListPending = null;
+      if (st === gl.WAIT_FAILED) return;
+      const flags = new Uint32Array(p.total);
+      gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, grassTf.buf);
+      gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, flags);
+      gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
+      const ids = new Uint32Array(p.total);
+      let n = 0;
+      let at = 0;
+      for (const [first, count] of p.runs) {
+        for (let k = 0; k < count; k++) if (flags[at + k]) ids[n++] = first + k;
+        at += count;
+      }
+      if (!grassList) {
+        const vao = gl.createVertexArray();
+        const buf = gl.createBuffer();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.enableVertexAttribArray(1);
+        gl.vertexAttribIPointer(1, 1, gl.UNSIGNED_INT, 0, 0);
+        gl.vertexAttribDivisor(1, 1);
+        gl.bindVertexArray(g.vao);
+        grassList = { vao, buf, key: null, n: 0 };
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, grassList.buf);
+      gl.bufferData(gl.ARRAY_BUFFER, ids.subarray(0, Math.max(1, n)), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      grassList.key = p.key;
+      grassList.n = n;
     }
 
     // (0.3.5) The flowers, among the blades and against their depth. They

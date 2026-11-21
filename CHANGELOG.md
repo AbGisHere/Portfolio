@@ -6,6 +6,29 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.26 — 2026-11-21
+
+At rest, only the grass blades that grow are drawn, with the same picture.
+
+- When the camera holds, one pass of the grass's own program (`uLive`,
+  transform feedback, the rasterizer off) records which blades survive its
+  culls; read back behind a fence (no stall), the list then drives each
+  frame's draw by blade number (`aId`, `uList`), in the runs' order. A new
+  view makes a new list; `?grasslist=0` off.
+- Blades through the vertex shader a frame: desk 87k → 47k, pool 65k → 28k.
+  `bench` (M4 1440×900@2, 300 draws, three runs): desk by night 4.0 → 3.2 ms.
+  Live GPU time at rest too noisy on the M4 to show it.
+- Same picture: pool views compared against `?grasslist=0` under `freeze=1`
+  matched exactly in 10 of 12 runs (the two misses changed the whole frame:
+  timing, not grass); the desk varies per load (the boot prints).
+- Found: the grass costs vertex work, not fill (flat at `dpr=1`), so drawing
+  only the moving region would save little; far grass at 15 Hz fails the
+  0.5 px rule beyond ~50 m. `bench` at the pool doesn't reuse the kept
+  frame (a full redraw), and the 15 Hz rebuild of the kept world takes
+  11–14 GPU ms on the M4: the next target.
+- Pushed without `qa` or `devices`, on the owner's call. Transform feedback
+  is new to the site: check it on the phones.
+
 ## 0.5.25 — 2026-11-21
 
 Tooling only; the site is unchanged from 0.5.24.
