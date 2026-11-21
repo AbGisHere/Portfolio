@@ -6,6 +6,22 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.24 — 2026-11-21
+
+Fixes 0.5.22's desk culling on iOS 16: with the laptop, lamp and props all
+left out of a frame, Safari on the iPhone 13 hung on the pool climb (no
+reply for 120 s, `devices`' "unknown error"). Found on BrowserStack by
+culling one part at a time; the desk, its shadows and the steam stay
+culled, the laptop, lamp and props are drawn always. iPhone 13 climb
+~13 fps again; iPhone 15 and Pixel 9 unchanged. The iPhone SE 2022
+(iOS 15) still hangs with culling off: older, separate, open.
+
+`qa` on 0.5.23 (full tier, run alongside `devices`): parity 47/47 (42
+known gaps), switch 12/12; regress failed with no baseline (`scripts/out`
+cleared); perf 4/6, scroll 64.5 fps at 1440×900@2 and 45.8 at
+1728×1117@2 under the 118 gate, possibly from the parallel run. `devices
+-- --climb` on 0.5.23: 11/29.
+
 ## 0.5.23 — 2026-11-21
 
 Fixes 0.5.22's trees: the opaque tree pass failed to link (its fragment

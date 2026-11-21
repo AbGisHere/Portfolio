@@ -4683,7 +4683,9 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.depthFunc(gl.LESS);
         };
         const drawStaticWorld = () => {
-          if (deskOn && deskSeen) {
+          // (0.5.24) Not culled: with the laptop, lamp and props all left out
+          // of a frame, iOS 16 Safari (iPhone 13) hangs on the climb.
+          if (deskOn) {
             timed('desk-things', () => {
               if (!noLaptop) (meadowAt.device === 'tablet' ? drawTablet : drawLaptop)();
               if (!noLamp) drawLamp();

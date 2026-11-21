@@ -310,6 +310,10 @@ startup at full settled quality:
 **0.5.23** (2026-11-21) fixes 0.5.22's opaque tree pass, which failed
 to link (`vKind` not `flat` in its fragment shader).
 
+**0.5.24** (2026-11-21) draws the desk's laptop, lamp and props always
+(0.5.22 culled them; with all three out of a frame, iOS 16 Safari hung on
+the climb). The iPhone SE 2022 (iOS 15) hang is older and open.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own
