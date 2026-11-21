@@ -16,8 +16,11 @@
  * page compiles and links each program from the repo's own shader sources
  * (the main scene, the crests, the grass, the meadow's paint, flowers and
  * foot mist), reads the GPU, WebGL2 and which renderer the site picked, and
- * screenshots the frame. A device passes when it has WebGL2, every program
- * links and the site runs on GL; one marked `expect: 'layers'` (no WebGL2)
+ * screenshots the frame; then (0.5.26) opens the desk at rest and checks the
+ * site built its grass list (`data-grass-list`, transform feedback), and
+ * screenshots that too (`<device>-desk.png`). A device passes when it has
+ * WebGL2, every program links (the grass's transform feedback run and read
+ * back too), the grass list is built and the site runs on GL; one marked `expect: 'layers'` (no WebGL2)
  * passes when the site falls back to the layered scene.
  *
  * `--base` is the production server (default http://localhost:3001); a
@@ -167,7 +170,7 @@ function probe(programs) {
   // the ones after it. One context otherwise: a context per program took
   // iOS 15 Safari's session down.
   let ctx = gl;
-  for (const [name, vsSrc, fsSrc] of programs) {
+  for (const [name, vsSrc, fsSrc, varyings] of programs) {
     const gl = ctx;
     if (!gl) { out.programs.push({ name, vs: false, fs: false, link: false, log: 'no WebGL2 context for this program' }); continue; }
     const stage = (type, src) => {
@@ -184,9 +187,43 @@ function probe(programs) {
       const p = gl.createProgram();
       gl.attachShader(p, vs.s);
       gl.attachShader(p, fs.s);
+      if (varyings) gl.transformFeedbackVaryings(p, varyings, gl.SEPARATE_ATTRIBS);
       gl.linkProgram(p);
       link = !!gl.getProgramParameter(p, gl.LINK_STATUS);
       log = gl.getProgramInfoLog(p) || '';
+      // (0.5.26) A program whose outputs the site reads back (the grass's
+      // liveness pass): one pass of 64 instances, the rasterizer off, read
+      // back. Any GL error, or no read, fails it.
+      if (link && varyings) {
+        try {
+          while (gl.getError()) { /* clear */ }
+          gl.useProgram(p);
+          const lv = gl.getUniformLocation(p, 'uLive');
+          if (lv) gl.uniform1i(lv, 1);
+          const buf = gl.createBuffer();
+          gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, buf);
+          gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 64 * 4, gl.STREAM_READ);
+          const tf = gl.createTransformFeedback();
+          gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+          gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, buf);
+          gl.vertexAttribI4ui(1, 0, 0, 0, 0);
+          gl.enable(gl.RASTERIZER_DISCARD);
+          gl.beginTransformFeedback(gl.POINTS);
+          gl.drawArraysInstanced(gl.POINTS, 0, 1, 64);
+          gl.endTransformFeedback();
+          gl.disable(gl.RASTERIZER_DISCARD);
+          gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+          gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+          const got = new Uint32Array(64);
+          gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, buf);
+          gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, got);
+          const err = gl.getError();
+          if (err) { link = false; log = `transform feedback: GL error 0x${err.toString(16)}`; }
+        } catch (e) {
+          link = false;
+          log = `transform feedback: ${String(e.message || e).slice(0, 200)}`;
+        }
+      }
     }
     out.programs.push({ name, vs: vs.ok, fs: fs.ok, link, log: (vs.log || fs.log || log).slice(0, 400) });
     if (!link) {
@@ -379,6 +416,21 @@ try {
       const shot = join(OUT, `${slug(d.deviceName)}.png`);
       writeFileSync(shot, await driver.takeScreenshot(), 'base64');
       row.shot = relative(process.cwd(), shot);
+      // (0.5.26) The desk at rest: the site's grass list (only the blades
+      // that grow, by transform feedback) must get built. Not in the climb
+      // (its own pages).
+      if (!CLIMB && site?.renderer === 'gl') {
+        const deskUrl = `${BASE}/?desk=0.6${QUERY}`;
+        await driver.get(deskUrl);
+        const n = await driver.wait(async () => driver.executeScript(
+          "const h = document.querySelector('[data-grass-list]'); return h ? h.getAttribute('data-grass-list') : null;").catch(() => null), 90000).catch(() => null);
+        row.grassList = n == null ? null : Number(n);
+        if (!(row.grassList > 0)) row.failed.push(`grass list not built at the desk (${n ?? 'none'})`);
+        const deskShot = join(OUT, `${slug(d.deviceName)}-desk.png`);
+        writeFileSync(deskShot, await driver.takeScreenshot(), 'base64');
+        const deskErrors = await driver.executeScript('return (window.__errors || []).slice(0, 5);').catch(() => []);
+        for (const e of deskErrors ?? []) row.failed.push(`desk page error: ${e}`);
+      }
       // (0.5.13) The programs on a blank page, not beside the site's own
       // context (iOS and old Malis refused a second one). (0.5.15) After the
       // site, not before: on iOS 15 the probe's compiles left Safari unable

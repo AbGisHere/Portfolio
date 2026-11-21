@@ -2834,6 +2834,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
       grassList.key = p.key;
       grassList.n = n;
+      // (Harness: devices checks phones build it.)
+      if (canvas.parentElement) canvas.parentElement.dataset.grassList = String(n);
     }
 
     // (0.3.5) The flowers, among the blades and against their depth. They

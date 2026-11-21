@@ -323,6 +323,10 @@ and pool every frame over the kept frame (~27 calls), frozen 0.
 off), same picture: desk 87k → 47k blades, bench 4.0 → 3.2 ms. Pushed
 without `qa`/`devices`; the 15 Hz world rebuild (11–14 ms) is next.
 
+**0.5.27** (2026-11-21) has `devices` check the grass list: the grass
+linked and run with transform feedback in the probe, and the desk at rest
+building its list (`data-grass-list`) on each phone.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

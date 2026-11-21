@@ -36,7 +36,8 @@ export const PROGRAMS = [
   ['peaks-shape-far', PEAKS_FAR_VS, PEAKS_GEO_FS],
   ['peaks-consts', PEAKS_VS, PEAKS_CONSTS_FS],
   ['crest', CREST_VERTEX, CREST_FRAGMENT],
-  ['grass', GRASS_VERTEX, GRASS_FRAGMENT],
+  // (0.5.26) Linked as the site does: vLive read back by transform feedback.
+  ['grass', GRASS_VERTEX, GRASS_FRAGMENT, ['vLive']],
   ['flowers', FLOWER_VERTEX, FLOWER_FRAGMENT],
   ['trees', TREE_VERTEX, TREE_FRAGMENT],
   ['trees-opaque', TREE_VERTEX, TREE_OPAQUE_FRAGMENT],

@@ -6,6 +6,22 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.27 — 2026-11-21
+
+`devices` checks 0.5.26's grass list on the phones.
+
+- The probe links the grass as the site does (its `vLive` read back by
+  transform feedback), runs one liveness pass of 64 blades and reads it
+  back; a GL error or a failed read fails the program.
+- Each phone opens the desk at rest (`/?desk=0.6`) and must build the grass
+  list (the site now sets `data-grass-list` to its size); screenshotted as
+  `<device>-desk.png`. Not in `--climb` runs.
+- Five phones: the iPhone 13 (iOS 16), OnePlus 11R (Adreno 730) and Moto G71
+  (Adreno 619) pass, each building a 37,227-blade list. The Galaxy S21 builds
+  it too and runs on GL, but its probe failed: its compiler ran out of
+  memory at peaks-bake, before the grass, and every program after failed
+  (to look into). The iPhone SE 2022 (iOS 15) still hangs (open since 0.5.24).
+
 ## 0.5.26 — 2026-11-21
 
 At rest, only the grass blades that grow are drawn, with the same picture.
