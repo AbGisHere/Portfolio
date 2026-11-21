@@ -314,6 +314,10 @@ to link (`vKind` not `flat` in its fragment shader).
 (0.5.22 culled them; with all three out of a frame, iOS 16 Safari hung on
 the climb). The iPhone SE 2022 (iOS 15) hang is older and open.
 
+**0.5.25** (2026-11-21) makes `perf`'s views at rest wait for the load to
+settle before counting (`--rest-only` runs just them): opening 4/s, desk
+and pool every frame over the kept frame (~27 calls), frozen 0.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

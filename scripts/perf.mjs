@@ -108,7 +108,9 @@ const OUT = ensureDir(join(OUT_DIR, 'perf'));
 // and the frame gaps. `freeze=1` stops the clocks: there it should draw
 // nothing. `--rest 0` skips it; `--rest-ms` sets each view's window.
 const REST_ON = args.rest !== '0';
-const REST_MS = Number(args['rest-ms'] ?? (GATE ? 2000 : 4000));
+const REST_MS = Number(args['rest-ms'] ?? 4000);
+// `--rest-only`: only the views at rest, no sweeps (and no gate).
+const REST_ONLY = Boolean(args['rest-only']);
 const REST_VIEWS = [
   ['opening', 'scroll=0&theme=night'],
   ['desk', 'desk=0.6&theme=night'],
@@ -417,7 +419,30 @@ async function restPass(browser) {
       await page.waitForSelector('[data-renderer="gl"] canvas', { timeout: 60000 });
       // Ready: the house where it's in view, then the scene settled.
       await page.waitForFunction(() => { const h = window.__debugHouse?.(); return !h || !h.houseBuilt || h.ready; }, null, { timeout: 90000 }).catch(() => {});
-      await sleep(3000);
+      await sleep(1000);
+      // (0.5.25) Settled: the load's tail (the mirrors' last faces, the
+      // opening's build) drew into a 2 s window and read as redraws. Wait
+      // until two 1 s windows in a row draw at the same rate (within 1), up
+      // to 15 s, then count.
+      await page.evaluate(() => new Promise(res => {
+        const gl = document.querySelector('[data-renderer="gl"] canvas').getContext('webgl2');
+        let calls = 0;
+        const orig = {};
+        for (const f of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
+          const o = orig[f] = gl[f];
+          gl[f] = (...a) => { calls++; return o.apply(gl, a); };
+        }
+        let seen = 0, drawn = 0, prev = -99, t0 = performance.now(), w0 = t0;
+        const tick = now => {
+          if (calls > seen) { drawn++; seen = calls; }
+          if (now - w0 >= 1000) {
+            if (Math.abs(drawn - prev) <= 1 || now - t0 > 15000) { Object.assign(gl, orig); return res(); }
+            prev = drawn; drawn = 0; w0 = now;
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }));
       const r = await page.evaluate(ms => new Promise(res => {
         const gl = document.querySelector('[data-renderer="gl"] canvas').getContext('webgl2');
         let calls = 0;
@@ -457,7 +482,7 @@ async function main() {
     args: ['--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--enable-gpu'],
   });
   const results = [];
-  for (const { vp, renderer } of CASES) {
+  for (const { vp, renderer } of REST_ONLY ? [] : CASES) {
     let r = await measure(browser, vp, renderer);
     // Gate: a failing case gets another go (headless sweeps on a busy machine
     // drop frames of their own); the last try counts.
@@ -467,7 +492,7 @@ async function main() {
     }
     results.push(r);
   }
-  const sharp = GATE ? await sharpness(browser) : null;
+  const sharp = GATE && !REST_ONLY ? await sharpness(browser) : null;
   const rest = REST_ON && RENDERERS.includes('gl') ? await restPass(browser) : null;
   const gpu = await (async () => {
     const p = await browser.newPage();

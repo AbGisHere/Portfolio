@@ -6,6 +6,22 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.25 — 2026-11-21
+
+Tooling only; the site is unchanged from 0.5.24.
+
+- `perf`'s views at rest now wait until two 1 s windows in a row draw at
+  the same rate (up to 15 s) and count for 4 s (was a fixed 3 s wait and a
+  2 s window under `--gate`). The load's tail (the mirrors' last faces, the
+  opening's build) was being read as redraws: 0.5.23's qa showed the opening
+  at 7/s, the pool at night 41.8/s × 79 calls and the frozen pool 1/s × 168.
+- `--rest-only` runs just those views, no sweeps.
+- Measured on 0.5.24 (M4, 1440×900@2, `--rest-only`): opening 4.0/s × 1
+  call, desk 117.3/s × 28, pool by night 120.2/s × 26, pool by day
+  120.1/s × 27, pool frozen 0. The desk and pool redraw every frame by
+  design (the grass's wind, the water, the steam), drawing over the kept
+  frame.
+
 ## 0.5.24 — 2026-11-21
 
 Fixes 0.5.22's desk culling on iOS 16: with the laptop, lamp and props all
