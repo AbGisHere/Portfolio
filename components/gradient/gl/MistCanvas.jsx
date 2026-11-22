@@ -394,16 +394,17 @@ export default function MistCanvas({ recipe, onFail }) {
     let H = null;
     let houseSubPromise = null;
     let houseFragmentCache = null;
-    const loadHouseSub = () => {
-      if (H) return H;
+    const loadHouseSub = (startWorker = false) => {
+      if (H) {
+        if (startWorker && buildHouse) buildHouse();
+        return H;
+      }
       if (!houseSubPromise) {
         houseSubPromise = import('./houseSubsystem').then(mod => {
           if (stopped) return mod;
           H = mod;
-          if (houseWarmed) {
-            if (buildHouse) buildHouse();
-            if (houseBuilt && warmHouse) warmHouse(isDirectHouse);
-          }
+          if ((startWorker || houseWarmed) && buildHouse) buildHouse();
+          if (houseWarmed && houseBuilt && warmHouse) warmHouse(isDirectHouse);
           dirty = true;
           kickRef.current();
           return mod;
@@ -470,11 +471,11 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const ensureWarmHouse = (priority = false) => {
       if (stopped || noHouse) return;
-      loadHouseSub();
+      loadHouseSub(true);
       if (houseWarmed) return;
       houseWarmed = true;
-      setHouseReadiness('loading');
-      if (canvas.parentElement) canvas.parentElement.dataset.houseReady = 'false';
+      if (!houseComplete) setHouseReadiness(houseBuilt ? 'mesh-ready' : 'loading');
+      if (canvas.parentElement) canvas.parentElement.dataset.houseReady = String(houseComplete);
       if (buildHouse) buildHouse();
       if (houseBuilt && warmHouse) warmHouse(priority || isDirectHouse);
     };
@@ -824,7 +825,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // takes it; deviceProfile.js chooses otherwise: not on a slow link).
         const lmb = params.get('lmbaked');
         const baked = useLightmap && !noHouse && indexedHouse && lmb !== '0' && (lmb === '1' || wantsShippedLightmap()) ? H.bakedLightmapUrl() : null;
-        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb === '1' || (pb !== '0' && !!touch), lightmap, baked });
+        houseWorker.postMessage({ cache: params.get('housecache') !== '0', prebuilt: pb !== '0', lightmap, baked });
       } catch {
         here();
       }
@@ -1172,6 +1173,10 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, f.tex, 0);
           gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
           aoPass.frameOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+          if (aoPass.frameOk && deskFrame) {
+            deleteStillBuf(deskFrame);
+            deskFrame = null;
+          }
         }
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.activeTexture(gl.TEXTURE0);
@@ -1364,6 +1369,13 @@ export default function MistCanvas({ recipe, onFail }) {
       return next || null;
     };
     const deskFrameTarget = () => {
+      if (aoPass?.frameOk && aoPass.size[0] === canvas.width && aoPass.size[1] === canvas.height) {
+        if (deskFrame) {
+          deleteStillBuf(deskFrame);
+          deskFrame = null;
+        }
+        return { fbo: aoPass.frame.fbo, tex: aoPass.frame.tex, size: aoPass.size };
+      }
       const next = allocStillBuf(deskFrame, canvas.width, canvas.height);
       deskFrame = next;
       return next || null;
@@ -1565,6 +1577,7 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.vertexAttribPointer(i, n, gl.FLOAT, false, BIRD_STRIDE * 4, at * 4);
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, ib);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(BIRD_INSTANCE), gl.DYNAMIC_DRAW);
         for (const [i, at] of [[4, 0], [5, 4], [6, 8]]) {
           gl.enableVertexAttribArray(i);
           gl.vertexAttribPointer(i, 4, gl.FLOAT, false, BIRD_INSTANCE * 4, at * 4);
@@ -1720,33 +1733,31 @@ export default function MistCanvas({ recipe, onFail }) {
     // whatever happens), then everything down to the desk, then the house,
     // all in the background so nobody waits at any of them.
     const mountedAt = performance.now();
-    // (0.5.30) Track when the camera actually moves (not raw wheel ticks) so
-    // background compiles pause during active scroll sweeps without ever
-    // deadlocking if the visitor spins the wheel against a readiness hold.
-    let lastCamMoveAt = 0;
-    let lastPrepCamKey = '';
     const openingFirst = () => peaksShown || !peaksNow || peaksNow.skipGeo || peaksMode === false || performance.now() - mountedAt > 5000;
     const preparation = createPreparationQueue({
-      schedule: next => typeof window.requestIdleCallback === 'function'
-        ? window.requestIdleCallback(next, { timeout: 200 })
-        : setTimeout(next, 16),
-      cancel: id => (window.cancelIdleCallback ?? clearTimeout)(id),
+      backoffDelay: 16,
+      schedule: next => {
+        if (isDirectHouse || loadingRef.current?.dataset.active === 'true') {
+          return setTimeout(next, 4);
+        }
+        return typeof window.requestIdleCallback === 'function'
+          ? window.requestIdleCallback(() => next(), { timeout: 16 })
+          : setTimeout(next, 8);
+      },
+      cancel: id => {
+        clearTimeout(id);
+        window.cancelIdleCallback?.(id);
+      },
       restore: cleanGL,
       canRun: () => {
         if (stopped || document.hidden) return false;
-        const d = getDescent();
-        const ck = `${d.about.toFixed(4)},${d.desk.toFixed(4)},${d.contact.toFixed(4)}`;
-        if (ck !== lastPrepCamKey) {
-          lastPrepCamKey = ck;
-          lastCamMoveAt = performance.now();
-        }
-        if (lastCamMoveAt && performance.now() - lastCamMoveAt < 180) {
-          setTimeout(() => preparation.resume(), 190);
+        if (orbit || !settled()) {
+          setTimeout(() => preparation.resume(), 100);
           return false;
         }
         if (openingFirst()) return true;
         // (Asked again shortly: the queue waits on a no.)
-        setTimeout(() => preparation.resume(), 250);
+        setTimeout(() => preparation.resume(), 100);
         return false;
       },
       onReady: () => {
@@ -1759,8 +1770,133 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.33) Progressive preparation: secondary passes are compiled in idle slots
     // throttled to at most 2 concurrent compiles in flight, ordered by scroll approach.
     const portraitFirst = window.innerHeight > window.innerWidth;
+    let deskPipelinesWarmed = false;
+    const warmDeskPipelines = () => {
+      if (deskPipelinesWarmed) return 'done';
+      const activeDev = portraitFirst ? tablet : laptop;
+      if ((!noGrass && (grass === null || flowers === null)) ||
+          (!noTrees && (trees === null || trees?.opaque === undefined)) ||
+          (!noDesk && desk === null) ||
+          (!noLaptop && activeDev === null) ||
+          (!noLamp && lamp === null) ||
+          (!noProps && (props === null || steam === null)) ||
+          meadowPaint === null || meadowPaintFlat === null || meadowFlowers === null || meadowFlowersFlat === null || meadowFoot === null ||
+          birdPass === null) {
+        return 'pending';
+      }
+      const tgt = deskFrameTarget();
+      if (!tgt) return 'done';
+      deskPipelinesWarmed = true;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, tgt.fbo);
+      gl.viewport(0, 0, 1, 1);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(0, 0, 1, 1);
+      gl.disable(gl.BLEND);
+      const P = peaksPrograms();
+      if (P?.direct) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.useProgram(P.direct);
+        gl.bindVertexArray(null);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      if (P?.behind) {
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(false);
+        gl.useProgram(P.behind);
+        gl.bindVertexArray(null);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+      }
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LESS);
+      gl.depthMask(true);
+      if (grass?.prog) {
+        gl.useProgram(grass.prog);
+        gl.bindVertexArray(grass.vao);
+        gl.vertexAttribI4ui(1, 0, 0, 0, 0);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 3, 1);
+        gl.vertexAttrib4f(1, 0, 0, 0, 1);
+      }
+      if (flowers?.prog) {
+        meadowTexture();
+        gl.useProgram(flowers.prog);
+        gl.bindVertexArray(flowers.vao);
+        gl.vertexAttribI4ui(1, 0, 0, 0, 0);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
+        gl.vertexAttrib4f(1, 0, 0, 0, 1);
+      }
+      if (trees?.prog) {
+        gl.useProgram(trees.prog);
+        gl.bindVertexArray(trees.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
+        if (trees.opaque?.prog) {
+          gl.useProgram(trees.opaque.prog);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
+        }
+      }
+      if (desk?.prog) {
+        gl.useProgram(desk.prog);
+        gl.bindVertexArray(desk.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
+      }
+      for (const dev of [laptop, tablet, lamp, props]) {
+        if (dev?.prog && dev.vao) {
+          gl.useProgram(dev.prog);
+          gl.bindVertexArray(dev.vao);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+      }
+      if (birdPass?.prog && birdPass.kinds?.[0]?.vao) {
+        gl.useProgram(birdPass.prog);
+        gl.bindVertexArray(birdPass.kinds[0].vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
+      }
+      if (meadowVao) {
+        gl.bindVertexArray(meadowVao);
+        gl.enable(gl.BLEND);
+        gl.depthMask(false);
+        for (const mp of [meadowPaint, meadowPaintFlat]) {
+          if (mp?.prog) {
+            gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
+            gl.useProgram(mp.prog);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
+        }
+        for (const mf of [meadowFlowers, meadowFlowersFlat]) {
+          if (mf?.prog) {
+            gl.blendFunc(gl.ONE, gl.ONE);
+            gl.useProgram(mf.prog);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
+        }
+        if (meadowFoot?.prog) {
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          gl.useProgram(meadowFoot.prog);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+      }
+      if (steam?.prog) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.useProgram(steam.prog);
+        gl.bindVertexArray(steam.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.depthFunc(gl.LESS);
+      cleanGL();
+      return 'done';
+    };
     scheduleQueue([
       () => {
+        if (!noHouse) loadHouseSub(true);
         meadowTexture();
         if (!meadowPaintAsync && !canStartCompile()) return 'pending';
         startMeadowPaintAsync();
@@ -1782,7 +1918,14 @@ export default function MistCanvas({ recipe, onFail }) {
         if (!treeAsync && !canStartCompile()) return 'pending';
         startTreeAsync();
         const t = treeProgram(false);
-        return t === null ? 'pending' : 'done';
+        if (t === null) return 'pending';
+        if (t && t.opaque === undefined && treeOpaqueAsync) {
+          const op = readyProgram(treeOpaqueAsync, false);
+          if (op) t.opaque = { prog: op, u: uniformLookup(op) };
+          else if (!treeOpaqueAsync.failed) return 'pending';
+          else t.opaque = false;
+        }
+        return 'done';
       },
       () => {
         if (noDesk) return 'disabled';
@@ -1796,16 +1939,6 @@ export default function MistCanvas({ recipe, onFail }) {
         const startDev = portraitFirst ? startTabletAsync : startLaptopAsync;
         const devProg = portraitFirst ? tabletProgram : laptopProgram;
         const devHandle = portraitFirst ? tabletAsync : laptopAsync;
-        if (!devHandle && !canStartCompile()) return 'pending';
-        startDev();
-        const dev = devProg(false);
-        return dev === null ? 'pending' : 'done';
-      },
-      () => {
-        if (noLaptop) return 'disabled';
-        const startDev = portraitFirst ? startLaptopAsync : startTabletAsync;
-        const devProg = portraitFirst ? laptopProgram : tabletProgram;
-        const devHandle = portraitFirst ? laptopAsync : tabletAsync;
         if (!devHandle && !canStartCompile()) return 'pending';
         startDev();
         const dev = devProg(false);
@@ -1831,7 +1964,7 @@ export default function MistCanvas({ recipe, onFail }) {
         if (!meadowFootAsync && !canStartCompile()) return 'pending';
         startMeadowFootAsync();
         meadowPrograms(false);
-        return meadowPaint === null || meadowFlowers === null || meadowFoot === null ? 'pending' : 'done';
+        return meadowPaint === null || meadowPaintFlat === null || meadowFlowers === null || meadowFlowersFlat === null || meadowFoot === null ? 'pending' : 'done';
       },
       () => {
         if (noProps) return 'disabled';
@@ -1844,6 +1977,7 @@ export default function MistCanvas({ recipe, onFail }) {
         startBirdAsync();
         return birdProgram(false) === null ? 'pending' : 'done';
       },
+      warmDeskPipelines,
       // (0.5.10) Then the house, in the background, with the desk's passes
       // all ready: its build in the worker, its programs in idle slots.
       () => {
@@ -1855,6 +1989,40 @@ export default function MistCanvas({ recipe, onFail }) {
     // (0.4.32) The house: geometry generated by worker, but shader compilation
     // and idle queue preparation are deferred until reaching the desk stretch
     // or direct navigation, preventing GPU context loss on mobile hero views.
+    let housePipelinesWarmed = false;
+    let cachedHouseLight = null;
+    let cachedHouseLightKey = '';
+    const houseLighting = () => {
+      if (meadowAt?.colours) return { colours: meadowAt.colours, mist: meadowAt.mist };
+      if (!w || !h) return null;
+      const r = recipeRef.current;
+      const base = orbit?.scene ? orbit.scene.stops : toHexStops(value);
+      const key = `${w}x${h}|${base.join(',')}|${orbit ? orbit.e.toFixed(3) : '1'}`;
+      if (cachedHouseLight && cachedHouseLightKey === key) return cachedHouseLight;
+      const mist = { ...mistOf(r.mist), haze: value[2], height: value[3], sharp: value[4], sun: value[5], seed: value[6] };
+      const f1 = sceneAt({
+        recipe: r,
+        orbit,
+        e: orbit ? orbit.e : 1,
+        turning: !!orbit?.scene,
+        base,
+        haze: value[2],
+        about: 1,
+        desk: 1,
+        contact: 0,
+        free: null,
+        reduced: motion.matches,
+        w,
+        h,
+        layoutAt: ranges => layout(w, h, { size: value[0], horizon: value[1], mist, aspect: r.aspect, crests: false, ranges }),
+        restCol: rgbToHex(value.slice(7, 10)),
+        maxRidges: MAX_RIDGES,
+        peaksOff: noPeaks,
+      });
+      const mCol = f1.ground ? mix(f1.ground.stops[0][1], f1.light.mist, 0.15) : null;
+      cachedHouseLightKey = key;
+      return (cachedHouseLight = f1.grass ? { colours: f1.grass, mist: mCol } : null);
+    };
     warmHouse = (first = isDirectHouse) => {
       if (noHouse) return;
       if (!H) { loadHouseSub(); return; }
@@ -1864,12 +2032,14 @@ export default function MistCanvas({ recipe, onFail }) {
         const g = houseProgram(false);
         const sh = houseShadow(false);
         if (g === null || sh === null) return 'pending';
-        if (g && sh && meadowAt) houseShadowMap(g, sh, meadowAt.colours);
+        const hl = houseLighting();
+        if (g && sh && hl?.colours) houseShadowMap(g, sh, hl.colours);
         return 'done';
       };
       const warmProbes = () => {
         if (noMirror || !houseBuilt?.house.mirrors?.length) return 'disabled';
-        if (!meadowAt || !mirrorProbes() || !houseProgram(false) || !probeBackdrop(false)) return 'pending';
+        const hl = houseLighting();
+        if (!hl?.colours || !mirrorProbes() || !houseProgram(false) || !probeBackdrop(false)) return 'pending';
         // (A face drawn, more to draw: the next at the next idle slot.)
         if (probeStep(false)) return probesStale() ? 'again' : 'done';
         return 'done';
@@ -1906,15 +2076,188 @@ export default function MistCanvas({ recipe, onFail }) {
         });
         return left ? 'pending' : 'done';
       };
+      // Pre-compile backend Metal/ANGLE render pipeline states (PSOs) for every
+      // house/AO/reflection/glass/cull target combination via 1×1 scissored
+      // offscreen draws so entering the house or settling at the pool never stalls.
+      const warmHousePipelines = () => {
+        if (housePipelinesWarmed || house === false || houseFailed) return 'done';
+        if (!house || shadow === null || (!noGlass && glass === null) || (!noAO && aoPass === null) ||
+            (!noMirror && !noGlass && (!reflect || (!house.mirrorProg && !houseMirrorAsync?.failed))) ||
+            (!noMeadowMesh && meadowLawn === null)) {
+          return 'pending';
+        }
+        if (useVariants && house.variants && house.variants.some((v, i) => !v && !houseVariantsAsync?.[i]?.failed)) {
+          return 'pending';
+        }
+        housePipelinesWarmed = true;
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(0, 0, 1, 1);
+        gl.viewport(0, 0, 1, 1);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, H.HOUSE_FRAME_BINDING, house.ubo);
+        gl.activeTexture(gl.TEXTURE16);
+        gl.bindTexture(gl.TEXTURE_2D, house.lightTex);
+        if (house.lightmap) {
+          gl.activeTexture(gl.TEXTURE17);
+          gl.bindTexture(gl.TEXTURE_2D, house.lightmap.tex);
+        }
+        H.bindTables(gl, house.vtables);
+        gl.activeTexture(gl.TEXTURE0);
+        const L0 = house.leaves?.[0];
+        const drawThreeVaos = () => {
+          gl.bindVertexArray(house.vao);
+          drawRange(house, 0, 3);
+          if (L0?.vao && L0.count > 0) {
+            gl.bindVertexArray(L0.vao);
+            pointLeaves(L0, 0);
+            gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
+          }
+          if (house.curtains?.vao && house.curtains.count > 0) {
+            gl.bindVertexArray(house.curtains.vao);
+            if (house.indexed) gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_INT, 0);
+            else gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
+        };
+        // 1. aoPass.fbo (R16F + DEPTH24)
+        if (aoPass && aoPass.fbo) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.fbo);
+          gl.enable(gl.DEPTH_TEST);
+          gl.depthFunc(gl.LESS);
+          gl.depthMask(true);
+          gl.disable(gl.BLEND);
+          if (aoPass.solidProg) {
+            gl.useProgram(aoPass.solidProg);
+            drawThreeVaos();
+          }
+          if (aoPass.prog) {
+            gl.useProgram(aoPass.prog);
+            gl.bindVertexArray(house.vao);
+            gl.depthMask(false);
+            gl.enable(gl.BLEND);
+            gl.blendEquation(gl.MIN);
+            drawRange(house, 0, 3);
+            gl.blendEquation(gl.FUNC_ADD);
+            gl.disable(gl.BLEND);
+            gl.depthMask(true);
+          }
+          drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+        }
+        // 2. peaksGeo.prev.fbo + aoPass.depth for P.geoFar (first-rest-frame depth-culled peaks)
+        const P = peaksPrograms();
+        const pgTgt = peaksGeo?.prev || peaksGeo;
+        if (P?.geoFar && pgTgt?.fbo && aoPass?.depth && peaksGeo.w === aoPass.size[0] && peaksGeo.h === aoPass.size[1]) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, pgTgt.fbo);
+          gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, aoPass.depth);
+          gl.enable(gl.DEPTH_TEST);
+          gl.depthFunc(gl.LEQUAL);
+          gl.depthMask(false);
+          gl.disable(gl.BLEND);
+          gl.bindVertexArray(null);
+          gl.useProgram(P.geoFar);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.depthMask(true);
+          gl.depthFunc(gl.LESS);
+          gl.disable(gl.DEPTH_TEST);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
+          if (pgTgt === peaksGeo.prev) drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
+        }
+        // 3. reflect.fbo (RGBA8 + DEPTH24)
+        if (reflect && reflect.fbo && house.mirrorProg) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, reflect.fbo);
+          gl.enable(gl.DEPTH_TEST);
+          gl.depthFunc(gl.LESS);
+          gl.depthMask(true);
+          gl.disable(gl.BLEND);
+          gl.useProgram(house.mirrorProg);
+          drawThreeVaos();
+          drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+        }
+        // 4. aoPass.frame.fbo (RGBA8 + DEPTH24)
+        if (aoPass?.frame?.fbo && aoPass.frameOk) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
+          gl.enable(gl.DEPTH_TEST);
+          gl.disable(gl.BLEND);
+          gl.useProgram(house.prog);
+          gl.depthFunc(gl.LEQUAL);
+          gl.depthMask(false);
+          drawThreeVaos();
+          gl.depthFunc(gl.LESS);
+          gl.depthMask(true);
+          drawThreeVaos();
+          gl.bindVertexArray(house.vao);
+          for (const vp of (house.variants ?? []).map(v => v?.prog).filter(Boolean)) {
+            gl.useProgram(vp);
+            gl.depthFunc(gl.LEQUAL);
+            gl.depthMask(false);
+            drawRange(house, 0, 3);
+            gl.depthFunc(gl.LESS);
+            gl.depthMask(true);
+            drawRange(house, 0, 3);
+          }
+          const leafProg = house.variants?.[H.LEAF_VARIANT]?.prog;
+          if (leafProg && L0?.vao && L0.count > 0) {
+            gl.useProgram(leafProg);
+            gl.bindVertexArray(L0.vao);
+            pointLeaves(L0, 0);
+            gl.depthFunc(gl.LEQUAL);
+            gl.depthMask(false);
+            gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
+            gl.depthFunc(gl.LESS);
+            gl.depthMask(true);
+            gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
+          }
+          if (meadowLawn?.prog) {
+            meadowTexture();
+            gl.bindVertexArray(house.vao);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
+            gl.depthFunc(gl.LEQUAL);
+            gl.depthMask(false);
+            gl.useProgram(meadowLawn.prog);
+            drawRange(house, 0, 3);
+            gl.disable(gl.BLEND);
+            gl.depthFunc(gl.LESS);
+            gl.depthMask(true);
+          }
+          if (glass?.prog && glass.vao) {
+            gl.disable(gl.BLEND);
+            gl.depthFunc(gl.LEQUAL);
+            gl.depthMask(false);
+            gl.useProgram(glass.prog);
+            gl.bindVertexArray(glass.vao);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          }
+          if (glass?.waterProg && glass.waterVao) {
+            gl.disable(gl.BLEND);
+            gl.depthFunc(gl.LEQUAL);
+            gl.depthMask(false);
+            gl.useProgram(glass.waterProg);
+            gl.bindVertexArray(glass.waterVao);
+            gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+          }
+          gl.depthMask(true);
+          gl.depthFunc(gl.LESS);
+          drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+        }
+        gl.disable(gl.SCISSOR_TEST);
+        gl.disable(gl.BLEND);
+        gl.disable(gl.DEPTH_TEST);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+        cleanGL();
+        return 'done';
+      };
       scheduleQueue([
         () => {
           if (!houseAsync) {
             if (!canStartCompile()) return 'pending';
             startHouseAsync();
           }
+          if (!noMeadowMesh && !meadowLawnAsync && canStartCompile()) startMeadowLawnAsync();
           if (useLightmap && house === null && !lmStored() && !lightmapAtlasAsync && canStartCompile()) startLightmapAtlasAsync();
           if (useLightmap && house === null && !lmStored() && !lightmapLawnAsync && canStartCompile()) startLightmapLawnAsync();
-          return houseProgram(false) === null ? 'pending' : 'done';
+          meadowPrograms(false);
+          return houseProgram(false) === null || (!noMeadowMesh && meadowLawn === null) ? 'pending' : 'done';
         },
         () => {
           if (!shadowAsync && !canStartCompile()) return 'pending';
@@ -1952,6 +2295,20 @@ export default function MistCanvas({ recipe, onFail }) {
           return ao === null ? 'pending' : 'done';
         },
         () => {
+          if (!noStill) {
+            stillTarget();
+            cleanGL();
+          }
+          return 'done';
+        },
+        () => {
+          if (!noStill && !noStillWorld) {
+            stillWorldTarget();
+            cleanGL();
+          }
+          return 'done';
+        },
+        () => {
           if (!probeBackdropAsync && !canStartCompile()) return 'pending';
           startProbeBackdropAsync();
           return probeBackdrop(false) === null ? 'pending' : 'done';
@@ -1983,8 +2340,9 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'done';
         },
         shadowNow,
-        warmProbes,
         warmVariants,
+        warmHousePipelines,
+        warmProbes,
       ], first);
     };
     gl.uniform1i(uniform('uMoon'), 4);
@@ -2060,25 +2418,29 @@ export default function MistCanvas({ recipe, onFail }) {
     let meadowLawn = null;
     let meadowFoot = null;
     const meadowPrograms = (wait = requiredPass) => {
-      const make = (starter, handle) => {
+      const make = (starter, waitThis = wait) => {
         const h = starter();
-        const prog = readyProgram(h, wait);
+        const prog = readyProgram(h, waitThis);
         if (!prog) return h?.failed ? false : null;
 
         return { prog, u: uniformLookup(prog) };
       };
+      const optWait = wait && frozen;
       if (meadowPaint === null) {
-        const res = make(startMeadowPaintAsync, meadowPaintAsync);
+        const res = make(startMeadowPaintAsync, wait);
         if (res === null) return null;
         meadowPaint = res;
       }
       if (meadowPaintFlat === null) {
-        const res = make(startMeadowPaintFlatAsync, meadowPaintFlatAsync);
-        if (res) meadowPaintFlat = res;
-        else if (res === false) meadowPaintFlat = false;
+        const res = make(startMeadowPaintFlatAsync, optWait);
+        if (res) {
+          meadowPaintFlat = res;
+          dirty = true;
+          kickRef.current();
+        } else if (res === false) meadowPaintFlat = false;
       }
       if (meadowFlowers === null) {
-        const res = make(startMeadowFlowersAsync, meadowFlowersAsync);
+        const res = make(startMeadowFlowersAsync, optWait);
         if (res) {
           meadowFlowers = res;
           dirty = true;
@@ -2088,17 +2450,23 @@ export default function MistCanvas({ recipe, onFail }) {
         }
       }
       if (meadowFlowersFlat === null) {
-        const res = make(startMeadowFlowersFlatAsync, meadowFlowersFlatAsync);
-        if (res) meadowFlowersFlat = res;
-        else if (res === false) meadowFlowersFlat = false;
+        const res = make(startMeadowFlowersFlatAsync, optWait);
+        if (res) {
+          meadowFlowersFlat = res;
+          dirty = true;
+          kickRef.current();
+        } else if (res === false) meadowFlowersFlat = false;
       }
       if (meadowLawn === null && !noMeadowMesh && (lawnSeen || houseBuilt)) {
-        const res = make(startMeadowLawnAsync, meadowLawnAsync);
-        if (res) meadowLawn = res;
-        else if (res === false) meadowLawn = false;
+        const res = make(startMeadowLawnAsync, optWait && lawnSeen);
+        if (res) {
+          meadowLawn = res;
+          dirty = true;
+          kickRef.current();
+        } else if (res === false) meadowLawn = false;
       }
       if (meadowFoot === null) {
-        const res = make(startMeadowFootAsync, meadowFootAsync);
+        const res = make(startMeadowFootAsync, optWait);
         if (res) {
           meadowFoot = res;
           dirty = true;
@@ -2208,6 +2576,15 @@ export default function MistCanvas({ recipe, onFail }) {
         shownStops = null;
         // Landed on the target seed exactly: breathe from here (sin 0 = 0).
         idleT = 0;
+        if (houseComplete && !noHouse && !noMirror && probesStale()) {
+          scheduleQueue([
+            () => {
+              if (orbit || !settled()) return 'pending';
+              if (probeStep(false)) return probesStale() ? 'again' : 'done';
+              return 'done';
+            },
+          ]);
+        }
       }
       dirty = true;
     }
@@ -2462,6 +2839,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const fScratch = [];
     let fAt = 0;
     let skySent = null;
+    let lampHitCache = null;
     function rebuild() {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
@@ -2734,7 +3112,13 @@ export default function MistCanvas({ recipe, onFail }) {
           ? {
               pitch, cam, cm, front: ground ? ground.top : h, colours: frame.grass, a: sm * sm * (3 - 2 * sm), paintA: paintSm * paintSm * (3 - 2 * paintSm), lid: frame.lid, device: frame.device,
               contact: free ? 0 : contact,
-              top: rowWhere(y => groundAt(pitch, cam, pitch.sx, y) !== null),
+              top: rowWhere(y => {
+                if (!peaksNow?.behind) return groundAt(pitch, cam, pitch.sx, y) !== null;
+                const d0 = groundAt(pitch, cam, 0, y)?.d ?? Infinity;
+                const d1 = groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity;
+                const d2 = groundAt(pitch, cam, w, y)?.d ?? Infinity;
+                return Math.min(d0, d1, d2) < 242;
+              }),
               near: rowWhere(y => (groundAt(pitch, cam, pitch.sx, y)?.d ?? Infinity) < FLOWER_M),
               nearBot: rowWhere(y => Math.max(groundAt(pitch, cam, 0, y)?.d ?? Infinity, groundAt(pitch, cam, w, y)?.d ?? Infinity) < FLOWERS.fade[0]),
               // (0.3.5) How far the meadow runs to the mountains' foot down
@@ -2765,8 +3149,17 @@ export default function MistCanvas({ recipe, onFail }) {
       // the frame and big enough to see (the owner, 2026-10-06: clickable
       // from anywhere, not only at the holds); null elsewhere.
       // Its outline (every part) goes with the camera, for a drag.
-      const lampPose = meadowAt ? lampPoseNow() : null;
-      const hit = meadowAt && !noLamp && lampProgram() ? lampHitOn(meadowAt.pitch, meadowAt.cm, lampPose) : null;
+      const lampPose = meadowAt && deskSeen ? lampPoseNow() : null;
+      let hit = null;
+      if (lampPose && !noLamp && lampProgram(false)) {
+        const P = meadowAt.pitch, c = meadowAt.cm;
+        const lKey = `${P.cos},${P.sin},${P.yc},${P.ys},${P.f},${P.zoom},${P.sx},${P.sy},${c.x},${c.y},${c.z},${lampPose.base},${lampPose.a},${lampPose.b},${lampPose.c}`;
+        if (lampHitCache?.key === lKey) hit = lampHitCache.hit;
+        else {
+          hit = lampHitOn(P, c, lampPose);
+          lampHitCache = { key: lKey, hit };
+        }
+      }
       const shown = hit && hit.r >= 4 && hit.x + hit.w > 0 && hit.x < w && hit.y + hit.h > 0 && hit.y < h;
       publishLampSpot(shown ? { ...hit, cam: { P: meadowAt.pitch, cm: meadowAt.cm }, pose: lampPose, device: meadowAt.device } : null);
       // The grass, once the camera is low enough to see blades.
@@ -2874,7 +3267,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.vertexAttribI4ui(1, 0, 0, 0, 0);
       // (0.5.26) At rest, only the blades that grow, from the list (below).
       const key = noGrassList ? null : `${c.x},${c.y},${c.z},${P.cos},${P.sin},${P.f},${P.zoom},${P.yc},${P.ys},${P.sx},${P.sy},${w},${h},${fw()},${!!peaksNow?.behind}`;
-      if (key) grassListPoll(g);
+      if (key) grassListPoll(g, key);
       const list = key && grassList?.key === key ? grassList : null;
       if (list) {
         gl.uniform1i(g.u('uList'), 1);
@@ -2943,9 +3336,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.flush();
       grassListPending = { key, runs: runs.map(r => [r[0], r[1]]), total, fence };
     }
-    function grassListPoll(g) {
+    function grassListPoll(g, currentKey) {
       const p = grassListPending;
       if (!p) return;
+      if (p.key !== currentKey) {
+        gl.deleteSync(p.fence);
+        grassListPending = null;
+        return;
+      }
       const st = gl.clientWaitSync(p.fence, 0, 0);
       if (st === gl.TIMEOUT_EXPIRED) return;
       gl.deleteSync(p.fence);
@@ -3024,9 +3422,14 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.flush();
       flowerListPending = { key, runs: runs.map(r => [r[0], r[1]]), total, fence };
     }
-    function flowerListPoll(g) {
+    function flowerListPoll(g, currentKey) {
       const p = flowerListPending;
       if (!p) return;
+      if (p.key !== currentKey) {
+        gl.deleteSync(p.fence);
+        flowerListPending = null;
+        return;
+      }
       const st = gl.clientWaitSync(p.fence, 0, 0);
       if (st === gl.TIMEOUT_EXPIRED) return;
       gl.deleteSync(p.fence);
@@ -3114,7 +3517,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.vertexAttribI4ui(1, 0, 0, 0, 0);
       const camKey = `${c.x},${c.y},${c.z},${P.cos},${P.sin},${P.f},${P.zoom},${P.yc},${P.ys},${P.sx},${P.sy},${w},${h},${fw()}`;
       const listKey = noFlowerList ? null : camKey;
-      if (listKey) flowerListPoll(g);
+      if (listKey) flowerListPoll(g, listKey);
       const list = listKey && flowerList?.key === listKey ? flowerList : null;
       if (list) {
         gl.uniform1i(g.u('uList'), 1);
@@ -3693,7 +4096,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // that face again. A no-op while the light hasn't moved.
       const sh = houseShadow(wait);
       if (sh === null) return false;
-      if (sh && meadowAt?.colours) houseShadowMap(hg, sh, meadowAt.colours);
+      const hl = houseLighting();
+      if (sh && hl?.colours) houseShadowMap(hg, sh, hl.colours);
       const night = houseNight();
       const cm = meadowAt ? meadowAt.cm : { x: 0, y: 0, z: 0 };
       let k = -1;
@@ -3719,7 +4123,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const [yaw, pitch] = H.PROBE_FACES[f];
       const S = pr.size;
       const view = { P: { cos: Math.cos(pitch), sin: Math.sin(pitch), f: S / 2, zoom: 1, yc: Math.cos(yaw), ys: Math.sin(yaw), sx: S / 2, sy: S / 2 }, c: { x: m.at[0], y: m.at[1], z: m.at[2] }, size: S };
-      const sky = meadowAt?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
+      const sky = hl?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LESS);
       gl.disable(gl.BLEND);
@@ -3733,7 +4137,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.uniform2f(b.u('uYP'), yaw, pitch);
         gl.uniform3fv(b.u('uTop'), rgb01(sky[0]));
         gl.uniform3fv(b.u('uLow'), rgb01(sky[1]));
-        gl.uniform3fv(b.u('uHaze'), rgb01(meadowAt?.mist ?? sky[1]));
+        gl.uniform3fv(b.u('uHaze'), rgb01(hl?.mist ?? sky[1]));
         gl.uniform1f(b.u('uNight'), night);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(false);
@@ -3766,6 +4170,7 @@ export default function MistCanvas({ recipe, onFail }) {
           (!noMirror && !noGlass && !house.mirrorProg && !houseMirrorAsync?.failed) ||
           (!noAO && aoPass === null) || water === undefined || (!noBloom && bloom === undefined)) return;
       if (!noMirror && houseBuilt.house.mirrors?.length && (!probeSet || probesStale(probesNeeded()))) return;
+      if (!housePipelinesWarmed) return;
       // Cover all submitted uploads/probe/warm-up work without gl.finish or a
       // blocking wait. A resize before initial readiness needs a fresh fence.
       if (glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
@@ -3818,8 +4223,9 @@ export default function MistCanvas({ recipe, onFail }) {
     function drawHouse(mirror = false, lawn = false, view = null, who = false, under = false) {
       const g = houseProgram();
       if (!g) return;
-      const sky = meadowAt?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
-      const colours = meadowAt?.colours ?? {
+      const hl = meadowAt?.colours ? meadowAt : houseLighting();
+      const sky = hl?.colours?.env ?? [value.slice(7, 10), value.slice(10, 13)];
+      const colours = hl?.colours ?? {
         dir: [0.35, 0.9],
         sky: rgb01(sky[0]),
         sun: [255, 255, 255],
@@ -4393,6 +4799,7 @@ export default function MistCanvas({ recipe, onFail }) {
     }
     // Started at once, so they build while the page is still settling.
     if (!noPeaks) startPeaksPrograms();
+    if (!noHouse) loadHouseSub(true);
     function peaksFlow(p) {
       const u = peaksU(p);
       gl.uniform1i(u('uFlow'), PEAKS_FLOW);
@@ -4921,6 +5328,7 @@ export default function MistCanvas({ recipe, onFail }) {
             if (!peaksShown) {
               peaksShown = true;
               peaksReadyAt = performance.now();
+              preparation.resume();
             }
           }
           if (!all) break;
@@ -5111,7 +5519,6 @@ export default function MistCanvas({ recipe, onFail }) {
           bloomStillKey = null;
           glassCopyKey = null;
         }
-        if ((still || stillWorld || deskFrame) && !(deskOn && (houseSeen || deskSeen))) freeStill();
         const stillWorldOk = stillOk && !noStillWorld && prints.n === 0;
         const keyNow = stillOk ? stillKeyNow(stillWorldOk) : null;
         stillHit = stillOk && stillKey !== null && stillKey === keyNow && !!still && still.size[0] === canvas.width && still.size[1] === canvas.height;

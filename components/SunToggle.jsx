@@ -42,14 +42,19 @@ export default function SunToggle({ recipe }) {
     let last = null;
     const apply = spot => {
       if (!spot) return;
-      if (last && last.x === spot.x && last.y === spot.y) return;
-      last = { x: spot.x, y: spot.y };
-      el.style.setProperty('--spot-x', `${spot.x}px`);
-      el.style.setProperty('--spot-y', `${spot.y}px`);
       // (0.3.11) Where the descent has taken the body off the frame, the
-      // target leaves the page (and the tab order) with it.
+      // target leaves the page (and the tab order) with it. Check hidden
+      // before touching style properties so off-screen scroll frames do zero
+      // CSS variable writes or style recalculations.
       const hidden = !!size && (spot.x < 0 || spot.y < 0 || spot.x > size[0] || spot.y > size[1]);
       if (el.hidden !== hidden) el.hidden = hidden;
+      if (hidden) return;
+      const qx = Math.round(spot.x * 4) / 4;
+      const qy = Math.round(spot.y * 4) / 4;
+      if (last && last.x === qx && last.y === qy) return;
+      last = { x: qx, y: qy };
+      el.style.setProperty('--spot-x', `${spot.x}px`);
+      el.style.setProperty('--spot-y', `${spot.y}px`);
     };
     const ro = box && typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {

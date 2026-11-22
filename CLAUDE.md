@@ -414,6 +414,51 @@ redraw throttling:
   `test:adaptive` 9/9, `hygiene` all passed, end-to-end scroll past open laptop
   to pool verified (`0` errors).
 
+**0.5.31** (2026-11-22) eliminates first-use shader/PSO/FBO scroll spikes,
+cuts house `mesh-ready` (`5,034 → 963 ms`) and full `ready` (`20,303 → 2,547 ms`),
+and reduces VRAM and per-frame GPU/DOM work:
+- Non-blocking shader link & Metal/ANGLE PSO warm-up (`MistCanvas.jsx`,
+  `poolWater.js`): `meadowPrograms()` only waits synchronously on `meadowPaint`
+  during live scroll while polling `meadowPaintFlat`, `meadowFlowers`,
+  `meadowFlowersFlat`, `meadowLawn` and `meadowFoot` non-blockingly (removing a
+  `74.8 ms` flight stall); adds `1×1` scissored offscreen PSO warm-up draws in
+  `warmDeskPipelines` (every desk/meadow pass + `P.direct`/`P.behind`) and
+  `warmHousePipelines` (all 3 house VAOs — `house.vao`, `house.leaves[0].vao`,
+  `house.curtains.vao` — across `aoPass.solidProg`, `aoPass.prog`, `P.geoFar`,
+  `house.mirrorProg`, `house.prog`, `house.variants[0..4]`, `meadowLawn.prog`,
+  `glass.prog`, and `glass.waterProg`), plus `caus.slopeProg` and all 3 RGB
+  `gl.colorMask` passes of `caus.prog` in `water.prepare()`.
+- House readiness & background queue (`MistCanvas.jsx`): starts `loadHouseSub(true)`
+  on mount with streaming `/house/house.bin.gz` in production; fixes
+  `ensureWarmHouse()` downgrading `'mesh-ready'` to `'loading'`; computes
+  exact `about = 1, desk = 1` lighting via `houseLighting()` so `shadowNow` and
+  all 18 mirror probe faces bake while the visitor is still at `scroll = 0`;
+  runs `createPreparationQueue` with `backoffDelay: 16`, wrapped `() => next()`
+  idle callbacks, and `orbit || !settled()` pause + post-orbit background probe
+  refresh in `stepOrbit()`.
+- Persistent FBOs & VRAM savings (`MistCanvas.jsx`): shares `aoPass.frame`
+  (`RGBA8 + DEPTH24`) with `deskFrameTarget()` and frees `deskFrame` once
+  allocated (`-62.2 MB` VRAM); pre-allocates `stillTarget()` and
+  `stillWorldTarget()` in `warmHouse` and keeps `still`, `stillWorld` and
+  `peaksGeo.prev` allocated across scroll (eliminating `67–149 ms` mid-scroll
+  FBO deletion/status stalls); skips compiling inactive device geometry
+  (`tabletProgram` on landscape, `laptopProgram` on portrait) during idle
+  warm-up.
+- Shader, CPU & DOM hygiene (`meadowShader.js`, `peaksShader.js`,
+  `MistCanvas.jsx`, `SunToggle.jsx`): early `discard` in `MEADOW_PAINT` and
+  `MEADOW_LAWN_FRAGMENT` past `uPaintNear.y` (`240 m`) or zero alpha; bounds
+  `meadowAt.top` scissor to `< 242 m` when `peaksNow.behind` is active; skips
+  `skyRaw()` in `haze()` when `amt <= 1e-4`, `mistLit()` when `g.T >= .9999`,
+  and `uG2` horizon fetch in `readG()` when `g.hit <= 0.`; discards stale
+  transform-feedback fences immediately on camera motion; caches `lampHitOn`
+  when `deskSeen`; skips `--spot-x`/`--spot-y` DOM writes in `SunToggle.jsx`
+  while off-screen.
+- M4 `1440×900@2` (`npm run perf`): `mesh-ready` `5,034 → 963 ms`, `ready`
+  `20,303 → 2,547 ms`, full scroll `98.2 fps` (`max 86.0 → 33.3 ms`, `0` long
+  tasks, `RecalcStyleDuration` `149.1 → 114.2 ms`), house climb `94.1 fps`
+  (`p50 8.4 ms`, `p95 16.9 ms`, `max 183.1 → 41.7 ms`, `>20 ms` `8 → 4`),
+  switch `120.0 fps` (`max 9.4 ms`, `0 > 20 ms`), idle `120.0 fps` (`0 > 20 ms`).
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

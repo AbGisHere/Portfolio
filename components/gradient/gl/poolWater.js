@@ -274,6 +274,33 @@ export function makeWater(gl, unit, pre = null) {
         gl.uniform2f(u(p, 'uAspect'), 1, POOL.d / POOL.w);
       });
       pass(progs.step, p => gl.uniform2f(u(p, 'uTexel'), 1 / nx, 1 / nz));
+      if (caus) {
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(0, 0, 1, 1);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, caus.slopeFbo);
+        gl.viewport(0, 0, 1, 1);
+        gl.useProgram(caus.slopeProg);
+        gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
+        gl.uniform1i(caus.su.field, unit);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, caus.fbo);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(caus.prog);
+        gl.bindTexture(gl.TEXTURE_2D, caus.slopeTex);
+        gl.uniform1i(caus.u.slope, unit);
+        gl.bindVertexArray(caus.vao);
+        CAUSTICS.ior.forEach((n, c) => {
+          gl.colorMask(c === 0, c === 1, c === 2, false);
+          gl.uniform1f(caus.u.ior, n);
+          gl.drawElements(gl.TRIANGLES, 3, caus.type, 0);
+        });
+        gl.colorMask(true, true, true, true);
+        gl.disable(gl.BLEND);
+        gl.disable(gl.SCISSOR_TEST);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
       gl.clearColor(0, 0, 0, 0);
       for (const target of targets) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);

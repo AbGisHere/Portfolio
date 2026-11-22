@@ -6,6 +6,76 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.31 — 2026-11-22
+
+Trace-driven frame-spike & load-time overhaul: 1×1 scissored offscreen
+Metal/ANGLE PSO warm-up, non-blocking meadow shader linking, early house
+worker + `scroll=0` probe baking, shared `aoPass.frame` / `deskFrame` (`-62.2 MB`
+VRAM), persistent FBOs across scroll, and shader/CPU/DOM hygiene.
+
+- **Non-blocking shader link & Metal/ANGLE PSO warm-up (`MistCanvas.jsx`, `poolWater.js`):**
+  - `meadowPrograms()` only waits synchronously on `meadowPaint` during live
+    scroll while polling `meadowPaintFlat`, `meadowFlowers`,
+    `meadowFlowersFlat`, `meadowLawn` and `meadowFoot` non-blockingly and
+    starting `startMeadowLawnAsync()` in `warmHouse` step 1 (eliminating a
+    `74.8 ms` flight stall).
+  - Added `1×1` scissored offscreen PSO warm-up draws in `warmDeskPipelines`
+    (every desk/meadow pass + `P.direct`/`P.behind` into `deskFrameTarget()`)
+    and `warmHousePipelines` (all 3 house VAOs — `house.vao`,
+    `house.leaves[0].vao`, `house.curtains.vao` — across `aoPass.solidProg`,
+    `aoPass.prog`, `P.geoFar`, `house.mirrorProg`, `house.prog`,
+    `house.variants[0..4]`, `meadowLawn.prog`, `glass.prog`, and
+    `glass.waterProg`), plus `caus.slopeProg` and all 3 RGB `gl.colorMask`
+    passes of `caus.prog` in `water.prepare()`.
+- **House readiness & background preparation (`MistCanvas.jsx`):**
+  - Starts `loadHouseSub(true)` on mount with streaming `/house/house.bin.gz`
+    decompression in production (`houseWorker.js` still builds from source in
+    `next dev` and on slow/Save-Data links).
+  - Fixed `ensureWarmHouse()` downgrading `'mesh-ready'` back to `'loading'`
+    when `houseBuilt` had already finished before the desk queue reached
+    `warmHouse`.
+  - Added `houseLighting()` computing exact `about = 1, desk = 1` lighting so
+    `shadowNow` and all 18 mirror probe faces bake while the visitor is still
+    at `scroll = 0`.
+  - Configured `createPreparationQueue` with `backoffDelay: 16`, wrapped
+    `() => next()` idle callbacks (preventing 200 ms `timeRemaining() < 4`
+    spins during active `rAF`), and `orbit || !settled()` pause + post-orbit
+    background probe refresh in `stepOrbit()`.
+- **Persistent FBOs & VRAM savings (`MistCanvas.jsx`):**
+  - Shared `aoPass.frame` (`RGBA8 + DEPTH24`) with `deskFrameTarget()` and
+    freed `deskFrame` once `aoPass.frameOk` is ready (`-62.2 MB` VRAM).
+  - Pre-allocated `stillTarget()` and `stillWorldTarget()` in `warmHouse` and
+    kept `still`, `stillWorld` and `peaksGeo.prev` allocated across scroll
+    (eliminating `67–149 ms` mid-scroll FBO deletion and
+    `checkFramebufferStatus` stalls).
+  - Skipped compiling inactive device geometry (`tabletProgram` on landscape,
+    `laptopProgram` on portrait) during idle warm-up.
+- **Shader, CPU & DOM hygiene (`meadowShader.js`, `peaksShader.js`, `MistCanvas.jsx`, `SunToggle.jsx`):**
+  - Added early `discard` after `dFdx`/`dFdy` in `MEADOW_PAINT` and
+    `MEADOW_LAWN_FRAGMENT` when `dist >= uPaintNear.y` (`240 m`) or alpha is
+    zero, and bounded `meadowAt.top` scissor rows to `< 242 m` when
+    `peaksNow.behind` is true.
+  - Guarded `skyRaw()` in `haze()` when `amt <= 1e-4`, `mistLit()` in
+    `lightParts()` when `g.T >= .9999`, and `uG2` horizon fetch in `readG()`
+    when `g.hit <= 0.`.
+  - Discarded obsolete transform-feedback fences immediately on camera motion in
+    `grassListPoll()` and `flowerListPoll()`, gated and cached `lampHitOn` on
+    `deskSeen`, and skipped `--spot-x`/`--spot-y` DOM writes in `SunToggle.jsx`
+    while off-screen.
+- **Measured (`1440×900@2` on Apple M4, production build):**
+  - House `mesh-ready`: `5,034 ms → 963 ms` (`5.2×` faster)
+  - House full `ready`: `20,303 ms → 2,547 ms` (`8.0×` faster)
+  - Full scroll (`0 → 1`): `98.2 fps`, `p95 17.4 ms`, `max 86.0 → 33.3 ms`,
+    `0` long tasks, `RecalcStyleDuration` `149.1 → 114.2 ms`
+  - House climb (`--house`): `94.1 fps`, `p50 8.4 ms`, `p95 16.9 ms`,
+    `max 183.1 → 41.7 ms`, `>20 ms` frames `8 → 4`, `0` long tasks
+  - Day/night switch: `120.0 fps`, `p50 8.3 ms`, `p95 9.3 ms`, `max 9.4 ms`,
+    `0 > 20 ms`, `0` long tasks
+  - Idle & at-rest draws: `120.0 fps` (`0 > 20 ms`), `opening 4.0/s (1 call)`,
+    `desk 25.9/s (5 calls)`, `pool-night 25.9/s (12 calls)`,
+    `pool-day 52.4/s (10 calls)`, `pool-frozen 0.0/s`
+  - Checks: `test:unit` 88/88, `test:adaptive` 9/9, `hygiene` 21/21 passed.
+
 ## 0.5.30 — 2026-11-22
 
 Temporal mountain reprojection while scrolling, Mali / Galaxy S21 shader

@@ -252,7 +252,7 @@ void main() {
 #endif
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
-  if (!hit) discard;
+  if (!hit || (uPaintNear.y > 0.0 && dist >= uPaintNear.y) || (uMeadowA <= 1e-4 && uPrintN == 0)) discard;
   float px = length(abs(gx) + abs(gy));
   vec3 k = broad(gm, gx, gy, px);
   vec3 near = mix(vec3(1.0), k, uMeadowA);
@@ -413,6 +413,7 @@ void main() {
   float dist = length(vWorld - uCamM);
   vec2 gx = dFdx(gm);
   vec2 gy = dFdy(gm);
+  if ((uPaintNear.y > 0.0 && dist >= uPaintNear.y) || (uMeadowA <= 1e-4 && uPrintN == 0)) discard;
   float px = length(abs(gx) + abs(gy));
   vec3 k = broad(gm, gx, gy, px);
   vec3 near = mix(vec3(1.0), k, uMeadowA);

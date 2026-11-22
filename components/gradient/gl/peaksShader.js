@@ -784,11 +784,13 @@ vec3 haze(vec3 c, vec3 rd, float t) {
   // (0.5.7) By day, aerial perspective, not fog: a thinner, bluer veil, so
   // far ranges go blue, not white.
   float k = 1. - exp(-max(t - 2500., 0.) / mix(30000., 46000., uGrade));
-  vec3 to = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, mix(.02, .16, 1. - uNight)), rd.z))));
   // Toward a low sun the veil is lit gold.
   float sunward = pow(max(dot(normalize(rd.xz), normalize(uSunDir.xz)), 0.), 6.) * smoothstep(.25, .02, uSunDir.y) * smoothstep(-.06, .01, uSunDir.y);
+  float amt = clamp(k + .1 * sunward, 0., mix(.85, .5, 1. - uNight));
+  if (amt <= 1e-4) return c;
+  vec3 to = toScreen(skyRaw(normalize(vec3(rd.x, max(rd.y, mix(.02, .16, 1. - uNight)), rd.z))));
   to = mix(to, to * vec3(1.04, 1.02, 1.), sunward);
-  return mix(c, to, clamp(k + .1 * sunward, 0., mix(.85, .5, 1. - uNight)));
+  return mix(c, to, amt);
 }
 
 // Exact meadow palette matching mistShader.js & grassShader.js (in linear light),
@@ -1085,7 +1087,7 @@ void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out v
     base = drawSun(base, uv, f, r, u, lens);
     base = drawMoon(base, uv, f, r, u, lens);
   }
-  mist = mistLit(g, rd);
+  mist = g.T < .9999 ? mistLit(g, rd) : vec3(0.);
 }
 `;
 
@@ -1293,7 +1295,7 @@ G readG(vec3 rd) {
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
   g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = a.x > 0. ? 1. : 0.; g.strata = b.w;
-  g.hor = texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale * uFrameScale, uHorMax));
+  g.hor = g.hit > 0. ? texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale * uFrameScale, uHorMax)) : vec4(-1.);
   return g;
 }`;
 
