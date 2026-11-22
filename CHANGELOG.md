@@ -6,6 +6,52 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.29 — 2026-11-22
+
+3D mountain rock, geological strata & snow-flute craft pass, taller balanced
+central hero massif, and laptop closed top-down → open scroll speedup.
+
+- **Alpine granite strata, tangent-space sculpting & snow flutes (`peaksShader.js`):**
+  - Replaced world-space `(dx, 0, dz)` rock perturbation (which cancelled out
+    vertical strata on `±Z` faces) with 3-scale pixel-footprint anti-aliased
+    tangent-space `(tg, bt)` normal sculpting (macro vertical couloir flutes +
+    diagonal fracture ribs, mid-scale angular cleavage, close-range granite
+    micro-crag, and softer wind-fluted snow drifts; `n.y >= 0.05` safe for
+    packed `(n.x, n.z)` normal reconstruction).
+  - Added aperiodic alpine granite geology (`geoBand`, vertical `rib`, diagonal
+    `joint`) driving `g.strata`, curvature-based couloir snow (`gully`), and
+    high-altitude glacier snow flutes (`highCling`, `fluteSnow`) with steep
+    cliff cutoffs so snow sweeps cleanly up upper ridges while dark granite
+    buttresses punch through.
+  - Upgraded `ground()` with layered dark slate / mid & pale granite, warm
+    mineral streaks, dark fracture clefts, scree aprons, directional warm-vs-cool
+    sky hemisphere fill (`skyDir`), softer subsurface-scattered snow crevice AO
+    (`effAO`), and a soft highlight shoulder above `0.74` so sunlit snow behind
+    the house preserves 3D ridge/flute relief instead of clipping flat white.
+- **Taller, balanced central hero massif (`peaks.js`, `peaksShader.js`):**
+  - Raised `PEAKS[0]` from `[300, 3300, 1500, 1500]` to
+    `[300, 3300, 1820, 1850]`, bumped `CEILING` to `4900.`, and widened the
+    hero clarity/moonlight radius (`2200..780`) so the central peak rises into
+    the lower ~35–40% of the sky with wide open sky flanks for typography while
+    keeping the sun, moon, misty valley, and right snow range unobstructed.
+- **Laptop closed top-down → open scroll speedup (`peaksShader.js`, `MistCanvas.jsx`):**
+  - Added analytic meadow plateau short-circuit to `coneReach()` (skipping
+    wasted raymarch steps over the bottom ~75% of the frame) and replaced its
+    4-corner ray loop with a single conservative wide-cone center ray (96 max
+    steps).
+  - Scoped `.24` close-spire march stride strictly behind the house
+    (`t < 2600 && p.z < SHELF.z - 200`), keeping the right-hand summit behind
+    the house notch-free while restoring full `.42` stride toward the desk.
+  - Deduplicated granite/strata/flute noise evaluations in `geo()`
+    (`~34 → ~15` noise calls/px) and used `0.55×` motion scale (`~1584×990` on
+    Retina) for `pk.behind` while scrolling, snapping straight back to native
+    `1.0×` at rest with generalized `uPeakAOScale` occlusion culling.
+- **Verified (M4, `1440×900@2`):**
+  - Laptop top-down → open wheel sweep: **`89.7 → 113.9 fps`** (`p50 8.3 ms`,
+    `>14 ms` frames `88 → 17`, **`0 > 20 ms`**).
+  - `npm run test:unit` 88/88, `npm run test:adaptive` 9/9, `hygiene` all
+    passed, zero console/WebGL errors across opening, desk, and house day/night.
+
 ## 0.5.28 — 2026-11-22
 
 Tier 1 & Tier 2 GPU/CPU optimizations, crisp `1.0×` climb mountains, healed

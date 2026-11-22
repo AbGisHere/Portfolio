@@ -12,7 +12,7 @@
 // The peaks: [x, z, height, radius]. The hero in front, a massif on the
 // left, a low ridge on the right (the owner's "calmer range", 2026-11-19).
 export const PEAKS = [
-  [300, 3300, 1500, 1500],
+  [300, 3300, 1820, 1850],
   [-1300, 3000, 1100, 1100],
   [1900, 3100, 1000, 1000],
   // (0.5.5) Behind the house: the range around our own mountain.

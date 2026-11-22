@@ -320,7 +320,7 @@ float mistN(vec2 xz) {
   return mistNoise(xz);
 }
 // Nothing stands above this: a ray past it, climbing, has missed.
-const float CEILING = 4400.;
+const float CEILING = 4900.;
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
   bool gone = false;
@@ -343,7 +343,8 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     }
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
     tp = t; hp = h;
-    t += max(h * (t < 3500. ? .24 : .42), .5 + t * .0014);
+    float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
+    t += max(h * kStep, .5 + t * .0014);
   }
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
@@ -352,15 +353,23 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
 // (0.5.3) For the coarse pass: conservative cone reach against the baked
 // heightfield so the full pass skips empty sky in one jump.
 float coneReach(vec3 ro, vec3 rd, float tmax, float k) {
+  // (0.5.29) Fast analytic exit for downward rays hitting the flat meadow
+  // plateau (matches geo() — avoids 160 wasted march steps per corner ray
+  // on the bottom 75% of the screen during desk top-down → laptop open!).
+  if (rd.y < 0. && ro.y >= ${f(SHELF.y - 0.5)} && ro.y < ${f(SHELF.y + 85)}) {
+    float tp = (${f(SHELF.y)} - ro.y) / rd.y;
+    if (tp > 0. && shelfD((ro + rd * tp).xz) < ${f(SHELF.r * 0.97)}) return tp;
+  }
   float t = max(1., nearFor(rd));
-  for (int i = 0; i < 160; i++) {
+  for (int i = 0; i < 96; i++) {
     vec3 p = ro + rd * t;
     float h = p.y - Hm(p, t);
     if (h < k * t + 6.) return t;
-    if (t > tmax || (rd.y > 0. && p.y > CEILING)) break;
-    t += max(h * (t < 3500. ? .24 : .42), 1. + t * .0015);
+    if (t > tmax || (rd.y > 0. && p.y > CEILING)) return tmax;
+    float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
+    t += max(h * kStep, 1. + t * .0015);
   }
-  return tmax;
+  return t;
 }
 vec3 nrm(vec3 p, float t) {
   // Match central-difference step to the active bake box's texel spacing so
@@ -444,31 +453,90 @@ G geo(vec3 rd, float tStart) {
   vec3 p = uCam + rd * max(g.t, 0.);
   if (g.hit > 0.) {
     g.n = nrm(p, g.t);
+    vec3 n0 = g.n;
     float alt = p.y;
     float shf = shelfMask(p.xz);
-    // Snow where the slope holds it, draping naturally down the hero peak
-    // and flanking massifs (never pushed off the hero peak by the valley).
-    float line = 1600. + fbm(p.xz / 650., 3) * 380. + 600. * shf - 620. * valleyLen(p.xz);
-    vec2 fu = faceUV(p, g.n);
-    float bn = noise(fu / 32.);
-    float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
-    g.strata = strata;
-    float holds = g.n.y + .11 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
-    g.snow = smoothstep(line - 140., line + 140., alt) * smoothstep(.33, .48, holds);
-    g.snow = max(g.snow, smoothstep(.52, .66, holds) * smoothstep(1380., 1680., alt - 600. * shf));
-    g.snow *= (1. - shf) * smoothstep(${f(SHELF.r * 3.5)}, ${f(SHELF.r * 8.)}, shelfD(p.xz));
-    // Fine crag relief ONLY on rocky/snowy mountain faces — never on the
-    // meadow overlook or flat grass, so the meadow stays crisp and smooth.
-    float flatMeadow = shf;
-    float rough = (1. - flatMeadow) * mix(1., .25, g.snow) * smoothstep(18000., 2200., g.t);
-    if (rough > .01) {
-      vec2 bq = fu / 14.;
-      float b0 = fbm(bq, 3), bx = fbm(bq + vec2(.3, 0.), 3), bz = fbm(bq + vec2(0., .3), 3);
-      vec2 bq2 = fu / 48.;
-      float c0 = noise(bq2), cx = noise(bq2 + vec2(.25, 0.)), cz = noise(bq2 + vec2(0., .25));
-      g.n = normalize(g.n - vec3((bx - b0) * 1.9 + (cx - c0) * 1.1, 0., (bz - b0) * 1.9 + (cz - c0) * 1.1) * rough);
-    }
+    // Compute curvature/occlusion first: concave gullies (ao < 0.62) collect
+    // snow and dark rock crevices; convex ribs (ao > 0.68) shear snow off.
     g.ao = mix(clamp(.62 + (alt - Hcoarse(p.xz)) / 320., .35, 1.), 1., shf);
+    vec2 fu = faceUV(p, n0);
+    // (0.5.29) Aperiodic alpine granite geology: broad fault-warped bedding
+    // shifts, vertical couloir/buttress ribs, and diagonal fracture joints
+    // (shared across strata, snow flutes, and tangent-space normal sculpting
+    // so total noise cost stays lean at 120 fps).
+    float warp = (fbm(p.xz / 340. + vec2(2.1, -1.3), 2) - .5) * 260.;
+    float dip = alt + p.x * .22 - p.z * .14 + warp;
+    float geoBand = smoothstep(.24, .78, fbm(vec2(dip / 140., fu.x / 480. + 1.7), 2));
+    vec2 mq = vec2(fu.x / 52. + geoBand * 1.1, fu.y / 145.);
+    vec2 jq = vec2((fu.x * .70 + dip * .32) / 50., (dip * .70 - fu.x * .23) / 94.);
+    float m0Raw = fbm(mq, 2);
+    float j0Raw = noise(jq);
+    float rib = 1. - abs(2. * m0Raw - 1.);
+    float joint = 1. - abs(2. * j0Raw - 1.);
+    float strata = clamp(geoBand * .54 + rib * .28 + joint * .18, 0., 1.);
+    g.strata = strata;
+    // Anti-aliased tangent-space normal sculpting (horizontal across face +
+    // vertical up face) so granite ribs, fracture facets, and wind-sculpted
+    // snow flutes catch crisp 3D light without sub-pixel stipple aliasing.
+    float pxW = max(g.t * 1.35 / max(uRes.y, 400.), .6);
+    float aaMacro = smoothstep(78. * .5, 78. * .14, pxW);
+    float aaMid   = smoothstep(28. * .5, 28. * .14, pxW);
+    float aaFine  = smoothstep(12. * .5, 12. * .14, pxW);
+    // Snow accumulation from slope, concave couloirs/gullies, angular granite
+    // ribs, and altitude — sweeping crisp glacier flutes all the way to high
+    // summits while exposing bold dark granite buttresses & fracture crags.
+    float line = 1600. + fbm(p.xz / 650., 2) * 380. + 600. * shf - 620. * valleyLen(p.xz);
+    float gully = clamp(.66 - g.ao, -.13, .24) * .78;
+    float rockEdge = (rib - .52) * .13 + (m0Raw - .5) * .12 + (j0Raw - .5) * .06 + (geoBand - .5) * .06;
+    float highCling = smoothstep(2250., 3350., alt) * .15;
+    float fluteSnow = smoothstep(2000., 3100., alt) * smoothstep(.32, .72, 1. - rib) * .18;
+    float holds = n0.y + gully + rockEdge + highCling + fluteSnow;
+    float cliffCut = smoothstep(.11, .24, n0.y);
+    g.snow = smoothstep(line - 150., line + 130., alt) * smoothstep(.35, .48, holds) * cliffCut;
+    g.snow = max(g.snow, smoothstep(.52, .65, holds) * smoothstep(1380., 1680., alt - 600. * shf) * cliffCut);
+    // Subtle wind-packed snow tucked into steep upper couloir cracks (never horizontal bars).
+    float crackSnow = smoothstep(line + 140., line + 540., alt) * smoothstep(.54, .86, joint)
+      * smoothstep(.18, .35, n0.y) * smoothstep(.48, .78, rib) * smoothstep(.65, .44, g.ao);
+    g.snow = max(g.snow, crackSnow * .78);
+    g.snow *= (1. - shf) * smoothstep(${f(SHELF.r * 3.5)}, ${f(SHELF.r * 8.)}, shelfD(p.xz));
+    // Sculpted angular granite facets & soft wind-fluted snow drifts applied
+    // in true tangent space (tg across face, bt up face).
+    float flatMeadow = shf;
+    float rockMask = (1. - flatMeadow) * smoothstep(26000., 1800., g.t);
+    if (rockMask > .01) {
+      vec3 tg = normalize(vec3(-n0.z, 0., n0.x) + vec3(1e-5, 0., 0.));
+      vec3 bt = normalize(cross(n0, tg));
+      // Macro vertical couloir flutes + diagonal granite fracture ribs (reuses m0Raw/joint).
+      float m0 = m0Raw * .62 + joint * .38;
+      float mx = fbm(mq + vec2(.24, 0.), 2) * .62 + (1. - abs(2. * noise(jq + vec2(.22, -.07)) - 1.)) * .38;
+      float my = fbm(mq + vec2(0., .24), 2) * .62 + (1. - abs(2. * noise(jq + vec2(.09, .22)) - 1.)) * .38;
+      float dU = (mx - m0) * 2.45 * aaMacro;
+      float dV = (my - m0) * 1.65 * aaMacro;
+      // Soft sweeping snow wind-flutes / drift ridges (for snow-covered slopes).
+      float sdU = (mx - m0) * .80 * aaMacro;
+      float sdV = (my - m0) * .56 * aaMacro;
+      // Mid-scale chiseled granite blocks & diagonal cleavage planes (aperiodic).
+      if (aaMid > .01) {
+        vec2 sq = vec2(fu.x / 26. + geoBand * .8, (fu.y * .85 + dip * .15) / 34.);
+        float s0 = 1. - abs(2. * noise(sq) - 1.);
+        float sx = 1. - abs(2. * noise(sq + vec2(.22, 0.)) - 1.);
+        float sy = 1. - abs(2. * noise(sq + vec2(0., .22)) - 1.);
+        dU += (sx - s0) * 1.25 * aaMid;
+        dV += (sy - s0) * 1.05 * aaMid;
+      }
+      // Fine granite micro-crag ONLY when well-resolved by screen pixels.
+      if (aaFine > .01) {
+        vec2 fq = fu / 11.;
+        float f0 = noise(fq), fx = noise(fq + vec2(.25, 0.)), fy = noise(fq + vec2(0., .25));
+        dU += (fx - f0) * .58 * aaFine;
+        dV += (fy - f0) * .58 * aaFine;
+      }
+      float uFinal = mix(dU, sdU, g.snow) * rockMask;
+      float vFinal = mix(dV, sdV, g.snow) * rockMask;
+      vec3 nn = normalize(n0 - (tg * uFinal + bt * vFinal));
+      // Keep n.y >= 0.05 because o0 packs (n.x, n.z) and reconstructs +n.y.
+      g.n = normalize(vec3(nn.x, max(nn.y, .05), nn.z));
+    }
   }
   // The mist between the eye and what it sees: its depth (transmittance)
   // and how high in it the light was gathered (the light pass lights it).
@@ -724,9 +792,23 @@ vec3 ground(G g, vec3 rd) {
   float alt = p.y;
   vec2 fu = faceUV(p, n);
   float strata = g.strata;
-  // Crisp alpine granite & slate (never muddy flat brown when viewed from the base).
-  vec3 rock = mix(vec3(.14, .135, .145), vec3(.33, .30, .28), strata);
-  rock = mix(rock, vec3(.19, .17, .155), noise(fu / 120.) * .55);
+  // (0.5.29) Layered alpine granite & dark slate: cool dark gneiss in deep
+  // clefts, crisp grey-granite bands, subtle warm mineral veins on sunlit faces,
+  // and fine-grained talus/scree on moderate lower aprons.
+  float bandVar = noise(fu / 135. + vec2(1.4, 3.7));
+  float vein = noise(vec2(fu.x / 68., fu.y / 38. + strata * 2.2));
+  vec3 darkSlate = vec3(.095, .10, .118);
+  vec3 midGranite = vec3(.25, .245, .24);
+  vec3 paleGranite = vec3(.41, .395, .375);
+  vec3 rock = mix(darkSlate, midGranite, smoothstep(.18, .62, strata));
+  rock = mix(rock, paleGranite, smoothstep(.58, .88, strata) * (.45 + .55 * bandVar));
+  // Subtle warm mineral ochre/iron strata streaks & darker vertical fracture clefts.
+  rock *= mix(vec3(.92, .94, .98), vec3(1.06, 1.01, .94), smoothstep(.42, .78, vein));
+  float cleft = smoothstep(.62, .38, g.ao) * smoothstep(.55, .22, strata);
+  rock *= 1. - .34 * cleft;
+  // Scree/talus apron where steep cliffs shed loose grey rock onto moderate slopes.
+  float scree = smoothstep(2350., 1650., alt) * smoothstep(.46, .68, n.y) * smoothstep(.86, .66, n.y) * (1. - g.snow);
+  rock = mix(rock, vec3(.23, .225, .22) * (.88 + .24 * bandVar), scree * .5);
   // Alpine evergreen foothills on gentler lower slopes.
   float pine = smoothstep(1900., 1450., alt + noise(p.xz / 90.) * 220.) * smoothstep(.52, .76, n.y);
   rock = mix(rock, vec3(.042, .088, .058), pine);
@@ -736,24 +818,36 @@ vec3 ground(G g, vec3 rd) {
   lawn = max(lawn, shf);
   vec3 grass = mix(vec3(.11, .19, .065), vec3(.16, .25, .08), noise(p.xz / 120.) * .6 + noise(p.xz / 420.) * .4);
   rock = mix(rock, grass, lawn * (1. - shf));
-  vec3 alb = mix(rock, mix(vec3(.88, .89, .91), vec3(.97, .97, .98), 1. - uNight), g.snow);
+  // Snow keeps subtle cool shadow-subsurface tone so sunlit faces never blow flat white.
+  vec3 snowAlb = mix(vec3(.86, .88, .92), vec3(.93, .945, .965), 1. - uNight);
+  snowAlb *= .96 + .04 * noise(fu / 85.);
+  vec3 alb = mix(rock, snowAlb, g.snow);
   float dif = max(dot(n, uLightDir), 0.);
   float sh = dif > 0. ? shadow(g) : 0.;
+  // Snow scatters light internally in crevices so shaded flutes stay cool glacier-blue
+  // rather than harsh dark ink lines.
+  float effAO = mix(g.ao, sqrt(g.ao), g.snow * .52);
   // Shaded snow takes the sky's light paler than rock does (it scatters
   // inside itself): a soft grey-blue, not a saturated blue.
   vec3 sk = SKYL;
-  vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .55) * 1.35;
+  vec3 skSnow = mix(vec3(dot(sk, vec3(.2126, .7152, .0722))), sk, .58) * 1.28;
   // (0.5.7) By day the sun carries the scene: stronger direct light against
   // a cooler, lower sky fill, so lit faces glow warm and shade goes blue.
-  vec3 amb = mix(sk, skSnow, g.snow) * (.55 + .45 * n.y) * g.ao * mix(vec3(1.), vec3(.5, .64, 1.), 1. - uNight);
+  // (0.5.29) Directional sky-hemisphere gradient (sun-side sky slightly warmer
+  // & brighter than anti-solar blue sky) gives backlit granite ribs & shaded
+  // snow flutes genuine warm-vs-cool 3D modeling even in full shadow.
+  float skySide = dot(n.xz, normalize(uLightDir.xz + 1e-4));
+  vec3 skyDir = mix(vec3(.88, .94, 1.08), vec3(1.12, 1.04, .92), .5 + .5 * skySide);
+  vec3 amb = mix(sk, skSnow, g.snow) * (.50 + .50 * n.y) * effAO
+    * mix(vec3(1.), vec3(.52, .67, 1.) * skyDir * (1. + .22 * skySide), 1. - uNight);
   // (0.5.8) By night the hero peak alone stays legible (text will sit by
   // it): a cool moonlit fill on its faces, the snow catching most; the
   // rest of the range keeps the night.
-  float hero = smoothstep(1900., 700., length(p.xz - PEAK[0].xy));
-  amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * g.ao;
-  vec3 c = alb * (SUNL * dif * sh * mix(1., 2., 1. - uNight) + amb);
+  float hero = smoothstep(2200., 780., length(p.xz - PEAK[0].xy));
+  amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * effAO;
+  vec3 c = alb * (SUNL * dif * sh * mix(1., 1.92, 1. - uNight) + amb);
   // (0.5.9) By day too the hero stands apart: a touch more light on it.
-  c += (1. - uNight) * hero * alb * SKYL * vec3(.85, .9, 1.) * .55 * (.5 + .5 * n.y) * g.ao;
+  c += (1. - uNight) * hero * alb * SKYL * vec3(.85, .9, 1.) * .55 * (.5 + .5 * n.y) * effAO;
   c *= 1. + .12 * hero * (1. - uNight);
   // Bounce: with the body ahead, faces toward the viewer are backlit, so
   // sunlit mist and snowfields throw warm luminous light back onto them,
@@ -762,9 +856,13 @@ vec3 ground(G g, vec3 rd) {
   float facing = max(dot(normalize(n.xz + 1e-4), back), 0.) * (1. - n.y * .45);
   float lowness = smoothstep(MIST_BASE + MIST_RISE * 7., MIST_BASE, alt);
   vec3 bounce = BODYL * mix(vec3(1.), vec3(1., .92, .82), .45) * (.22 + .28 * lowness);
-  c += alb * bounce * facing * (1. - dif * sh * .85) * g.ao;
+  c += alb * bounce * facing * (1. - dif * sh * .85) * effAO;
   // Snow is matte: no sheen, only a faint glitter of crystals in the light.
-  c += g.snow * BODYL * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .5;
+  c += g.snow * BODYL * dif * sh * step(.997, hash(floor(p.xz * 1.7 + p.y * .9))) * .4;
+  // (0.5.29) Soft highlight shoulder on sunlit peaks so front-lit snow behind
+  // the house stays bright crisp alpine white while preserving 3D ridge/flute relief.
+  vec3 over = max(c - vec3(.74), vec3(0.));
+  c = min(c, vec3(.74)) + over / (1. + over * 1.15);
   // (0.5.9) ... and clear of the haze the rest of the range sits back in.
   c = haze(c, rd, g.t * (1. - .7 * hero));
   // Below the mist's floor the ground fades into it: never a seen valley floor.
@@ -976,16 +1074,12 @@ void main() {
   vec2 uv = (gl_FragCoord.xy * 4. * 2. - uFull) / uFull.y - uShift;
   vec3 f = normalize(uLook - uCam), r = camRight(f), u = cross(r, f);
   float lens = 1. / tan(radians(uFov) * .5);
-  // The corner rays of this coarse texel's block, the nearest of them.
-  float best = 1e9;
-  for (int k = 0; k < 4; k++) {
-    vec2 o2 = vec2(k & 1, k >> 1) * 2. - 1.;
-    vec2 q = uv + o2 * 4. / uFull.y;
-    vec3 rd = normalize(f * lens + q.x * r + q.y * u);
-    // A block's width (4 px) a few times over, as an angle.
-    float cone = 4. * 3. * 2. / (uFull.y * lens);
-    best = min(best, coneReach(uCam, rd, 80000., cone));
-  }
+  // (0.5.29) Single center-ray conservative cone (15 px angular radius > 5×
+  // the 2.83 px half-diagonal of a 4×4 block): 4× faster coarse prepass with
+  // identical march accuracy (and geo()'s 2-try fallback guards any miss).
+  vec3 rd = normalize(f * lens + uv.x * r + uv.y * u);
+  float cone = 4. * 3.75 * 2. / (uFull.y * lens);
+  float best = coneReach(uCam, rd, 80000., cone);
   o = vec4(best * .9 * .001, 0., 0., 1.);
 }`;
 
@@ -1045,15 +1139,18 @@ uniform sampler2D uCoarse;
 // is completely covered by solid house/lawn (< 9000 m vs clear 1e4).
 uniform sampler2D uPeakAO;
 uniform float uPeakAOOn;
+uniform float uPeakAOScale;
 uniform ivec2 uPeakAOSize;
 void main() {
   if (uPeakAOOn > .5) {
-    ivec2 b = ivec2(gl_FragCoord.xy) * 2;
+    float inv = 1. / max(uPeakAOScale, .25);
+    ivec2 b = ivec2(floor(gl_FragCoord.xy * inv));
+    int span = max(int(ceil(inv)) - 1, 1);
     ivec2 mx = uPeakAOSize - 1;
     float d0 = texelFetch(uPeakAO, min(b, mx), 0).r;
-    float d1 = texelFetch(uPeakAO, min(b + ivec2(1, 0), mx), 0).r;
-    float d2 = texelFetch(uPeakAO, min(b + ivec2(0, 1), mx), 0).r;
-    float d3 = texelFetch(uPeakAO, min(b + ivec2(1, 1), mx), 0).r;
+    float d1 = texelFetch(uPeakAO, min(b + ivec2(span, 0), mx), 0).r;
+    float d2 = texelFetch(uPeakAO, min(b + ivec2(0, span), mx), 0).r;
+    float d3 = texelFetch(uPeakAO, min(b + ivec2(span, span), mx), 0).r;
     if (max(max(d0, d1), max(d2, d3)) < 9000.) {
       o0 = vec4(-.001, 0., 1., 0.);
       o1 = vec4(1., 0., 1., .5);

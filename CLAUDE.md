@@ -354,6 +354,30 @@ building its list (`data-grass-list`) on each phone.
   `max 17.6 ms`, `0 > 20 ms`), Night climb `109.2 fps` (`p50 8.4 ms`), rest
   draws `5` calls at desk / `8–9` calls at pool (`p50 8.3 ms`, `p95 9.2–9.3 ms`).
 
+**0.5.29** (2026-11-22) polishes 3D mountain rock, geological strata, snow
+flutes and hero peak framing, and removes scroll lag on the laptop top-down →
+open transition:
+- Peaks look (`peaksShader.js`, `peaks.js`): fixes world-space `(dx, 0, dz)`
+  bump flattening on `±Z` faces with pixel-footprint anti-aliased tangent-space
+  `(tg, bt)` sculpting (`n.y >= 0.05` safe); adds aperiodic alpine granite
+  geology (`geoBand`, vertical `rib`, diagonal `joint`), curvature-driven
+  couloir & high-altitude glacier snow flutes (`highCling`, `fluteSnow`),
+  layered dark slate / mid & pale granite + scree/mineral variation, warm-vs-cool
+  directional sky hemisphere fill (`skyDir`), softer snow crevice AO (`effAO`),
+  and a highlight shoulder above `0.74` preserving sunlit 3D ridge detail; raises
+  `PEAKS[0]` to `[300, 3300, 1820, 1850]` (`CEILING = 4900.`) so the central
+  massif rises cleanly into the lower ~35–40% of the sky with open flanks for
+  future typography.
+- Laptop top-down → open & climb speed (`peaksShader.js`, `MistCanvas.jsx`):
+  adds analytic meadow plateau exit + single wide-cone center ray (96 max steps)
+  in `coneReach()`, scopes `.24` close-spire stride strictly to peaks behind the
+  house (`t < 2600 && p.z < SHELF.z - 200`), deduplicates `geo()` noise calls
+  (`~34 → ~15`/px), and uses `0.55×` motion scale for `pk.behind` with
+  generalized `uPeakAOScale` culling while snapping to native `1.0×` at rest.
+- M4 `1440×900@2`: laptop top-down → open sweep `89.7 → 113.9 fps`
+  (`p50 8.3 ms`, `>14 ms` frames `88 → 17`, `0 > 20 ms`); `test:unit` 88/88,
+  `test:adaptive` 9/9, `hygiene` all passed, zero console/WebGL warnings.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

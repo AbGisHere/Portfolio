@@ -4660,12 +4660,15 @@ export default function MistCanvas({ recipe, onFail }) {
         // Each pass that marches them sets which: all four unless the view
         // just moved and the opening is up.
         const use = moved && peaksShown && !noBearUse ? bearUse(pk) : null;
-        // (0.5.13, 0.5.28) While the opening flight moves (`!pk.behind`), march
-        // at half size and snap back to 1.0× at rest. Keep `pk.behind` (mountains
-        // behind the house) at full 1.0× with hardware `aoPass.depth` culling so
-        // climb silhouettes stay razor-sharp.
+        // (0.5.13, 0.5.29) While the opening flight moves (`!pk.behind`), march
+        // at 0.5× and snap back to 1.0× at rest. While behind the desk/house
+        // (`pk.behind`), march at 0.55× during scroll motion (~1584×990 on
+        // Retina — still >1× CSS px & 3.3× fewer pixels so laptop-open & climb
+        // hold ~120 fps), snapping immediately to full 1.0× on the first still frame.
         if (moved || peaksGeo.scale === undefined) {
-          peaksGeo.scale = !pk.behind && moved && peaksShown && !noMotionRes && !frozen ? 0.5 : pk.behind && frameScale < 1 ? frameScale : 1;
+          peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen
+            ? (!pk.behind ? 0.5 : frameScale < 1 ? frameScale : 0.55)
+            : pk.behind && frameScale < 1 ? frameScale : 1;
         }
         const GW = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(W * peaksGeo.scale)) : W;
         const GH = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(H * peaksGeo.scale)) : H;
@@ -4726,15 +4729,16 @@ export default function MistCanvas({ recipe, onFail }) {
             peaksView(G, pk);
             gl.uniform2f(peaksU(G)('uRes'), GW, GH);
             gl.uniform1i(peaksU(G)('uCoarse'), PEAKS_G2);
-            // (0.5.28) When marching at 0.5x behind the house (aoPass.depth
-            // cannot attach), cull 2x2 full-res blocks covered by uPeakAO.
-            const aoCull = !cull && prepOnly === 'cull' && peaksGeo.scale === 0.5 && !!aoPass?.tex;
+            // (0.5.28, 0.5.29) When marching at reduced scale behind the house
+            // (aoPass.depth cannot attach), cull full-res blocks covered by uPeakAO.
+            const aoCull = !cull && prepOnly === 'cull' && peaksGeo.scale < frameScale && !!aoPass?.tex;
             gl.uniform1f(peaksU(G)('uPeakAOOn'), aoCull ? 1 : 0);
             if (aoCull) {
               gl.activeTexture(gl.TEXTURE13);
               gl.bindTexture(gl.TEXTURE_2D, aoPass.tex);
               gl.activeTexture(gl.TEXTURE0);
               gl.uniform1i(peaksU(G)('uPeakAO'), 13);
+              gl.uniform1f(peaksU(G)('uPeakAOScale'), peaksGeo.scale / frameScale);
               gl.uniform2i(peaksU(G)('uPeakAOSize'), aoPass.size[0], aoPass.size[1]);
             }
             timed('peaks-geo', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
