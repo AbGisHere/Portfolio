@@ -17,6 +17,10 @@ import { POOL } from './houseShape';
 /** The grid (cells across x, z), the rate it steps at, the damping. */
 export const WATER = { nx: 256, nz: 112, hz: 60, damp: 0.995, idle: [0.9, 2.6], chop: [0.05, 0.22] };
 
+/** The caustics' map: its size, and the indices it's drawn at (water's,
+ * for red, green and blue: houseGlass.js IOR). */
+export const CAUSTICS = { nx: 512, nz: 216, grid: [420, 178], ior: [1.3311, 1.334, 1.3372] };
+
 const VERTEX = `#version 300 es
 out vec2 vUv;
 void main() {
@@ -83,9 +87,10 @@ function program(gl, fs) {
   return p;
 }
 
-/** The caustics' target, grid and program (null: can't be drawn here). */
+/** The caustics' target, grid, precomputed slope pass and program (null: can't be drawn here). */
 function makeCaustics(gl, pre) {
   let prog = pre?.('water-caustics');
+  let slopeProg = pre?.('water-caustics-slope');
   if (!prog) try {
     const sh = (type, src) => {
       const x = gl.createShader(type);
@@ -102,6 +107,14 @@ function makeCaustics(gl, pre) {
   } catch {
     return null;
   }
+  if (!slopeProg) try {
+    slopeProg = program(gl, CAUSTIC_SLOPE_FRAGMENT);
+  } catch {
+    return null;
+  }
+  const [gx, gz] = CAUSTICS.grid;
+  const sw = gx + 1;
+  const sh = gz + 1;
   const tex = gl.createTexture();
   // (On its own unit, so it never displaces a texture someone else updates.)
   gl.activeTexture(gl.TEXTURE10);
@@ -114,21 +127,39 @@ function makeCaustics(gl, pre) {
   const fbo = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  let ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  // (0.5.28) Precompute (h, gx, gy) once per grid vertex instead of 3× per RGB pass.
+  const slopeTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, slopeTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, sh, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const slopeFbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, slopeFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, slopeTex, 0);
+  ok = ok && gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.activeTexture(gl.TEXTURE0);
-  if (!ok) return null;
+  if (!ok) {
+    gl.deleteTexture(tex);
+    gl.deleteFramebuffer(fbo);
+    gl.deleteTexture(slopeTex);
+    gl.deleteFramebuffer(slopeFbo);
+    return null;
+  }
   // The grid: two triangles a cell, in the water's uv. (0.4.65) Indexed:
   // each corner shaded once, not up to six times (the same uv, bit for bit).
-  const [gx, gz] = CAUSTICS.grid;
-  const pts = new Float32Array((gx + 1) * (gz + 1) * 2);
+  const pts = new Float32Array(sw * sh * 2);
   for (let j = 0, k = 0; j <= gz; j++) for (let i = 0; i <= gx; i++) { pts[k++] = i / gx; pts[k++] = j / gz; }
   // (0.5.10) 16-bit indices where the grid fits them.
-  const short = (gx + 1) * (gz + 1) <= 65536;
+  const short = sw * sh <= 65536;
   const idx = new (short ? Uint16Array : Uint32Array)(gx * gz * 6);
   for (let j = 0, k = 0; j < gz; j++) {
     for (let i = 0; i < gx; i++) {
-      const a = j * (gx + 1) + i, b = a + 1, c = a + gx + 2, d = a + gx + 1;
+      const a = j * sw + i, b = a + 1, c = a + sw + 1, d = a + sw;
       idx[k++] = a; idx[k++] = b; idx[k++] = c; idx[k++] = a; idx[k++] = c; idx[k++] = d;
     }
   }
@@ -144,7 +175,13 @@ function makeCaustics(gl, pre) {
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   const u = name => gl.getUniformLocation(prog, name);
-  return { prog, tex, fbo, vao, buf, ibuf, count: idx.length, type: short ? gl.UNSIGNED_SHORT : gl.UNSIGNED_INT, u: { field: u('uField'), light: u('uLight'), size: u('uSize'), ior: u('uIor'), texel: u('uTexel'), t: u('uT') } };
+  const su = name => gl.getUniformLocation(slopeProg, name);
+  return {
+    prog, slopeProg, tex, fbo, slopeTex, slopeFbo, sw, sh, vao, buf, ibuf,
+    count: idx.length, type: short ? gl.UNSIGNED_SHORT : gl.UNSIGNED_INT,
+    u: { slope: u('uSlope'), light: u('uLight'), size: u('uSize'), ior: u('uIor') },
+    su: { field: su('uField'), size: su('uSize'), texel: su('uTexel'), t: su('uT') },
+  };
 }
 
 /**
@@ -169,7 +206,8 @@ export function makeWater(gl, unit, pre = null) {
     const tex = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, nx, nz, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    // (0.5.28) Only height (r) and speed (g) are stored: RG16F halves sim BW.
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, nx, nz, 0, gl.RG, gl.HALF_FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -302,21 +340,33 @@ export function makeWater(gl, unit, pre = null) {
     // viewport and program).
     caustics(L, cUnit, t) {
       if (!caus) return false;
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      // Pass 1: bake (h, gx, gy) once for every grid vertex.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, caus.slopeFbo);
+      gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0]);
+      gl.viewport(0, 0, caus.sw, caus.sh);
+      gl.useProgram(caus.slopeProg);
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
+      gl.uniform1i(caus.su.field, unit);
+      gl.uniform2f(caus.su.size, POOL.w, POOL.d);
+      gl.uniform2f(caus.su.texel, 1 / nx, 1 / nz);
+      gl.uniform1f(caus.su.t, t);
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Pass 2: refract R/G/B reading the baked slope via 1 texelFetch/vertex.
       gl.bindFramebuffer(gl.FRAMEBUFFER, caus.fbo);
       gl.viewport(0, 0, CAUSTICS.nx, CAUSTICS.nz);
-      gl.disable(gl.DEPTH_TEST);
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.useProgram(caus.prog);
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
-      gl.uniform1i(caus.u.field, unit);
+      gl.bindTexture(gl.TEXTURE_2D, caus.slopeTex);
+      gl.uniform1i(caus.u.slope, unit);
       gl.uniform3fv(caus.u.light, L);
       gl.uniform3f(caus.u.size, POOL.w, POOL.d, POOL.deep);
-      gl.uniform2f(caus.u.texel, 1 / nx, 1 / nz);
-      gl.uniform1f(caus.u.t, t);
       gl.bindVertexArray(caus.vao);
       CAUSTICS.ior.forEach((n, c) => {
         gl.colorMask(c === 0, c === 1, c === 2, false);
@@ -327,6 +377,8 @@ export function makeWater(gl, unit, pre = null) {
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // Restore water heightfield on `unit`, bind finished caustics on `cUnit`.
+      gl.bindTexture(gl.TEXTURE_2D, targets[cur].tex);
       gl.activeTexture(gl.TEXTURE0 + cUnit);
       gl.bindTexture(gl.TEXTURE_2D, caus.tex);
       gl.activeTexture(gl.TEXTURE0);
@@ -336,7 +388,10 @@ export function makeWater(gl, unit, pre = null) {
       if (caus) {
         gl.deleteTexture(caus.tex);
         gl.deleteFramebuffer(caus.fbo);
+        gl.deleteTexture(caus.slopeTex);
+        gl.deleteFramebuffer(caus.slopeFbo);
         gl.deleteProgram(caus.prog);
+        gl.deleteProgram(caus.slopeProg);
         gl.deleteVertexArray(caus.vao);
         gl.deleteBuffer(caus.buf);
         gl.deleteBuffer(caus.ibuf);
@@ -375,6 +430,24 @@ ${TRAINS.map(([l, a, d]) => {
 }
 `;
 
+const CAUSTIC_SLOPE_FRAGMENT = `#version 300 es
+precision highp float;
+uniform sampler2D uField;
+uniform vec2 uSize;
+uniform vec2 uTexel;
+uniform float uT;
+out vec4 outColor;
+${WAVES_GLSL}
+void main() {
+  vec2 aUv = (gl_FragCoord.xy - 0.5) / vec2(${CAUSTICS.grid[0]}.0, ${CAUSTICS.grid[1]}.0);
+  float h = texture(uField, aUv).r;
+  vec2 g = vec2(texture(uField, aUv + vec2(uTexel.x, 0.0)).r - texture(uField, aUv - vec2(uTexel.x, 0.0)).r,
+    texture(uField, aUv + vec2(0.0, uTexel.y)).r - texture(uField, aUv - vec2(0.0, uTexel.y)).r) / (2.0 * uTexel * uSize);
+  g += waveSlope(aUv * uSize, uT);
+  outColor = vec4(h, g.x, g.y, 0.0);
+}
+`;
+
 // (0.4.2) The caustics: the sun through the surface onto the floor. A grid
 // of points over the water, each refracted down to the floor through the
 // field's slope at it (its colour's index); each triangle lands bigger
@@ -383,24 +456,20 @@ ${TRAINS.map(([l, a, d]) => {
 // Wallace's method). Flat water lands every triangle as it was: 1.
 const CAUSTIC_VERTEX = `#version 300 es
 layout(location = 0) in vec2 aUv;
-uniform sampler2D uField;
+uniform sampler2D uSlope;
 uniform vec3 uLight;     // toward the light (unit)
 uniform vec3 uSize;      // the pool: width, length (metres), depth to the floor
 uniform float uIor;
-uniform vec2 uTexel;
-uniform float uT;
 out vec3 vOld;
 out vec3 vNew;
-${WAVES_GLSL}
 vec3 down(vec3 n) {
   vec3 r = refract(-uLight, n, 1.0 / uIor);
   return r * (uSize.z / max(-r.y, 1e-3));
 }
 void main() {
-  float h = texture(uField, aUv).r;
-  vec2 g = vec2(texture(uField, aUv + vec2(uTexel.x, 0.0)).r - texture(uField, aUv - vec2(uTexel.x, 0.0)).r,
-    texture(uField, aUv + vec2(0.0, uTexel.y)).r - texture(uField, aUv - vec2(0.0, uTexel.y)).r) / (2.0 * uTexel * uSize.xy);
-  g += waveSlope(aUv * uSize.xy, uT);
+  vec3 hs = texelFetch(uSlope, ivec2(gl_VertexID % ${CAUSTICS.grid[0] + 1}, gl_VertexID / ${CAUSTICS.grid[0] + 1}), 0).rgb;
+  float h = hs.x;
+  vec2 g = hs.yz;
   vec3 p = vec3(aUv * uSize.xy, 0.0);
   vOld = p + down(vec3(0.0, 1.0, 0.0));
   vNew = p + down(normalize(vec3(-g.x, 1.0, -g.y))) * (1.0 - h / uSize.z);
@@ -423,9 +492,5 @@ void main() {
 }
 `;
 
-/** The caustics' map: its size, and the indices it's drawn at (water's,
- * for red, green and blue: houseGlass.js IOR). */
-export const CAUSTICS = { nx: 512, nz: 216, grid: [420, 178], ior: [1.3311, 1.334, 1.3372] };
-
 /** The sim's shaders, for the devices check (scripts/lib/programs.mjs). */
-export const WATER_PROGRAMS = [['water-step', VERTEX, STEP], ['water-drop', VERTEX, DROP], ['water-caustics', CAUSTIC_VERTEX, CAUSTIC_FRAGMENT]];
+export const WATER_PROGRAMS = [['water-step', VERTEX, STEP], ['water-drop', VERTEX, DROP], ['water-caustics-slope', VERTEX, CAUSTIC_SLOPE_FRAGMENT], ['water-caustics', CAUSTIC_VERTEX, CAUSTIC_FRAGMENT]];

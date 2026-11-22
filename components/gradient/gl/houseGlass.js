@@ -22,7 +22,7 @@ import { CAMERA_GLSL, PROJECT_GLSL } from './deskShader';
 import { METAL_GLSL } from './laptopShader';
 import { GLASS_THICK, POOL } from './houseShape';
 import { WATER, WAVES_GLSL } from './poolWater';
-import { box, grid } from './meshKit';
+import { box } from './meshKit';
 
 const f = x => (Number.isInteger(x) ? `${x}.0` : x.toFixed(5));
 const v2 = a => `vec2(${a.map(f).join(', ')})`;
@@ -89,14 +89,43 @@ export function glassMesh(glass) {
     mark(rail ? 'rails' : 'windows', from);
     ranges[rail ? 'railsBox' : 'windowsBox'] = [bLo, bHi];
   }
-  const from = out.length / 9;
-  grid(out, 180, 76, (u, w) => ({ p: [PMIN[0] + 0.02 + u * (POOL.w - 0.04), POOL.at[1], PMIN[1] + 0.02 + w * (POOL.d - 0.04)], part: 4, s: u, t: w }));
-  mark('water', from);
+  // (0.5.28) Indexed 180×76 water surface mesh (13,937 verts vs 82,080 unindexed):
+  // 6× fewer vertex shader evaluations per frame with bit-exact geometry.
+  const wx = 180;
+  const wz = 76;
+  const waterVerts = new Float32Array((wx + 1) * (wz + 1) * 5);
+  for (let j = 0, k = 0; j <= wz; j++) {
+    const t = j / wz;
+    const pz = PMIN[1] + 0.02 + t * (POOL.d - 0.04);
+    for (let i = 0; i <= wx; i++) {
+      const s = i / wx;
+      waterVerts[k++] = PMIN[0] + 0.02 + s * (POOL.w - 0.04);
+      waterVerts[k++] = POOL.at[1];
+      waterVerts[k++] = pz;
+      waterVerts[k++] = s;
+      waterVerts[k++] = t;
+    }
+  }
+  const waterIndices = new Uint16Array(wx * wz * 6);
+  for (let j = 0, k = 0; j < wz; j++) {
+    for (let i = 0; i < wx; i++) {
+      const a = j * (wx + 1) + i;
+      const b = a + 1;
+      const c = a + wx + 2;
+      const d = a + wx + 1;
+      waterIndices[k++] = a;
+      waterIndices[k++] = b;
+      waterIndices[k++] = c;
+      waterIndices[k++] = a;
+      waterIndices[k++] = c;
+      waterIndices[k++] = d;
+    }
+  }
   const data = new Float32Array(out);
-  return { data, count: data.length / 9, ...ranges };
+  return { data, count: data.length / 9, ...ranges, waterVerts, waterIndices, waterCount: waterIndices.length };
 }
 
-export const GLASS_VERTEX = `#version 300 es
+export const GLASS_PANE_VERTEX = `#version 300 es
 precision highp float;
 
 layout(location = 0) in vec3 aPos;
@@ -105,8 +134,6 @@ layout(location = 2) in float aPart;
 layout(location = 3) in vec2 aST;
 
 ${CAMERA_GLSL}
-uniform sampler2D uWater;
-uniform float uWaterOn;
 out vec3 vWorld;
 out vec3 vNorm;
 out vec2 vST;
@@ -118,18 +145,33 @@ void main() {
   vPart = int(floor(aPart + 0.001));
   vWide = (aPart - float(vPart)) * 100.0;
   vST = aST;
-  vec3 p = aPos;
-  // The water stands where the field has it.
-  if (vPart == 4) p.y += textureLod(uWater, aST, 0.0).r * uWaterOn;
-  vWorld = p;
+  vWorld = aPos;
   vNorm = aNorm;
+  gl_Position = project(aPos);
+}
+`;
+
+export const GLASS_WATER_VERTEX = `#version 300 es
+precision highp float;
+
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aST;
+
+${CAMERA_GLSL}
+uniform sampler2D uWater;
+uniform float uWaterOn;
+out vec3 vWorld;
+
+${PROJECT_GLSL}
+void main() {
+  vec3 p = aPos;
+  p.y += textureLod(uWater, aST, 0.0).r * uWaterOn;
+  vWorld = p;
   gl_Position = project(p);
 }
 `;
 
-export const GLASS_FRAGMENT = `#version 300 es
-precision highp float;
-
+const GLASS_SHARED_FS = `
 ${CAMERA_GLSL}
 uniform vec3 uSun;
 uniform vec3 uEnvTop;
@@ -137,27 +179,11 @@ uniform vec3 uEnvLow;
 uniform vec3 uWood;
 uniform float uNight;
 uniform sampler2D uScene;    // the frame behind, as drawn
-uniform sampler2D uWater;    // the water's field (r: height, metres)
-uniform float uWaterOn;
-uniform float uWaterT;
-uniform sampler2D uReflect;  // the house mirrored in the water (a: there)
-uniform float uReflectOn;
-// (0.5.17) The part of uScene and uReflect the frame fills (1, 1 but while
-// the climb moves at a part size: MistCanvas.jsx frameScale).
 uniform vec2 uFrameUV;
-uniform vec2 uReflectUV;
 uniform vec3 uSky;
-
-in vec3 vWorld;
-in vec3 vNorm;
-in vec2 vST;
-flat in int vPart;
-flat in float vWide;
-out vec4 outColor;
 
 ${METAL_GLSL}
 ${PROJECT_GLSL}
-${WAVES_GLSL}
 
 // Where a world point lands on the frame (0 … 1).
 vec2 screenOf(vec3 w) {
@@ -176,15 +202,10 @@ float fresnel(float ci, float n) {
 }
 
 // The sky and what's round it, mirrored along R, and the body's glint.
-// What's out there along R, as a mirror shows it: the sky, and toward the
-// mountains their ranges against it (a far one hazed into the sky, a nearer
-// one darker), the meadow below the horizon, and the body's glint.
 vec3 mirrored(vec3 R, float a) {
   vec3 Ls = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
   vec3 c = envAt(R);
   float facing = smoothstep(-0.1, 0.35, R.z);
-  // (0.4.64) The ranges only where they can show: above the horizon,
-  // toward the mountains.
   if (R.y > 0.0 && facing > 0.0) {
     float az = atan(R.x, R.z);
     float far = 0.035 + 0.05 * envNoise(vec2(az * 5.0, 1.0)) + 0.02 * envNoise(vec2(az * 17.0, 3.0));
@@ -198,117 +219,134 @@ vec3 mirrored(vec3 R, float a) {
   c *= mix(1.0, 0.35, uNight);
   return c + uSun * pow(max(dot(R, Ls), 0.0), 1.0 / max(a, 1e-3)) * 3.0 * (1.0 - 0.7 * uNight);
 }
+`;
+
+export const GLASS_WATER_FRAGMENT = `#version 300 es
+precision highp float;
+
+${GLASS_SHARED_FS}
+uniform sampler2D uWater;    // the water's field (r: height, metres)
+uniform float uWaterOn;
+uniform float uWaterT;
+uniform sampler2D uReflect;  // the house mirrored in the water (a: there)
+uniform float uReflectOn;
+uniform vec2 uReflectUV;
+
+in vec3 vWorld;
+out vec4 outColor;
+
+${WAVES_GLSL}
+
+void main() {
+  vec3 V = normalize(uCam - vWorld);
+  vec3 I = -V;
+  vec2 here = screenOf(vWorld);
+  vec2 uv = (vWorld.xz - ${v2(PMIN)}) / ${v2([POOL.w, POOL.d])};
+  vec2 e = vec2(1.0 / ${WATER.nx}.0, 1.0 / ${WATER.nz}.0);
+  vec2 slope = vec2(texture(uWater, uv + vec2(e.x, 0.0)).r - texture(uWater, uv - vec2(e.x, 0.0)).r,
+    texture(uWater, uv + vec2(0.0, e.y)).r - texture(uWater, uv - vec2(0.0, e.y)).r) / (2.0 * e * ${v2([POOL.w, POOL.d])}) * uWaterOn;
+  slope += waveSlope(vWorld.xz - ${v2(PMIN)}, uWaterT);
+  vec2 w = vWorld.xz * 6.0 + uWaterT * vec2(0.3, 0.2);
+  slope += (vec2(noise2(w), noise2(w + 17.0)) - 0.5) * 0.012;
+  vec3 N = normalize(vec3(-slope.x, 1.0, -slope.y));
+  float ci = max(dot(N, V), 1e-3);
+  vec3 through;
+  vec3 Fr;
+  for (int c = 0; c < 3; c++) {
+    float n = c == 0 ? ${f(IOR.water[0])} : c == 1 ? ${f(IOR.water[1])} : ${f(IOR.water[2])};
+    vec3 d = refract(I, N, 1.0 / n);
+    float t = (${f(FLOOR_Y)} - vWorld.y) / min(d.y, -1e-3);
+    if (d.x > 1e-4) t = min(t, (${f(PMAX[0])} - vWorld.x) / d.x);
+    if (d.x < -1e-4) t = min(t, (${f(PMIN[0])} - vWorld.x) / d.x);
+    if (d.z > 1e-4) t = min(t, (${f(PMAX[1])} - vWorld.z) / d.z);
+    if (d.z < -1e-4) t = min(t, (${f(PMIN[1])} - vWorld.z) / d.z);
+    vec3 hit = vWorld + d * max(t, 0.0);
+    float s = texture(uScene, screenOf(hit) * uFrameUV)[c];
+    float a = c == 0 ? 0.34 : c == 1 ? 0.056 : 0.012;
+    float path = t + (vWorld.y - hit.y);
+    float keep = exp(-a * path * 1.6);
+    float glow = (c == 0 ? 0.02 : c == 1 ? 0.1 : 0.13) * (1.0 - exp(-path * 0.5)) * mix(1.0, 0.6, uNight);
+    through[c] = s * keep + glow * (uEnvTop[c] * 0.5 + uEnvLow[c] * 0.5);
+    Fr[c] = fresnel(ci, n);
+  }
+  vec3 R = reflect(I, N);
+  vec3 refl = mirrored(R, 0.0025);
+  if (uReflectOn > 0.5) {
+    vec4 m = texture(uReflect, (here + slope * 0.03) * uReflectUV);
+    refl = mix(refl, m.rgb, m.a);
+  }
+  outColor = vec4(mix(through, refl, Fr), 1.0);
+}
+`;
+
+export const GLASS_PANE_FRAGMENT = `#version 300 es
+precision highp float;
+
+${GLASS_SHARED_FS}
+in vec3 vWorld;
+in vec3 vNorm;
+in vec2 vST;
+flat in int vPart;
+flat in float vWide;
+out vec4 outColor;
 
 void main() {
   vec3 N = normalize(vNorm);
   vec3 V = normalize(uCam - vWorld);
   vec3 I = -V;
   vec2 here = screenOf(vWorld);
-  vec3 col;
-  if (vPart == 4) {
-    // ---- The water. Its slope from the field, and a fine ripple over it.
-    vec2 uv = (vWorld.xz - ${v2(PMIN)}) / ${v2([POOL.w, POOL.d])};
-    vec2 e = vec2(1.0 / ${WATER.nx}.0, 1.0 / ${WATER.nz}.0);
-    vec2 slope = vec2(texture(uWater, uv + vec2(e.x, 0.0)).r - texture(uWater, uv - vec2(e.x, 0.0)).r,
-      texture(uWater, uv + vec2(0.0, e.y)).r - texture(uWater, uv - vec2(0.0, e.y)).r) / (2.0 * e * ${v2([POOL.w, POOL.d])}) * uWaterOn;
-    // The wind's ripples on it (poolWater.js), and a finer stir still.
-    slope += waveSlope(vWorld.xz - ${v2(PMIN)}, uWaterT);
-    vec2 w = vWorld.xz * 6.0 + uWaterT * vec2(0.3, 0.2);
-    slope += (vec2(noise2(w), noise2(w + 17.0)) - 0.5) * 0.012;
-    N = normalize(vec3(-slope.x, 1.0, -slope.y));
-    float ci = max(dot(N, V), 1e-3);
-    // Each colour down its own path to the basin's floor or walls.
-    vec3 through;
-    vec3 Fr;
-    for (int c = 0; c < 3; c++) {
-      float n = c == 0 ? ${f(IOR.water[0])} : c == 1 ? ${f(IOR.water[1])} : ${f(IOR.water[2])};
-      vec3 d = refract(I, N, 1.0 / n);
-      float t = (${f(FLOOR_Y)} - vWorld.y) / min(d.y, -1e-3);
-      if (d.x > 1e-4) t = min(t, (${f(PMAX[0])} - vWorld.x) / d.x);
-      if (d.x < -1e-4) t = min(t, (${f(PMIN[0])} - vWorld.x) / d.x);
-      if (d.z > 1e-4) t = min(t, (${f(PMAX[1])} - vWorld.z) / d.z);
-      if (d.z < -1e-4) t = min(t, (${f(PMIN[1])} - vWorld.z) / d.z);
-      vec3 hit = vWorld + d * max(t, 0.0);
-      float s = texture(uScene, screenOf(hit) * uFrameUV)[c];
-      // Absorbed along the way down and back up toward the light's way in
-      // (pure water: a = 0.34, 0.056, 0.012 per metre), and a little light
-      // scattered back toward the eye from the water itself.
-      float a = c == 0 ? 0.34 : c == 1 ? 0.056 : 0.012;
-      float path = t + (vWorld.y - hit.y);
-      float keep = exp(-a * path * 1.6);
-      float glow = (c == 0 ? 0.02 : c == 1 ? 0.1 : 0.13) * (1.0 - exp(-path * 0.5)) * mix(1.0, 0.6, uNight);
-      through[c] = s * keep + glow * (uEnvTop[c] * 0.5 + uEnvLow[c] * 0.5);
-      Fr[c] = fresnel(ci, n);
-    }
-    vec3 R = reflect(I, N);
-    vec3 refl = mirrored(R, 0.0025);
-    if (uReflectOn > 0.5) {
-      // The house mirrored, where it's there, nudged by the surface's slope.
-      vec4 m = texture(uReflect, (here + slope * 0.03) * uReflectUV);
-      refl = mix(refl, m.rgb, m.a);
-    }
-    col = mix(through, refl, Fr);
-  } else {
-    // ---- A pane of glass. Its faces are the panes' broad sides; seen
-    // through its edge, it's the glass's own green.
-    bool rail = vPart >= 2;
-    int axis = vPart % 2;
-    bool face = axis == 0 ? abs(N.x) > 0.5 : abs(N.z) > 0.5;
-    vec3 Ng = dot(N, V) < 0.0 ? -N : N;
-    // Toughened glass isn't quite flat: the rollers leave a faint wave
-    // across it (~30 cm), and it's never perfectly true, so reflections
-    // waver along a pane and break a little between panes.
-    float wave = face ? sin(vWorld.y * 21.0 + (vWorld.x + vWorld.z) * 0.7) * 0.0035 + (envNoise(vWorld.xz * 0.8 + vWorld.y * 0.6) - 0.5) * 0.004 : 0.0;
-    if (face) Ng = normalize(Ng + vec3(0.0, wave, 0.0) + (axis == 0 ? vec3(0.0, 0.0, wave * 0.6) : vec3(wave * 0.6, 0.0, 0.0)));
-    float ci = max(abs(dot(Ng, V)), 1e-3);
-    vec3 tang = I - dot(I, Ng) * Ng;
-    vec3 side = length(tang) > 1e-5 ? normalize(tang) : vec3(0.0);
-    vec3 through;
-    vec3 Rs;
-    for (int c = 0; c < 3; c++) {
-      float n = c == 0 ? ${f(IOR.glass[0])} : c == 1 ? ${f(IOR.glass[1])} : ${f(IOR.glass[2])};
-      float si = sqrt(max(0.0, 1.0 - ci * ci));
-      float ct = sqrt(max(1e-4, 1.0 - si * si / (n * n)));
-      // The slab's sideways shift of the ray (t sin θi (1 − cos θi / (n cos θt)))
-      // and the path inside it.
-      float shift = ${f(GLASS_THICK)} * si * (1.0 - ci / (n * ct));
-      float path = face ? ${f(GLASS_THICK)} / ct : 0.6;
-      vec2 at = here + (screenOf(vWorld - side * shift) - here) + vec2(0.0, wave * 0.35);
-      float s = texture(uScene, at * uFrameUV)[c];
-      // Float glass's iron: a faint green that deepens along the path.
-      float a = c == 0 ? 3.2 : c == 1 ? 1.1 : 2.4;
-      float r = fresnel(ci, n);
-      Rs[c] = 2.0 * r / (1.0 + r);
-      through[c] = s * exp(-a * path) * (1.0 - Rs[c]);
-    }
-    vec3 refl = mirrored(reflect(I, Ng), 0.002);
-    col = through + refl * Rs;
-    // A little dust on it, catching the light, more toward its foot.
-    col += (uEnvTop * 0.5 + uSun * 0.3) * (0.008 + 0.012 * envNoise(vWorld.xy * 9.0 + vWorld.z * 7.0)) * (rail ? 1.0 + 1.5 * exp(-max(vWorld.y - ${f(POOL.at[1])}, 0.0) * 6.0) * step(${f(POOL.at[1] - 0.1)}, vWorld.y) : 1.0) * mix(1.0, 0.3, uNight);
-    // Laminated: two sheets on an interlayer, a faint grey-green through it.
-    col *= vec3(0.93, 0.965, 0.95);
-    // Its edges, drawn to the millimetre (whatever the pixels): the
-    // polished edge seen end on, the glass's own deep green, and at it the
-    // light bent by the edge's arris, what's behind shifted and dimmed. The
-    // balustrade's top edge catches the sky and the sun as a bright line.
+  bool rail = vPart >= 2;
+  int axis = vPart % 2;
+  bool face = axis == 0 ? abs(N.x) > 0.5 : abs(N.z) > 0.5;
+  vec3 Ng = dot(N, V) < 0.0 ? -N : N;
+  float wave = face ? sin(vWorld.y * 21.0 + (vWorld.x + vWorld.z) * 0.7) * 0.0035 + (envNoise(vWorld.xz * 0.8 + vWorld.y * 0.6) - 0.5) * 0.004 : 0.0;
+  if (face) Ng = normalize(Ng + vec3(0.0, wave, 0.0) + (axis == 0 ? vec3(0.0, 0.0, wave * 0.6) : vec3(wave * 0.6, 0.0, 0.0)));
+  float ci = max(abs(dot(Ng, V)), 1e-3);
+  float si = sqrt(max(0.0, 1.0 - ci * ci));
+  vec3 tang = I - dot(I, Ng) * Ng;
+  vec3 side = length(tang) > 1e-5 ? normalize(tang) : vec3(0.0);
+  vec3 through;
+  vec3 Rs;
+  for (int c = 0; c < 3; c++) {
+    float n = c == 0 ? ${f(IOR.glass[0])} : c == 1 ? ${f(IOR.glass[1])} : ${f(IOR.glass[2])};
+    float st = si / n;
+    float ct = sqrt(max(1e-4, 1.0 - st * st));
+    float shift = ${f(GLASS_THICK)} * si * (1.0 - ci / (n * ct));
+    float path = face ? ${f(GLASS_THICK)} / ct : 0.6;
+    vec2 at = here + (screenOf(vWorld - side * shift) - here) + vec2(0.0, wave * 0.35);
+    float s = texture(uScene, at * uFrameUV)[c];
+    float a = c == 0 ? 3.2 : c == 1 ? 1.1 : 2.4;
+    float rs = (ci - n * ct) / (ci + n * ct);
+    float rp = (n * ci - ct) / (n * ci + ct);
+    float r = 0.5 * (rs * rs + rp * rp);
+    Rs[c] = 2.0 * r / (1.0 + r);
+    through[c] = s * exp(-a * path) * (1.0 - Rs[c]);
+  }
+  vec3 refl = mirrored(reflect(I, Ng), 0.002);
+  vec3 col = through + refl * Rs;
+  col += (uEnvTop * 0.5 + uSun * 0.3) * (0.008 + 0.012 * envNoise(vWorld.xy * 9.0 + vWorld.z * 7.0)) * (rail ? 1.0 + 1.5 * exp(-max(vWorld.y - ${f(POOL.at[1])}, 0.0) * 6.0) * step(${f(POOL.at[1] - 0.1)}, vWorld.y) : 1.0) * mix(1.0, 0.3, uNight);
+  col *= vec3(0.93, 0.965, 0.95);
+  if (!face) {
     vec3 edgeCol = texture(uScene, here * uFrameUV).rgb * vec3(0.22, 0.4, 0.34) + vec3(0.1, 0.24, 0.2) * (uEnvTop * 0.6 + uSun * 0.5) * mix(1.0, 0.35, uNight);
-    if (!face) col = edgeCol + refl * 0.08;
-    else {
-      float px = max(vWide * fwidth(vST.x), 1e-5);
-      float dEdge = min(vST.x, 1.0 - vST.x) * vWide;
-      float side = 1.0 - smoothstep(0.012, 0.012 + px * 1.5, dEdge);
-      float near = 1.0 - smoothstep(0.012, 0.035, dEdge);
-      if (near > 0.0) {
-        vec2 bend = (vST.x < 0.5 ? -1.0 : 1.0) * vec2(dFdx(vST.x), dFdy(vST.x)) / max(length(vec2(dFdx(vST.x), dFdy(vST.x))), 1e-6) * 0.004;
-        col = mix(col, texture(uScene, (here + bend * near) * uFrameUV).rgb * 0.8 * vec3(0.85, 0.95, 0.9) + refl * Rs, near * 0.6);
-      }
-      col = mix(col, edgeCol, side);
-      if (rail) {
-        float pyH = max(1.01 * fwidth(vST.y), 1e-5);
-        float dTop = (1.0 - vST.y) * 1.01;
-        float lip = 1.0 - smoothstep(0.0, 0.006 + pyH * 1.5, dTop);
-        col = mix(col, (uEnvTop * 1.2 + uSun * 0.6) * mix(1.0, 0.4, uNight) * vec3(0.8, 0.95, 0.9), lip * 0.8);
-      }
+    col = edgeCol + refl * 0.08;
+  } else {
+    float px = max(vWide * fwidth(vST.x), 1e-5);
+    float dEdge = min(vST.x, 1.0 - vST.x) * vWide;
+    float sideW = 1.0 - smoothstep(0.012, 0.012 + px * 1.5, dEdge);
+    float near = 1.0 - smoothstep(0.012, 0.035, dEdge);
+    if (near > 0.0) {
+      vec2 bend = (vST.x < 0.5 ? -1.0 : 1.0) * vec2(dFdx(vST.x), dFdy(vST.x)) / max(length(vec2(dFdx(vST.x), dFdy(vST.x))), 1e-6) * 0.004;
+      col = mix(col, texture(uScene, (here + bend * near) * uFrameUV).rgb * 0.8 * vec3(0.85, 0.95, 0.9) + refl * Rs, near * 0.6);
+    }
+    if (sideW > 0.0) {
+      vec3 edgeCol = texture(uScene, here * uFrameUV).rgb * vec3(0.22, 0.4, 0.34) + vec3(0.1, 0.24, 0.2) * (uEnvTop * 0.6 + uSun * 0.5) * mix(1.0, 0.35, uNight);
+      col = mix(col, edgeCol, sideW);
+    }
+    if (rail) {
+      float pyH = max(1.01 * fwidth(vST.y), 1e-5);
+      float dTop = (1.0 - vST.y) * 1.01;
+      float lip = 1.0 - smoothstep(0.0, 0.006 + pyH * 1.5, dTop);
+      col = mix(col, (uEnvTop * 1.2 + uSun * 0.6) * mix(1.0, 0.4, uNight) * vec3(0.8, 0.95, 0.9), lip * 0.8);
     }
   }
   outColor = vec4(col, 1.0);

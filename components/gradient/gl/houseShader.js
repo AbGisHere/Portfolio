@@ -198,6 +198,7 @@ uniform vec2 uMirror;
 uniform float uMorph;
 out vec3 vWorld;
 flat out int vPart;
+out float vZ;
 
 ${PROJECT_GLSL}
 void main() {
@@ -212,7 +213,9 @@ void main() {
   vPart = int(floor(part + 0.001));
   vec3 at = pos;
   if (uMirror.x > 0.5) at.y = 2.0 * uMirror.y - at.y;
-  gl_Position = project(at);
+  vec4 clip = project(at);
+  vZ = clip.w;
+  gl_Position = clip;
 }
 `;
 
@@ -582,27 +585,30 @@ export const HOUSE_LIGHT_GLSL = houseLightGlsl(false);
 const HOUSE_LIGHT_UBO_GLSL = houseLightGlsl(true);
 
 /** (0.4.2) The house's depth along the view, for the ambient occlusion
- * (houseShader's own vertex stage; R16F). */
+ * (houseShader's own vertex stage; R16F). Lawn/fallback pass with frayed edge. */
 export const HOUSE_DEPTH_FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
-${CAMERA_GLSL}
-uniform vec2 uMirror;
 in vec3 vWorld;
 flat in int vPart;
+in float vZ;
 out vec4 outColor;
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise2(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = p - i;
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
-}
 void main() {
   // (Where the lawn frays into the meadow, as the shading pass leaves it.)
   if (vPart == ${HOUSE_PART.lawn} && vWorld.y < 1.0 * pow(hash2(floor(gl_FragCoord.xy)), 0.7)) discard;
-  vec3 q = viewOf(vWorld - uCam);
-  outColor = vec4(-q.y * uPitch.y + q.z * uPitch.x, 0.0, 0.0, 1.0);
+  outColor = vec4(vZ, 0.0, 0.0, 1.0);
+}
+`;
+
+/** (0.5.28) Discard-free solid house depth pass: keeps hardware Early-Z / Hi-Z
+ * 100% active across all 518k solid house triangles and 15k leaf instances. */
+export const HOUSE_DEPTH_SOLID_FRAGMENT = `#version 300 es
+precision highp float;
+in float vZ;
+out vec4 outColor;
+void main() {
+  outColor = vec4(vZ, 0.0, 0.0, 1.0);
 }
 `;
 
@@ -712,16 +718,20 @@ const vec3 BOOKS[10] = vec3[](vec3(0.55, 0.16, 0.12), vec3(0.15, 0.24, 0.38), ve
   vec3(0.1, 0.1, 0.11), vec3(0.7, 0.45, 0.18), vec3(0.85, 0.82, 0.76), vec3(0.42, 0.22, 0.3), vec3(0.3, 0.42, 0.48), vec3(0.6, 0.3, 0.2));
 
 void main() {
+#ifdef HS_MIRROR
   // (Only what stands above the water is mirrored in it, and never the
   // rooms behind the glass: too dim to show in it.)
   if (uMirror.x > 0.5 && (vWorld.y < uMirror.y || roomOf(vWorld) != 0)) discard;
+#endif
   // (0.4.55) Directions, the material and its own light at mediump (phone
   // GPUs: fewer registers); positions, depth, shadow lookups, hashes and
   // the lights' sums stay highp, and so do ints (0.4.41).
   vec3 N0 = normalize(vNorm);
   mediump vec3 N = N0;
   vec3 V = normalize(uCam - vWorld);
+#ifdef HS_MIRROR
   if (uMirror.x > 0.5) V = normalize(vec3(uCam.x, 2.0 * uMirror.y - uCam.y, uCam.z) - vWorld);
+#endif
   mediump vec3 L = normalize(vec3(uSunDir.x, 0.55, uSunDir.y));
   vec2 st = vST;
   float k = vVar * 10.0;
@@ -1569,6 +1579,8 @@ void main() {
   outColor = vec4(col, 1.0);
 }
 `;
+
+export const HOUSE_MIRROR_FRAGMENT = HOUSE_FRAGMENT.replace('#version 300 es\n', '#version 300 es\n#define HS_MIRROR\n');
 
 /**
  * (0.4.47) The fragment shader for a run of only these materials

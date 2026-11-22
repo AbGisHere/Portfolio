@@ -26,10 +26,15 @@ uniform vec2 uScale;
 in vec2 vUv;
 out vec4 outColor;
 void main() {
-  vec3 c = vec3(0.0);
-  for (int i = -1; i <= 1; i++)
-    for (int j = -1; j <= 1; j++) c += texture(uFrom, vUv * uScale + vec2(i, j) * uTexel).rgb;
-  c /= 9.0;
+  // (0.5.28) Exact 4-tap bilinear decomposition of the 3x3 box filter on a
+  // gl.LINEAR source texture: 4/9 at (-0.5,-0.5), 2/9 at (+1,-0.5) & (-0.5,+1),
+  // 1/9 at (+1,+1) — 55.6% fewer texture reads with identical weights.
+  vec2 b = vUv * uScale;
+  vec2 t = uTexel;
+  vec3 c = (4.0 * texture(uFrom, b + vec2(-0.5, -0.5) * t).rgb
+    + 2.0 * texture(uFrom, b + vec2(1.0, -0.5) * t).rgb
+    + 2.0 * texture(uFrom, b + vec2(-0.5, 1.0) * t).rgb
+    + texture(uFrom, b + vec2(1.0, 1.0) * t).rgb) / 9.0;
   float l = max(c.r, max(c.g, c.b));
   // (Only what burns: the lamps, the strips, the shades; a lit wall rolls
   // off below this, houseShader.js.)
@@ -140,6 +145,7 @@ export function makeBloom(gl, unit, pre = null) {
   };
   const run = (prog, to, from, set) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, to ? to.fbo : null);
+    if (to) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0]);
     gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, from);

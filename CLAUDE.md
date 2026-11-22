@@ -327,6 +327,33 @@ without `qa`/`devices`; the 15 Hz world rebuild (11–14 ms) is next.
 linked and run with transform feedback in the probe, and the desk at rest
 building its list (`data-grass-list`) on each phone.
 
+**0.5.28** (2026-11-22) ships Tier 1 & Tier 2 GPU/CPU optimizations, sharp
+`1.0×` climb mountains and GPU unmount cleanup:
+- At rest: moves static tree wood, lawn, sky/peaks, desk & tree shadows out
+  of the 15 Hz `stillWorld` rebuild into `0 Hz` `still` (15 Hz rebuilds only
+  tree leaf cards + meadow); filters 120 Hz `house-under` caustics to the
+  pool-basin runs (`?poolruns=0` off); adds a transform-feedback wildflower
+  live-list splitting near (24-vert) vs far head-only (6-vert) flowers
+  (`?flowerlist=0` off, `15,360 → 1,139` desk / `984` pool, `>92%` culled)
+  plus early circle reject in `FLOWER_FRAGMENT` and cached `flowerRanges`.
+- Climb & shaders: restores hardware Early-Z/Hi-Z in the house depth prepass
+  (`HOUSE_DEPTH_SOLID_FRAGMENT`, `vZ` from VS) and solid variants (dedicated
+  `HOUSE_MIRROR_FRAGMENT` for pool reflection); splits `houseGlass.js` into
+  `GLASS_PANE` (guarded `edgeCol` fetch, hoisted `si`/Fresnel) and indexed
+  `GLASS_WATER` (`82k → 13.9k` verts); exact 4-tap bilinear `bloom` bright
+  pass + tile invalidation; `RG16F` water sim + 1-pass precomputed caustics
+  slope (`water-caustics-slope`); `RGBA8` `glass.tex` copy; one-time static
+  `mirrorUniforms` + unit-15 atlas rebind fix; `peaksShader.js` `Hm` in
+  `coneReach`, packed `strata` in `o1.w`, hoisted cloud/moon sky constants
+  (`20×1` `peaksConsts`), `0.24` near-spire march step fixing the right-hand
+  summit overhang, and `pk.behind` restored to crisp `1.0×` with hardware
+  `aoPass.depth` culling.
+- Cleanup: disposes grass/flower TF GPU buffers/VAOs/fences and water glass
+  buffers on unmount; closes 3 stale `Planned` rows in `ROADMAP.md`.
+- M4 `1440×900@2` (`perf --house`): Day climb `109.2 fps` (`p50 8.3 ms`,
+  `max 17.6 ms`, `0 > 20 ms`), Night climb `109.2 fps` (`p50 8.4 ms`), rest
+  draws `5` calls at desk / `8–9` calls at pool (`p50 8.3 ms`, `p95 9.2–9.3 ms`).
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

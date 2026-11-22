@@ -6,6 +6,54 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.28 — 2026-11-22
+
+Tier 1 & Tier 2 GPU/CPU optimizations, crisp `1.0×` climb mountains, healed
+near-spire raymarch, and GPU unmount cleanup.
+
+- **Lighter 15 Hz `stillWorld` rebuild (`MistCanvas.jsx`, `treeShader.js`):**
+  Moved 100% static world passes (tree trunks/branches, lawn, sky/peaks, desk
+  shadow, tree shadows) into `0 Hz` `still` when `stillWorldOk`, leaving only
+  tree leaf cards and meadow wind/cloud tint at 15 Hz.
+- **Pool-only `house-under` caustics (`MistCanvas.jsx`, `?poolruns=0` off):**
+  Precomputes the few house runs overlapping the pool basin (`y < POOL.at[1]`)
+  so 120 Hz at-rest caustics no longer resubmits the whole house + 15k leaves.
+- **Hardware Early-Z restored in house depth & solid variants (`houseShader.js`):**
+  Split discard-free `HOUSE_DEPTH_SOLID_FRAGMENT` (passing `vZ` from VS) from
+  frayed-edge `HOUSE_DEPTH_FRAGMENT`, and moved the pool-reflection clip
+  `discard` into dedicated `HOUSE_MIRROR_FRAGMENT` (`#define HS_MIRROR`).
+- **Wildflowers TF live-list & early reject (`flowerShader.js`, `?flowerlist=0` off):**
+  Transform-feedback live-list at rest culls ~92–94% of dead flower slots
+  (`15,360 → 1,139` at desk, `984` at pool) and splits near stem+head
+  (24 verts) from far head-only (6 verts), plus early `dot(vUV, vUV) > 1.0`
+  reject before `atan`/`pow` and cached `flowerRanges`.
+- **Glass, water, bloom & probes (`houseGlass.js`, `poolWater.js`, `bloom.js`, `mirrorProbe.js`):**
+  Split `GLASS_PANE` (guarded `edgeCol` fetch on <1% edge pixels, hoisted `si`
+  and inline Fresnel) from indexed `GLASS_WATER` (`82,080 → 13,937` verts,
+  6× fewer VS invocations); switched `glass.tex` to native `RGBA8`; exact
+  4-tap bilinear `BRIGHT` downsample (-55.6% taps) + TBDR `invalidateFramebuffer`
+  in `bloom.js`; `RG16F` water heightfield + 1-pass precomputed caustics slope
+  (`water-caustics-slope`, cutting 3× `waveSlope` + 5× `uField` gradient
+  recomputation); one-time static `mirrorUniforms` uploads and unit-15 atlas
+  rebind fixing probe feedback loops.
+- **Peaks shader & climb sharpness (`peaksShader.js`, `MistCanvas.jsx`):**
+  `coneReach` now reads `BAKE.outer` (`Hm`), `strata` packs into `o1.w`
+  (removing 5 duplicate 2D noises/px in `ground`), dead `reach()` removed from
+  `drawSun`, moon tint & 3 cloud atmospheric integrals hoisted into `20×1`
+  `PEAKS_CONSTS_FS`, steep near-spire march step tightened (`0.24` within
+  3.5 km, healing the sliced right-hand summit behind the house), and
+  `pk.behind` restored to crisp `1.0×` with hardware `aoPass.depth` culling.
+- **Cleanup:** Disposes grass/flower TF GPU resources and indexed water glass
+  buffers on unmount; marks 3 completed `ROADMAP.md` rows done (`0.5.10`,
+  `0.5.13`, `0.4.59`/`0.5.16`).
+- **Measured (M4 `1440×900@2`, production build):**
+  - `perf --house`: Day climb `109.2 fps` (`p50 8.3 ms`, `max 17.6 ms`,
+    `0 > 20 ms`), Night climb `109.2 fps` (`p50 8.4 ms`, `max 24.9 ms`).
+  - Rest views: opening `4.5/s` (`1` call), desk `5` calls (`1.9–2.5 ms` bench),
+    pool-night `8` calls, pool-day `9` calls (`p50 8.3 ms`, `p95 9.2–9.3 ms`).
+  - `test:unit` 88/88, `test:adaptive` 9/9, `hygiene` all passed, zero console
+    errors or WebGL warnings.
+
 ## 0.5.27 — 2026-11-21
 
 `devices` checks 0.5.26's grass list on the phones.

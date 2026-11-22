@@ -9,10 +9,12 @@ import { runVariant } from './houseLights';
 
 export {
   HOUSE_DEPTH_FRAGMENT,
+  HOUSE_DEPTH_SOLID_FRAGMENT,
   HOUSE_DEPTH_VERTEX,
   HOUSE_FRAGMENT,
   HOUSE_FRAME_BINDING,
   HOUSE_FRAME_FLOATS,
+  HOUSE_MIRROR_FRAGMENT,
   HOUSE_STRIDE,
   HOUSE_VERTEX,
   LIGHTMAP_BOUNDS,
@@ -26,7 +28,7 @@ export { WATER_PROGRAMS, makeWater } from './poolWater';
 export { PROBE, PROBE_BACKDROP_FRAGMENT, PROBE_BACKDROP_VERTEX, PROBE_FACES, makeProbes, mirrorsOnPath, probeLayout } from './mirrorProbe';
 export { personMesh } from './personMesh';
 export { BLOOM_PROGRAMS, makeBloom } from './bloom';
-export { GLASS_FRAGMENT, GLASS_VERTEX, glassMesh } from './houseGlass';
+export { GLASS_PANE_FRAGMENT, GLASS_PANE_VERTEX, GLASS_WATER_FRAGMENT, GLASS_WATER_VERTEX, glassMesh } from './houseGlass';
 export { SHADOW_FRAGMENT, SHADOW_VERTEX, lightDir, makeShadow } from './houseShadow';
 export { LEAF_INSTANCE_STRIDE, LEAF_TEMPLATES, LEAF_TEMPLATE_STRIDE, leafTemplate } from './leafInstances';
 export { ATLAS_FRAGMENT, ATLAS_VERTEX, LAWN_MESH_FRAGMENT, LAWN_MESH_VERTEX, lightmapHash, makeLightmap, startLightmapReadback, uploadLightmap } from './houseLightmap';

@@ -72,6 +72,13 @@ uniform vec2 uSunDir;   // where the light comes from across the ground (x, z)
 uniform float uPxCss;   // one device pixel, CSS px
 uniform vec4 uTreeShadow; // the lone tree's shadow (treeShader.js)
 uniform sampler2D uMeadow;
+// (0.5.28) At rest, a transform-feedback live list skips the ~85-90% dead
+// flower slots and splits far head-only flowers (vLive 1: 6 verts) from
+// near stem+head flowers (vLive 2: 24 verts).
+uniform int uLive;
+uniform int uList;
+layout(location = 1) in uint aId;
+flat out uint vLive;
 
 // (0.4.0) A world offset in the camera's frame before its pitch: turned
 // back by the yaw (uYaw: cos, sin; 0 faces the mountains, +z).
@@ -127,7 +134,7 @@ vec4 project(vec3 w) {
 ${MOUND_GLSL}
 void main() {
   int per = ${FLOWERS.side * FLOWERS.side * FLOWERS.slots};
-  int id = gl_InstanceID + uFirst;
+  int id = uList == 1 ? int(aId) : gl_InstanceID + uFirst;
   int ring = id / per;
   int r = id - ring * per;
   int cell = r / ${FLOWERS.slots};
@@ -138,6 +145,7 @@ void main() {
   vec2 pos = (vec2(at) + vec2(rnd(s), rnd(s))) * c;
   // (0.4.12) Up the hill too (it's meadow), none under the house's stone.
   if (underHouse(pos)) {
+    vLive = 0u;
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -163,6 +171,16 @@ void main() {
   // A device pixel at the root, in metres.
   float pxM = z0 > 0.0 ? uPxCss * z0 / fz : 1.0;
   if (grow <= 0.0 || z0 <= 0.0 || pxM > 0.12) {
+    vLive = 0u;
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+  // A stem at least a device pixel wide (no shimmer far off); (0.4.16) one
+  // that would have to widen past three times its own is left out (far off
+  // it's thinner than a pixel and only the head reads).
+  float sw = max(0.0035, pxM * 0.9);
+  vLive = sw > 0.0105 ? 1u : 2u;
+  if (uLive == 1) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -197,10 +215,6 @@ ${PUSH_SUM}
   float phi = min(length(bend) * 1.3, 1.5);
   vec2 bd = length(bend) > 1e-5 ? normalize(bend) : face;
   int v = gl_VertexID;
-  // A stem at least a device pixel wide (no shimmer far off); (0.4.16) one
-  // that would have to widen past three times its own is left out (far off
-  // it's thinner than a pixel and only the head reads).
-  float sw = max(0.0035, pxM * 0.9);
   if (sw > 0.0105) {
     if (v < ${STEM_SEGS * 6}) {
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -309,7 +323,9 @@ void main() {
     col = mix(uMid * 0.8, uTip * 0.85, vUV.y);
     col *= mix(vec3(1.0), uSky, 0.25);
   } else {
-    float r = length(vUV);
+    float r2 = dot(vUV, vUV);
+    if (r2 > 1.0) discard;
+    float r = sqrt(r2);
     float ang = atan(vUV.y, vUV.x) + vSpin;
     float aa = fwidth(r);
     float back = step(vFront, 0.0);

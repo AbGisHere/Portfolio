@@ -91,7 +91,7 @@ vec2 faceUV(vec3 p, vec3 n) {
   float steep = smoothstep(.75, .35, n.y);
   return mix(p.xz, vec2(dot(p.xz, tg), p.y * 1.15), steep);
 }
-struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; vec4 hor; };
+struct G { float t; vec3 n; float snow; float T; float mh; float ao; float hit; float strata; vec4 hor; };
 vec3 camRight(vec3 f) {
   vec3 r = uRight - f * dot(uRight, f);
   float l = length(r);
@@ -343,7 +343,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     }
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
     tp = t; hp = h;
-    t += max(h * .42, .5 + t * .0014);
+    t += max(h * (t < 3500. ? .24 : .42), .5 + t * .0014);
   }
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
@@ -355,10 +355,10 @@ float coneReach(vec3 ro, vec3 rd, float tmax, float k) {
   float t = max(1., nearFor(rd));
   for (int i = 0; i < 160; i++) {
     vec3 p = ro + rd * t;
-    float h = p.y - H(p.xz, 5);
+    float h = p.y - Hm(p, t);
     if (h < k * t + 6.) return t;
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) break;
-    t += max(h * .42, 1. + t * .0015);
+    t += max(h * (t < 3500. ? .24 : .42), 1. + t * .0015);
   }
   return tmax;
 }
@@ -415,7 +415,7 @@ float horizon(vec3 p, vec2 dir) {
 
 G geo(vec3 rd, float tStart) {
   G g;
-  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.hor = vec4(-1); g.T = 1.; g.mh = 0.;
+  g.n = vec3(0, 1, 0); g.snow = 0.; g.ao = 1.; g.strata = .5; g.hor = vec4(-1); g.T = 1.; g.mh = 0.;
   // (0.5.3) Fast analytic hit on the level sunlit meadow plateau around the
   // desk: zero raymarch steps and razor-clean flat ground (no noise lumps).
   if (rd.y < 0. && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
@@ -452,6 +452,7 @@ G geo(vec3 rd, float tStart) {
     vec2 fu = faceUV(p, g.n);
     float bn = noise(fu / 32.);
     float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
+    g.strata = strata;
     float holds = g.n.y + .11 * (fbm(fu / 45., 3) - .5) + .1 * (strata - .5) + .09 * (bn - .5);
     g.snow = smoothstep(line - 140., line + 140., alt) * smoothstep(.33, .48, holds);
     g.snow = max(g.snow, smoothstep(.52, .66, holds) * smoothstep(1380., 1680., alt - 600. * shf));
@@ -584,6 +585,7 @@ vec3 scatter(vec3 rd, vec3 L, float I, vec3 lit) {
   return c;
 }
 float EXPO;
+vec3 MOON_TINT, CLD_SUN, CLD_MOON, CLD_ZEN;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
 // By night the eye loses colour and sees blue (the Purkinje shift): moonlit
 // snow silver-blue, the sky navy, as in night photographs.
@@ -643,10 +645,9 @@ vec3 sky(vec3 rd) {
     float dens = smoothstep(.48, .78, mix(fib, soft, .35)) * cover;
     dens *= smoothstep(.005, .06, rd.y);
     float a = clamp(dens * .75, 0., .8);
-    vec3 Lhi = normalize(uSunDir + vec3(0., .05, 0.));
     float fwd = pow(max(dot(rd, uSunDir), 0.), 14.);
-    vec3 lit = reach(Lhi, SUN_I) * (.05 + .9 * fwd) * (.75 + .25 * soft) * vec3(1.02, 1., .96) + reach(uMoonDir, MOON_I) * .12;
-    vec3 cc = lit + skyRaw(vec3(0., 1., 0.)) * .5;
+    vec3 lit = CLD_SUN * (.05 + .9 * fwd) * (.75 + .25 * soft) * vec3(1.02, 1., .96) + CLD_MOON * .12;
+    vec3 cc = lit + CLD_ZEN * .5;
     c = mix(c, cc, a);
   }
   return toScreen(c);
@@ -722,8 +723,7 @@ vec3 ground(G g, vec3 rd) {
   vec3 n = g.n;
   float alt = p.y;
   vec2 fu = faceUV(p, n);
-  float bn = noise(fu / 32.);
-  float strata = noise(vec2(alt / 38. + fbm(fu / 260., 3) * 3. + bn * .8, 1.7));
+  float strata = g.strata;
   // Crisp alpine granite & slate (never muddy flat brown when viewed from the base).
   vec3 rock = mix(vec3(.14, .135, .145), vec3(.33, .30, .28), strata);
   rock = mix(rock, vec3(.19, .17, .155), noise(fu / 120.) * .55);
@@ -818,8 +818,6 @@ vec3 drawSun(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   dv.y *= 1. + .18 * smoothstep(.06, 0., alt);
   float R = .104 * lens / 1.7320508, d = length(dv) / R, px = 2.5 / uRes.y / R;
   float up = smoothstep(-.12, -.02, alt);
-  vec3 L = reach(uSunDir, SUN_I);
-  vec3 hue = L / max(max(L.r, L.g), 1e-4);
   float high = smoothstep(.02, .25, alt);
   // (0.5.7) As in the owner's references: a small white-hot core, a wide
   // gold glow along the horizon, and a starburst of thin rays of uneven
@@ -904,10 +902,8 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
   vec3 dark = c * .9 + vec3(.014, .017, .026);
   col = mix(dark, col, lit);
   // Low, warmer (amber to honey); high, cream.
-  vec3 tr = exp(-TAU0 * airmass(max(malt, 0.) + .004));
-  vec3 tint = tr / max(max(tr.r, tr.g), 1e-3);
   float high = smoothstep(.02, .3, malt);
-  col *= mix(mix(tint, vec3(1.), .4), vec3(1.), high);
+  col *= mix(mix(MOON_TINT, vec3(1.), .4), vec3(1.), high);
   // Its light in the air round it, added: a soft aureole and the sky
   // lifted wide round it, cool high, warm low.
   float o = max(d - 1., 0.);
@@ -932,6 +928,11 @@ void frameConsts() {
   TR = BR * HR * exp(-uCam.y / HR); TM = vec3(BM * HM * exp(-uCam.y / HM));
   LITS = bodyLit(uSunDir, SUN_I); LITM = bodyLit(uMoonDir, MOON_I);
   BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
+  vec3 trM = exp(-TAU0 * airmass(max(uMoonDir.y, 0.) + .004));
+  MOON_TINT = trM / max(max(trM.r, trM.g), 1e-3);
+  CLD_SUN = reach(normalize(uSunDir + vec3(0., .05, 0.)), SUN_I);
+  CLD_MOON = reach(uMoonDir, MOON_I);
+  CLD_ZEN = skyRaw(vec3(0., 1., 0.));
 }
 void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
   if (uHaveConsts > .5) {
@@ -946,6 +947,10 @@ void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out v
     TM = texelFetch(uConsts, ivec2(13, 0), 0).rgb;
     LITS = texelFetch(uConsts, ivec2(14, 0), 0).rgb;
     LITM = texelFetch(uConsts, ivec2(15, 0), 0).rgb;
+    MOON_TINT = texelFetch(uConsts, ivec2(16, 0), 0).rgb;
+    CLD_SUN = texelFetch(uConsts, ivec2(17, 0), 0).rgb;
+    CLD_MOON = texelFetch(uConsts, ivec2(18, 0), 0).rgb;
+    CLD_ZEN = texelFetch(uConsts, ivec2(19, 0), 0).rgb;
   } else frameConsts();
   if (g.hit > 0.) base = ground(g, rd);
   else {
@@ -1029,18 +1034,37 @@ void main() {
   o = vec4(a, h2.x - a, mistNoise(p), h2.y * .001);
 }`;
 
-// The shape pass: two float targets.
+// The shape pass: two targets (o0: RGBA16F, o1: RGBA8 holding T, mh, ao, strata).
 export const PEAKS_GEO_FS = `#version 300 es
 ${COMMON}
 layout(location = 0) out vec4 o0;
 layout(location = 1) out vec4 o1;
 uniform sampler2D uCoarse;
+// (0.5.28) When marching behind the house at 0.5x scale (where full-res
+// aoPass.depth cannot attach), skip pixels whose 2x2 full-res block in uPeakAO
+// is completely covered by solid house/lawn (< 9000 m vs clear 1e4).
+uniform sampler2D uPeakAO;
+uniform float uPeakAOOn;
+uniform ivec2 uPeakAOSize;
 void main() {
+  if (uPeakAOOn > .5) {
+    ivec2 b = ivec2(gl_FragCoord.xy) * 2;
+    ivec2 mx = uPeakAOSize - 1;
+    float d0 = texelFetch(uPeakAO, min(b, mx), 0).r;
+    float d1 = texelFetch(uPeakAO, min(b + ivec2(1, 0), mx), 0).r;
+    float d2 = texelFetch(uPeakAO, min(b + ivec2(0, 1), mx), 0).r;
+    float d3 = texelFetch(uPeakAO, min(b + ivec2(1, 1), mx), 0).r;
+    if (max(max(d0, d1), max(d2, d3)) < 9000.) {
+      o0 = vec4(-.001, 0., 1., 0.);
+      o1 = vec4(1., 0., 1., .5);
+      return;
+    }
+  }
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
   G g = geo(rd, texelFetch(uCoarse, ivec2(gl_FragCoord.xy) / 4, 0).x * 1000.);
   o0 = vec4(g.t * .001, g.n.x, g.n.z, g.snow);
-  o1 = vec4(g.T, g.mh, g.ao, g.hit);
+  o1 = vec4(g.T, g.mh, g.ao, g.strata);
 }`;
 
 // The light pass, reading them.
@@ -1055,7 +1079,7 @@ uniform float uFrameScale;
 uniform vec2 uHorMax;
 G readG(vec3 rd) {
   if (uSkipGeo > .5 || uReady < .5) {
-    G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.hor = vec4(-1);
+    G s; s.t = -1.; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 0.; s.strata = .5; s.hor = vec4(-1);
     if ((uSkipGeo > .5 || uNear > 0.) && rd.y < -.0005 && uCam.y >= ${f(SHELF.y - 0.5)}) {
       s.t = max((${f(SHELF.y)} - uCam.y) / rd.y, .1);
       s.hit = 1.;
@@ -1066,7 +1090,7 @@ G readG(vec3 rd) {
   vec4 a = texelFetch(uG0, px, 0), b = texelFetch(uG1, px, 0);
   G g;
   g.t = a.x * 1000.; g.n = vec3(a.y, sqrt(max(1. - a.y * a.y - a.z * a.z, 0.)), a.z); g.snow = a.w;
-  g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = b.w;
+  g.T = b.x; g.mh = b.y; g.ao = b.z; g.hit = a.x > 0. ? 1. : 0.; g.strata = b.w;
   g.hor = texture(uG2, min(gl_FragCoord.xy / uRes * uGeoScale * uFrameScale, uHorMax));
   return g;
 }`;
@@ -1169,7 +1193,7 @@ out vec4 o;
 void main() {
   frameConsts();
   int i = int(gl_FragCoord.x);
-  vec3 v = i < 6 ? S[min(i, 5)] : i == 6 ? LIGHT : i == 7 ? vec3(EXPO) : i == 8 ? TAU0 : i == 9 ? BODYL : i == 10 ? SUNL : i == 11 ? SKYL : i == 12 ? TR : i == 13 ? TM : i == 14 ? LITS : LITM;
+  vec3 v = i < 6 ? S[min(i, 5)] : i == 6 ? LIGHT : i == 7 ? vec3(EXPO) : i == 8 ? TAU0 : i == 9 ? BODYL : i == 10 ? SUNL : i == 11 ? SKYL : i == 12 ? TR : i == 13 ? TM : i == 14 ? LITS : i == 15 ? LITM : i == 16 ? MOON_TINT : i == 17 ? CLD_SUN : i == 18 ? CLD_MOON : CLD_ZEN;
   o = vec4(v, 1.);
 }`;
 

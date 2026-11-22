@@ -164,6 +164,9 @@ export function makeProbes(gl, unit) {
   ok = ok && gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+  // (0.5.28) Leave `atlas` (not `tex`, which is `fbo`'s color attachment)
+  // bound on `unit`, preventing a feedback loop when drawing probe faces.
+  gl.bindTexture(gl.TEXTURE_2D, atlas);
   gl.activeTexture(gl.TEXTURE0);
   if (!ok) {
     for (const t of [atlas, tex]) gl.deleteTexture(t);
