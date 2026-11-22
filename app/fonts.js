@@ -1,13 +1,16 @@
-import { Unbounded, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 
 // Shared by the root layout and global-error (which replaces the layout and
-// so has to load its own fonts). Unbounded at its one weight; JetBrains Mono
-// as one file over part of its axis. The site uses Unbounded 800 and JetBrains Mono
-// 400/500.
-export const unbounded = Unbounded({
-  subsets: ['latin'],
+// so has to load its own fonts). The site uses Unbounded 800 and JetBrains
+// Mono 400/500.
+//
+// Self-hosted (0.5.32): the latin files Google Fonts serves, in app/fonts/.
+// next/font/google fetched them at build time, and Turbopack's build broke
+// on that fetch ("next/font/google queries have exactly one entry") with
+// fonts.js unchanged; local files make the build independent of Google.
+export const unbounded = localFont({
   // (0.5.12) Only the h1 uses it, at 800: that one weight, not the axis.
-  weight: ['800'],
+  src: [{ path: './fonts/unbounded-latin.woff2', weight: '800', style: 'normal' }],
   variable: '--font-display',
   display: 'swap',
   // (0.5.17) Not preloaded: no text shows on the first screen yet (the h1
@@ -17,12 +20,9 @@ export const unbounded = Unbounded({
   preload: false,
 });
 
-export const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  // Narrows the axis to 400–600: the whole axis (no `weight`, as the docs
-  // suggest for variable fonts) is 9 KB more to preload. Turbopack doesn't
-  // take a '400 600' range string.
-  weight: ['400', '500', '600'],
+export const jetbrainsMono = localFont({
+  // One variable file over 400–600 (what Google served for those weights).
+  src: [{ path: './fonts/jetbrains-mono-latin.woff2', weight: '400 600', style: 'normal' }],
   variable: '--font-mono',
   display: 'swap',
   preload: false,

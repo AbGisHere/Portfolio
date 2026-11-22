@@ -6,6 +6,72 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.32 — 2026-11-23
+
+Real-phone BrowserStack profiling (`scripts/device-profile.mjs`), self-hosted
+Latin fonts (`app/fonts/`), Adreno 619 VRAM context-loss fix, ANGLE sampler &
+PSO warm-up fixes (`MistCanvas.jsx`, `bloom.js`), overlapped house shader
+compilation during worker download, and night light-cell early-reject in
+`houseShader.js`.
+
+- **Real-phone profile & self-hosted fonts (`scripts/device-profile.mjs`, `app/fonts.js`, `app/fonts/`):**
+  - Added `scripts/device-profile.mjs` to measure refresh rate, load
+    (`meshReady`, `ready`, JS heap), rest draw rates, flight/desk/climb/whole
+    scroll, and opening day/night switch across 10 BrowserStack phones/tablets:
+    Galaxy S21 (`Mali-G78`, 60 Hz) completes the house in `18.9 s` (`51 MB`
+    heap) and runs at `56.1` (flight), `57.0` (desk), `41.2` (climb), and
+    `57.7 fps` (switch); Pixel 10 (`PowerVR DXT`, 60 Hz) runs desk at
+    `59.3 fps` and climb at `58.2 fps`; OnePlus 11R (`Adreno 730`, 90 Hz) runs
+    switch at `90.6 fps` (`0` late) and desk at `62.9 fps`.
+  - Self-hosted `unbounded-latin.woff2` and `jetbrains-mono-latin.woff2` in
+    `app/fonts/` via `next/font/local` so builds never depend on fetching
+    Google Fonts.
+- **Adreno 619 VRAM & context-loss fix (`MistCanvas.jsx`):**
+  - Removed eager `stillTarget()` and `stillWorldTarget()` allocations from
+    `warmHouse` at `scroll = 0`, allocating them only on demand at rest and
+    freeing `still` and `stillWorld` when returning to the 3D opening
+    (`peaksNow?.a >= 1 && !peaksNow.behind`) so budget Adreno 619 devices
+    (`Moto G71`, `Galaxy Tab A9+`) never hold `still` + `stillWorld` +
+    `peaksGeo.prev` + `aoPass` in VRAM simultaneously.
+- **ANGLE sampler validation, PSO warm-up & overlapped house compiles (`MistCanvas.jsx`, `bloom.js`):**
+  - Initialized valid non-zero camera projection (`uPitch`, `uYaw`, `uScreen`,
+    `uDepthAB`, `uLightVP`) in `house.ubo`, `glass`, `aoPass`, and desk/meadow
+    programs plus distinct sampler units (`uScene = 11`, `uWater = 8`,
+    `uReflect = 12`, `uMeadow = 5`, `uGrain = 2`, `uDeck = 6`, `uBack = 7`) so
+    `1×1` warm draws never fail ANGLE's `validateSamplers()` or produce `NaN`
+    `gl_Position` in `project()`.
+  - Bound unit `15` via `mirrorProbes()` and unbound FBO textures on units
+    `12/13/21–23` during `warmHousePipelines` to prevent WebGL feedback loops.
+  - Added `1×1` scissored PSO warm-up draws for `bloom` (`bright`, `blur`,
+    `add` blended & unblended) inside `bloom.prepare()`, and pre-warmed
+    `peaksMoonFace()` (`/moon.jpg` decode & mipmap) in `warmDeskPipelines`.
+  - Pre-started `startHouseAsync()` and `startShadowAsync()` as soon as
+    `houseSubsystem.js` loads while `houseWorker` downloads
+    `/house/house.bin.gz`.
+  - Deferred post-switch `queueStaleProbes()` while at the opening
+    (`about <= 0.35`) so opening switches never trigger house cubemap probe
+    rendering during the switch window.
+- **Night climb light-cell early-reject (`houseShader.js`):**
+  - In `HOUSE_LIGHT_UBO_GLSL` (`lampsAt`), early-exits empty light cells
+    (`cell.y < 0.5 && cell.w < 0.5`) before fetching `L_RANGE(room)`, fetches
+    `L_P(i)` first to reject out-of-radius lights (`dot(d, d) > lp.w * lp.w`)
+    before fetching `L_K(i)` / `L_W(i)` / `LD(3, i)`, and skips `stripsAt()`
+    when `cell.w < 0.5` (keeping `HOUSE_LIGHT_GLSL` for `houseLightmap.js`
+    byte-identical).
+- **Measured (`1440×900@2` on Apple M4, production build):**
+  - Full scroll (`0 → 1 → 0`): `100.1 fps`, `p95 16.8 ms`, `>20 ms` frames
+    `61 → 34`, `0` long tasks, `RecalcStyleDuration` `114.2 → 94.8 ms`
+  - House climb (`--house`): `97.7 fps`, `p50 8.4 ms`, `p95 16.7 ms`,
+    `>20 ms` frames `4 → 2`
+  - Day/night switch (`4×`): `120.1 fps`, `p50 8.3 ms`, `p95 9.1 ms`,
+    `max 9.4 ms`, `0 > 20 ms`, `TaskDuration` `1,936.6 → 503.4 ms` (`-74%`)
+  - Idle & at-rest draws: `120.0–120.2 fps` (`0 > 20 ms`, `8.4–12.5 ms/s` task
+    time), `opening 4.0/s (1 call)`, `desk 25.7/s (5 calls)`,
+    `pool-night 26.0/s (12 calls)`, `pool-day 51.7/s (10 calls)`,
+    `pool-frozen 0.0/s`
+  - Checks: `test:unit` 88/88, `test:adaptive` 9/9, `hygiene` 21/21, `parity`
+    47/47 passed.
+
 ## 0.5.31 — 2026-11-22
 
 Trace-driven frame-spike & load-time overhaul: 1×1 scissored offscreen

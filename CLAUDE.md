@@ -459,6 +459,51 @@ and reduces VRAM and per-frame GPU/DOM work:
   (`p50 8.4 ms`, `p95 16.9 ms`, `max 183.1 → 41.7 ms`, `>20 ms` `8 → 4`),
   switch `120.0 fps` (`max 9.4 ms`, `0 > 20 ms`), idle `120.0 fps` (`0 > 20 ms`).
 
+**0.5.32** (2026-11-23) adds real-phone BrowserStack profiling
+(`scripts/device-profile.mjs`), self-hosts the Latin fonts (`app/fonts/`),
+and ships 4 phone-driven GPU/VRAM/shader fixes:
+- Real-phone profile & self-hosted fonts (`scripts/device-profile.mjs`,
+  `app/fonts.js`, `app/fonts/`): profiles refresh rate, load (`meshReady`,
+  `ready`, JS heap), rest draw rates, flight/desk/climb/whole scroll, and
+  switch across 10 BrowserStack phones/tablets; Galaxy S21 (`Mali-G78`) now
+  completes the house in `18.9 s` (`51 MB` heap) and runs at `56.1 / 57.0 /
+  41.2 / 57.7 fps`, Pixel 10 (`PowerVR DXT`) runs desk at `59.3 fps` and climb
+  at `58.2 fps`, and OnePlus 11R runs switch at `90.6 fps` (`0` late); switches
+  `app/fonts.js` to `next/font/local` (`unbounded-latin.woff2`,
+  `jetbrains-mono-latin.woff2`) so production builds never depend on fetching
+  Google Fonts.
+- Adreno 619 VRAM context-loss fix (`MistCanvas.jsx`): removes eager
+  `stillTarget()` / `stillWorldTarget()` allocations from `warmHouse` at
+  `scroll = 0` and frees `still` and `stillWorld` when returning to the 3D
+  opening (`peaksNow?.a >= 1 && !peaksNow.behind`) so budget Adreno 619 devices
+  (`Moto G71`, `Galaxy Tab A9+`) never hold `still` + `stillWorld` +
+  `peaksGeo.prev` + `aoPass` in VRAM simultaneously.
+- Mobile ANGLE sampler validation & PSO warm-up (`MistCanvas.jsx`, `bloom.js`):
+  initializes non-zero camera projection (`uPitch`, `uYaw`, `uScreen`,
+  `uDepthAB`, `uLightVP`) in `house.ubo`, `glass`, `aoPass`, and desk/meadow
+  shaders plus distinct sampler units (`uScene = 11`, `uWater = 8`,
+  `uReflect = 12`, `uMeadow = 5`, `uGrain = 2`, `uDeck = 6`, `uBack = 7`) so
+  `1×1` warm draws never fail ANGLE's `validateSamplers()` or divide by zero in
+  `project()`; binds unit 15 via `mirrorProbes()` and unbinds FBO textures on
+  units `12/13/21–23` during `warmHousePipelines`; warms `bloom` (`bright`,
+  `blur`, `add` blended & unblended) in `bloom.prepare()`; pre-warms
+  `peaksMoonFace()` in `warmDeskPipelines`; pre-starts `startHouseAsync()` and
+  `startShadowAsync()` as soon as `houseSubsystem.js` loads while `houseWorker`
+  downloads `/house/house.bin.gz`; and defers post-switch `queueStaleProbes()`
+  while at the opening (`about <= 0.35`).
+- Night climb light-cell early-reject (`houseShader.js`): in
+  `HOUSE_LIGHT_UBO_GLSL` (`lampsAt`), early-exits empty light cells
+  (`cell.y < 0.5 && cell.w < 0.5`) before fetching `L_RANGE(room)`, fetches
+  `L_P(i)` first to reject out-of-radius lights (`dot(d, d) > lp.w * lp.w`)
+  before fetching `L_K(i)` / `L_W(i)` / `LD(3, i)`, and skips `stripsAt()`
+  when `cell.w < 0.5` (keeping `HOUSE_LIGHT_GLSL` for `houseLightmap.js`
+  unchanged).
+- M4 `1440×900@2` (`npm run perf`): full scroll `100.1 fps` (`p95 16.8 ms`,
+  `>20 ms` frames `61 → 34`, `RecalcStyleDuration` `114.2 → 94.8 ms`), house
+  climb `97.7 fps` (`p50 8.4 ms`, `p95 16.7 ms`, `>20 ms` `4 → 2`), switch
+  `120.1 fps` (`max 9.4 ms`, `0 > 20 ms`, `TaskDuration` `1,936.6 → 503.4 ms`),
+  idle `120.0–120.2 fps` (`0 > 20 ms`, `8.4–12.5 ms/s` task time).
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

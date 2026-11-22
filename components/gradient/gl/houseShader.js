@@ -491,10 +491,12 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
   if (room == 0 && uNight <= 0.0) return vec3(0.0);
   vec3 sum = roomFill(room);
   float dayOn = 1.0 - uNight;
-  ivec2 lr = L_RANGE(room);
+${useFrame ? `  vec4 cell = cellOf(p);
+  if (cell.y < 0.5 && cell.w < 0.5) return sum * mix(1.35, 1.08, uNight);
+  ivec2 lr = L_RANGE(room);` : `  ivec2 lr = L_RANGE(room);
   // (0.4.40) Only the lights that reach p's cell, in their order: the
   // room's among them, then (outside) the front rooms'.
-  vec4 cell = cellOf(p);
+  vec4 cell = cellOf(p);`}
   int c0 = int(cell.x + 0.5);
   int cn = int(cell.y + 0.5);
   // (0.4.66) The list's texel fetched once per four entries.
@@ -508,26 +510,41 @@ vec3 lampsAt(vec3 p, vec3 N, vec3 V, float a, int room) {
     int i = listPick(lt, (c0 + j) & 3);
     if (i >= lr.y) { jb = j; break; }
     if (i < lr.x) continue;
+${useFrame ? `    vec4 lp = L_P(i);
+    vec3 d = lp.xyz - p;
+    if (dot(d, d) > lp.w * lp.w) continue;
     vec4 lk = L_K(i);
     if (lk.x <= 0.0) continue;
     vec4 lw = L_W(i);
     float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
-    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);
+    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, lp, lk, lw);` : `    vec4 lk = L_K(i);
+    if (lk.x <= 0.0) continue;
+    vec4 lw = L_W(i);
+    float w = lw.x * nightOn(lw.y) + lk.w * dayOn;
+    if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, true, L_P(i), lk, lw);`}
   }
   if (room == 0 && uNight > 0.0 && p.z <= ${f(FRONT_LAMPS_MAX_Z + 0.01)}) {
     lq = -1;
     for (int j = lr.x == 0 ? jb : 0; j < cn; j++) {
       if (((c0 + j) >> 2) != lq) { lq = (c0 + j) >> 2; lt = ldAt(${LIST_ROW}, lq); }
       int i = listPick(lt, (c0 + j) & 3);
+${useFrame ? `      vec4 lp = L_P(i);
+      vec3 d = lp.xyz - p;
+      if (dot(d, d) > lp.w * lp.w) continue;
       if (LD(3, i).w < 0.5) continue;
       vec4 lk = L_K(i);
       if (lk.x <= 0.0) continue;
       vec4 lw = L_W(i);
       float w = lw.x * nightOn(lw.y);
-      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);
+      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, lp, lk, lw);` : `      if (LD(3, i).w < 0.5) continue;
+      vec4 lk = L_K(i);
+      if (lk.x <= 0.0) continue;
+      vec4 lw = L_W(i);
+      float w = lw.x * nightOn(lw.y);
+      if (w > 0.0) sum += lampAt(i, p, N, V, a, room, w, false, L_P(i), lk, lw);`}
     }
   }
-  sum += stripsAt(p, N, room, dayOn, cell);
+  ${useFrame ? 'if (cell.w > 0.5) sum += stripsAt(p, N, room, dayOn, cell);' : 'sum += stripsAt(p, N, room, dayOn, cell);'}
   // (0.4.28) A fifth down, by night most (overexposed: the owner).
   return sum * mix(1.35, 1.08, uNight);
 }

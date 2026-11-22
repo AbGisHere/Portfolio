@@ -124,6 +124,7 @@ export function makeBloom(gl, unit, pre = null) {
   const targets = [0, 1].map(() => ({ tex: gl.createTexture(), fbo: gl.createFramebuffer() }));
   let size = [0, 0];
   let hasGlow = false;
+  let warmed = false;
   const resize = (w, h) => {
     const s = [Math.max(1, w >> 2), Math.max(1, h >> 2)];
     if (s[0] === size[0] && s[1] === size[1]) return;
@@ -153,8 +154,49 @@ export function makeBloom(gl, unit, pre = null) {
     set(prog);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
+  const prepare = (w, h) => {
+    resize(w, h);
+    if (warmed || !size[0] || !size[1]) return;
+    warmed = true;
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, 1, 1);
+    gl.viewport(0, 0, 1, 1);
+    gl.bindVertexArray(vao);
+    run(progs.bright, targets[0], targets[1].tex, p => {
+      gl.uniform2f(u(p, 'uTexel'), 1 / Math.max(1, w), 1 / Math.max(1, h));
+      gl.uniform2f(u(p, 'uScale'), 1, 1);
+    });
+    run(progs.blur, targets[1], targets[0].tex, p => gl.uniform2f(u(p, 'uDir'), 1 / size[0], 0));
+    gl.activeTexture(gl.TEXTURE0 + BASE_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, targets[1].tex);
+    run(progs.add, targets[0], targets[1].tex, p => {
+      gl.uniform1f(u(p, 'uAmount'), 0);
+      gl.uniform1f(u(p, 'uBaseOn'), 1);
+      gl.uniform2f(u(p, 'uScale'), 1, 1);
+      gl.uniform1i(u(p, 'uBase'), BASE_UNIT);
+    });
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    run(progs.add, targets[0], targets[1].tex, p => {
+      gl.uniform1f(u(p, 'uAmount'), 0);
+      gl.uniform1f(u(p, 'uBaseOn'), 0);
+      gl.uniform2f(u(p, 'uScale'), 1, 1);
+      gl.uniform1i(u(p, 'uBase'), unit);
+    });
+    for (const t of targets) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+      gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0]);
+    }
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.activeTexture(gl.TEXTURE0);
+  };
   return {
-    prepare: resize,
+    prepare,
     // (0.4.57) `base`: the frame's texture, to write it and the glow onto
     // the canvas in one pass (blending off); else the glow is added on.
     // `reuse`: at rest when the bright sources haven't changed, reuse the
