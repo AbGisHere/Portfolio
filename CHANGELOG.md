@@ -6,6 +6,57 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.30 — 2026-11-22
+
+Temporal mountain reprojection while scrolling, Mali / Galaxy S21 shader
+slimming, scroll CPU & spike cleanup, and measured at-rest redraw throttling.
+
+- **Temporal mountain reprojection & horizon scissor (`peaksShader.js`, `MistCanvas.jsx`, `?reproj=0` off):**
+  - Ping-pong `peaksGeo` / `peaksGeo.prev` FBOs (zero copy, disposed on resize
+    & unmount) reuse valid interior mountain pixels during scroll with 2-step
+    rotation + parallax refinement, 4-neighbor silhouette edge guards,
+    pre-reprojection analytic meadow checks, `coarseT` foreground occlusion
+    rejection, and a 1-fetch `H()` surface drift guard — snapping to a fresh
+    native `1.0×` march on the first still frame.
+  - Added height-scaled `horizonClipY` + strictly-in-rim `READ_G` analytic
+    meadow fast-path to scissor below-horizon rays on desk and house views
+    while staying off during the high descent over the valley.
+- **Mali / Galaxy S21 shader slimming (`peaksShader.js`, `crestShader.js`):**
+  - Split `COMMON_TERRAIN` into minimal per-pass chunks (`TERRAIN_BASE`,
+    `TERRAIN_BAKE`, `TERRAIN_COARSE`, `TERRAIN_HOR`, `TERRAIN_GEO`), moved
+    `PEAK[12]` out of `COMMON_CAM` (keeping `HERO_XZ` in light passes), and
+    split `SHADE_ATMO` for `PEAKS_CONSTS_FS`: `PEAKS_BAKE_FS` `-50%` (14.2 KB),
+    `PEAKS_COARSE_FS` `-53%` (13.1 KB), `PEAKS_HOR_FS` `-54%` (12.8 KB),
+    `PEAKS_CONSTS_FS` `-68%` (9.8 KB).
+  - Rewrote `CREST_FRAGMENT` with hoisted per-ridge scalar uniforms and a
+    non-unrolled `uLoop4` loop (~4× smaller compiled IR on Mali).
+- **Scroll CPU & spike cleanup (`MistCanvas.jsx`, `grassShader.js`):**
+  - Camera-motion-gated `preparation.canRun()` (pauses background compiles only
+    while camera coordinates actually change, never deadlocking on readiness
+    holds) + `peaksNow.skipGeo` in `openingFirst()`.
+  - Zero-allocation `ringRanges()` with row-level frustum early reject in
+    `grassShader.js` + `grassRangeCache` in `MistCanvas.jsx` (`grass` CPU
+    `1.2–2.6 ms → 0.3 ms`).
+  - Preallocated scratch `Float32Array`s in `rebuild()`, skipped hidden 2D
+    ridge math under 3D peaks, cached `dataset.*` DOM writes (`setDs`),
+    replaced `JSON.stringify(lampPoseNow())` in `stillKeyNow()`, and skipped
+    empty bird buffer uploads.
+- **Measured at-rest redraw throttling (`MistCanvas.jsx`, `?restthrottle=0` off):**
+  - Syncs pool rest draws to 60 Hz water/firefly ticks and desk/house rest
+    draws to 30 Hz wind ticks (60 Hz when birds are active), keeping native
+    `1.0×` quality and `stillWorld` (15 Hz) limited to tree leaves + meadow.
+- **Verified (M4, `1440×900@2`):**
+  - House climb (`contact` stretch): **`72.0 → 101.1 fps`** (`p50 8.3 ms`,
+    `>20 ms` `74 → 8`, `max 533 → 183 ms`).
+  - Laptop top-down → open sweep: **`115.5 fps`** (`p95 10.0 ms`, `>14 ms`
+    `17 → 3`, `peaks-coarse 8.49 → 0.62 ms`, `peaks-geo 10.27 → 1.54 ms`).
+  - Switch: **`120.0 fps`** (`max 9.3 ms`, `0 > 20 ms`).
+  - At rest: `desk` **`117.6 → 26.0 drawn/s`**, `pool-night`
+    **`120.2 → 26.0 drawn/s`**, `pool-day` **`120.2 → 51.5 drawn/s`**,
+    `opening` `5.7 drawn/s`, `pool-frozen` `0.0 drawn/s`.
+  - End-to-end wheel scroll past open laptop to pool verified (`0` errors);
+    `test:unit` 88/88, `test:adaptive` 9/9, `hygiene` all passed.
+
 ## 0.5.29 — 2026-11-22
 
 3D mountain rock, geological strata & snow-flute craft pass, taller balanced

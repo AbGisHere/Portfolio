@@ -51,6 +51,8 @@ uniform float uS[MAX_RIDGES];   // camera scale (1 at rest)
 uniform float uFoot[MAX_RIDGES]; // camera foot (= uBase at rest)
 uniform float uM;              // (0.3) columns span uM × the frame, centred (1: the frame)
 uniform int uExt[MAX_RIDGES];   // control points past each end
+// (0.5.30) 4 from JS: prevents Mali from unrolling 4 copies of profile() in IR.
+uniform int uLoop4;
 
 out vec4 outCrest;
 
@@ -76,41 +78,46 @@ float octave(float e, float l, int row, float n) {
 }
 
 // Vl — ridge height profile at x (0..1 across the reference frame)
-float profile(float e, int b) {
-  float o = 1.7 + float(b) * 0.33;
-  int row = b * 4;
-  float n = uN[b];
+float profile(float e, float o, int row, float n) {
   float c = 0.52 * octave(e, o, row, n) + 0.3 * octave(e, o * 2.15, row + 1, n) + 0.18 * octave(e, o * 4.4, row + 2, n);
   float d = 0.55 + 0.45 * pow(noise1(e * 1.13 + n * 0.51, row + 3), 1.4);
   return pow(max(0.0, c), 1.0 + uSharp * 0.9) * d;
 }
 
-// The crest's y at control point i (CSS px)
-float pointY(int i, int b) {
-  float x = uX0 + float(i) * uDx;
-  return uBase[b] - uL[b] * profile((x - uW * 0.5) / uU + 0.5, b);
-}
-
 void main() {
   int col = int(gl_FragCoord.x);
   int b = int(gl_FragCoord.y);
-  bool moved = uS[b] != 1.0 || uFoot[b] != uBase[b] || uM != 1.0;
+  // Hoist per-ridge uniforms once into scalars so Mali never indexes uniform
+  // arrays inside the control-point loop.
+  float sb = uS[b];
+  float bb = uBase[b];
+  float fb = uFoot[b];
+  float lb = uL[b];
+  float nb = uN[b];
+  int eb = uExt[b];
+  bool moved = sb != 1.0 || fb != bb || uM != 1.0;
   float x = (float(col) + 0.5) / uDpr;
-  if (moved) x = uW * 0.5 + (x - uW * 0.5) * uM / uS[b];
-  int lo = -uExt[b];
-  int hi = uLast + uExt[b];
+  if (moved) x = uW * 0.5 + (x - uW * 0.5) * uM / sb;
+  int lo = -eb;
+  int hi = uLast + eb;
   int n = int(floor((x - uX0) / uDx));
   n = clamp(n, lo, hi - 1);
   float u = clamp((x - (uX0 + float(n) * uDx)) / uDx, 0.0, 1.0);
-  float a = pointY(max(n - 1, lo), b);
-  float o = pointY(n, b);
-  float s = pointY(n + 1, b);
-  float r = pointY(min(n + 2, hi), b);
+  float freq = 1.7 + float(b) * 0.33;
+  int row = b * 4;
+  int cnt = uLoop4 > 0 ? uLoop4 : 4;
+  float pts[4];
+  for (int k = 0; k < cnt; k++) {
+    int idx = clamp(n + k - 1, lo, hi);
+    float px = uX0 + float(idx) * uDx;
+    pts[k] = bb - lb * profile((px - uW * 0.5) / uU + 0.5, freq, row, nb);
+  }
+  float a = pts[0], o = pts[1], s = pts[2], r = pts[3];
   float c1 = o + (s - a) / 6.0;
   float c2 = s - (r - o) / 6.0;
   float v = 1.0 - u;
   float y = v * v * v * o + 3.0 * v * v * u * c1 + 3.0 * v * u * u * c2 + u * u * u * s;
-  if (moved) y = uFoot[b] + (y - uBase[b]) * uS[b];
+  if (moved) y = fb + (y - bb) * sb;
   outCrest = vec4(y, 0.0, 0.0, 1.0);
 }
 `;

@@ -82,6 +82,8 @@ const chunkPastRim = (x0, x1, z0, z1) => {
   const sy = cz > 0 ? cz * (SHELF.r / SHELF.lip) : cz * (SHELF.r / SHELF.back);
   return cx * cx + sy * sy > RIM_CULL_R2;
 };
+const _lo = [0, -0.2, 0];
+const _hi = [0, 0, 0];
 export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull = false, maxD = Infinity, rim = false) {
   const per = side * side * each;
   const runs = [];
@@ -92,19 +94,37 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull =
     open = null;
   };
   const half = side / 2;
+  const maxGap = MERGE * CHUNK * each;
+  const maxD2 = maxD < Infinity ? maxD * maxD : Infinity;
   for (let ring = 0; ring < rings; ring++) {
     const c = cell * 2 ** ring;
     const bx = Math.floor(cam.x / c) - half;
     const bz = Math.floor(cam.z / c) - half;
     const innerHole = ring > 0 ? half * 0.5 * 0.9 * c - 1e-3 : -1;
+    const rowX0 = (bx - 1) * c - reach;
+    const rowX1 = (bx + side + 1) * c + reach;
     for (let row = 0; row < side; row++) {
+      const z0 = (bz + row - 1) * c;
+      const z1 = (bz + row + 2) * c;
+      // Row-level frustum early reject: skips all 8 chunks in a row when
+      // the whole row lies outside the camera frustum (~50-65% of rows).
+      _lo[0] = rowX0; _lo[1] = -0.2; _lo[2] = z0 - reach;
+      _hi[0] = rowX1; _hi[1] = HILL_TOP + reach; _hi[2] = z1 + reach;
+      if (!seen(_lo, _hi)) {
+        if (open) {
+          gap += side * each;
+          if (gap > maxGap) {
+            close();
+            gap = 0;
+          }
+        }
+        continue;
+      }
       const maxAz = Math.max(Math.abs(row - half - 1), Math.abs(row + 2 - half)) * c;
       for (let col = 0; col < side; col += CHUNK) {
         const cols = Math.min(CHUNK, side - col);
         const x0 = (bx + col - 1) * c;
         const x1 = (bx + col + cols + 1) * c;
-        const z0 = (bz + row - 1) * c;
-        const z1 = (bz + row + 2) * c;
         const first = ring * per + (row * side + col) * each;
         const count = cols * each;
         let dead = false;
@@ -117,17 +137,19 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull =
             const mx = Math.max(x0, Math.min(x1, MOUND.at[0]));
             const mz = Math.max(z0, Math.min(z1, MOUND.at[1]));
             topY = moundY(mx, mz);
-            if (maxD < Infinity) {
+            if (maxD2 < Infinity) {
               const dx = cam.x < x0 ? x0 - cam.x : cam.x > x1 ? cam.x - x1 : 0;
               const dz = cam.z < z0 ? z0 - cam.z : cam.z > z1 ? cam.z - z1 : 0;
               const dy = cam.y < 0 ? -cam.y : cam.y > topY ? cam.y - topY : 0;
-              if (dx * dx + dy * dy + dz * dz >= maxD * maxD) dead = true;
+              if (dx * dx + dy * dy + dz * dz >= maxD2) dead = true;
             }
           }
         }
-        const lo = [x0 - reach, -0.2, z0 - reach];
-        const hi = [x1 + reach, topY + reach, z1 + reach];
-        if (!dead && seen(lo, hi)) {
+        if (!dead) {
+          _lo[0] = x0 - reach; _lo[1] = -0.2; _lo[2] = z0 - reach;
+          _hi[0] = x1 + reach; _hi[1] = topY + reach; _hi[2] = z1 + reach;
+        }
+        if (!dead && seen(_lo, _hi)) {
           if (open && first === open[0] + open[1] + gap) open[1] += gap + count;
           else {
             close();
@@ -136,7 +158,7 @@ export function ringRanges({ rings, side, cell }, each, reach, cam, seen, cull =
           gap = 0;
         } else if (open) {
           gap += count;
-          if (gap > MERGE * CHUNK * each) {
+          if (gap > maxGap) {
             close();
             gap = 0;
           }

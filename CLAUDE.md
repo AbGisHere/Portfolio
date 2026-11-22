@@ -378,6 +378,42 @@ open transition:
   (`p50 8.3 ms`, `>14 ms` frames `88 → 17`, `0 > 20 ms`); `test:unit` 88/88,
   `test:adaptive` 9/9, `hygiene` all passed, zero console/WebGL warnings.
 
+**0.5.30** (2026-11-22) ships temporal mountain reprojection while scrolling,
+Mali/Galaxy S21 shader slimming, scroll CPU/spike cleanup, and measured at-rest
+redraw throttling:
+- Temporal reprojection & horizon scissor (`peaksShader.js`, `MistCanvas.jsx`,
+  `?reproj=0` off): zero-copy ping-pong `peaksGeo` / `peaksGeo.prev` FBOs reuse
+  valid interior mountain pixels with 2-step rotation + parallax refinement,
+  4-neighbor silhouette edge guards, pre-reprojection analytic meadow checks,
+  `coarseT` foreground occlusion rejection, and a 1-fetch `H()` surface check,
+  snapping to a fresh native `1.0×` march at rest; height-scaled `horizonClipY`
+  + strictly-in-rim `READ_G` analytic meadow hit clip below-horizon rays on
+  desk and house views while staying off over the high descent valley.
+- Mali shader slimming (`peaksShader.js`, `crestShader.js`): splits
+  `COMMON_TERRAIN` into minimal per-pass chunks (`TERRAIN_BASE`, `TERRAIN_BAKE`,
+  `TERRAIN_COARSE`, `TERRAIN_HOR`, `TERRAIN_GEO`), moves `PEAK[12]` out of
+  `COMMON_CAM`, and splits `SHADE_ATMO` for `PEAKS_CONSTS_FS` (`PEAKS_BAKE_FS`
+  `-50%`, `PEAKS_COARSE_FS` `-53%`, `PEAKS_HOR_FS` `-54%`, `PEAKS_CONSTS_FS`
+  `-68%`); rewrites `CREST_FRAGMENT` with hoisted per-ridge scalars and a
+  non-unrolled `uLoop4` loop (~4× smaller compiled IR on Mali).
+- Scroll CPU & spikes (`MistCanvas.jsx`, `grassShader.js`): camera-motion-gated
+  `preparation.canRun()` (never deadlocks at the laptop hold) + `peaksNow.skipGeo`
+  in `openingFirst()`; zero-alloc row-frustum-culled `ringRanges()` +
+  `grassRangeCache` (`grass` CPU `1.2–2.6 → 0.3 ms`); preallocated `rebuild()`
+  `Float32Array`s, skipped 2D ridge math under 3D peaks, cached `dataset.*`
+  writes (`setDs`), numeric `lampPose` key (no `JSON.stringify`), and skipped
+  empty bird uploads.
+- Measured at-rest redraw throttling (`MistCanvas.jsx`, `?restthrottle=0` off):
+  syncs pool rest draws to 60 Hz water/firefly ticks and desk/house rest draws
+  to 30 Hz wind ticks (60 Hz while birds fly).
+- M4 `1440×900@2`: house climb `72.0 → 101.1 fps` (`p50 8.3 ms`, `>20 ms`
+  `74 → 8`, `max 533 → 183 ms`), laptop top-down → open `115.5 fps`
+  (`p95 10.0 ms`, `peaks-coarse 8.49 → 0.62 ms`, `peaks-geo 10.27 → 1.54 ms`),
+  switch `120.0 fps` (`0 > 20 ms`), rest draws: `desk 26.0/s`,
+  `pool-night 26.0/s`, `pool-day 51.5/s`, `opening 5.7/s`; `test:unit` 88/88,
+  `test:adaptive` 9/9, `hygiene` all passed, end-to-end scroll past open laptop
+  to pool verified (`0` errors).
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

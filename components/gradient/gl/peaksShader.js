@@ -61,7 +61,9 @@ vec3 dayGrade(vec3 c) {
 // The four bearings the ground's horizon is found for (../peaks.js BEARINGS).
 uniform vec2 uBear[4];
 
-const vec4 PEAK[${PEAKS.length}] = vec4[${PEAKS.length}](${peaks});
+// Hero peak centre (the full PEAK[] array lives in TERRAIN_BASE only so
+// Mali never compiles a 12-vec4 constant table into light/mix/consts passes).
+const vec2 HERO_XZ = vec2(${f(PEAKS[0][0])}, ${f(PEAKS[0][1])});
 // The mist: its floor, and the height it thins out by.
 const float MIST_BASE = ${f(CLOUD.base)};
 const float MIST_RISE = ${f(CLOUD.rise)};
@@ -105,7 +107,10 @@ vec3 viewRay(out vec3 f, out vec3 r, out vec3 u, out float lens, out vec2 uv) {
 }
 `;
 
-const COMMON_TERRAIN = `
+// (0.5.30) Terrain split into minimal per-pass chunks so Mali / Galaxy S21
+// never compiles dead march/geo/horizon/terrain2 code into bake/coarse/hor/shape-far.
+const TERRAIN_BASE = `
+const vec4 PEAK[${PEAKS.length}] = vec4[${PEAKS.length}](${peaks});
 float ridged(vec2 p, int oct) {
   float s = 0., a = .5, w = 1.;
   for (int i = 0; i < 12; i++) {
@@ -115,27 +120,6 @@ float ridged(vec2 p, int oct) {
     p = M * p * 2.03; a *= .5;
   }
   return s;
-}
-vec2 fbm2(vec2 p, int oct) {
-  float s = 0., s3 = 0., a = .5;
-  for (int i = 0; i < 8; i++) {
-    if (i >= oct) break;
-    s += a * noise(p);
-    if (i == 2) s3 = s;
-    p = M * p * 2.02; a *= .5;
-  }
-  return vec2(s, oct <= 3 ? s : s3);
-}
-vec2 ridged2(vec2 p, int oct) {
-  float s = 0., s3 = 0., a = .5, w = 1.;
-  for (int i = 0; i < 12; i++) {
-    if (i >= oct) break;
-    float n = 1. - abs(noise(p) * 2. - 1.);
-    n *= n; s += n * a * w; w = clamp(n * 1.6, 0., 1.);
-    if (i == 2) s3 = s;
-    p = M * p * 2.03; a *= .5;
-  }
-  return vec2(s, oct <= 3 ? s : s3);
 }
 
 // ---- the ground
@@ -219,43 +203,6 @@ float terrain(vec2 p, int oct) {
   h = mix(h, ${f(SHELF.y)}, shelfMask(p));
   return h;
 }
-// Single-pass 8-octave + 3-octave height for PEAKS_BAKE_FS (exact match to terrain(p,8), terrain(p,3)).
-vec2 terrain2(vec2 p) {
-  float d = length(p), ring = smoothstep(1100., 3400., d);
-  float mask = .45 + .55 * noise(p / 3800. + vec2(3.1, 1.7));
-  float valley = 380. + fbm(p / 1500., 3) * 420.;
-  vec2 range = .78 * ridged2(p / 2800., 8) + .22 * fbm2(p / 2600., 5);
-  vec2 h = mix(vec2(valley), range * 3200. * mask + 450., ring);
-  vec2 det = .8 + .36 * ridged2(p / 560. + vec2(5.3, 2.1), 8);
-  for (int i = 0; i < ${PEAKS.length}; i++) {
-    float sc = i == 0 || i > 2 ? 1. : .62;
-    h.x = max(h.x, peak(p, PEAK[i], sc, det.x));
-    h.y = max(h.y, peak(p, PEAK[i], sc, det.y));
-  }
-  float vd = valleyDist(p);
-  float vn = .45 + .55 * noise(p / 2300. + 2.);
-  vec2 vfloor = 650. + 1250. * ridged2(p / 1700. + 5.3, 6) * vn * det;
-  float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
-  vec2 walls = max(h - vfloor, vec2(0.)) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
-  h = mix(h, vfloor + walls * wall, valleyLen(p));
-  float sx = max(shelfD(p) - ${f(SHELF.r)}, 0.);
-  float sm25 = smoothstep(25., 500., sx);
-  float sm90 = smoothstep(0., 90., sx);
-  float sm60 = smoothstep(0., 60., sx);
-  float hum = sm60 * (1. - smoothstep(250., 600., sx))
-    * (22. * smoothstep(.45, .8, noise(p / 95. + 9.1)) + 7. * noise(p / 28. + 3.3));
-  vec2 spur = vec2(${f(SHELF.y)} - (.12 * sx + .0009 * sx * sx) + hum)
-    - 160. * det * sm25 * ridged2(p / 420. + 7.7, 7)
-    - 55. * sm90 * ridged2(p / 130. + 3.1, 6)
-    - 22. * sm60 * fbm2(p / 60. + 2.3, 5);
-  spur = min(spur, vec2(${f(SHELF.y)} - .06 * sx));
-  float cap = ${f(SHELF.y)} - 520. * smoothstep(0., 380., sx) + 2600. * smoothstep(520., 1500., sx);
-  float capN = noise(p / 230. + 2.9) - .5;
-  h = min(h, vec2(cap) + 60. * det * capN);
-  h = max(h, spur);
-  h = mix(h, vec2(${f(SHELF.y)}), shelfMask(p));
-  return h;
-}
 // (0.5.3) The ground and the mist's pattern baked once (PEAKS_BAKE_FS):
 // a near box covering the whole hero range and a far box covering the
 // plateau and distant ranges. Each texel stores height split in two (exact
@@ -321,6 +268,114 @@ float mistN(vec2 xz) {
 }
 // Nothing stands above this: a ray past it, climbing, has missed.
 const float CEILING = 4900.;
+`;
+
+// Single-pass 8-octave + 3-octave height: ONLY included in PEAKS_BAKE_FS.
+const TERRAIN_BAKE = `
+vec2 fbm2(vec2 p, int oct) {
+  float s = 0., s3 = 0., a = .5;
+  for (int i = 0; i < 8; i++) {
+    if (i >= oct) break;
+    s += a * noise(p);
+    if (i == 2) s3 = s;
+    p = M * p * 2.02; a *= .5;
+  }
+  return vec2(s, oct <= 3 ? s : s3);
+}
+vec2 ridged2(vec2 p, int oct) {
+  float s = 0., s3 = 0., a = .5, w = 1.;
+  for (int i = 0; i < 12; i++) {
+    if (i >= oct) break;
+    float n = 1. - abs(noise(p) * 2. - 1.);
+    n *= n; s += n * a * w; w = clamp(n * 1.6, 0., 1.);
+    if (i == 2) s3 = s;
+    p = M * p * 2.03; a *= .5;
+  }
+  return vec2(s, oct <= 3 ? s : s3);
+}
+vec2 terrain2(vec2 p) {
+  float d = length(p), ring = smoothstep(1100., 3400., d);
+  float mask = .45 + .55 * noise(p / 3800. + vec2(3.1, 1.7));
+  float valley = 380. + fbm(p / 1500., 3) * 420.;
+  vec2 range = .78 * ridged2(p / 2800., 8) + .22 * fbm2(p / 2600., 5);
+  vec2 h = mix(vec2(valley), range * 3200. * mask + 450., ring);
+  vec2 det = .8 + .36 * ridged2(p / 560. + vec2(5.3, 2.1), 8);
+  for (int i = 0; i < ${PEAKS.length}; i++) {
+    float sc = i == 0 || i > 2 ? 1. : .62;
+    h.x = max(h.x, peak(p, PEAK[i], sc, det.x));
+    h.y = max(h.y, peak(p, PEAK[i], sc, det.y));
+  }
+  float vd = valleyDist(p);
+  float vn = .45 + .55 * noise(p / 2300. + 2.);
+  vec2 vfloor = 650. + 1250. * ridged2(p / 1700. + 5.3, 6) * vn * det;
+  float wall = pow(smoothstep(${f(VALLEY.half)}, ${f(VALLEY.half + VALLEY.wall)}, vd), 1.35);
+  vec2 walls = max(h - vfloor, vec2(0.)) + 480. * (.6 + .4 * noise(p / 1300.)) * det;
+  h = mix(h, vfloor + walls * wall, valleyLen(p));
+  float sx = max(shelfD(p) - ${f(SHELF.r)}, 0.);
+  float sm25 = smoothstep(25., 500., sx);
+  float sm90 = smoothstep(0., 90., sx);
+  float sm60 = smoothstep(0., 60., sx);
+  float hum = sm60 * (1. - smoothstep(250., 600., sx))
+    * (22. * smoothstep(.45, .8, noise(p / 95. + 9.1)) + 7. * noise(p / 28. + 3.3));
+  vec2 spur = vec2(${f(SHELF.y)} - (.12 * sx + .0009 * sx * sx) + hum)
+    - 160. * det * sm25 * ridged2(p / 420. + 7.7, 7)
+    - 55. * sm90 * ridged2(p / 130. + 3.1, 6)
+    - 22. * sm60 * fbm2(p / 60. + 2.3, 5);
+  spur = min(spur, vec2(${f(SHELF.y)} - .06 * sx));
+  float cap = ${f(SHELF.y)} - 520. * smoothstep(0., 380., sx) + 2600. * smoothstep(520., 1500., sx);
+  float capN = noise(p / 230. + 2.9) - .5;
+  h = min(h, vec2(cap) + 60. * det * capN);
+  h = max(h, spur);
+  h = mix(h, vec2(${f(SHELF.y)}), shelfMask(p));
+  return h;
+}
+`;
+
+// Coarse cone prepass: ONLY included in PEAKS_COARSE_FS.
+const TERRAIN_COARSE = `
+// (0.5.3) For the coarse pass: conservative cone reach against the baked
+// heightfield so the full pass skips empty sky in one jump.
+float coneReach(vec3 ro, vec3 rd, float tmax, float k) {
+  // (0.5.29) Fast analytic exit for downward rays hitting the flat meadow
+  // plateau (matches geo() — avoids 160 wasted march steps on the bottom
+  // ~75% of the screen during desk top-down → laptop open!).
+  if (rd.y < 0. && ro.y >= ${f(SHELF.y - 0.5)} && ro.y < ${f(SHELF.y + 85)}) {
+    float tp = (${f(SHELF.y)} - ro.y) / rd.y;
+    if (tp > 0. && shelfD((ro + rd * tp).xz) < ${f(SHELF.r * 0.97)}) return tp;
+  }
+  float t = max(1., nearFor(rd));
+  for (int i = 0; i < 96; i++) {
+    vec3 p = ro + rd * t;
+    float h = p.y - Hm(p, t);
+    if (h < k * t + 6.) return t;
+    if (t > tmax || (rd.y > 0. && p.y > CEILING)) return tmax;
+    float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
+    t += max(h * kStep, 1. + t * .0015);
+  }
+  return t;
+}
+`;
+
+// Horizon elevation march: ONLY included in PEAKS_HOR_FS & PEAKS_ALL_FS.
+const TERRAIN_HOR = `
+// How high the ground rises toward a bearing, seen from p: the tangent of
+// the horizon's elevation. A body below it is hidden, so the light pass
+// shades with this instead of marching a shadow every frame.
+float horizon(vec3 p, vec2 dir) {
+  float m = -1., t = 15.;
+  for (int i = 0; i < 18; i++) {
+    vec2 q = p.xz + dir * t;
+    float h = H(q, 3) - p.y;
+    m = max(m, h / t);
+    t *= 1.38;
+    if (t > 16000.) break;
+  }
+  return m;
+}
+`;
+
+// Full shape pass: ONLY included in PEAKS_GEO_FS & PEAKS_ALL_FS.
+const TERRAIN_GEO = `
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
   bool gone = false;
@@ -349,27 +404,6 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
   return gone || rd.y >= 0. || hp > 40. + t * .02 ? -1. : t;
-}
-// (0.5.3) For the coarse pass: conservative cone reach against the baked
-// heightfield so the full pass skips empty sky in one jump.
-float coneReach(vec3 ro, vec3 rd, float tmax, float k) {
-  // (0.5.29) Fast analytic exit for downward rays hitting the flat meadow
-  // plateau (matches geo() — avoids 160 wasted march steps per corner ray
-  // on the bottom 75% of the screen during desk top-down → laptop open!).
-  if (rd.y < 0. && ro.y >= ${f(SHELF.y - 0.5)} && ro.y < ${f(SHELF.y + 85)}) {
-    float tp = (${f(SHELF.y)} - ro.y) / rd.y;
-    if (tp > 0. && shelfD((ro + rd * tp).xz) < ${f(SHELF.r * 0.97)}) return tp;
-  }
-  float t = max(1., nearFor(rd));
-  for (int i = 0; i < 96; i++) {
-    vec3 p = ro + rd * t;
-    float h = p.y - Hm(p, t);
-    if (h < k * t + 6.) return t;
-    if (t > tmax || (rd.y > 0. && p.y > CEILING)) return tmax;
-    float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
-    t += max(h * kStep, 1. + t * .0015);
-  }
-  return t;
 }
 vec3 nrm(vec3 p, float t) {
   // Match central-difference step to the active bake box's texel spacing so
@@ -405,21 +439,6 @@ float mistAt(vec3 p) {
   body *= 1. - shelfMask(p.xz);
   float bill = noise(p.xz / 260. + hgt * .7);
   return body * (.55 + .45 * bill) * .0016;
-}
-
-// How high the ground rises toward a bearing, seen from p: the tangent of
-// the horizon's elevation. A body below it is hidden, so the light pass
-// shades with this instead of marching a shadow every frame.
-float horizon(vec3 p, vec2 dir) {
-  float m = -1., t = 15.;
-  for (int i = 0; i < 18; i++) {
-    vec2 q = p.xz + dir * t;
-    float h = H(q, 3) - p.y;
-    m = max(m, h / t);
-    t *= 1.38;
-    if (t > 16000.) break;
-  }
-  return m;
 }
 
 G geo(vec3 rd, float tStart) {
@@ -567,42 +586,23 @@ G geo(vec3 rd, float tStart) {
   return g;
 }
 `;
-const COMMON = `${COMMON_CAM}\n${COMMON_TERRAIN}`;
+const COMMON_GEO = `${COMMON_CAM}\n${TERRAIN_BASE}\n${TERRAIN_GEO}`;
+const COMMON_COARSE = `${COMMON_CAM}\n${TERRAIN_BASE}\n${TERRAIN_COARSE}`;
+const COMMON_HOR = `${COMMON_CAM}\n${TERRAIN_BASE}\n${TERRAIN_HOR}`;
+const COMMON_BAKE = `${COMMON_CAM}\n${TERRAIN_BASE}\n${TERRAIN_BAKE}`;
+const COMMON_ALL = `${COMMON_CAM}\n${TERRAIN_BASE}\n${TERRAIN_HOR}\n${TERRAIN_GEO}`;
 
-const SHADE = `
-uniform sampler2D uFlow;
-// Noise from the flow texture (five octaves baked in): one or two reads,
-// not a dozen noise sums.
-float tn(vec2 p) { return texture(uFlow, p).r; }
-float tn2(vec2 p) { return texture(uFlow, p).r * .62 + texture(uFlow, p * 2.73 + .37).g * .38; }
+// (0.5.30) Atmosphere & frame constants split out so PEAKS_CONSTS_FS never
+// compiles ground(), sky(), stars(), drawSun(), or drawMoon() on Mali.
+const SHADE_ATMO = `
 uniform float uByMoon;
 uniform vec3 uSunDir, uMoonDir, uLightDir;
 uniform vec3 uStops[6];
 uniform vec3 uBody;
-uniform vec3 uGrassGround, uGrassFar, uGrassSky;
 uniform float uNight, uGlow, uA;
 
 vec3 S[6];
 vec3 LIGHT;
-
-// The moon's near side (public/moon.jpg: NASA's LRO map, public domain,
-// projected onto a disc); until it has loaded, the drawn one stands in.
-uniform sampler2D uMoonTex;
-uniform float uMoonReady;
-// The light's shadow: the body against the ground's horizon toward it.
-uniform float uLightAz;
-uniform vec4 uBearAz;
-float shadow(G g) {
-  float tl = uLightDir.y / max(length(uLightDir.xz), 1e-4);
-  // The horizon toward the light: blended between the bearings either side.
-  float a = clamp(uLightAz, uBearAz.x, uBearAz.w);
-  float th = a < uBearAz.y ? mix(g.hor.x, g.hor.y, (a - uBearAz.x) / (uBearAz.y - uBearAz.x))
-           : a < uBearAz.z ? mix(g.hor.y, g.hor.z, (a - uBearAz.y) / (uBearAz.z - uBearAz.y))
-           : mix(g.hor.z, g.hor.w, (a - uBearAz.z) / (uBearAz.w - uBearAz.z));
-  return smoothstep(-.035, .035, tl - th);
-}
-
-uniform float uLapse;
 
 // ---- the air, as real skies are lit: the body's light scattered by air
 // (Rayleigh: blue overhead, white toward the horizon) and haze (Mie: the
@@ -684,6 +684,48 @@ vec3 skyRaw(vec3 rd) {
 vec3 bodyLight() { return toScreen(reach(uLightDir, uByMoon > .5 ? MOON_I : SUN_I) * (uByMoon > .5 ? .8 : .11)) * 1.25 * (uByMoon > .5 ? vec3(.8, .9, 1.15) : vec3(1.)); }
 vec3 sunLit() { vec3 b = BODYL; if (uByMoon > .5) return b; float l = dot(b, vec3(.2126, .7152, .0722)); return mix(vec3(l), b, .18) * vec3(1.02, 1., .97); }
 vec3 skyLight() { return toScreen(skyRaw(normalize(vec3(0., 1., 0.) + uLightDir * .3)) * .55); }
+void frameConsts() {
+  for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
+  LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
+  EXPO = 1.25 * pow(16., uNight);
+  TAU0 = tau0();
+  TR = BR * HR * exp(-uCam.y / HR); TM = vec3(BM * HM * exp(-uCam.y / HM));
+  LITS = bodyLit(uSunDir, SUN_I); LITM = bodyLit(uMoonDir, MOON_I);
+  BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
+  vec3 trM = exp(-TAU0 * airmass(max(uMoonDir.y, 0.) + .004));
+  MOON_TINT = trM / max(max(trM.r, trM.g), 1e-3);
+  CLD_SUN = reach(normalize(uSunDir + vec3(0., .05, 0.)), SUN_I);
+  CLD_MOON = reach(uMoonDir, MOON_I);
+  CLD_ZEN = skyRaw(vec3(0., 1., 0.));
+}
+`;
+
+const SHADE = `${SHADE_ATMO}
+uniform sampler2D uFlow;
+// Noise from the flow texture (five octaves baked in): one or two reads,
+// not a dozen noise sums.
+float tn(vec2 p) { return texture(uFlow, p).r; }
+float tn2(vec2 p) { return texture(uFlow, p).r * .62 + texture(uFlow, p * 2.73 + .37).g * .38; }
+uniform vec3 uGrassGround, uGrassFar, uGrassSky;
+
+// The moon's near side (public/moon.jpg: NASA's LRO map, public domain,
+// projected onto a disc); until it has loaded, the drawn one stands in.
+uniform sampler2D uMoonTex;
+uniform float uMoonReady;
+// The light's shadow: the body against the ground's horizon toward it.
+uniform float uLightAz;
+uniform vec4 uBearAz;
+float shadow(G g) {
+  float tl = uLightDir.y / max(length(uLightDir.xz), 1e-4);
+  // The horizon toward the light: blended between the bearings either side.
+  float a = clamp(uLightAz, uBearAz.x, uBearAz.w);
+  float th = a < uBearAz.y ? mix(g.hor.x, g.hor.y, (a - uBearAz.x) / (uBearAz.y - uBearAz.x))
+           : a < uBearAz.z ? mix(g.hor.y, g.hor.z, (a - uBearAz.y) / (uBearAz.z - uBearAz.y))
+           : mix(g.hor.z, g.hor.w, (a - uBearAz.z) / (uBearAz.w - uBearAz.z));
+  return smoothstep(-.035, .035, tl - th);
+}
+
+uniform float uLapse;
 
 vec3 sky(vec3 rd) {
   vec3 c = skyRaw(rd);
@@ -843,7 +885,7 @@ vec3 ground(G g, vec3 rd) {
   // (0.5.8) By night the hero peak alone stays legible (text will sit by
   // it): a cool moonlit fill on its faces, the snow catching most; the
   // rest of the range keeps the night.
-  float hero = smoothstep(2200., 780., length(p.xz - PEAK[0].xy));
+  float hero = smoothstep(2200., 780., length(p.xz - HERO_XZ));
   amb += uNight * hero * vec3(.07, .09, .14) * (.6 + .4 * g.snow) * (.5 + .5 * n.y) * effAO;
   vec3 c = alb * (SUNL * dif * sh * mix(1., 1.92, 1. - uNight) + amb);
   // (0.5.9) By day too the hero stands apart: a touch more light on it.
@@ -1018,20 +1060,6 @@ vec3 drawMoon(vec3 c, vec2 uv, vec3 f, vec3 r, vec3 u, float lens) {
 // 16-texel float target (PEAKS_CONSTS_FS; 0.5.17: 16) and read back here, where there.
 uniform sampler2D uConsts;
 uniform float uHaveConsts;
-void frameConsts() {
-  for (int i = 0; i < 6; i++) S[i] = pow(uStops[i], vec3(2.2));
-  LIGHT = mix(pow(uBody, vec3(2.2)), vec3(1.), .15 * (1. - uNight));
-  EXPO = 1.25 * pow(16., uNight);
-  TAU0 = tau0();
-  TR = BR * HR * exp(-uCam.y / HR); TM = vec3(BM * HM * exp(-uCam.y / HM));
-  LITS = bodyLit(uSunDir, SUN_I); LITM = bodyLit(uMoonDir, MOON_I);
-  BODYL = bodyLight(); SUNL = sunLit(); SKYL = skyLight();
-  vec3 trM = exp(-TAU0 * airmass(max(uMoonDir.y, 0.) + .004));
-  MOON_TINT = trM / max(max(trM.r, trM.g), 1e-3);
-  CLD_SUN = reach(normalize(uSunDir + vec3(0., .05, 0.)), SUN_I);
-  CLD_MOON = reach(uMoonDir, MOON_I);
-  CLD_ZEN = skyRaw(vec3(0., 1., 0.));
-}
 void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out vec3 base, out vec3 mist) {
   if (uHaveConsts > .5) {
     for (int i = 0; i < 6; i++) S[i] = texelFetch(uConsts, ivec2(i, 0), 0).rgb;
@@ -1065,7 +1093,7 @@ void lightParts(G g, vec3 rd, vec2 uv, vec3 f, vec3 r, vec3 u, float lens, out v
 // gets before it is near the ground (a little short of it, so the full
 // pass, starting there, never steps over a ridge a coarse ray missed).
 export const PEAKS_COARSE_FS = `#version 300 es
-${COMMON}
+${COMMON_COARSE}
 uniform vec2 uFull;
 out vec4 o;
 void main() {
@@ -1086,7 +1114,7 @@ void main() {
 // Each pixel's ground horizon toward the four bearings, at half the size
 // each way (the shadows are soft; the light pass reads it filtered).
 export const PEAKS_HOR_FS = `#version 300 es
-${COMMON}
+${COMMON_HOR}
 uniform sampler2D uG0;
 // (0.5.13) Which bearings the light reads this frame (1) — while the camera
 // moves only those are marched; all four once it settles.
@@ -1111,7 +1139,7 @@ void main() {
 // (0.5.3) The bake: one box's texels — exact ground height (split in r+g),
 // mist noise (b), and coarse 3-octave height (a) for instant AO.
 export const PEAKS_BAKE_FS = `#version 300 es
-${COMMON}
+${COMMON_BAKE}
 uniform vec4 uBox;
 out vec4 o;
 void main() {
@@ -1130,17 +1158,25 @@ void main() {
 
 // The shape pass: two targets (o0: RGBA16F, o1: RGBA8 holding T, mh, ao, strata).
 export const PEAKS_GEO_FS = `#version 300 es
-${COMMON}
+${COMMON_GEO}
 layout(location = 0) out vec4 o0;
 layout(location = 1) out vec4 o1;
 uniform sampler2D uCoarse;
-// (0.5.28) When marching behind the house at 0.5x scale (where full-res
-// aoPass.depth cannot attach), skip pixels whose 2x2 full-res block in uPeakAO
-// is completely covered by solid house/lawn (< 9000 m vs clear 1e4).
+// (0.5.28) When marching behind the house at reduced scale (where full-res
+// aoPass.depth cannot attach), skip pixels whose block in uPeakAO is covered
+// by solid house/lawn (< 9000 m vs clear 1e4).
 uniform sampler2D uPeakAO;
 uniform float uPeakAOOn;
 uniform float uPeakAOScale;
 uniform ivec2 uPeakAOSize;
+// (0.5.30) Temporal reprojection while scrolling (P2/R): reuse valid interior
+// mountain pixels from the previous frame with rotation+parallax refinement
+// and 4-neighbor silhouette guards so edges & newly revealed areas march fresh.
+uniform float uReprojOn;
+uniform sampler2D uPrevG0, uPrevG1;
+uniform vec3 uPrevCam, uPrevF, uPrevR, uPrevU;
+uniform float uPrevLens;
+uniform vec2 uPrevShift, uPrevRes;
 void main() {
   if (uPeakAOOn > .5) {
     float inv = 1. / max(uPeakAOScale, .25);
@@ -1159,7 +1195,66 @@ void main() {
   }
   vec3 f, r, u; float lens; vec2 uv;
   vec3 rd = viewRay(f, r, u, lens, uv);
-  G g = geo(rd, texelFetch(uCoarse, ivec2(gl_FragCoord.xy) / 4, 0).x * 1000.);
+  // (0.5.30) Analytic meadow plateau hit runs BEFORE temporal reprojection so
+  // distant mountains from the previous frame can never bleed over the plateau.
+  if (rd.y < 0. && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y < ${f(SHELF.y + 85)}) {
+    float tp = (${f(SHELF.y)} - uCam.y) / rd.y;
+    if (tp > 0. && shelfD((uCam + rd * tp).xz) < ${f(SHELF.r * 0.97)}) {
+      o0 = vec4(tp * .001, 0., 0., 0.);
+      o1 = vec4(1., 0., 1., .5);
+      return;
+    }
+  }
+  float coarseT = texelFetch(uCoarse, ivec2(gl_FragCoord.xy) / 4, 0).x * 1000.;
+  if (uReprojOn > .5 && coarseT > 300. && coarseT < 70000.) {
+    float z0 = dot(rd, uPrevF);
+    if (z0 > 1e-4) {
+      vec2 pUv0 = vec2(dot(rd, uPrevR), dot(rd, uPrevU)) * (uPrevLens / z0);
+      ivec2 px0 = ivec2(floor(((pUv0 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
+      if (all(greaterThanEqual(px0, ivec2(2))) && all(lessThan(px0, ivec2(uPrevRes) - 2))) {
+        float t0 = texelFetch(uPrevG0, px0, 0).x * 1000.;
+        if (t0 > 350.) {
+          vec3 w0 = uCam + rd * t0;
+          vec3 d1 = w0 - uPrevCam;
+          float z1 = dot(d1, uPrevF);
+          if (z1 > 1e-4) {
+            vec2 pUv1 = vec2(dot(d1, uPrevR), dot(d1, uPrevU)) * (uPrevLens / z1);
+            ivec2 px1 = ivec2(floor(((pUv1 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
+            if (all(greaterThanEqual(px1, ivec2(2))) && all(lessThan(px1, ivec2(uPrevRes) - 2))) {
+              vec4 pA = texelFetch(uPrevG0, px1, 0);
+              float t1 = pA.x * 1000.;
+              if (t1 > 350.) {
+                float nL = texelFetch(uPrevG0, px1 + ivec2(-1, 0), 0).x;
+                float nR = texelFetch(uPrevG0, px1 + ivec2(1, 0), 0).x;
+                float nD = texelFetch(uPrevG0, px1 + ivec2(0, -1), 0).x;
+                float nU = texelFetch(uPrevG0, px1 + ivec2(0, 1), 0).x;
+                float minN = min(min(nL, nR), min(nD, nU));
+                float maxN = max(max(nL, nR), max(nD, nU));
+                if (minN > .35 && (maxN - minN) < pA.x * .06) {
+                  vec2 qUv = ((vec2(px1) + .5) * 2. - uPrevRes) / uPrevRes.y - uPrevShift;
+                  vec3 pRd = normalize(uPrevF * uPrevLens + qUv.x * uPrevR + qUv.y * uPrevU);
+                  vec3 w1 = uPrevCam + pRd * t1;
+                  vec3 toW = w1 - uCam;
+                  float tNew = length(toW);
+                  float pxAng = 1.4 / max(uRes.y * lens, 200.);
+                  // Guard against foreground occlusion (coarseT) and multi-frame
+                  // surface drift (1-fetch baked H check).
+                  if (tNew > 350. && tNew < coarseT * 1.22 && abs(tNew - t1) < tNew * .05
+                      && dot(toW / tNew, rd) > cos(pxAng)
+                      && abs(w1.y - H(w1.xz, 5)) < max(6., tNew * .0025)) {
+                    o0 = vec4(tNew * .001, pA.y, pA.z, pA.w);
+                    o1 = texelFetch(uPrevG1, px1, 0);
+                    return;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  G g = geo(rd, coarseT);
   o0 = vec4(g.t * .001, g.n.x, g.n.z, g.snow);
   o1 = vec4(g.T, g.mh, g.ao, g.strata);
 }`;
@@ -1182,6 +1277,16 @@ G readG(vec3 rd) {
       s.hit = 1.;
     }
     return s;
+  }
+  // (0.5.30) Eye/climb-height analytic meadow hit matching horizonClipY() scissor:
+  // ONLY triggers when the intersection point is strictly inside the plateau rim
+  // (never past the rim over the valley!).
+  if (uNear > 0. && rd.y < -.06 && uCam.y >= ${f(SHELF.y - 0.5)} && uCam.y <= ${f(SHELF.y + 17)}) {
+    float tp = (${f(SHELF.y)} - uCam.y) / rd.y;
+    if (tp > 0. && shelfD((uCam + rd * tp).xz) < ${f(SHELF.r * 0.97)}) {
+      G s; s.t = tp; s.n = vec3(0, 1, 0); s.snow = 0.; s.T = 1.; s.mh = 0.; s.ao = 1.; s.hit = 1.; s.strata = .5; s.hor = vec4(-1);
+      return s;
+    }
   }
   ivec2 px = ivec2(gl_FragCoord.xy * uGeoScale);
   vec4 a = texelFetch(uG0, px, 0), b = texelFetch(uG1, px, 0);
@@ -1285,7 +1390,7 @@ void main() {
 // (0.5.13) The frame's constants (lightParts), one texel each.
 export const PEAKS_CONSTS_FS = `#version 300 es
 ${COMMON_CAM}
-${SHADE}
+${SHADE_ATMO}
 out vec4 o;
 void main() {
   frameConsts();
@@ -1296,7 +1401,7 @@ void main() {
 
 // Both in one, where float targets can't be drawn into.
 export const PEAKS_ALL_FS = `#version 300 es
-${COMMON}
+${COMMON_ALL}
 ${SHADE}
 ${FLOW}
 out vec4 o;
