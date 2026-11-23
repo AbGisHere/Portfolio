@@ -472,6 +472,15 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const onHouseRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/house');
     const isDirectHouse = typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'));
+    // True while sitting at the opening hero (before scrolling down): keeps
+    // background warm-up shaders & PSOs 100% warm using 1×1 scratch targets so
+    // budget mobile GPUs (Adreno 619) never overlap full-res house/bloom/glass
+    // FBOs with opening-only `peaksKept` + `peaksGeo` + `peaksBake` (~72 MB saved).
+    const onOpeningHero = () => {
+      if (isDirectHouse || houseSeen || deskSeen) return false;
+      const d = getDescent();
+      return d.about < 0.25 && d.desk === 0 && (d.contact ?? 0) === 0;
+    };
 
     const ensureWarmHouse = (priority = false) => {
       if (stopped || noHouse) return;
@@ -1185,7 +1194,7 @@ export default function MistCanvas({ recipe, onFail }) {
     // ambient occlusion (texture unit 13): its program and target (null:
     // none here).
     let aoPass = null;
-    const aoTarget = (wait = requiredPass) => {
+    const aoTarget = (wait = requiredPass, tiny = false) => {
       if (aoPass === false) return false;
       if (noHouse || noAO || !gl.getExtension('EXT_color_buffer_float')) return (aoPass = false);
       if (aoPass === null) {
@@ -1213,7 +1222,7 @@ export default function MistCanvas({ recipe, onFail }) {
         aoPass = { prog: dp, u: du, solidProg: sp || null, su, tex: gl.createTexture(), depth: gl.createRenderbuffer(), fbo: gl.createFramebuffer(), size: [0, 0] };
       }
       if (!aoPass) return null;
-      const size = [canvas.width, canvas.height];
+      const size = tiny && aoPass.size[0] === 0 ? [1, 1] : [canvas.width, canvas.height];
       if (aoPass.size[0] !== size[0] || aoPass.size[1] !== size[1]) {
         aoPass.size = size;
         gl.activeTexture(gl.TEXTURE13);
@@ -1564,15 +1573,17 @@ export default function MistCanvas({ recipe, onFail }) {
       const Y1 = Math.min(fh(), fh() - Math.floor(y0 * k) + 4);
       return X1 > X0 && Y1 > Y0 ? [X0, Y0, X1 - X0, Y1 - Y0] : null;
     };
-    const prepareFrameCopy = g => {
+    const prepareFrameCopy = (g, tiny = false) => {
+      const tw = tiny && g.size[0] === 0 ? 1 : canvas.width;
+      const th = tiny && g.size[0] === 0 ? 1 : canvas.height;
       gl.activeTexture(gl.TEXTURE11);
       gl.bindTexture(gl.TEXTURE_2D, g.tex);
-      if (g.size[0] !== canvas.width || g.size[1] !== canvas.height) {
-        g.size = [canvas.width, canvas.height];
+      if (g.size[0] !== tw || g.size[1] !== th) {
+        g.size = [tw, th];
         glassCopyKey = null;
         // (0.5.28) RGBA8 matches aoPass.frame natively, avoiding RGBA→RGB
         // format conversion during copyTexSubImage2D.
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, tw, th, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -1882,7 +1893,9 @@ export default function MistCanvas({ recipe, onFail }) {
         return 'pending';
       }
       peaksMoonFace();
-      const tgt = deskFrameTarget();
+      // Use a 1×1 RGBA8+DEPTH24 scratch target for 1×1 PSO warm-up instead of
+      // allocating full-res `deskFrame` (~21 MB on mobile) while at scroll = 0.
+      const tgt = allocStillBuf(null, 1, 1);
       if (!tgt) return 'done';
       deskPipelinesWarmed = true;
       gl.bindFramebuffer(gl.FRAMEBUFFER, tgt.fbo);
@@ -1917,17 +1930,13 @@ export default function MistCanvas({ recipe, onFail }) {
       if (grass?.prog) {
         initCameraU(grass.prog, grass.u);
         gl.bindVertexArray(grass.vao);
-        gl.vertexAttribI4ui(1, 0, 0, 0, 0);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 3, 1);
-        gl.vertexAttrib4f(1, 0, 0, 0, 1);
       }
       if (flowers?.prog) {
         meadowTexture();
         initCameraU(flowers.prog, flowers.u);
         gl.bindVertexArray(flowers.vao);
-        gl.vertexAttribI4ui(1, 0, 0, 0, 0);
         gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, 1);
-        gl.vertexAttrib4f(1, 0, 0, 0, 1);
       }
       if (trees?.prog) {
         initCameraU(trees.prog, trees.u);
@@ -1995,6 +2004,7 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.depthMask(true);
       gl.depthFunc(gl.LESS);
       cleanGL();
+      deleteStillBuf(tgt);
       return 'done';
     };
     scheduleQueue([
@@ -2371,7 +2381,7 @@ export default function MistCanvas({ recipe, onFail }) {
             gl.depthMask(true);
           }
           if (glass?.prog && glass.vao) {
-            prepareFrameCopy(glass);
+            prepareFrameCopy(glass, onOpeningHero());
             gl.disable(gl.BLEND);
             gl.depthFunc(gl.LEQUAL);
             gl.depthMask(false);
@@ -2423,7 +2433,7 @@ export default function MistCanvas({ recipe, onFail }) {
           if (!glassWaterAsync && !canStartCompile()) return 'pending';
           startGlassWaterAsync();
           const gp = glassProgram(false);
-          if (gp) prepareFrameCopy(gp);
+          if (gp) prepareFrameCopy(gp, onOpeningHero());
           return gp === null ? 'pending' : 'done';
         },
         () => {
@@ -2444,7 +2454,7 @@ export default function MistCanvas({ recipe, onFail }) {
           startDepthAsync();
           if (!depthSolidAsync && !canStartCompile()) return 'pending';
           startDepthSolidAsync();
-          const ao = aoTarget(false);
+          const ao = aoTarget(false, onOpeningHero());
           return ao === null ? 'pending' : 'done';
         },
         () => {
@@ -2474,7 +2484,10 @@ export default function MistCanvas({ recipe, onFail }) {
         () => {
           if (!noBloom) {
             bloom ??= H.makeBloom(gl, 14, fxProgram) || false;
-            if (bloom) bloom.prepare(canvas.width, canvas.height);
+            if (bloom) {
+              const hero = onOpeningHero();
+              bloom.prepare(hero ? 4 : canvas.width, hero ? 4 : canvas.height);
+            }
           }
           return 'done';
         },
@@ -2994,6 +3007,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
       if (about > 0.35 || desk > 0 || contact > 0) ensureWarmHouse();
+      if ((desk > 0.3 || contact > 0) && aoPass && aoPass.size[0] < canvas.width) aoTarget(false);
       const free = getFreeCam();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
@@ -4352,11 +4366,12 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!housePipelinesWarmed) return;
       // Cover all submitted uploads/probe/warm-up work without gl.finish or a
       // blocking wait. A resize before initial readiness needs a fresh fence.
-      if (glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
+      const hero = onOpeningHero();
+      if (!hero && glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
         prepareFrameCopy(glass);
         gl.activeTexture(gl.TEXTURE0);
       }
-      if (bloom) bloom.prepare(canvas.width, canvas.height);
+      if (bloom) bloom.prepare(hero ? 4 : canvas.width, hero ? 4 : canvas.height);
       const completion = houseCompletion.poll(`${canvas.width}x${canvas.height}`);
       if (completion === 'pending') return;
       if (completion === 'failed') {

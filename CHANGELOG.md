@@ -6,6 +6,37 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.35 — 2026-11-23
+
+Eliminated Moto G71 5G (`Adreno 619`, Android 11) opening-hero VRAM OOM
+(`-72 MB` peak VRAM at `scroll = 0`) while keeping 100% of background shader
+and PSO warm-up intact — Moto G71 now stays on WebGL2 across all phases with
+`0` context losses and `0` errors, and desktop GL `perf --gate --house` holds
+`0` frames `> 20 ms` on both `1440×900@2` and `1728×1117@2`.
+
+- **Opening-hero VRAM reduction (`MistCanvas.jsx`):**
+  - `warmDeskPipelines()` now uses a disposable `1×1` `RGBA8 + DEPTH24` scratch
+    FBO instead of allocating full-res `deskFrame` (`-21 MB` on Moto G71) and
+    removes its leftover `vertexAttribI4ui`/`vertexAttrib4f` calls.
+  - While on the opening hero (`onOpeningHero()`), background `warmHouse()` and
+    `syncHouseReadiness()` keep all shader compiles and Metal/ANGLE PSO
+    warm-ups active using matched-format tiny targets (`aoPass` `1×1`,
+    `glass.tex` `1×1`, `bloom` `4×4` — `-51 MB` on Moto G71), upgrading
+    `aoPass` to full resolution in `rebuild()` once `desk > 0.3 || contact > 0`
+    (after opening-only `peaksKept` is freed).
+- **Verified (`npm run test:unit` `88/88`, `npm run test:adaptive` `9/9`, `npm run hygiene` `21/21`):**
+  - **Moto G71 5G (`Adreno 619`, Android 11, `dpr 2.625`):** `0` context
+    losses / `0` errors across all phases (WebGL2 throughout), `house mesh
+    15.7 s, ready 31.1 s` (`38 MB` heap), `rest` `4/s×1` / `24.5/s×6` /
+    `27.9/s×11`, `flight` `4.0 fps` (`max 518 ms`, down from `1303 ms`),
+    `whole` `6.0 fps`, `switch` `7.6 fps`.
+  - **iPhone 13 (`Apple A15`, iOS 16, `dpr 3`):** `house ready 10.5 s`,
+    `flight` `60.2 fps (max 29 ms)`, `switch` `60.2 fps (max 31 ms, late 1)`,
+    `desk` CPU `16.6 → 13.4 ms`, `rest.pool` `37.7 → 24.3/s`, `0` errors.
+  - **Apple M4 (`perf --gate --house`):** `1440×900@2` GL `118.9 fps` scroll /
+    `119.6 fps` house (`0 > 20 ms`) PASS; `1728×1117@2` GL `118.1 fps` scroll /
+    `118.7 fps` house (`0 > 20 ms`) PASS.
+
 ## 0.5.34 — 2026-11-23
 
 Fixed the post-scroll missing-mountains bug behind the desk/house, passed both

@@ -576,6 +576,27 @@ across desktop and mobile GPUs:
   Tab A9+ (`Adreno 619`) `flight` `1.4 → 2.1 fps` (`max 2762 → 1731 ms`),
   `whole` `1.7 → 3.4 fps` (`2.0×`), `0` errors.
 
+**0.5.35** (2026-11-23) eliminates Moto G71 5G (`Adreno 619`, Android 11)
+opening-hero `webglcontextlost` OOM (`-72 MB` peak VRAM at `scroll = 0`) while
+keeping 100% of background shader & PSO warm-up intact:
+- Hero-VRAM warm-up (`MistCanvas.jsx`): `warmDeskPipelines()` warms all desk,
+  meadow, grass, and tree PSOs on a disposable `1×1` `RGBA8 + DEPTH24` scratch
+  FBO instead of allocating full-res `deskFrame` (`-21 MB` on Moto G71). While
+  sitting on the opening hero (`onOpeningHero()`), background `warmHouse()` and
+  `syncHouseReadiness()` allocate `aoPass` (`1×1`), `glass.tex` (`1×1`), and
+  `bloom` (`4×4`) at matched-format tiny sizes (`-51 MB`), upgrading `aoPass`
+  to full resolution in `rebuild()` once `desk > 0.3 || contact > 0` (after
+  `peaksKept` is freed).
+- Measured: Moto G71 5G (`Adreno 619`, `dpr 2.625`) stays on WebGL2 for 100% of
+  all phases with `0` context losses and `0` errors (`house mesh 15.7 s, ready
+  31.1 s`, `38 MB` heap, `rest` `4/s×1` / `24.5/s×6` / `27.9/s×11`, `flight`
+  `4.0 fps, max 518 ms` down from `1303 ms`, `whole` `6.0 fps`); iPhone 13
+  (`Apple A15`, iOS 16) `house ready 10.5 s`, `flight` `60.2 fps`, `switch`
+  `60.2 fps (late 1)`, `desk` CPU `16.6 → 13.4 ms`, `rest.pool` `37.7 → 24.3/s`;
+  Apple M4 `perf --gate --house` `1440×900@2` `118.9` scroll / `119.6` house
+  (`0 > 20 ms`) PASS and `1728×1117@2` `118.1` scroll / `118.7` house (`0 >
+  20 ms`) PASS; `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own
