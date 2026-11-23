@@ -6,6 +6,53 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.34 — 2026-11-23
+
+Fixed the post-scroll missing-mountains bug behind the desk/house, passed both
+desktop GL `perf --gate` viewports (`1440×900@2` `119.8 fps` and `1728×1117@2`
+`118.4 fps`) with zero resting visual drift (`regress 21/21, mean 0.00`), and
+accelerated mountain flight on mobile (`OnePlus 11R` `+47%`, `Galaxy Tab A9+`
+`2.0×` on `whole`).
+
+- **Fixed missing mountains behind desk/house (`MistCanvas.jsx`):**
+  - `stillOk` and `peaksPrepare()` now wait for `peaksSettled` (`peaksGeo.ready
+    && scale === 1 && !use && !refining`) before baking `still`, preventing
+    `stillHit && stillHasPeaks` from freezing unready (`uReady = 0`) or
+    half-res mountains permanently after scrolling to the desk or house.
+  - Added `peaksWork` to `tick()` rest-throttling, draw, and rAF-continuation
+    conditions so banded `1.0×` refinement always completes (including under
+    reduced motion).
+- **Desktop `120 fps` GL scroll gate & mobile mountain flight speedup (`peaksShader.js`, `MistCanvas.jsx`):**
+  - Fixed `tryReproj()` float32 `cos()` cancellation and sub-pixel diagonal
+    cutoff (`dot(dDir, dDir) >= pxAng * pxAng` at `1.4 px`), relaxed `RGBA16F`
+    slope-quantization and coarse-cone halo (`1.35×`) thresholds, and enabled
+    reprojection across `pk.behind` transitions.
+  - Added a motion-only `uMotion` fast path in `TERRAIN_GEO` (`uMotion = 1`
+    only while scrolling at `< 1.0×`; 100% bit-identical at rest `1.0×`): 8 mist
+    steps with `tau > 6.5` early out, 128 max march / 3 binary-search steps,
+    and skipping sub-pixel `aaMid`/`aaFine` micro-crag noise.
+  - Capped moving `peaksGeo` at `650k px` on `> 5.2M px` Retina displays
+    (`1728×1117@2`, `5K`, `6K`), leaving `1440×900@2`, phones (`0.5×`), and all
+    resting `1.0×` frames untouched.
+- **Mobile VRAM & Metal VAO cleanup (`MistCanvas.jsx`):**
+  - Freed `peaksKept` (`~20–24 MB`) early before `aoTarget()` allocates
+    `aoPass.frame` and before `prepOnly` returns in `drawPeaks()`, and banded
+    direct jumps to an unloaded house (`pk.behind && !houseComplete &&
+    camJump > 200`).
+  - Replaced per-frame `vertexAttribI4ui`/`vertexAttrib4f` calls in `drawGrass`
+    and `drawFlowers` with a shared 96-byte static zero `Uint32Array` VAO
+    buffer (cleaned up on unmount).
+- **Verified (`npm run test:unit` `88/88`, `npm run test:adaptive` `9/9`, `npm run hygiene` `21/21`, `regress` `21/21` `mean 0.00 / p99 0`, `switch` `4/4`):**
+  - **Apple M4 (`perf --gate`):** `1440×900@2` GL `112.1 → 119.8 fps (0 > 20 ms)`
+    PASS; `1728×1117@2` GL `96.0 → 118.4 fps (51 → 1 > 20 ms)` PASS.
+  - **OnePlus 11R (`Adreno 730`, `dpr 3.5`):** `flight` `30.6 → 45.1 fps`
+    (`+47%`, `p95 66.4 → 33.4 ms`), `desk` `66.6 → 70.2 fps`, `climb`
+    `40.1 → 42.5 fps`, `whole` `52.3 → 58.7 fps`, `house ready` `17.1 → 13.0 s`,
+    `switch` `90.2 fps (0 late)`.
+  - **Galaxy Tab A9+ (`Adreno 619`, `dpr 1.5`):** `flight` `1.4 → 2.1 fps`
+    (`max 2762 → 1731 ms`), `desk` `5.2 → 6.9 fps`, `whole` `1.7 → 3.4 fps`
+    (`2.0×`), `wholeAgain` `2.1 → 3.5 fps`, `0` context losses / `0` errors.
+
 ## 0.5.33 — 2026-11-23
 
 Fixed all 3 QA `switch` seam failures (`PEAKS_LIT_FS` opening clamp),

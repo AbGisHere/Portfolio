@@ -497,6 +497,25 @@ export default function MistCanvas({ recipe, onFail }) {
     // vertex array (every blade comes from its instance number). Compiled
     // non-blocking in parallel at load; prepared without blocking the hero.
     // Null until built; false if this GPU can't build it.
+    // Shared 24-uint zero buffer for grass/flower VAOs (location 1 = aId) so
+    // non-list draws never thrash generic uint/float attribute state on Metal.
+    let zeroIdBuf = null;
+    const makeZeroIdVao = () => {
+      if (!zeroIdBuf) {
+        zeroIdBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, zeroIdBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Uint32Array(24), gl.STATIC_DRAW);
+      }
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, zeroIdBuf);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribIPointer(1, 1, gl.UNSIGNED_INT, 0, 0);
+      gl.vertexAttribDivisor(1, 0);
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      return vao;
+    };
     let grass = null;
     const grassProgram = (wait = requiredPass) => {
       if (grass !== null) return grass;
@@ -505,7 +524,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const gp = readyProgram(h, wait);
       if (!gp) return h?.failed ? (grass = false) : null;
 
-      grass = { prog: gp, vao: gl.createVertexArray(), u: uniformLookup(gp) };
+      grass = { prog: gp, vao: makeZeroIdVao(), u: uniformLookup(gp) };
       return grass;
     };
     // (0.3.5) The flowers in the grass (flowerShader.js), built like it.
@@ -517,7 +536,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const fp = readyProgram(h, wait);
       if (!fp) return h?.failed ? (flowers = false) : null;
 
-      flowers = { prog: fp, vao: gl.createVertexArray(), u: uniformLookup(fp) };
+      flowers = { prog: fp, vao: makeZeroIdVao(), u: uniformLookup(fp) };
       return flowers;
     };
     // (0.3.5) The trees (treeShader.js): their layout is fixed, so it goes
@@ -1217,12 +1236,13 @@ export default function MistCanvas({ recipe, onFail }) {
         // writing it (drawHouseDepth), as the frame's lawn comes after the
         // grass.
         if (ok && !noEarlyZ) {
-          // (0.5.33) Release deskFrame before allocating aoPass.frame so budget
-          // mobile GPUs (Adreno 619) never hold both full-res targets at once.
+          // (0.5.33) Release deskFrame and opening-only peaksKept before allocating
+          // aoPass.frame so budget mobile GPUs (Adreno 619) never hold both at once.
           if (deskFrame) {
             deleteStillBuf(deskFrame);
             deskFrame = null;
           }
+          if (!peaksNow || peaksNow.behind || peaksNow.a < 1) freePeaksKept();
           // (0.4.50) Its colour a texture, so the bloom reads it in place
           // of a copy of the canvas.
           aoPass.frame ??= { fbo: gl.createFramebuffer(), tex: gl.createTexture() };
@@ -2496,6 +2516,12 @@ export default function MistCanvas({ recipe, onFail }) {
     let peaksMode;
     let peaksGeo = null;
     let peaksKept = null;
+    const freePeaksKept = () => {
+      if (!peaksKept) return;
+      for (const t of peaksKept.texs) gl.deleteTexture(t);
+      gl.deleteFramebuffer(peaksKept.fbo);
+      peaksKept = null;
+    };
     let peaksMoon = null;
     let peaksLapse = 0;
     let peaksLastSweep = 0;
@@ -3387,9 +3413,6 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / fw());
       gl.uniform1f(g.u('uResY'), fh());
       gl.uniform1i(g.u('uLive'), 0);
-      // aId is a uint: with no list bound, its constant must be one too (WebGL
-      // checks the type), put back to the float default after.
-      gl.vertexAttribI4ui(1, 0, 0, 0, 0);
       // (0.5.26) At rest, only the blades that grow, from the list (below).
       const key = noGrassList ? null : `${c.x},${c.y},${c.z},${P.cos},${P.sin},${P.f},${P.zoom},${P.yc},${P.ys},${P.sx},${P.sy},${w},${h},${fw()},${!!peaksNow?.behind}`;
       if (key) grassListPoll(g, key);
@@ -3414,7 +3437,6 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         if (key && restFrame && grassListPending?.key !== key) grassLivePass(g, key, runs);
       }
-      gl.vertexAttrib4f(1, 0, 0, 0, 1);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -3639,7 +3661,6 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(g.u('uCssPerPx'), w / fw());
       gl.uniform1f(g.u('uResY'), fh());
       gl.uniform1i(g.u('uLive'), 0);
-      gl.vertexAttribI4ui(1, 0, 0, 0, 0);
       const camKey = `${c.x},${c.y},${c.z},${P.cos},${P.sin},${P.f},${P.zoom},${P.yc},${P.ys},${P.sx},${P.sy},${w},${h},${fw()}`;
       const listKey = noFlowerList ? null : camKey;
       if (listKey) flowerListPoll(g, listKey);
@@ -3669,7 +3690,6 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         if (listKey && restFrame && flowerListPending?.key !== listKey) flowerLivePass(g, listKey, runs);
       }
-      gl.vertexAttrib4f(1, 0, 0, 0, 1);
       gl.bindVertexArray(null);
       gl.useProgram(prog);
     }
@@ -5078,8 +5098,8 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.uniform1f(u('uNight'), pk.light.night);
       gl.uniform1f(u('uA'), pk.a);
       gl.uniform1i(u('uFlow'), PEAKS_FLOW);
-      const usePrevDisp = !!(peaksGeo?.refining && !peaksGeo.ready && peaksGeo.prev && peaksGeo.dispScale < 1);
-      const dispReady = !!(peaksGeo?.ready || (peaksGeo?.refining && (peaksGeo.dispScale === 1 || peaksGeo.prev)));
+      const usePrevDisp = !!(peaksGeo?.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
+      const dispReady = !!(peaksGeo?.ready || (peaksGeo?.refining && (peaksGeo.holdCurr || (peaksGeo.holdPrev && peaksGeo.prev))));
       const dispScale = usePrevDisp ? peaksGeo.dispScale : (peaksGeo?.scale ?? 1);
       gl.uniform1f(u('uReady'), dispReady ? 1 : 0);
       gl.uniform1f(u('uReveal'), peaksReveal);
@@ -5245,6 +5265,7 @@ export default function MistCanvas({ recipe, onFail }) {
     function drawPeaks(target = null, prepOnly = false) {
       const pk = peaksNow;
       if (!pk) return false;
+      if (pk.behind || pk.a < 1) freePeaksKept();
       const P = peaksPrograms();
       if (!P) return false;
       const prepped = !prepOnly && peaksPrepped === peaksFrameNo;
@@ -5294,6 +5315,8 @@ export default function MistCanvas({ recipe, onFail }) {
             prevCam: null,
             reproj: false,
             refining: false,
+            holdPrev: false,
+            holdCurr: false,
             dispScale: 1,
           };
           gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
@@ -5305,10 +5328,19 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         const moved = peaksGeo.key !== viewKey;
         if (moved) {
-          peaksGeo.refining = false;
-          // (0.5.30, 0.5.33) Allocate `prev` lazily on the first scroll move and
+          const pc = peaksGeo.prevCam;
+          const camJump = pc ? Math.hypot(pk.cam.pos[0] - pc.pos[0], pk.cam.pos[1] - pc.pos[1], pk.cam.pos[2] - pc.pos[2]) : Infinity;
+          // Jump straight to an unloaded house (e.g. opening → pool while house
+          // is still building without aoPass.depth culling): march in bands
+          // without allocating `prev` so Adreno 619 never hits GPU TDR.
+          // Never trigger during normal flight scrolling (!pk.behind).
+          const teleport = !frozen && peaksShown && !!pk.behind && !houseComplete && camJump > 200;
+          peaksGeo.refining = teleport;
+          peaksGeo.holdPrev = false;
+          peaksGeo.holdCurr = false;
+          // (0.5.30, 0.5.33) Allocate `prev` lazily on the first smooth move and
           // ping-pong swap so the previous frame stays intact for reprojection.
-          const canReproj = !noReproj && !frozen && peaksShown && peaksGeo.ready && peaksGeo.prevCam && peaksGeo.prevCam.behind === !!pk.behind;
+          const canReproj = !teleport && !noReproj && !frozen && peaksShown && peaksGeo.ready && !!pc;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
           if (canReproj && peaksGeo.prev) {
             const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
@@ -5337,7 +5369,13 @@ export default function MistCanvas({ recipe, onFail }) {
             }
             peaksGeo.dispScale = peaksGeo.scale;
             peaksGeo.refining = true;
-          } else peaksGeo.refining = false;
+            peaksGeo.holdPrev = !!peaksGeo.prev;
+            peaksGeo.holdCurr = false;
+          } else {
+            peaksGeo.refining = false;
+            peaksGeo.holdPrev = false;
+            peaksGeo.holdCurr = false;
+          }
           peaksGeo.scale = 1;
           peaksGeo.reproj = false;
           peaksGeo.step = 0;
@@ -5346,6 +5384,8 @@ export default function MistCanvas({ recipe, onFail }) {
           // Settled: the horizons again, toward all four (banded when live).
           peaksGeo.dispScale = peaksGeo.scale;
           peaksGeo.refining = !frozen;
+          peaksGeo.holdPrev = false;
+          peaksGeo.holdCurr = !frozen;
           peaksGeo.reproj = false;
           peaksGeo.step = 1 + 8;
           peaksGeo.ready = false;
@@ -5359,8 +5399,9 @@ export default function MistCanvas({ recipe, onFail }) {
         // Retina — still >1× CSS px & 3.3× fewer pixels so laptop-open & climb
         // hold ~120 fps), snapping immediately to full 1.0× on the first still frame.
         if (moved || peaksGeo.scale === undefined) {
+          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(650_000 / (W * H))) : 0.5;
           peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen
-            ? (!pk.behind ? 0.5 : frameScale < 1 ? frameScale : 0.55)
+            ? (!pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1))
             : pk.behind && frameScale < 1 ? frameScale : 1;
         }
         const GW = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(W * peaksGeo.scale)) : W;
@@ -5430,6 +5471,7 @@ export default function MistCanvas({ recipe, onFail }) {
               gl.useProgram(G);
               peaksView(G, pk);
               gl.uniform2f(peaksU(G)('uRes'), GW, GH);
+              gl.uniform1f(peaksU(G)('uMotion'), peaksGeo.scale < 1 ? 1 : 0);
               gl.uniform1i(peaksU(G)('uCoarse'), PEAKS_G2);
               // (0.5.28, 0.5.29) When marching at reduced scale behind the house
               // (aoPass.depth cannot attach), cull full-res blocks covered by uPeakAO.
@@ -5508,6 +5550,8 @@ export default function MistCanvas({ recipe, onFail }) {
           if (peaksGeo.step >= STEPS) {
             peaksGeo.ready = true;
             peaksGeo.refining = false;
+            peaksGeo.holdPrev = false;
+            peaksGeo.holdCurr = false;
             peaksGeo.dispScale = peaksGeo.scale;
             const cb = camBasis(pk.cam);
             peaksGeo.prevCam = {
@@ -5525,7 +5569,7 @@ export default function MistCanvas({ recipe, onFail }) {
         }
         // (0.5.13) For the harness: the shape's scale (½ while the flight
         // moves, 1 once the 1.0× settle completes; parity checks it after a scroll).
-        const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.prev && peaksGeo.dispScale < 1);
+        const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
         setDs(document.documentElement, 'peaksScale', String(showPrev ? peaksGeo.dispScale : peaksGeo.scale));
         peaksReveal = peaksReadyAt ? Math.min(1, (performance.now() - peaksReadyAt) / 550) : 0;
         const srcGeo = showPrev ? peaksGeo.prev : peaksGeo;
@@ -5538,7 +5582,7 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.activeTexture(gl.TEXTURE0);
       } else if (prepped && peaksGeo) {
         // Prepared before the frame: its targets back on their units.
-        const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.prev && peaksGeo.dispScale < 1);
+        const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
         const srcGeo = showPrev ? peaksGeo.prev : peaksGeo;
         for (const [unit, t] of [[PEAKS_G0, srcGeo.texs[0]], [PEAKS_G1, srcGeo.texs[1]], [PEAKS_G2, peaksGeo.hor.texs[0]]]) {
           gl.activeTexture(gl.TEXTURE0 + unit);
@@ -5559,13 +5603,6 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.5.3) Behind the desk's scene: on the far plane, under its depth.
       if (pk.behind) {
         if (!P.behind) return false;
-        // (0.5.13) Down at the desk the kept light isn't read: its memory
-        // back (made again on the way up, in one frame).
-        if (peaksKept) {
-          for (const t of peaksKept.texs) gl.deleteTexture(t);
-          gl.deleteFramebuffer(peaksKept.fbo);
-          peaksKept = null;
-        }
         gl.useProgram(P.behind);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
         gl.viewport(0, 0, fw(), fh());
@@ -5581,12 +5618,6 @@ export default function MistCanvas({ recipe, onFail }) {
         return true;
       }
       if (pk.a < 1 || !P.lit || changing) {
-        // L4: free opening-only `peaksKept` once moving/fading away from rest.
-        if (peaksKept && pk.a < 1) {
-          for (const t of peaksKept.texs) gl.deleteTexture(t);
-          gl.deleteFramebuffer(peaksKept.fbo);
-          peaksKept = null;
-        }
         const L = P.direct || P.all;
         gl.useProgram(L);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
@@ -5708,7 +5739,10 @@ export default function MistCanvas({ recipe, onFail }) {
         const deskOn = !!meadowAt && !noDesk && !!deskProgram(true);
         // (0.5.19) At rest, the kept still frame when its key holds (both at
         // the pool hold via aoPass.frame and at the desk hold via deskFrame).
-        const stillOk = restFrame && !noStill && !probing && deskOn && !!meadowAt && frameScale === 1 && !noEarlyZ && (houseSeen ? (!noHouse && !noAO && !!aoPass?.frameOk) : deskSeen);
+        // Wait until any banded 1.0× mountain refinement finishes before baking
+        // `still`, so `stillHit` can never freeze half-res or unready peaks.
+        const peaksSettled = !peaksNow?.behind || peaksNow.skipGeo || !peaksMode?.geo || (!!peaksGeo?.ready && peaksGeo.scale === 1 && !peaksGeo.use && !peaksGeo.refining);
+        const stillOk = restFrame && !noStill && !probing && deskOn && !!meadowAt && frameScale === 1 && !noEarlyZ && peaksSettled && (houseSeen ? (!noHouse && !noAO && !!aoPass?.frameOk) : deskSeen);
         if (!stillOk) {
           stillKey = null;
           stillWorldKey = null;
@@ -5741,7 +5775,7 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.uniform1f(uniform('uDpr'), fw() / w);
         }
         const mirroredPool = stillHit ? reflectKept : (reflectKept = deskOn && !noHouse && !noGlass && houseSeen && drawPoolReflection());
-        if (!(stillHit && stillHasPeaks)) peaksPrepare();
+        if (!(stillHit && stillHasPeaks && peaksSettled)) peaksPrepare();
         const grassOn = !!grassAt && !!grassProgram(true);
         // (0.3.5) The trees show as soon as the meadow's paint does.
         const treesOn = !!meadowAt?.mist && meadowShown && meadowAt.a > 0.01 && !noTrees && !!treeProgram(true);
@@ -6139,7 +6173,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // `?restthrottle=0` off): pool syncs to 60 Hz water/firefly ticks; desk
       // syncs to 30 Hz grass/steam wind ticks (60 Hz when birds are active).
       const walkerLive = !!grassAt && walker.live(now / 1000).length > 0;
-      const canThrottleRest = !noRestThrottle && !busy && !crestMoved && !probing && !orbit && settled() && !walkerLive && (!peaksNow || peaksNow.skipGeo || peaksReveal >= 1) && !(peaksGeo && !peaksNow?.skipGeo && (!peaksGeo.ready || peaksGeo.scale < 1 || peaksGeo.use)) && !grassListPending && !flowerListPending;
+      const peaksWork = !!(peaksGeo && !peaksNow?.skipGeo && (!peaksGeo.ready || peaksGeo.scale < 1 || peaksGeo.use || peaksGeo.refining));
+      const canThrottleRest = !noRestThrottle && !busy && !crestMoved && !probing && !orbit && settled() && !walkerLive && (!peaksNow || peaksNow.skipGeo || peaksReveal >= 1) && !peaksWork && !grassListPending && !flowerListPending;
       let slowRest = false;
       if (canThrottleRest) {
         if (peaksAlone) {
@@ -6153,7 +6188,7 @@ export default function MistCanvas({ recipe, onFail }) {
           slowRest = !windMoved && (now - lastRestDrawAt < 1000 / restHz);
         }
       }
-      if (!slowRest && (busy || crestMoved || windMoved || living || probing || (tick && changed(vs)))) {
+      if (!slowRest && (busy || crestMoved || windMoved || living || probing || peaksWork || (tick && changed(vs)))) {
         if (peaksAlone) lastPeaksAt = now;
         lastRestDrawAt = now;
         restFrame = !busy && !frozen;
@@ -6171,7 +6206,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // (0.4.39) Unless a kick during this frame already asked for the next
       // one: two callbacks a vsync drew the whole scene twice (and stepped the
       // water twice).
-      if (!raf && (moving || drifting || living || probing || preparingHouse) && visible && onScreen) raf = requestAnimationFrame(frame);
+      if (!raf && (moving || drifting || living || probing || preparingHouse || peaksWork) && visible && onScreen) raf = requestAnimationFrame(frame);
     }
 
     // Like Wl, the clock starts when the loop does, so the first step's dt is
@@ -6354,6 +6389,7 @@ export default function MistCanvas({ recipe, onFail }) {
         if (glass.waterIbo) gl.deleteBuffer(glass.waterIbo);
       }
       // (0.5.28) Dispose grass & flower transform-feedback live-list GPU resources.
+      if (zeroIdBuf) gl.deleteBuffer(zeroIdBuf);
       if (grassListPending) gl.deleteSync(grassListPending.fence);
       if (grassList) {
         gl.deleteVertexArray(grassList.vao);

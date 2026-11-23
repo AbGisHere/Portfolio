@@ -376,10 +376,14 @@ float horizon(vec3 p, vec2 dir) {
 
 // Full shape pass: ONLY included in PEAKS_GEO_FS & PEAKS_ALL_FS.
 const TERRAIN_GEO = `
+uniform float uMotion;
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
   bool gone = false;
+  int maxSteps = uMotion > .5 ? 128 : 190;
+  int binSteps = uMotion > .5 ? 3 : 5;
   for (int i = 0; i < 190; i++) {
+    if (i >= maxSteps) break;
     vec3 p = ro + rd * t;
     // Static baked heightfield (1 texture read/step): blazing fast and
     // completely rigid across scroll frames, with conservative Lipschitz
@@ -389,6 +393,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
       // Binary search refinement for rock-solid silhouettes.
       float lo = tp, hi = t;
       for (int j = 0; j < 5; j++) {
+        if (j >= binSteps) break;
         float mid = .5 * (lo + hi);
         vec3 pm = ro + rd * mid;
         if (pm.y - H(pm.xz, 5) < 0.) hi = mid;
@@ -399,7 +404,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
     tp = t; hp = h;
     float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
-    t += max(h * kStep, .5 + t * .0014);
+    t += max(h * kStep, uMotion > .5 ? (1. + t * .0024) : (.5 + t * .0014));
   }
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
@@ -535,7 +540,7 @@ G geo(vec3 rd, float tStart) {
       float sdU = (mx - m0) * .80 * aaMacro;
       float sdV = (my - m0) * .56 * aaMacro;
       // Mid-scale chiseled granite blocks & diagonal cleavage planes (aperiodic).
-      if (aaMid > .01) {
+      if (aaMid > .01 && uMotion < .5) {
         vec2 sq = vec2(fu.x / 26. + geoBand * .8, (fu.y * .85 + dip * .15) / 34.);
         float s0 = 1. - abs(2. * noise(sq) - 1.);
         float sx = 1. - abs(2. * noise(sq + vec2(.22, 0.)) - 1.);
@@ -544,7 +549,7 @@ G geo(vec3 rd, float tStart) {
         dV += (sy - s0) * 1.05 * aaMid;
       }
       // Fine granite micro-crag ONLY when well-resolved by screen pixels.
-      if (aaFine > .01) {
+      if (aaFine > .01 && uMotion < .5) {
         vec2 fq = fu / 11.;
         float f0 = noise(fq), fx = noise(fq + vec2(.25, 0.)), fy = noise(fq + vec2(0., .25));
         dU += (fx - f0) * .58 * aaFine;
@@ -570,15 +575,18 @@ G geo(vec3 rd, float tStart) {
     t1 = min(end, max(ta, tb));
   } else if (uCam.y > top || uCam.y < lo) t1 = 0.;
   if (t1 > t0) {
-    float dt = (t1 - t0) / 14.;
+    int mSteps = uMotion > .5 ? 8 : 14;
+    float dt = (t1 - t0) / float(mSteps);
     float j = hash(gl_FragCoord.xy) * dt;
     for (int i = 0; i < 14; i++) {
+      if (i >= mSteps) break;
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);
       tau += dn;
       hw += a * dn * clamp((q.y - MIST_BASE) / (MIST_RISE * 4.5), 0., 1.);
       w += a * dn;
+      if (uMotion > .5 && tau > 6.5) break;
     }
   }
   g.T = exp(-tau);
@@ -1205,16 +1213,17 @@ bool tryReproj(vec3 rd, float lens, float coarseT, out vec4 out0, out vec4 out1)
   float nU = texelFetch(uPrevG0, px1 + ivec2(0, 1), 0).x;
   float minN = min(min(nL, nR), min(nD, nU));
   float maxN = max(max(nL, nR), max(nD, nU));
-  if (minN <= .35 || (maxN - minN) >= pA.x * .06) return false;
+  if (minN <= .35 || (maxN - minN) >= pA.x * .09) return false;
   vec2 qUv = ((vec2(px1) + .5) * 2. - uPrevRes) / uPrevRes.y - uPrevShift;
   vec3 pRd = normalize(uPrevF * uPrevLens + qUv.x * uPrevR + qUv.y * uPrevU);
   vec3 w1 = uPrevCam + pRd * t1;
   vec3 toW = w1 - uCam;
   float tNew = length(toW);
-  float pxAng = 1.4 / max(uRes.y * lens, 200.);
-  if (tNew <= 350. || tNew >= coarseT * 1.22 || abs(tNew - t1) >= tNew * .05
-      || dot(toW / tNew, rd) <= cos(pxAng)
-      || abs(w1.y - H(w1.xz, 5)) >= max(6., tNew * .0025)) return false;
+  float pxAng = 2.8 / max(uRes.y * lens, 200.);
+  vec3 dDir = toW / tNew - rd;
+  if (tNew <= 350. || tNew >= coarseT * 1.35 || abs(tNew - t1) >= tNew * .05
+      || dot(dDir, dDir) >= pxAng * pxAng
+      || abs(w1.y - H(w1.xz, 5)) >= max(16., tNew * .006)) return false;
   out0 = vec4(tNew * .001, pA.y, pA.z, pA.w);
   out1 = texelFetch(uPrevG1, px1, 0);
   return true;

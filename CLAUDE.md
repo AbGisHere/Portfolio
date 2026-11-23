@@ -544,6 +544,38 @@ cuts climb draw calls and Night shading cost across mobile and desktop:
   `285 → 180 ms` (`-37%`); M4 `1440×900@2` house climb up to `119.6 fps (0 >
   20 ms)`, `switch` `4/4` GL pass, `regress` `mean 0.00 / p99 0`.
 
+**0.5.34** (2026-11-23) fixes the post-scroll missing-mountains bug behind the
+desk/house, passes both desktop GL perf gates (`1440×900@2` and `1728×1117@2`)
+at `118+ fps` with zero resting visual change, and accelerates mountain flight
+across desktop and mobile GPUs:
+- Banded mountain settle fix (`MistCanvas.jsx`): `stillOk` and `peaksPrepare()`
+  now wait for `peaksSettled` (`ready && scale === 1 && !use && !refining`)
+  before baking `still`, and `tick()` keeps scheduling frames while `peaksWork`
+  is active, preventing `stillHit` from freezing unready (`uReady = 0`) or
+  half-res peaks behind the meadow/house.
+- Faster scrolling mountain geometry (`peaksShader.js`, `MistCanvas.jsx`):
+  fixed `tryReproj()` float32 `cos()` cancellation and sub-pixel diagonal
+  cutoff (`dot(dDir, dDir) >= pxAng * pxAng` at `1.4 px`, relaxed `RGBA16F`
+  slope quantization and `1.35×` coarse-cone margin), enabled cross-`pk.behind`
+  reprojection, added a motion-only `uMotion` fast path in `geo()` (8 mist
+  steps with `tau > 6.5` early out, 128 max march / 3 binary-search steps, skip
+  sub-pixel `aaMid`/`aaFine`; 100% untouched at rest `1.0×`), and capped moving
+  `peaksGeo` at `650k px` on `> 5.2M px` Retina displays (`1440×900@2` and
+  phones unchanged at `0.5×`).
+- Mobile VRAM & Metal VAO cleanup (`MistCanvas.jsx`): freed `peaksKept`
+  (`~20–24 MB`) before `aoTarget()` allocates `aoPass.frame` and before
+  `prepOnly` returns in `drawPeaks()`, banded jumps to an unloaded house
+  (`pk.behind && !houseComplete && camJump > 200`), and replaced per-frame
+  `vertexAttribI4ui`/`vertexAttrib4f` calls in `drawGrass`/`drawFlowers` with a
+  shared 96-byte static zero `Uint32Array` VAO buffer.
+- Measured: M4 `perf --gate` `1440×900@2` GL `112.1 → 119.8 fps (0 > 20 ms)`
+  PASS and `1728×1117@2` GL `96.0 → 118.4 fps (51 → 1 > 20 ms)` PASS;
+  `regress 21/21 (mean 0.00, p99 0)`, `switch 4/4`, `hygiene 21/21`,
+  `test:unit 88/88`, `test:adaptive 9/9`; OnePlus 11R `flight` `30.6 → 45.1 fps`
+  (`+47%`), `whole` `52.3 → 58.7 fps`, `house ready` `17.1 → 13.0 s`; Galaxy
+  Tab A9+ (`Adreno 619`) `flight` `1.4 → 2.1 fps` (`max 2762 → 1731 ms`),
+  `whole` `1.7 → 3.4 fps` (`2.0×`), `0` errors.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own
