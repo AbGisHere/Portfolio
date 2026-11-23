@@ -51,12 +51,12 @@ uniform vec2 uDir;
 in vec2 vUv;
 out vec4 outColor;
 void main() {
-  const float W[5] = float[](0.227, 0.194, 0.122, 0.054, 0.016);
-  vec3 c = texture(uFrom, vUv).rgb * W[0];
-  for (int i = 1; i < 5; i++) {
-    c += texture(uFrom, vUv + uDir * float(i)).rgb * W[i];
-    c += texture(uFrom, vUv - uDir * float(i)).rgb * W[i];
-  }
+  vec2 d2 = uDir * 2.0, d3 = uDir * 3.0, d4 = uDir * 4.0;
+  vec3 c = texture(uFrom, vUv).rgb * 0.227
+    + (texture(uFrom, vUv + uDir).rgb + texture(uFrom, vUv - uDir).rgb) * 0.194
+    + (texture(uFrom, vUv + d2).rgb + texture(uFrom, vUv - d2).rgb) * 0.122
+    + (texture(uFrom, vUv + d3).rgb + texture(uFrom, vUv - d3).rgb) * 0.054
+    + (texture(uFrom, vUv + d4).rgb + texture(uFrom, vUv - d4).rgb) * 0.016;
   outColor = vec4(c, 1.0);
 }
 `;

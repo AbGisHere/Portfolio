@@ -6,6 +6,56 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.33 — 2026-11-23
+
+Fixed all 3 QA `switch` seam failures (`PEAKS_LIT_FS` opening clamp),
+eliminated Adreno 619 `webglcontextlost` across both Moto G71 5G and Galaxy Tab
+A9+ (lazy `peaksGeo.prev`, `deskFrame` release ordering, banded `1.0×` settle
+refinement), cut climb draw calls `-42/frame`, and lifted iPhone 15 Night climb
+by `+76%`.
+
+- **Seamless opening `switch` (`peaksShader.js`):**
+  - Clamped `base` and `mist` to `[0, 1]` before `compose()` in `PEAKS_LIT_FS`
+    at the opening (`uNear <= 0`) to match `PEAKS_FS` (`RGBA8` `peaksKept`) +
+    `PEAKS_MIX_FS`, eliminating the 1-frame highlight seam when `changing`
+    toggles: `scroll 0 day→night` `peak ×3.8 → ×2.5`, `scroll 0 night→day`
+    `peak ×4.1 → ×2.5`, `scroll 0.5 night→day` `peak ×3.1 → ×2.2` (`4/4` GL
+    pass, `regress mean 0.00, p99 0`).
+- **Adreno 619 stability, VRAM & diagnostics (`MistCanvas.jsx`, `peaksShader.js`, `AtmosphereField.jsx`, `scripts/device-profile.mjs`):**
+  - Lazy-allocated `peaksGeo.prev` (`~28 MB`) on the first scroll move instead
+    of at `scroll = 0`, and deleted `deskFrame` *before* allocating
+    `aoPass.frame` (`-18 MB` peak VRAM overlap).
+  - Banded post-move `1.0×` `peaksGeo` refinement into 8 geometry + 4 horizon
+    bands (displaying the completed `0.5×` frame from `peaksGeo.prev` until
+    `1.0×` completes, with per-band `aoPass.depth` culling behind the house) so
+    budget mobile GPUs never trip Android's GPU TDR watchdog.
+  - Scoped temporal reprojection in `PEAKS_GEO_FS` into a separate `tryReproj()`
+    helper to reduce register overlap with `geo()`.
+  - Warmed `P.geoFar` in `warmHousePipelines` with a matched `1×1`
+    `RGBA16F + RGBA8 + DEPTH24` scratch target (no `checkFramebufferStatus` GPU
+    sync stall).
+  - Logged `[gl-fallback]` and `webglcontextlost` descent/house state into
+    `window.__errors`, and added `--out <file>`, end-of-session `ctxLostAt`,
+    `finalRenderer`, and `window.__errors` capture to `scripts/device-profile.mjs`.
+- **Climb draw-call reduction & Night GPU speedup (`MistCanvas.jsx`, `houseShader.js`, `bloom.js`):**
+  - Coalesced contiguous variant-split runs in `drawSolid()` for single-shader
+    passes (`aoPass` depth, `poolReflection`).
+  - Cached culled leaf ranges across `aoPass` + `solid` and per-offset leaf
+    VAOs (`leafVaoAt`, replacing mid-frame `vertexAttribPointer` mutations)
+    with full unmount disposal.
+  - Removed 5 redundant per-frame `gl.useProgram(vp.prog)` switches in
+    `drawHouse()` (lazily updating `mirrorUniforms` on variant switch) and
+    skipped unchanged `HouseFrame` UBO `bufferData` uploads on `lawn`/`under`.
+  - Skipped `normalize` + `ggx()` when `NdotL <= 0` in `lampAt()` (keeping
+    `HOUSE_LIGHT_GLSL` lightmap byte-identical), enabled `HS_LSPEC` on
+    quarter-res `HOUSE_MIRROR_FRAGMENT`, and unrolled `bloom.js` `BLUR`.
+- **Measured (real BrowserStack phones & Apple M4 `1440×900@2`):**
+  - **Moto G71 5G (`Adreno 619`, Android 11):** `layers` fallback (`house: never ready`) → **`house ready 33.2 s` (`mesh 17.9 s`, `38 MB` heap), `0` context losses, `0` errors** across the full profile.
+  - **Galaxy Tab A9+ (`Adreno 619`, Android 14):** `webglcontextlost` at `flight`/`wholeAgain` → **`house ready 31.9 s`, `0` context losses, `0` errors** across the full profile.
+  - **iPhone 15 (`Apple A16`, `dpr 3`):** Night `climb` **`16.1 → 28.3 fps` (`+76%`, CPU `6.3 → 3.5 ms`)**, Night `whole` **`20.9 → 36.9 fps` (`+77%`, max `164 → 54 ms`)**, Day `wholeAgain` **`34.5 → 43.3 fps` (`+26%`)**, `rest.opening` **`3.7/s×1` (`cpu 0.4 ms`)**, `switch` **`59.9 fps`**.
+  - **iPhone 13 (`Apple A15`, iOS 16):** `climb` draw calls **`185 → 143` (`-42/frame`)**, `climb` max **`285 → 180 ms` (`-37%`)**, `rest.opening` **`56.6 → 59.5 fps` (`max 210 → 44 ms`)**, `rest.desk` **`39.6 → 45.0 fps`**.
+  - **M4 `1440×900@2`:** house climb up to **`119.6 fps` (`0 > 20 ms`)**, `switch` `4/4` GL pass, `regress` `11/11` (`mean 0.00, p99 0`), `test:unit` `88/88`, `test:adaptive` `9/9`, `hygiene` `21/21`.
+
 ## 0.5.32 — 2026-11-23
 
 Real-phone BrowserStack profiling (`scripts/device-profile.mjs`), self-hosted

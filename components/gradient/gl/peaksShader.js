@@ -1179,6 +1179,46 @@ uniform sampler2D uPrevG0, uPrevG1;
 uniform vec3 uPrevCam, uPrevF, uPrevR, uPrevU;
 uniform float uPrevLens;
 uniform vec2 uPrevShift, uPrevRes;
+// (0.5.30, 0.5.33) Temporal reprojection helper kept in its own function scope
+// so its registers do not overlap with geo() on small-register mobile GPUs
+// (e.g. Adreno 619).
+bool tryReproj(vec3 rd, float lens, float coarseT, out vec4 out0, out vec4 out1) {
+  float z0 = dot(rd, uPrevF);
+  if (z0 <= 1e-4) return false;
+  vec2 pUv0 = vec2(dot(rd, uPrevR), dot(rd, uPrevU)) * (uPrevLens / z0);
+  ivec2 px0 = ivec2(floor(((pUv0 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
+  if (!all(greaterThanEqual(px0, ivec2(2))) || !all(lessThan(px0, ivec2(uPrevRes) - 2))) return false;
+  float t0 = texelFetch(uPrevG0, px0, 0).x * 1000.;
+  if (t0 <= 350.) return false;
+  vec3 d1 = (uCam + rd * t0) - uPrevCam;
+  float z1 = dot(d1, uPrevF);
+  if (z1 <= 1e-4) return false;
+  vec2 pUv1 = vec2(dot(d1, uPrevR), dot(d1, uPrevU)) * (uPrevLens / z1);
+  ivec2 px1 = ivec2(floor(((pUv1 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
+  if (!all(greaterThanEqual(px1, ivec2(2))) || !all(lessThan(px1, ivec2(uPrevRes) - 2))) return false;
+  vec4 pA = texelFetch(uPrevG0, px1, 0);
+  float t1 = pA.x * 1000.;
+  if (t1 <= 350.) return false;
+  float nL = texelFetch(uPrevG0, px1 + ivec2(-1, 0), 0).x;
+  float nR = texelFetch(uPrevG0, px1 + ivec2(1, 0), 0).x;
+  float nD = texelFetch(uPrevG0, px1 + ivec2(0, -1), 0).x;
+  float nU = texelFetch(uPrevG0, px1 + ivec2(0, 1), 0).x;
+  float minN = min(min(nL, nR), min(nD, nU));
+  float maxN = max(max(nL, nR), max(nD, nU));
+  if (minN <= .35 || (maxN - minN) >= pA.x * .06) return false;
+  vec2 qUv = ((vec2(px1) + .5) * 2. - uPrevRes) / uPrevRes.y - uPrevShift;
+  vec3 pRd = normalize(uPrevF * uPrevLens + qUv.x * uPrevR + qUv.y * uPrevU);
+  vec3 w1 = uPrevCam + pRd * t1;
+  vec3 toW = w1 - uCam;
+  float tNew = length(toW);
+  float pxAng = 1.4 / max(uRes.y * lens, 200.);
+  if (tNew <= 350. || tNew >= coarseT * 1.22 || abs(tNew - t1) >= tNew * .05
+      || dot(toW / tNew, rd) <= cos(pxAng)
+      || abs(w1.y - H(w1.xz, 5)) >= max(6., tNew * .0025)) return false;
+  out0 = vec4(tNew * .001, pA.y, pA.z, pA.w);
+  out1 = texelFetch(uPrevG1, px1, 0);
+  return true;
+}
 void main() {
   if (uPeakAOOn > .5) {
     float inv = 1. / max(uPeakAOScale, .25);
@@ -1209,51 +1249,11 @@ void main() {
   }
   float coarseT = texelFetch(uCoarse, ivec2(gl_FragCoord.xy) / 4, 0).x * 1000.;
   if (uReprojOn > .5 && coarseT > 300. && coarseT < 70000.) {
-    float z0 = dot(rd, uPrevF);
-    if (z0 > 1e-4) {
-      vec2 pUv0 = vec2(dot(rd, uPrevR), dot(rd, uPrevU)) * (uPrevLens / z0);
-      ivec2 px0 = ivec2(floor(((pUv0 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
-      if (all(greaterThanEqual(px0, ivec2(2))) && all(lessThan(px0, ivec2(uPrevRes) - 2))) {
-        float t0 = texelFetch(uPrevG0, px0, 0).x * 1000.;
-        if (t0 > 350.) {
-          vec3 w0 = uCam + rd * t0;
-          vec3 d1 = w0 - uPrevCam;
-          float z1 = dot(d1, uPrevF);
-          if (z1 > 1e-4) {
-            vec2 pUv1 = vec2(dot(d1, uPrevR), dot(d1, uPrevU)) * (uPrevLens / z1);
-            ivec2 px1 = ivec2(floor(((pUv1 + uPrevShift) * uPrevRes.y + uPrevRes) * .5));
-            if (all(greaterThanEqual(px1, ivec2(2))) && all(lessThan(px1, ivec2(uPrevRes) - 2))) {
-              vec4 pA = texelFetch(uPrevG0, px1, 0);
-              float t1 = pA.x * 1000.;
-              if (t1 > 350.) {
-                float nL = texelFetch(uPrevG0, px1 + ivec2(-1, 0), 0).x;
-                float nR = texelFetch(uPrevG0, px1 + ivec2(1, 0), 0).x;
-                float nD = texelFetch(uPrevG0, px1 + ivec2(0, -1), 0).x;
-                float nU = texelFetch(uPrevG0, px1 + ivec2(0, 1), 0).x;
-                float minN = min(min(nL, nR), min(nD, nU));
-                float maxN = max(max(nL, nR), max(nD, nU));
-                if (minN > .35 && (maxN - minN) < pA.x * .06) {
-                  vec2 qUv = ((vec2(px1) + .5) * 2. - uPrevRes) / uPrevRes.y - uPrevShift;
-                  vec3 pRd = normalize(uPrevF * uPrevLens + qUv.x * uPrevR + qUv.y * uPrevU);
-                  vec3 w1 = uPrevCam + pRd * t1;
-                  vec3 toW = w1 - uCam;
-                  float tNew = length(toW);
-                  float pxAng = 1.4 / max(uRes.y * lens, 200.);
-                  // Guard against foreground occlusion (coarseT) and multi-frame
-                  // surface drift (1-fetch baked H check).
-                  if (tNew > 350. && tNew < coarseT * 1.22 && abs(tNew - t1) < tNew * .05
-                      && dot(toW / tNew, rd) > cos(pxAng)
-                      && abs(w1.y - H(w1.xz, 5)) < max(6., tNew * .0025)) {
-                    o0 = vec4(tNew * .001, pA.y, pA.z, pA.w);
-                    o1 = texelFetch(uPrevG1, px1, 0);
-                    return;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+    vec4 r0, r1;
+    if (tryReproj(rd, lens, coarseT, r0, r1)) {
+      o0 = r0;
+      o1 = r1;
+      return;
     }
   }
   G g = geo(rd, coarseT);
@@ -1382,7 +1382,10 @@ void main() {
   // (0.5.6) From the plateau, the gorge's mist seen edge-on past the rim
   // is in the far ranges' shade, not a white line along the horizon.
   if (uNear > 0. && g.t > 250.) mist = mix(mist, mist * .55, smoothstep(-.06, -.004, rd.y));
-  vec3 lin = compose(base, mist, g.T, rd);
+  // (0.5.33) Match PEAKS_FS's RGBA8 [0, 1] range before compose() at the
+  // opening (uNear <= 0) so switching between peaksKept and P.direct never
+  // introduces a 1-frame highlight seam on bright day frames.
+  vec3 lin = uNear <= 0. ? compose(clamp(base, 0., 1.), clamp(mist, 0., 1.), g.T, rd) : compose(base, mist, g.T, rd);
   // The first load: the mountains fade in over the sky that was there.
   if (g.hit > 0. && uReveal < 1. && uSkipGeo < .5 && uNear <= 0.) lin = mix(sky(rd), lin, uReveal);
   vec3 c = pow(lin, vec3(1. / 2.2)) + (hash(gl_FragCoord.xy) - .5) / 255.;

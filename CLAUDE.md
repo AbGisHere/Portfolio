@@ -504,6 +504,46 @@ and ships 4 phone-driven GPU/VRAM/shader fixes:
   `120.1 fps` (`max 9.4 ms`, `0 > 20 ms`, `TaskDuration` `1,936.6 → 503.4 ms`),
   idle `120.0–120.2 fps` (`0 > 20 ms`, `8.4–12.5 ms/s` task time).
 
+**0.5.33** (2026-11-23) fixes all 3 QA `switch` seam failures, eliminates
+Adreno 619 `webglcontextlost` across both Moto G71 5G and Galaxy Tab A9+, and
+cuts climb draw calls and Night shading cost across mobile and desktop:
+- Seamless opening `switch` (`peaksShader.js`): clamps `base` and `mist` to
+  `[0, 1]` before `compose()` in `PEAKS_LIT_FS` at the opening (`uNear <= 0`)
+  to match `PEAKS_FS` (`RGBA8` `peaksKept`) + `PEAKS_MIX_FS`, fixing all 3
+  `switch` failures (`scroll 0 day→night` `×3.8 → ×2.5`, `scroll 0 night→day`
+  `×4.1 → ×2.5`, `scroll 0.5 night→day` `×3.1 → ×2.2`; `regress mean 0.00`).
+- Adreno 619 stability & VRAM (`MistCanvas.jsx`, `peaksShader.js`,
+  `AtmosphereField.jsx`, `scripts/device-profile.mjs`): lazy-allocates
+  `peaksGeo.prev` (`~28 MB`) on first scroll move instead of at `scroll = 0`,
+  deletes `deskFrame` *before* allocating `aoPass.frame` (`-18 MB` peak),
+  bands post-move `1.0×` `peaksGeo` refinement into 8 geometry + 4 horizon
+  bands (displaying the completed `0.5×` frame from `peaksGeo.prev` until
+  `1.0×` completes, with per-band `aoPass.depth` culling behind the house) so
+  Adreno 619 never hits Android's GPU TDR watchdog, scopes `tryReproj()` in
+  `PEAKS_GEO_FS`, warms `P.geoFar` with a matched `1×1` `RGBA16F + RGBA8 +
+  DEPTH24` target (no `checkFramebufferStatus` GPU sync), logs `[gl-fallback]`
+  and `webglcontextlost` descent state into `window.__errors`, and adds
+  `--out`, end-of-session `ctxLostAt`, `finalRenderer`, and `window.__errors`
+  capture to `scripts/device-profile.mjs`. Both Moto G71 5G (`house ready
+  33.2 s`, `38 MB` heap) and Galaxy Tab A9+ (`house ready 31.9 s`) now
+  complete the entire profile on WebGL2 with `0` context losses and `0` errors.
+- Climb draw-call reduction & Night GPU speedup (`MistCanvas.jsx`,
+  `houseShader.js`, `bloom.js`): coalesces contiguous variant-split runs in
+  `drawSolid()` for single-shader passes (`aoPass` depth, `poolReflection`),
+  caches culled leaf ranges across `aoPass` + `solid` and per-offset leaf VAOs
+  (`leafVaoAt`, with unmount disposal), removes 5 redundant per-frame
+  `gl.useProgram(vp.prog)` variant switches in `drawHouse()` (lazily updating
+  `mirrorUniforms`), skips unchanged `HouseFrame` UBO `bufferData` uploads on
+  `lawn`/`under`, skips `normalize` + `ggx()` when `NdotL <= 0` in `lampAt()`
+  (keeping `HOUSE_LIGHT_GLSL` lightmap byte-identical), enables `HS_LSPEC` on
+  quarter-res `HOUSE_MIRROR_FRAGMENT`, and unrolls `bloom.js` `BLUR`.
+- Measured: iPhone 15 Night `climb` `16.1 → 28.3 fps` (`+76%`, CPU `6.3 →
+  3.5 ms`), Night `whole` `20.9 → 36.9 fps` (`+77%`, max `164 → 54 ms`), Day
+  `wholeAgain` `34.5 → 43.3 fps`, `rest.opening` `3.7/s×1` (`cpu 0.4 ms`);
+  iPhone 13 `climb` draw calls `185 → 143` (`-42/frame`), `climb` max
+  `285 → 180 ms` (`-37%`); M4 `1440×900@2` house climb up to `119.6 fps (0 >
+  20 ms)`, `switch` `4/4` GL pass, `regress` `mean 0.00 / p99 0`.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

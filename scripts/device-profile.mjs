@@ -57,6 +57,7 @@ const BASE = String(args.base ?? 'http://localhost:3001').replace(/\/$/, '');
 const ONLY = args.only ? String(args.only).toLowerCase().split(',') : null;
 const THEME = args.theme === 'day' ? 'day' : 'night';
 const OUT = join('scripts', 'out', 'device-profile');
+const OUT_FILE = args.out ? String(args.out) : null;
 
 const env = { ...process.env };
 if (existsSync('.env.local')) {
@@ -76,6 +77,8 @@ function install() {
   const canvas = document.querySelector('[data-renderer="gl"] canvas');
   const gl = canvas && canvas.getContext('webgl2');
   const p = window.__prof = { calls: 0, cpu: 0 };
+  // A lost context (low memory on budget GPUs): when, after load.
+  if (canvas) canvas.addEventListener('webglcontextlost', () => { window.__ctxLost ??= Math.round(performance.now()); });
   if (gl) for (const f of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawBuffers']) {
     if (f === 'drawBuffers' || !gl[f]) continue;
     const o = gl[f].bind(gl);
@@ -178,7 +181,14 @@ try {
     }
     const run = (fn, ...a) => driver.executeAsyncScript(`(${fn.toString()})(${a.map(x => JSON.stringify(x)).join(',')}${a.length ? ',' : ''}arguments[arguments.length - 1]);`);
     const pin = v => driver.executeScript(`window.__pinDescent(${JSON.stringify(v)});`);
-    const step = async (name, f) => { try { await f(); } catch (e) { row.errors.push(`${name}: ${String(e.message ?? e).split('\n')[0].slice(0, 140)}`); } };
+    const step = async (name, f) => {
+      try { await f(); } catch (e) {
+        const m = String(e.message ?? e).split('\n')[0].slice(0, 140);
+        // A page that no longer answers (iOS 16 in 0.5.32): stop this device.
+        if (/atom execution|timed? ?out|Timeout/i.test(m)) { row.hung = name; throw new Error(`hung at ${name}`); }
+        row.errors.push(`${name}: ${m}`);
+      }
+    };
     try {
       await driver.manage().setTimeouts({ script: 120000 });
       await driver.get('about:blank');
@@ -208,6 +218,7 @@ try {
       const ready = await driver.wait(async () => driver.executeScript('return !!(window.__debugHouse && window.__debugHouse().ready);').catch(() => false), 180000).catch(() => false);
       const ht = await driver.executeScript('return window.__debugHouse ? window.__debugHouse().times : null;').catch(() => null);
       row.load.house = ready && ht ? { meshReady: ht['mesh-ready'], ready: ht.ready } : 'never ready';
+      row.ctxLostAt = await driver.executeScript('return window.__ctxLost ?? null;').catch(() => null);
       row.load.heapMB = await driver.executeScript('return performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;');
       for (const [name, v] of REST.slice(1)) {
         await step(`rest ${name}`, async () => { await pin(v); await run(settle); row.rest[name] = stats(await run(measure, 4000, null), row.hz); });
@@ -230,6 +241,11 @@ try {
 
       // Heat: the whole path again, last.
       await step('move whole (again)', async () => { row.move.wholeAgain = stats(await run(measure, 9000, PATHS.whole), row.hz); });
+      const lateLost = await driver.executeScript('return window.__ctxLost ?? null;').catch(() => null);
+      if (lateLost != null) row.ctxLostAt ??= lateLost;
+      const pageErrors = await driver.executeScript('return (window.__errors || []).slice(0, 10);').catch(() => []);
+      for (const e of pageErrors) if (!row.errors.includes(e)) row.errors.push(e);
+      row.finalRenderer = await driver.executeScript("return document.querySelector('[data-renderer]')?.getAttribute('data-renderer') ?? null;").catch(() => null);
     } catch (err) {
       row.errors.push(`run: ${String(err.message ?? err).split('\n')[0].slice(0, 140)}`);
     } finally {
@@ -242,11 +258,15 @@ try {
       if (row.rest) console.log(`  rest    ${Object.entries(row.rest).map(([k, s]) => `${k} ${rr(s)}`).join(' · ')}`);
       if (row.move) for (const [k, s] of Object.entries(row.move)) console.log(`  ${k.padEnd(11)} ${f(s)} cpu ${s.cpuPerFrame}`);
       if (row.switch) console.log(`  switch      ${f(row.switch)}`);
+      if (row.ctxLostAt != null) console.log(`  context LOST at ${row.ctxLostAt} ms`);
+      if (row.finalRenderer && row.finalRenderer !== row.renderer) console.log(`  renderer fell back: ${row.renderer} -> ${row.finalRenderer}`);
       if (row.errors.length) console.log(`  errors  ${row.errors.join(' | ')}`);
-      writeFileSync(join(OUT, `profile-${version}-${THEME}.json`), JSON.stringify({ base: BASE, build, theme: THEME, results }, null, 2));
+      const outPath = OUT_FILE ? (OUT_FILE.includes('/') ? OUT_FILE : join(OUT, OUT_FILE)) : join(OUT, `profile-${version}-${THEME}.json`);
+      writeFileSync(outPath, JSON.stringify({ base: BASE, build, theme: THEME, results }, null, 2));
     }
   }
 } finally {
   if (tunnel) await new Promise(r => tunnel.stop(r));
 }
-console.log(`\n${results.length} devices · scripts/out/device-profile/profile-${version}-${THEME}.json`);
+const finalOut = OUT_FILE ? (OUT_FILE.includes('/') ? OUT_FILE : join(OUT, OUT_FILE)) : join(OUT, `profile-${version}-${THEME}.json`);
+console.log(`\n${results.length} devices · ${finalOut}`);

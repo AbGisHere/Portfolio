@@ -433,13 +433,20 @@ vec3 lampAt(int i, vec3 p, vec3 N, vec3 V, float a, int room, float w, bool own,
     if (kind == 7) fall *= mix(0.2, 1.0, smoothstep(0.4, 0.62, noise2(p.xz * 1.4 + l.xz))) * (0.75 + 0.25 * noise2(p.xz * 6.0));
   }
   if (fall <= 0.0) return vec3(0.0);
+${useFrame ? `  float NdotL = max(dot(N, Ld), 0.0);
 #ifdef HS_LSPEC
+  float spec = 0.0;
+#else
+  float spec = NdotL <= 0.0 ? 0.0 : (a >= 1.0 ? ${f(0.05 / 3.14159)} : ggx(max(dot(N, normalize(Ld + V)), 0.0), max(a * a, 0.02)) * 0.05);
+#endif
+  // (With a share of its light bounced round the room, from every side.)
+  return L_C(i) * k * fall * (NdotL + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));` : `#ifdef HS_LSPEC
   float spec = 0.0;
 #else
   float spec = a >= 1.0 ? ${f(0.05 / 3.14159)} : ggx(max(dot(N, normalize(Ld + V)), 0.0), max(a * a, 0.02)) * 0.05;
 #endif
   // (With a share of its light bounced round the room, from every side.)
-  return L_C(i) * k * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));
+  return L_C(i) * k * fall * (max(dot(N, Ld), 0.0) + spec + (at == 0 ? (kind >= 5 ? 0.0 : 0.05) : 0.3));`}
 }
 
 // (0.4.6) The LED strips: each lights what's before it along its way,
@@ -1597,7 +1604,7 @@ void main() {
 }
 `;
 
-export const HOUSE_MIRROR_FRAGMENT = HOUSE_FRAGMENT.replace('#version 300 es\n', '#version 300 es\n#define HS_MIRROR\n');
+export const HOUSE_MIRROR_FRAGMENT = HOUSE_FRAGMENT.replace('#version 300 es\n', '#version 300 es\n#define HS_MIRROR\n#define HS_LSPEC\n');
 
 /**
  * (0.4.47) The fragment shader for a run of only these materials

@@ -70,6 +70,9 @@ export default function AtmosphereField() {
   const retries = useRef(0);
   const retry = useRef(0);
   const fallBack = useCallback(err => {
+    if (typeof window !== 'undefined' && Array.isArray(window.__errors) && window.__errors.length < 20) {
+      window.__errors.push(`[gl-fallback] ${err?.message || 'unknown'}${err?.lost ? ` (retry ${retries.current + 1}/${RETRIES})` : ''}`);
+    }
     setRenderer('layers');
     if (!err?.lost || retries.current >= RETRIES) return;
     retries.current += 1;
