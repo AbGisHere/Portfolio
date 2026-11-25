@@ -135,12 +135,16 @@ const xs = DROP.map(k => k.at);
 const keys = {};
 const on = (c, x) => monotone(xs, (keys[c] ??= DROP.map(k => k[c])), x);
 
-/** The opening's camera for the descent's `about` (0 at the top). */
-export function peaksCameraAt(about) {
+/**
+ * The opening's camera for the descent's `about` (0 at the top). `lift`
+ * (degrees, 0.5.38) raises the view by that much: the intro looks up into
+ * the sky while the mountains load, then eases it back to 0.
+ */
+export function peaksCameraAt(about, lift = 0) {
   const x = clamp01(about);
   const y = on('y', x);
   const z = on('z', x);
-  const p = (on('pitch', x) * Math.PI) / 180;
+  const p = ((on('pitch', x) - lift) * Math.PI) / 180;
   const vx = valleyX(z);
   const pos = [vx, y, z];
   return { pos, look: [vx, y - Math.sin(p) * 1000, z + Math.cos(p) * 1000], right: [-1, 0, 0], fov: on('fov', x) };
@@ -273,9 +277,9 @@ export function toFrame(cam, dir, w, h) {
  * on the desk or the contact path, or `?peaks=0`). `a` is its opacity: 1
  * over the clouds, fading out once the camera is inside them.
  */
-export function peaksAt({ recipe, orbit = null, e = 1, about = 0, onDesk = false, w, h, off = false, desk = null }) {
+export function peaksAt({ recipe, orbit = null, e = 1, about = 0, onDesk = false, w, h, off = false, desk = null, lift = 0 }) {
   if (off || (onDesk && !desk)) return null;
-  const cam = desk?.join ? joinCamera(peaksCameraAt(about), desk.join, desk.t) : desk ?? peaksCameraAt(about);
+  const cam = desk?.join ? joinCamera(peaksCameraAt(about), desk.join, desk.t) : desk ?? peaksCameraAt(about, lift);
   // The sky is the top's, whatever the drop does to the lens: the bodies
   // and the shadows' bearings stay put on it.
   const top = peaksCameraAt(0);

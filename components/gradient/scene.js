@@ -43,6 +43,7 @@ import { cameraMetres, contactCameraAt, deskCameraAt, freeCameraAt, deskFrameAt,
  *   the switch's keyframes and the bodies ride the arc only once it does.
  * - `maxRidges`: how many ridges get painted (the shader's MAX_RIDGES).
  * - `peaksOff`: no 3D opening (`?peaks=0`, and the layered renderer).
+ * - `lift`: the intro's raise of the opening's view, in degrees (0.5.38).
  */
 export function sceneAt({
   recipe: r,
@@ -63,6 +64,7 @@ export function sceneAt({
   restCol,
   maxRidges = Infinity,
   peaksOff = false,
+  lift = 0,
 }) {
   const p = orbit ? e : 1;
   const from = orbit ? orbit.prev : r;
@@ -135,7 +137,7 @@ export function sceneAt({
     const P0 = pitchOf(c0, v0, w, h);
     if (P0) flight = { join: deskPeaksCamera(cameraMetres(c0), c0, P0, w, h), t: (about - FLIGHT_JOIN) / (1 - FLIGHT_JOIN) };
   }
-  const peaks = peaksAt({ recipe: r, orbit: turning ? orbit : null, e, about, onDesk, w, h, off: peaksOff, desk: flight });
+  const peaks = peaksAt({ recipe: r, orbit: turning ? orbit : null, e, about, onDesk, w, h, off: peaksOff, desk: flight, lift });
   const at = peaks && peaks.a > 0.5 ? peaks.spot : shown;
   const spot = at ? { x: at.x, y: at.y } : { x: -1e4, y: -1e4 };
   const life = onDesk ? skyLifeAt(desk, r, stops, { prev: turning ? orbit.prev : null, e }) : null;

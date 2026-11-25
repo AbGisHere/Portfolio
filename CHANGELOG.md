@@ -6,6 +6,49 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.38 — 2026-11-25
+
+Added a one-shot opening sky-to-mountains intro tilt on GL's frame loop, fixed
+the landing resolution drop and mid-tilt fade, eliminated the multi-frame
+horizon-shadow glitch during mountain scroll settles, and cleaned up moving
+valley mist and granite detail.
+
+- **Opening sky-to-mountains intro (`intro.js`, `SmoothScroll.jsx`, `MistCanvas.jsx`, `peaks.js`, `scene.js`, `AtmosphereField.module.css`, `docs/parts/atmosphere.md`):**
+  - Fresh loads at the top start pitched `+52°` up into the sky over a matching
+    day/night pre-3D sky backdrop, hold scroll (swallowing wheel, touchmove, and
+    scroll keys plus `lenis.stop()`, with a `6 s` fail-safe unlock cap) up to
+    `2.5 s` until the 3D peaks are ready, fade the canvas in over `0.4 s`, then
+    ease down onto the peaks via smootherstep over `2.2 s` (`0.9 s` on same-tab
+    revisits via `sessionStorage['abg-intro-seen']`, written when tilt starts so
+    dev StrictMode double-mounts don't shorten fresh loads).
+  - Skipped under `?intro=0`, `?freeze=1`, `?peaks=0`, pinned scrolls, reduced
+    motion, or loads below the top; automated harnesses pass `?intro=0`
+    (`scripts/lib/harness.mjs`, `device-profile.mjs`, `house-readiness-browser.mjs`).
+  - Kept `peaksGeo.scale = 1` (`uMotion = 0`) across both the tilt and the final
+    `lift = 0` landing frame (`introLand`, with `canReproj` disabled on landing
+    for a fresh `1.0×` raymarch) and forced `peaksReveal = 1` when the intro
+    runs so mountains never look washed-out mid-tilt or drop to `0.5×` on landing.
+- **Glitch-free `0.5× → 1.0×` mountain settles (`MistCanvas.jsx`):**
+  - Lazily double-buffered `peaksGeo.prevHor` alongside `peaksGeo.prev` so the 4
+    `HBANDS` passes refining `peaksGeo.hor` to `1.0×` never overwrite the `0.5×`
+    horizon shadows still displayed by `showPrev` (`?framegrab=1` confirmed `0`
+    pixels changed by `> 2` across all 10 banded refine frames before the single
+    atomic `1.0×` swap).
+- **Clean moving mist & consistent granite detail (`peaksShader.js`):**
+  - Kept all `14` mist steps in `uMotion` (with `tau > 6.5` early out) and
+    replaced white-noise `hash(gl_FragCoord.xy)` with low-variance Interleaved
+    Gradient Noise `(.25 + .5 * ign) * dt` during motion, eliminating both
+    chunky `2×2` salt-and-pepper mist static and horizontal slicing bands while
+    leaving resting `uMotion == 0` frames bit-identical.
+  - Kept `aaMid`/`aaFine` granite normal sculpting active during motion (`pxW`
+    already scales with `uRes.y` for distance anti-aliasing) and tightened
+    `uMotion` raymarch (`152` max steps, `0.0016` step floor) so distant horizon
+    ridges stay solid while scrolling.
+- **Verified:** Headless Chromium intro trace (`hold → tilt 2225 ms → done`,
+  `peaksScale = 1` throughout), `?framegrab=1` mid-flight settle diff,
+  `npm run test:unit` **`88/88`**, `npm run test:adaptive` **`9/9`**,
+  `npm run hygiene` **`21/21`**.
+
 ## 0.5.37 — 2026-11-25
 
 Restored instant BFCache Back-button navigation across all devices and lifted

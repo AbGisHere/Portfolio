@@ -199,7 +199,7 @@ try {
 
       // Load: from the opening, as a visitor arrives.
       const t0 = Date.now();
-      await driver.get(`${BASE}/?theme=${THEME}&adapt=0`);
+      await driver.get(`${BASE}/?theme=${THEME}&adapt=0&intro=0`);
       const nav = Date.now() - t0;
       await driver.wait(async () => driver.executeScript("const h = document.querySelector('[data-renderer]'); return !!(h && h.getAttribute('data-renderer'));").catch(() => false), 120000).catch(() => false);
       row.renderer = await driver.executeScript("return document.querySelector('[data-renderer]')?.getAttribute('data-renderer') ?? null;");

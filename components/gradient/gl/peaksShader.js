@@ -380,7 +380,7 @@ uniform float uMotion;
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
   bool gone = false;
-  int maxSteps = uMotion > .5 ? 128 : 190;
+  int maxSteps = uMotion > .5 ? 152 : 190;
   int binSteps = uMotion > .5 ? 3 : 5;
   for (int i = 0; i < 190; i++) {
     if (i >= maxSteps) break;
@@ -404,7 +404,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
     tp = t; hp = h;
     float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
-    t += max(h * kStep, uMotion > .5 ? (1. + t * .0024) : (.5 + t * .0014));
+    t += max(h * kStep, uMotion > .5 ? (.75 + t * .0016) : (.5 + t * .0014));
   }
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
@@ -540,7 +540,9 @@ G geo(vec3 rd, float tStart) {
       float sdU = (mx - m0) * .80 * aaMacro;
       float sdV = (my - m0) * .56 * aaMacro;
       // Mid-scale chiseled granite blocks & diagonal cleavage planes (aperiodic).
-      if (aaMid > .01 && uMotion < .5) {
+      // Naturally anti-aliased by pxW (which scales with uRes.y) so rock detail
+      // stays consistent while scrolling instead of popping in when scroll stops.
+      if (aaMid > .01) {
         vec2 sq = vec2(fu.x / 26. + geoBand * .8, (fu.y * .85 + dip * .15) / 34.);
         float s0 = 1. - abs(2. * noise(sq) - 1.);
         float sx = 1. - abs(2. * noise(sq + vec2(.22, 0.)) - 1.);
@@ -549,7 +551,7 @@ G geo(vec3 rd, float tStart) {
         dV += (sy - s0) * 1.05 * aaMid;
       }
       // Fine granite micro-crag ONLY when well-resolved by screen pixels.
-      if (aaFine > .01 && uMotion < .5) {
+      if (aaFine > .01) {
         vec2 fq = fu / 11.;
         float f0 = noise(fq), fx = noise(fq + vec2(.25, 0.)), fy = noise(fq + vec2(0., .25));
         dU += (fx - f0) * .58 * aaFine;
@@ -575,11 +577,14 @@ G geo(vec3 rd, float tStart) {
     t1 = min(end, max(ta, tb));
   } else if (uCam.y > top || uCam.y < lo) t1 = 0.;
   if (t1 > t0) {
-    int mSteps = uMotion > .5 ? 8 : 14;
-    float dt = (t1 - t0) / float(mSteps);
-    float j = hash(gl_FragCoord.xy) * dt;
+    // Keep all 14 mist steps in motion and use low-variance Interleaved Gradient
+    // Noise instead of white-noise hash jitter so 0.5× moving frames have neither
+    // chunky salt-and-pepper speckles nor horizontal slicing bands (leaving
+    // resting uMotion == 0 untouched).
+    float dt = (t1 - t0) / 14.;
+    float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
+    float j = (uMotion > .5 ? (.25 + .5 * ign) : hash(gl_FragCoord.xy)) * dt;
     for (int i = 0; i < 14; i++) {
-      if (i >= mSteps) break;
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);

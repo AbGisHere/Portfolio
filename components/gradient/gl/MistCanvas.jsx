@@ -71,8 +71,9 @@ import {
   driftGains,
   veilAt,
 } from '../camera';
-import { getDescent, pinDescent, subscribeDescent } from '../../scroll/descent';
+import { getDescent, isPinned, pinDescent, subscribeDescent } from '../../scroll/descent';
 import { getHouseTimes, setHouseReadiness } from '../../scroll/houseReadiness';
+import { setIntroLock } from '../../scroll/intro';
 import { getFreeCam, setFreeCam, subscribeFreeCam } from '../freeCam';
 import { publishSunSpot } from '../sunSpot';
 import { publishLampSpot } from '../lampSpot';
@@ -97,6 +98,15 @@ const IDLE_HZ = 30;
 // fastest pixel (61 in 20 s), so at 120 Hz nearly every frame wrote the
 // same pixels. It redraws this often, each step at most a level.
 const PEAKS_REST_HZ = 4;
+// (0.5.38) The intro (../../scroll/intro.js): the opening's view starts
+// INTRO_LIFT degrees up, in the sky, holds until the mountains are shown
+// (at most INTRO_HOLD_MS), then eases down over INTRO_TILT_MS (shorter
+// on a return visit in the same tab session). Scroll is held meanwhile.
+const INTRO_LIFT = 52;
+const INTRO_HOLD_MS = 2500;
+const INTRO_TILT_MS = 2200;
+const INTRO_TILT_AGAIN_MS = 900;
+const INTRO_SEEN = 'abg-intro-seen';
 // Measured-rate refresh for slow-moving world layers (trees sway, meadow wind
 // sheen) baked into `stillWorld` at rest: at 15 Hz (~67 ms) tree leaf flutter
 // moves < 0.5 px and meadow sheen shifts < 0.5/255 per update, skipping 7/8
@@ -2700,6 +2710,74 @@ export default function MistCanvas({ recipe, onFail }) {
     // Build only once the visitor approaches the desk; never queue the worker
     // behind idle time while scrolling, nor allocate its mesh on the hero.
     const frozen = params.get('freeze') === '1';
+    // (0.5.38) The intro: only on a fresh load at the top of the opening, in
+    // 3D, with motion allowed; `?intro=0` skips it (the harnesses pin a
+    // scroll or freeze, which skip it too).
+    let intro = null;
+    let introLift = 0;
+    let introUsed = false;
+    let introLand = false;
+    // The canvas stays hidden until its first 3D frame: until the peaks'
+    // programs link, the frame falls back to the 2D scene, whose sky would
+    // flash over the backdrop (which matches the 3D sky looking up).
+    let introHidden = false;
+    const showCanvas = () => {
+      if (!introHidden) return;
+      introHidden = false;
+      // Faded in, so the clouds don't pop over the plain backdrop.
+      canvas.style.transition = 'opacity 0.4s ease-out';
+      canvas.style.opacity = '';
+    };
+    {
+      const d = getDescent();
+      const atTop = !isPinned() && !d.about && !d.desk && !d.contact && window.scrollY === 0;
+      if (atTop && !frozen && !noPeaks && params.get('intro') !== '0' && !motion.matches) {
+        let again = false;
+        try {
+          again = sessionStorage.getItem(INTRO_SEEN) === '1';
+        } catch {}
+        intro = { phase: 'hold', at: performance.now(), tilt: again ? INTRO_TILT_AGAIN_MS : INTRO_TILT_MS };
+        introLift = INTRO_LIFT;
+        introUsed = true;
+        setIntroLock(true);
+        document.documentElement.dataset.intro = 'hold';
+        introHidden = true;
+        canvas.style.opacity = '0';
+      }
+    }
+    if (!intro) document.documentElement.dataset.intro = 'off';
+    const endIntro = () => {
+      showCanvas();
+      if (!intro && !introLift) return;
+      intro = null;
+      introLift = 0;
+      setIntroLock(false);
+      document.documentElement.dataset.intro = 'done';
+    };
+    // One step of the intro on GL's frame loop (no loop of its own): true
+    // when the view moved. The hold ends once the mountains are shown, or
+    // the 3D opening can't run (no peaks, a fallback), or at the cap.
+    const stepIntro = now => {
+      if (!intro) return false;
+      if (intro.phase === 'hold') {
+        const gone = peaksMode === false || (peaksMode && !peaksNow);
+        if (!peaksShown && !gone && now - intro.at < INTRO_HOLD_MS) return false;
+        intro.phase = 'tilt';
+        intro.at = now;
+        document.documentElement.dataset.intro = 'tilt';
+        // Mark seen once the tilt actually starts (not during mount setup) so
+        // React StrictMode's dev double-mount doesn't shorten fresh loads to 900 ms.
+        try { sessionStorage.setItem(INTRO_SEEN, '1'); } catch {}
+      }
+      const k = Math.min(1, (now - intro.at) / intro.tilt);
+      // Ease in and out (smootherstep): no jolt leaving the sky or landing.
+      const e = k * k * k * (k * (k * 6 - 15) + 10);
+      if (k >= 1) {
+        introLand = true;
+        endIntro();
+      } else introLift = INTRO_LIFT * (1 - e);
+      return true;
+    };
     // `?skyt=12` starts the closing sky's clock there (stills of the birds
     // and clouds at a given moment, with `?freeze=1`).
     skyT = Number(params.get('skyt')) || 0;
@@ -3050,6 +3128,8 @@ export default function MistCanvas({ recipe, onFail }) {
     function rebuild() {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
+      // A scroll that got through anyway (a scrollbar drag) ends the intro.
+      if (introLift && (about > 0 || desk > 0 || contact > 0)) endIntro();
       if (about > 0.35 || desk > 0 || contact > 0) ensureWarmHouse();
       if ((desk >= 0.85 || contact > 0) && aoPass && aoPass.size[0] < canvas.width) aoTarget(false);
       const free = getFreeCam();
@@ -3085,6 +3165,7 @@ export default function MistCanvas({ recipe, onFail }) {
         restCol: rgbToHex(value.slice(7, 10)),
         maxRidges: MAX_RIDGES,
         peaksOff: noPeaks,
+        lift: introLift,
       });
       const { cam, stops, lit } = frame;
       // (0.5.0) The 3D opening takes the scene's palette (peaksShader.js).
@@ -5331,6 +5412,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (prepOnly) peaksPrepped = peaksFrameNo;
       // The scroll's stops follow the opening (../../scroll/stops.js).
       setDs(document.documentElement, 'opening', '3d');
+      showCanvas();
       // (0.5.3) Its own textures on its own units again: on the desk's
       // paths the house's passes may have bound theirs there.
       const bindTo = (unit, t) => {
@@ -5356,18 +5438,29 @@ export default function MistCanvas({ recipe, onFail }) {
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.SCISSOR_TEST);
       const viewKey = [W, H, frameScale, ...pk.cam.pos, ...pk.cam.look, ...(pk.cam.right ?? []), pk.cam.fov, ...(pk.cam.shift ?? []), ...pk.bearings.flat()].join();
+      const makeHor = () => {
+        const h = floatTarget(half(W, 2), half(H, 2), 1);
+        gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
+        gl.bindTexture(gl.TEXTURE_2D, h.texs[0]);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.activeTexture(gl.TEXTURE0);
+        return h;
+      };
       if (P.geo && !pk.skipGeo && !prepped) {
         if (!peaksGeo || peaksGeo.w !== W || peaksGeo.h !== H) {
-          if (peaksGeo) for (const t of [peaksGeo.prev, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
+          if (peaksGeo) for (const t of [peaksGeo.prev, peaksGeo.prevHor, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
           dropTarget(peaksGeo);
           // M3: o1 (T, mh, ao, strata) is strictly [0, 1] → RGBA8 (halves VRAM & BW);
-          // coarse stores 1 distance float → R16F (4× smaller); `prev` is allocated
-          // lazily on the first scroll move so scroll=0 saves ~28 MB on mobile GPUs.
+          // coarse stores 1 distance float → R16F (4× smaller); `prev` & `prevHor` are
+          // allocated lazily on smooth moves/settles so scroll=0 saves VRAM on mobile GPUs.
           peaksGeo = {
             ...floatTarget(W, H, 2, ['rgba16f', 'rgba8']),
             prev: null,
+            prevHor: null,
             coarse: floatTarget(half(W, 4), half(H, 4), 1, ['r16f']),
-            hor: floatTarget(half(W, 2), half(H, 2), 1),
+            hor: makeHor(),
             w: W,
             h: H,
             key: null,
@@ -5378,12 +5471,6 @@ export default function MistCanvas({ recipe, onFail }) {
             holdCurr: false,
             dispScale: 1,
           };
-          gl.activeTexture(gl.TEXTURE0 + PEAKS_SPARE);
-          gl.bindTexture(gl.TEXTURE_2D, peaksGeo.hor.texs[0]);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-          gl.bindTexture(gl.TEXTURE_2D, null);
-          gl.activeTexture(gl.TEXTURE0);
         }
         const moved = peaksGeo.key !== viewKey;
         if (moved) {
@@ -5399,7 +5486,9 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.holdCurr = false;
           // (0.5.30, 0.5.33) Allocate `prev` lazily on the first smooth move and
           // ping-pong swap so the previous frame stays intact for reprojection.
-          const canReproj = !teleport && !noReproj && !frozen && peaksShown && peaksGeo.ready && !!pc;
+          // Skip reprojection on the intro's landing frame so the resting peaks
+          // come from a fresh 1.0× march rather than chained nearest-neighbor copies.
+          const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && peaksGeo.ready && !!pc;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
           if (canReproj && peaksGeo.prev) {
             const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
@@ -5419,12 +5508,20 @@ export default function MistCanvas({ recipe, onFail }) {
           // or single-frame spikes on desktop.
           if (!frozen) {
             if (!peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
+            if (!peaksGeo.prevHor) peaksGeo.prevHor = makeHor();
             if (peaksGeo.prev) {
               const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
               peaksGeo.fbo = peaksGeo.prev.fbo;
               peaksGeo.texs = peaksGeo.prev.texs;
               peaksGeo.prev.fbo = tfbo;
               peaksGeo.prev.texs = ttexs;
+            }
+            // Also double-buffer `hor` while refining 0.5× → 1.0× so the 4 HBANDS
+            // passes don't overwrite the 0.5× horizon shadows still displayed by `showPrev`.
+            if (peaksGeo.prevHor) {
+              const th = peaksGeo.hor;
+              peaksGeo.hor = peaksGeo.prevHor;
+              peaksGeo.prevHor = th;
             }
             peaksGeo.dispScale = peaksGeo.scale;
             peaksGeo.refining = true;
@@ -5463,9 +5560,13 @@ export default function MistCanvas({ recipe, onFail }) {
           // ~1520×855 on 4K-capped 5K/6K@2 — 2.3× more pixels than 560k) while
           // snapping back to full 1.0× on rest.
           const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(1_300_000 / (W * H))) : 0.5;
-          peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen
+          // (0.5.38) Not during the intro's tilt or its landing frame: it's
+          // watched, not scrolled, so never drop to 0.5× and pop back on landing.
+          const keepFull = !!intro || introLand;
+          peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen && !keepFull
             ? (!pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1))
             : pk.behind && frameScale < 1 ? frameScale : 1;
+          introLand = false;
         }
         const GW = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(W * peaksGeo.scale)) : W;
         const GH = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(H * peaksGeo.scale)) : H;
@@ -5634,20 +5735,22 @@ export default function MistCanvas({ recipe, onFail }) {
         // moves, 1 once the 1.0× settle completes; parity checks it after a scroll).
         const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
         setDs(document.documentElement, 'peaksScale', String(showPrev ? peaksGeo.dispScale : peaksGeo.scale));
-        peaksReveal = peaksReadyAt ? (frozen ? 1 : Math.min(1, (performance.now() - peaksReadyAt) / 550)) : 0;
+        peaksReveal = peaksReadyAt ? (frozen || introUsed ? 1 : Math.min(1, (performance.now() - peaksReadyAt) / 550)) : 0;
         const srcGeo = showPrev ? peaksGeo.prev : peaksGeo;
+        const srcHor = showPrev && peaksGeo.prevHor ? peaksGeo.prevHor : peaksGeo.hor;
         gl.activeTexture(gl.TEXTURE0 + PEAKS_G0);
         gl.bindTexture(gl.TEXTURE_2D, srcGeo.texs[0]);
         gl.activeTexture(gl.TEXTURE0 + PEAKS_G1);
         gl.bindTexture(gl.TEXTURE_2D, srcGeo.texs[1]);
         gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
-        gl.bindTexture(gl.TEXTURE_2D, peaksGeo.hor.texs[0]);
+        gl.bindTexture(gl.TEXTURE_2D, srcHor.texs[0]);
         gl.activeTexture(gl.TEXTURE0);
       } else if (prepped && peaksGeo) {
         // Prepared before the frame: its targets back on their units.
         const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
         const srcGeo = showPrev ? peaksGeo.prev : peaksGeo;
-        for (const [unit, t] of [[PEAKS_G0, srcGeo.texs[0]], [PEAKS_G1, srcGeo.texs[1]], [PEAKS_G2, peaksGeo.hor.texs[0]]]) {
+        const srcHor = showPrev && peaksGeo.prevHor ? peaksGeo.prevHor : peaksGeo.hor;
+        for (const [unit, t] of [[PEAKS_G0, srcGeo.texs[0]], [PEAKS_G1, srcGeo.texs[1]], [PEAKS_G2, srcHor.texs[0]]]) {
           gl.activeTexture(gl.TEXTURE0 + unit);
           gl.bindTexture(gl.TEXTURE_2D, t);
         }
@@ -6164,6 +6267,7 @@ export default function MistCanvas({ recipe, onFail }) {
         dirty = true;
       }
       stepOrbit(dt);
+      if (stepIntro(now)) dirty = true;
 
       let crestMoved = false;
       // The idle drift (the ridges' slow breathing) runs at every scroll
@@ -6344,6 +6448,7 @@ export default function MistCanvas({ recipe, onFail }) {
     const onLost = e => {
       e.preventDefault();
       stopped = true;
+      endIntro();
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();
@@ -6394,6 +6499,7 @@ export default function MistCanvas({ recipe, onFail }) {
 
     return () => {
       stopped = true;
+      endIntro();
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();
@@ -6427,7 +6533,7 @@ export default function MistCanvas({ recipe, onFail }) {
       if (bloom) bloom.dispose();
       if (probes) probes.dispose();
       // (0.5.10) The opening's targets, textures and programs.
-      if (peaksGeo) for (const t of [peaksGeo, peaksGeo.prev, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
+      if (peaksGeo) for (const t of [peaksGeo, peaksGeo.prev, peaksGeo.prevHor, peaksGeo.coarse, peaksGeo.hor]) dropTarget(t);
       if (peaksKept) dropTarget(peaksKept);
       if (peaksBake) for (const x of [peaksBake.near, peaksBake.far, peaksBake.outer]) if (x) { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.fbo); }
       if (peaksMoon?.tex) gl.deleteTexture(peaksMoon.tex);

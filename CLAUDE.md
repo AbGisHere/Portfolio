@@ -647,6 +647,36 @@ raises the large-display moving mountain budget by `2.3×`:
   0.396`, sharp granite crests and mist), plus `test:unit 88/88` and
   `test:adaptive 9/9`.
 
+**0.5.38** (2026-11-25) adds the opening sky-to-mountains intro tilt and fixes
+scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
+- Opening intro tilt (`components/scroll/intro.js`, `SmoothScroll.jsx`,
+  `MistCanvas.jsx`, `peaks.js`, `scene.js`, `AtmosphereField.module.css`,
+  `docs/parts/atmosphere.md`): fresh loads at the top start pitched `+52°` up in
+  the sky over a matching pre-3D sky backdrop, hold scroll (swallowing
+  wheel/touch/scroll-keys + `lenis.stop()`, `6 s` fail-safe cap) up to `2.5 s`
+  until the 3D peaks are ready, fade the canvas in over `0.4 s`, then ease down
+  via smootherstep over `2.2 s` (`0.9 s` on same-tab revisits via
+  `sessionStorage['abg-intro-seen']`, written when tilt starts). Harnesses pass
+  `?intro=0`. Kept `peaksGeo.scale = 1` across the tilt and its final `lift = 0`
+  landing frame (`introLand`, with `canReproj` off on landing for a fresh `1.0×`
+  march) and set `peaksReveal = 1` when the intro runs so mountains never fade
+  in washed-out mid-tilt or drop to `0.5×` on landing.
+- Glitch-free mountain settle & clean moving mist/granite (`MistCanvas.jsx`,
+  `peaksShader.js`): lazily double-buffered `peaksGeo.prevHor` alongside
+  `peaksGeo.prev` so the 4 `HBANDS` passes of a `0.5× → 1.0×` settle never
+  overwrite the `0.5×` horizon shadows still displayed by `showPrev` (`?framegrab=1`
+  verified `0` pixels changed by `> 2` across all 10 banded refine frames);
+  kept all `14` mist steps during motion with low-variance Interleaved Gradient
+  Noise (`(.25 + .5 * ign) * dt`) instead of 8-step white-noise `hash()`
+  (eliminating salt-and-pepper mist noise and horizontal slicing bands while
+  leaving resting `uMotion == 0` bit-identical); kept `aaMid`/`aaFine` granite
+  normals active in motion (`pxW` anti-aliases naturally) and tightened
+  `uMotion` raymarch (`152` steps, `0.0016` step floor).
+- Verified: headless Chromium intro timeline (`hold → tilt 2225 ms → done`,
+  `peaksScale = 1` throughout), `?framegrab=1` settle diff (`0` `> 2` pixels
+  during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
+  `hygiene 21/21`.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own
@@ -969,7 +999,8 @@ The invariants any change must keep, whatever part it touches:
 - **Three clocks only:** the spring at rest, the switch clock and, from
   `0.3.1`, the footprint clock (the grass's footsteps fading, ticked inside
   GL's frame loop, `ROADMAP.md` "0.3"). The wind (and the meadow's cloud
-  shadows), the closing sky's birds, clouds and stars, the lamp's flicker and the mug's steam run on GL's frame loop too, not a loop of their
+  shadows), the closing sky's birds, clouds and stars, the lamp's flicker, the mug's steam and (0.5.38, the owner's OK) the
+  opening's one-shot intro tilt run on GL's frame loop too, not a loop of their
   own. Don't add another animation loop. The camera is a pure function of
   scroll, never sprung; the scroll itself only snaps onto the stops.
 - **Frame budget:** 120 fps on the sweeps in `npm run perf`, and sharp on

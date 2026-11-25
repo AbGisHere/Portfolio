@@ -15,7 +15,7 @@ try {
       const page = await context.newPage(), errors = [];
       page.on('pageerror', e => errors.push(String(e)));
       page.on('console', m => { if (['warning', 'error'].includes(m.type())) errors.push(m.text()); });
-      await page.goto(`${base}/?adapt=0`, { waitUntil: 'load' });
+      await page.goto(`${base}/?adapt=0&intro=0`, { waitUntil: 'load' });
       await page.waitForFunction(() => !!window.__debugHouse);
       assert.equal(await page.evaluate(() => window.__debugHouse().houseBuilt), false, 'hero must not build the house');
       const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);

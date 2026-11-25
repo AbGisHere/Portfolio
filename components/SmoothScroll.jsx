@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { isPinned, setDescent } from './scroll/descent';
 import { CONTACT_STOPS, DESK_STOPS, DESK_STOPS_3D, STOP_REACH } from './scroll/stops';
 import { getHouseHold, getHouseReadiness, subscribeHouseReadiness } from './scroll/houseReadiness';
+import { isIntroLocked, subscribeIntro } from './scroll/intro';
 import styles from './SmoothScroll.module.css';
 
 /**
@@ -156,6 +157,7 @@ export default function SmoothScroll() {
         if (dead || lenis || native()) return;
         lenis = new Lenis({ autoRaf: true, smoothWheel: true, anchors: false });
         lenis.on('scroll', onLenis);
+        if (isIntroLocked()) lenis.stop();
         window.removeEventListener('scroll', onNative);
         measure();
       }, () => {
@@ -185,6 +187,22 @@ export default function SmoothScroll() {
     ro.observe(document.body);
     measure();
 
+    // (0.5.38) The opening's intro (scroll/intro.js): the page holds still
+    // while the camera tilts down from the sky. Input is swallowed rather
+    // than `overflow: hidden`, which would drop the scrollbar and resize
+    // the canvas mid-intro.
+    const SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End']);
+    const blockInput = e => {
+      if (!isIntroLocked()) return;
+      if (e.type === 'keydown' && !SCROLL_KEYS.has(e.key)) return;
+      e.preventDefault();
+    };
+    const onIntro = on => (on ? lenis?.stop() : lenis?.start());
+    const unsubscribeIntro = subscribeIntro(onIntro);
+    window.addEventListener('wheel', blockInput, { passive: false });
+    window.addEventListener('touchmove', blockInput, { passive: false });
+    window.addEventListener('keydown', blockInput);
+
     if (!native()) {
       if ('requestIdleCallback' in window) {
         idleId = window.requestIdleCallback(startLenis, { timeout: 1500 });
@@ -196,6 +214,10 @@ export default function SmoothScroll() {
     return () => {
       dead = true;
       unsubscribeHouse();
+      unsubscribeIntro();
+      window.removeEventListener('wheel', blockInput);
+      window.removeEventListener('touchmove', blockInput);
+      window.removeEventListener('keydown', blockInput);
       remeasure.current = null;
       if (idleId != null) {
         if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);

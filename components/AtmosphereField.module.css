@@ -28,6 +28,18 @@
   background: var(--sky-night);
 }
 
+/* (0.5.38) Until the opening's intro has run (MistCanvas sets `data-intro`
+   to `done`, or `off` when it doesn't run), the backdrop is the 3D sky the
+   intro opens on, looking up: sampled from it, clouds averaged out. The
+   recipes' 2D skies above would flash first otherwise. */
+:global(:root:not([data-intro='done']):not([data-intro='off'])) .field {
+  background: linear-gradient(to bottom, #3f68a6 0%, #6f91bd 55%, #c2d3e0 100%);
+}
+
+:global(:root[data-theme='night']:not([data-intro='done']):not([data-intro='off'])) .field {
+  background: linear-gradient(to bottom, #161b2a 0%, #1e222f 55%, #2b2e3b 100%);
+}
+
 .scene {
   position: absolute;
   inset: 0;

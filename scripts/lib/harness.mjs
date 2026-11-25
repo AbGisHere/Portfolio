@@ -40,10 +40,14 @@ export function ensureDir(dir) {
   return dir;
 }
 
-/** URL for a renderer, with any extra query params. */
+/**
+ * URL for a renderer, with any extra query params. The opening's intro
+ * (0.5.38, a timed tilt with scroll held) is off unless `extra` asks for it.
+ */
 export function sceneUrl(base, renderer, extra = {}) {
   const u = new URL(base);
   u.searchParams.set('renderer', renderer);
+  u.searchParams.set('intro', '0');
   for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
   return u.toString();
 }
