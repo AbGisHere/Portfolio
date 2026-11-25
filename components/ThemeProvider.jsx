@@ -28,10 +28,13 @@ export default function ThemeProvider({ children }) {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('abg-theme', theme);
 
-    // Browser chrome (mobile status bar, Safari's tinted toolbar) matches the
-    // top of the sky rather than cutting a hard line above it.
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = themes[theme].recipe.stops[0];
+    // Browser chrome (mobile status bar, Safari's tinted toolbar) starts on the
+    // opening sky; once the 3D WebGL scene is active, MistCanvas updates it
+    // dynamically across scroll beats and day/night switches.
+    if (document.documentElement.dataset.opening !== '3d') {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.content = theme === 'night' ? '#161b2a' : '#3f68a6';
+    }
   }, [theme, loaded]);
 
   // Each theme names its own successor, so the cycle lives with the themes.

@@ -1856,7 +1856,7 @@ export default function MistCanvas({ recipe, onFail }) {
       restore: cleanGL,
       canRun: () => {
         if (stopped || document.hidden) return false;
-        if (orbit || !settled()) {
+        if (orbit || !settled() || intro) {
           setTimeout(() => preparation.resume(), 100);
           return false;
         }
@@ -2701,6 +2701,8 @@ export default function MistCanvas({ recipe, onFail }) {
     let skyT = 0;
     let raf = 0;
     let last = 0;
+    let lastGap = 16;
+    let emaGap = 16;
     let woke = true;
     let visible = !document.hidden;
     let onScreen = true;
@@ -2753,27 +2755,31 @@ export default function MistCanvas({ recipe, onFail }) {
       introLift = 0;
       setIntroLock(false);
       document.documentElement.dataset.intro = 'done';
+      preparation.resume();
     };
     // One step of the intro on GL's frame loop (no loop of its own): true
-    // when the view moved. The hold ends once the mountains are shown, or
-    // the 3D opening can't run (no peaks, a fallback), or at the cap.
+    // when the view moved. The hold ends once the mountains (and outer bake)
+    // are ready, or the 3D opening can't run (no peaks, a fallback), or at the cap.
     const stepIntro = now => {
       if (!intro) return false;
       if (intro.phase === 'hold') {
         const gone = peaksMode === false || (peaksMode && !peaksNow);
-        if (!peaksShown && !gone && now - intro.at < INTRO_HOLD_MS) return false;
+        const outerDone = !peaksBake?.outer || peaksBake.outerReady;
+        if ((!peaksShown || !outerDone) && !gone && now - intro.at < INTRO_HOLD_MS) return false;
         intro.phase = 'tilt';
         intro.at = now;
+        intro.k = 0;
         document.documentElement.dataset.intro = 'tilt';
         // Mark seen once the tilt actually starts (not during mount setup) so
         // React StrictMode's dev double-mount doesn't shorten fresh loads to 900 ms.
         try { sessionStorage.setItem(INTRO_SEEN, '1'); } catch {}
       }
       const k = Math.min(1, (now - intro.at) / intro.tilt);
+      intro.k = k;
       // Ease in and out (smootherstep): no jolt leaving the sky or landing.
       const e = k * k * k * (k * (k * 6 - 15) + 10);
       if (k >= 1) {
-        introLand = true;
+        introLand = emaGap < 24;
         endIntro();
       } else introLift = INTRO_LIFT * (1 - e);
       return true;
@@ -3125,6 +3131,80 @@ export default function MistCanvas({ recipe, onFail }) {
     let fAt = 0;
     let skySent = null;
     let lampHitCache = null;
+    // Dynamic browser chrome tint (`<meta name="theme-color">` + root backdrop):
+    // tracks what actually sits at the top edge of the viewport across scroll
+    // beats (sky → meadow → sky → pool timber deck) and day/night switches.
+    let themeMeta = null;
+    let themeLastR = -1, themeLastG = -1, themeLastB = -1;
+    let themeLastAt = -Infinity;
+    let themeTimer = 0;
+    const applyThemeColor = (hex, ri, gi, bi, now) => {
+      themeLastR = ri; themeLastG = gi; themeLastB = bi; themeLastAt = now;
+      if (!themeMeta) {
+        themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (!themeMeta) {
+          themeMeta = document.createElement('meta');
+          themeMeta.name = 'theme-color';
+          document.head.appendChild(themeMeta);
+        }
+      }
+      if (themeMeta.content !== hex) themeMeta.content = hex;
+      document.documentElement.style.backgroundColor = hex;
+    };
+    const syncThemeColor = (cam, contact, pk) => {
+      const clamp01 = x => (x <= 0 ? 0 : x >= 1 ? 1 : x);
+      const ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+      const night = pk ? pk.light.night : houseNight();
+      const glow = pk ? pk.light.glow : 0;
+      const liftT = clamp01(introLift / INTRO_LIFT);
+      // Day & night sky at the top edge: deeper blue looking up during intro,
+      // brighter alpine sky over the peaks/laptop/house, warming through dusk glow.
+      let sr = (95 + (63 - 95) * liftT) * (1 - night) + (27 + (22 - 27) * liftT) * night;
+      let sg = (136 + (104 - 136) * liftT) * (1 - night) + (34 + (27 - 34) * liftT) * night;
+      let sb = (184 + (166 - 184) * liftT) * (1 - night) + (52 + (42 - 52) * liftT) * night;
+      if (glow > 0.01) {
+        const g = glow * 0.55;
+        sr += (122 - sr) * g;
+        sg += (90 - sg) * g;
+        sb += (104 - sb) * g;
+      }
+      // Ground at top edge when camera pitches down (> ~32°): meadow grass on
+      // the desk path, warm timber terrace deck over the pool (`contact >= 0.72`).
+      const pitchDeg = ((cam?.pitch ?? 0) * 180) / Math.PI;
+      const gMix = ss(32, 62, pitchDeg);
+      let r = sr, g = sg, b = sb;
+      if (gMix > 0.001) {
+        const deckMix = ss(0.72, 0.88, contact);
+        const mr = 74 * (1 - night) + 21 * night;
+        const mg = 111 * (1 - night) + 34 * night;
+        const mb = 40 * (1 - night) + 24 * night;
+        const dr = 71 * (1 - night) + 29 * night;
+        const dg = 49 * (1 - night) + 21 * night;
+        const db = 36 * (1 - night) + 17 * night;
+        const gr = mr + (dr - mr) * deckMix;
+        const gg = mg + (dg - mg) * deckMix;
+        const gb = mb + (db - mb) * deckMix;
+        r += (gr - r) * gMix;
+        g += (gg - g) * gMix;
+        b += (gb - b) * gMix;
+      }
+      const ri = Math.round(r), gi = Math.round(g), bi = Math.round(b);
+      const diff = Math.max(Math.abs(ri - themeLastR), Math.abs(gi - themeLastG), Math.abs(bi - themeLastB));
+      if (themeLastR >= 0 && diff < 3) return;
+      const hex = `#${((1 << 24) | (ri << 16) | (gi << 8) | bi).toString(16).slice(1)}`;
+      const now = performance.now();
+      const wait = 60 - (now - themeLastAt);
+      if (themeLastR >= 0 && wait > 0) {
+        window.clearTimeout(themeTimer);
+        themeTimer = window.setTimeout(() => {
+          themeTimer = 0;
+          if (!stopped) applyThemeColor(hex, ri, gi, bi, performance.now());
+        }, wait);
+        return;
+      }
+      if (themeTimer) { window.clearTimeout(themeTimer); themeTimer = 0; }
+      applyThemeColor(hex, ri, gi, bi, now);
+    };
     function rebuild() {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
@@ -3168,6 +3248,7 @@ export default function MistCanvas({ recipe, onFail }) {
         lift: introLift,
       });
       const { cam, stops, lit } = frame;
+      syncThemeColor(cam, contact, frame.peaks);
       // (0.5.0) The 3D opening takes the scene's palette (peaksShader.js).
       // The timelapse's own clock: it runs on through every switch, either
       // way, so the mist and the high cloud only ever drift forward.
@@ -5466,6 +5547,12 @@ export default function MistCanvas({ recipe, onFail }) {
             key: null,
             prevCam: null,
             reproj: false,
+            reprojDirty: false,
+            slowFrames: 0,
+            stillFrames: 0,
+            rung: 0,
+            rungHold: 0,
+            prevMovePx: Infinity,
             refining: false,
             holdPrev: false,
             holdCurr: false,
@@ -5473,22 +5560,86 @@ export default function MistCanvas({ recipe, onFail }) {
           };
         }
         const moved = peaksGeo.key !== viewKey;
+        // Each pass that marches them sets which: all four unless the view
+        // just moved and the opening is up.
+        const use = moved && peaksShown && !noBearUse ? bearUse(pk) : null;
+        const stillWait = !moved && peaksGeo.ready ? ++peaksGeo.stillFrames : 0;
         if (moved) {
+          peaksGeo.stillFrames = 0;
           const pc = peaksGeo.prevCam;
           const camJump = pc ? Math.hypot(pk.cam.pos[0] - pc.pos[0], pk.cam.pos[1] - pc.pos[1], pk.cam.pos[2] - pc.pos[2]) : Infinity;
+          const cb = pc ? camBasis(pk.cam) : null;
+          const angDelta = pc ? Math.hypot(cb.f[0] - pc.f[0], cb.f[1] - pc.f[1], cb.f[2] - pc.f[2]) : Infinity;
+          // Normalize screen-space mountain speed to px per 60 Hz frame (16.67 ms)
+          // so a single longer frame never looks like a sudden scroll acceleration.
+          const rawPx = pc ? (angDelta + camJump / (pk.behind ? 2500 : 1500)) * cb.lens * (H * 0.5) : Infinity;
+          const movePx = rawPx * (16.67 / Math.max(lastGap, 4));
+          // Gradual progressive settle during the intro's ease-out and Lenis's
+          // scroll deceleration tail on fast GPUs (emaGap < 24 ms): steps smoothly
+          // through 3 intermediate rungs (base → +30% → +62% → 1.0×) so the
+          // mountains sharpen little by little while gliding into rest instead of
+          // snapping abruptly or forcing full 1.0× during fast motion on mobile.
+          if (intro?.phase === 'tilt') {
+            const k = intro.k ?? 0;
+            const want = emaGap < 24 || peaksGeo.rung > 0
+              ? (k >= 0.94 ? 3 : k >= 0.84 ? 2 : k >= 0.72 ? 1 : 0)
+              : 0;
+            if (want > peaksGeo.rung) peaksGeo.rung = want;
+          } else {
+            const inTail = peaksGeo.rung > 0;
+            const slowing = inTail || movePx <= peaksGeo.prevMovePx * 1.05;
+            const fastEnough = inTail || emaGap < 24;
+            const canGradual = fastEnough && (!pk.behind || frameScale === 1);
+            if (canGradual && movePx < 15 && (inTail ? movePx < 16 : slowing)) {
+              peaksGeo.slowFrames++;
+              const want = movePx < 3.5 ? 3 : movePx < 7.5 ? 2 : movePx < 13 ? 1 : 0;
+              if (want > peaksGeo.rung && peaksGeo.slowFrames >= 3 && peaksGeo.rungHold >= 3) {
+                peaksGeo.rung++;
+                peaksGeo.rungHold = 0;
+              } else {
+                peaksGeo.rungHold++;
+              }
+            } else {
+              peaksGeo.slowFrames = 0;
+              peaksGeo.rung = 0;
+              peaksGeo.rungHold = 0;
+            }
+          }
+          peaksGeo.prevMovePx = movePx;
           // Jump straight to an unloaded house (e.g. opening → pool while house
           // is still building without aoPass.depth culling): march in bands
           // without allocating `prev` so Adreno 619 never hits GPU TDR.
           // Never trigger during normal flight scrolling (!pk.behind).
           const teleport = !frozen && peaksShown && !!pk.behind && !houseComplete && camJump > 200;
+          // Keep large Retina / 5K / 6K moving frames at the same ~1.30M px
+          // (1440×900) budget that holds 120 fps on M4 (~1418×917 on 1728×1117@2,
+          // ~1520×855 on 4K-capped 5K/6K@2 — 2.3× more pixels than 560k) while
+          // stepping smoothly up through progressive rungs during deceleration.
+          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(1_300_000 / (W * H))) : 0.5;
+          const baseScale = !pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1);
+          const rungScale = peaksGeo.rung === 0 ? baseScale
+            : peaksGeo.rung === 1 ? baseScale + (1 - baseScale) * 0.30
+            : peaksGeo.rung === 2 ? baseScale + (1 - baseScale) * 0.62
+            : 1;
+          // During the intro's tilt, use the same progressive rungs (`baseScale`
+          // during the fast pan → +30% → +62% → 1.0× during ease-out) so phones
+          // and tablets stay silky smooth; `introLand` holds 1.0× on landing.
+          const keepFull = introLand;
+          const nextScale = peaksShown && !noMotionRes && !frozen && !keepFull
+            ? rungScale
+            : pk.behind && frameScale < 1 ? frameScale : 1;
+          const nextGW = nextScale < 1 ? Math.max(1, Math.ceil(W * nextScale)) : W;
+          const nextGH = nextScale < 1 ? Math.max(1, Math.ceil(H * nextScale)) : H;
+          peaksGeo.scale = nextScale;
           peaksGeo.refining = teleport;
           peaksGeo.holdPrev = false;
           peaksGeo.holdCurr = false;
           // (0.5.30, 0.5.33) Allocate `prev` lazily on the first smooth move and
           // ping-pong swap so the previous frame stays intact for reprojection.
-          // Skip reprojection on the intro's landing frame so the resting peaks
-          // come from a fresh 1.0× march rather than chained nearest-neighbor copies.
-          const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && peaksGeo.ready && !!pc;
+          // Skip reprojection on the intro's landing frame and whenever stepping UP
+          // in resolution (0.5× → 1.0×) so coarse texels are never copied into 1.0×.
+          const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && peaksGeo.ready && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
+          introLand = false;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
           if (canReproj && peaksGeo.prev) {
             const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
@@ -5497,15 +5648,22 @@ export default function MistCanvas({ recipe, onFail }) {
             peaksGeo.prev.fbo = tfbo;
             peaksGeo.prev.texs = ttexs;
             peaksGeo.reproj = true;
-          } else peaksGeo.reproj = false;
+            if (nextScale === 1) peaksGeo.reprojDirty = true;
+          } else {
+            peaksGeo.reproj = false;
+            peaksGeo.reprojDirty = false;
+          }
           peaksGeo.key = viewKey;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
-        } else if (peaksGeo.ready && peaksGeo.scale < 1) {
-          // (0.5.33) Settled after a reduced-size scroll: refine to 1.0× in bands
-          // (keeping the completed reduced-res frame visible in `peaksGeo.prev`)
-          // so full-res 1.0× settles never trigger GPU TDR on budget mobile GPUs
-          // or single-frame spikes on desktop.
+        } else if (peaksGeo.ready && (peaksGeo.scale < 1 || (peaksGeo.reprojDirty && (frozen || stillWait >= 12)))) {
+          peaksGeo.slowFrames = 0;
+          peaksGeo.stillFrames = 0;
+          peaksGeo.rung = 0;
+          peaksGeo.rungHold = 0;
+          // (0.5.33) Settled after a reduced-size scroll (or a 1.0× reprojected
+          // slow tail): refine cleanly to fresh 1.0× in bands while holding the
+          // completed frame visible in `peaksGeo.prev` + `peaksGeo.prevHor`.
           if (!frozen) {
             if (!peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
             if (!peaksGeo.prevHor) peaksGeo.prevHor = makeHor();
@@ -5516,8 +5674,8 @@ export default function MistCanvas({ recipe, onFail }) {
               peaksGeo.prev.fbo = tfbo;
               peaksGeo.prev.texs = ttexs;
             }
-            // Also double-buffer `hor` while refining 0.5× → 1.0× so the 4 HBANDS
-            // passes don't overwrite the 0.5× horizon shadows still displayed by `showPrev`.
+            // Also double-buffer `hor` while refining so the 4 HBANDS passes
+            // never overwrite the horizon shadows still displayed by `showPrev`.
             if (peaksGeo.prevHor) {
               const th = peaksGeo.hor;
               peaksGeo.hor = peaksGeo.prevHor;
@@ -5534,9 +5692,14 @@ export default function MistCanvas({ recipe, onFail }) {
           }
           peaksGeo.scale = 1;
           peaksGeo.reproj = false;
+          peaksGeo.reprojDirty = false;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
-        } else if (peaksGeo.ready && peaksGeo.use) {
+        } else if (peaksGeo.ready && peaksGeo.use && (frozen || peaksGeo.scale < 1 || stillWait >= 12)) {
+          peaksGeo.slowFrames = 0;
+          peaksGeo.stillFrames = 0;
+          peaksGeo.rung = 0;
+          peaksGeo.rungHold = 0;
           // Settled: the horizons again, toward all four (banded when live).
           peaksGeo.dispScale = peaksGeo.scale;
           peaksGeo.refining = !frozen;
@@ -5545,28 +5708,8 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.reproj = false;
           peaksGeo.step = 1 + 8;
           peaksGeo.ready = false;
-        }
-        // Each pass that marches them sets which: all four unless the view
-        // just moved and the opening is up.
-        const use = moved && peaksShown && !noBearUse ? bearUse(pk) : null;
-        // (0.5.13, 0.5.29) While the opening flight moves (`!pk.behind`), march
-        // at 0.5× and snap back to 1.0× at rest. While behind the desk/house
-        // (`pk.behind`), march at 0.55× during scroll motion (~1584×990 on
-        // Retina — still >1× CSS px & 3.3× fewer pixels so laptop-open & climb
-        // hold ~120 fps), snapping immediately to full 1.0× on the first still frame.
-        if (moved || peaksGeo.scale === undefined) {
-          // Keep large Retina / 5K / 6K moving frames at the same ~1.30M px
-          // (1440×900) budget that holds 120 fps on M4 (~1418×917 on 1728×1117@2,
-          // ~1520×855 on 4K-capped 5K/6K@2 — 2.3× more pixels than 560k) while
-          // snapping back to full 1.0× on rest.
-          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(1_300_000 / (W * H))) : 0.5;
-          // (0.5.38) Not during the intro's tilt or its landing frame: it's
-          // watched, not scrolled, so never drop to 0.5× and pop back on landing.
-          const keepFull = !!intro || introLand;
-          peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen && !keepFull
-            ? (!pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1))
-            : pk.behind && frameScale < 1 ? frameScale : 1;
-          introLand = false;
+        } else if (peaksGeo.scale === undefined) {
+          peaksGeo.scale = pk.behind && frameScale < 1 ? frameScale : 1;
         }
         const GW = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(W * peaksGeo.scale)) : W;
         const GH = peaksGeo.scale < 1 ? Math.max(1, Math.ceil(H * peaksGeo.scale)) : H;
@@ -5726,7 +5869,7 @@ export default function MistCanvas({ recipe, onFail }) {
             if (!peaksShown) {
               peaksShown = true;
               peaksReadyAt = performance.now();
-              preparation.resume();
+              if (!intro) preparation.resume();
             }
           }
           if (!all) break;
@@ -5907,7 +6050,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // the pool hold via aoPass.frame and at the desk hold via deskFrame).
         // Wait until any banded 1.0× mountain refinement finishes before baking
         // `still`, so `stillHit` can never freeze half-res or unready peaks.
-        const peaksSettled = !peaksNow?.behind || peaksNow.skipGeo || !peaksMode?.geo || (!!peaksGeo?.ready && peaksGeo.scale === 1 && !peaksGeo.use && !peaksGeo.refining);
+        const peaksSettled = !peaksNow?.behind || peaksNow.skipGeo || !peaksMode?.geo || (!!peaksGeo?.ready && peaksGeo.scale === 1 && !peaksGeo.reprojDirty && !peaksGeo.use && !peaksGeo.refining);
         const stillOk = restFrame && !noStill && !probing && deskOn && !!meadowAt && frameScale === 1 && !noEarlyZ && peaksSettled && (houseSeen ? (!noHouse && !noAO && !!aoPass?.frameOk) : deskSeen);
         if (!stillOk) {
           stillKey = null;
@@ -6244,6 +6387,10 @@ export default function MistCanvas({ recipe, onFail }) {
       // dt exactly as the engine's Wl: seconds, clamped to [.001, .05].
       const gap = now - last;
       const dt = Math.min(0.05, Math.max(0.001, gap / 1000));
+      if (!woke && gap > 0) {
+        lastGap = Math.min(gap, 100);
+        emaGap = emaGap * 0.85 + lastGap * 0.15;
+      }
       last = now;
 
       startOrbit();
@@ -6340,7 +6487,8 @@ export default function MistCanvas({ recipe, onFail }) {
       // `?restthrottle=0` off): pool syncs to 60 Hz water/firefly ticks; desk
       // syncs to 30 Hz grass/steam wind ticks (60 Hz when birds are active).
       const walkerLive = !!grassAt && walker.live(now / 1000).length > 0;
-      const peaksWork = !!(peaksGeo && !peaksNow?.skipGeo && (!peaksGeo.ready || peaksGeo.scale < 1 || peaksGeo.use || peaksGeo.refining));
+      const bakePending = !!(peaksBake?.outer && !peaksBake.outerReady);
+      const peaksWork = !!(peaksGeo && !peaksNow?.skipGeo && (bakePending || !peaksGeo.ready || peaksGeo.scale < 1 || peaksGeo.reprojDirty || peaksGeo.use || peaksGeo.refining));
       const canThrottleRest = !noRestThrottle && !busy && !crestMoved && !probing && !orbit && settled() && !walkerLive && (!peaksNow || peaksNow.skipGeo || peaksReveal >= 1) && !peaksWork && !grassListPending && !flowerListPending;
       let slowRest = false;
       if (canThrottleRest) {
@@ -6449,6 +6597,8 @@ export default function MistCanvas({ recipe, onFail }) {
       e.preventDefault();
       stopped = true;
       endIntro();
+      if (themeTimer) { window.clearTimeout(themeTimer); themeTimer = 0; }
+      document.documentElement.style.backgroundColor = '';
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();
@@ -6500,6 +6650,8 @@ export default function MistCanvas({ recipe, onFail }) {
     return () => {
       stopped = true;
       endIntro();
+      if (themeTimer) { window.clearTimeout(themeTimer); themeTimer = 0; }
+      document.documentElement.style.backgroundColor = '';
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();

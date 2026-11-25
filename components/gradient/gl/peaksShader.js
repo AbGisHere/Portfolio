@@ -577,13 +577,14 @@ G geo(vec3 rd, float tStart) {
     t1 = min(end, max(ta, tb));
   } else if (uCam.y > top || uCam.y < lo) t1 = 0.;
   if (t1 > t0) {
-    // Keep all 14 mist steps in motion and use low-variance Interleaved Gradient
-    // Noise instead of white-noise hash jitter so 0.5× moving frames have neither
-    // chunky salt-and-pepper speckles nor horizontal slicing bands (leaving
-    // resting uMotion == 0 untouched).
+    // Keep all 14 mist steps in motion and gate low-variance Interleaved
+    // Gradient Noise by step width dt so close mist stays silky smooth (no
+    // 2×2 diagonal weave) while grazing far-valley mist avoids slicing bands
+    // (leaving resting uMotion == 0 untouched).
     float dt = (t1 - t0) / 14.;
     float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
-    float j = (uMotion > .5 ? (.25 + .5 * ign) : hash(gl_FragCoord.xy)) * dt;
+    float mJit = .5 + (ign - .5) * .5 * smoothstep(150., 600., dt);
+    float j = (uMotion > .5 ? mJit : hash(gl_FragCoord.xy)) * dt;
     for (int i = 0; i < 14; i++) {
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;

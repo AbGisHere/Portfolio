@@ -6,6 +6,51 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.39 — 2026-11-25
+
+Made the opening intro pan silky smooth on phones and tablets, replaced abrupt
+post-scroll resolution snaps with gradual deceleration sharpening, eliminated
+the close moving-mist diagonal weave, and wired dynamic scene-matched browser
+toolbar tinting.
+
+- **Silky-smooth intro pan on mobile & desktop (`MistCanvas.jsx`):**
+  - Paused the background `preparation` shader-compile and PSO warm-up queue
+    while `intro` is running (`canRun()` returns `false` while `intro` is active;
+    `endIntro()` calls `preparation.resume()`), eliminating main-thread and GPU
+    stalls during the 2.2 s sky-to-mountains tilt.
+  - Completed `peaksBake.outer` during `'hold'` (driven at display refresh via
+    `bakePending` in `peaksWork`) so zero terrain baking or `prevCam` cache
+    wipes interrupt the pan.
+  - Rendered the fast middle of the tilt (`k < 0.72`) at `moveScale` (`4×` fewer
+    pixels on phones and tablets), then stepped smoothly through progressive
+    rungs (`base → +30% → +62% → 1.0×`) over the final smootherstep ease-out on
+    fast GPUs (`emaGap < 24 ms`), while keeping slow mobile GPUs on TDR-safe
+    banded `1.0×` post-landing refinement.
+- **Gradual deceleration settle (`MistCanvas.jsx`):**
+  - Replaced the abrupt post-stop `0.5× → 1.0×` snap with frame-time-normalized
+    progressive rungs (`base → +30% → +62% → 1.0×`, at most one rung every 3
+    frames while decelerating on fast GPUs) so mountains sharpen little by
+    little as Lenis coasts to rest, with `canReproj` guarded by
+    `pc.gw >= nextGW && pc.gh >= nextGH` (never upsampling coarse texels) and
+    `stillWait >= 12` before silent `reprojDirty`/`use` background refreshes.
+- **Silky close moving mist (`peaksShader.js`):**
+  - Gated the moving Interleaved Gradient Noise jitter by
+    `smoothstep(150., 600., dt)` so close mist plumes stay completely smooth (no
+    `2×2` diagonal weave) while grazing far-valley mist remains free of
+    horizontal slicing bands and resting `uMotion == 0` stays bit-identical.
+- **Dynamic browser toolbar colour (`MistCanvas.jsx`, `app/layout.jsx`, `ThemeProvider.jsx`):**
+  - Added throttled `syncThemeColor()` (60 ms cadence with trailing flush, zero
+    GPU readbacks) updating `<meta name="theme-color">` and root
+    `backgroundColor` to match the top edge of the viewport across scroll beats
+    and day/night switches: sky blue (`#3f68a6 → #5f88b8`) → meadow green
+    (`#4a6f28`) → sky blue (`#5f88b8`) → warm walnut pool deck (`#473124`) by
+    day, and `#161b2a → #1b2234` → `#152218` → `#1d1511` by night.
+- **Verified:** Headless Chromium phone `393×852@3` intro (`120.0 fps`, `p95
+  9.0 ms`, `max 9.3 ms`), desktop Lenis deceleration trace (`1 → 0.5 → 0.65 →
+  0.81 → 1`, zero bounce), all 8 day/night `theme-color` beats,
+  `npm run test:unit` **`88/88`**, `npm run test:adaptive` **`9/9`**,
+  `npm run hygiene` **`21/21`**.
+
 ## 0.5.38 — 2026-11-25
 
 Added a one-shot opening sky-to-mountains intro tilt on GL's frame loop, fixed

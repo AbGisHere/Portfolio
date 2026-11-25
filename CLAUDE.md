@@ -677,6 +677,40 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.39** (2026-11-25) makes the opening intro pan silky smooth on phones &
+tablets, replaces post-scroll resolution snaps with gradual deceleration
+sharpening, removes close moving-mist diagonal weave, and dynamically tints the
+browser toolbar to follow the scene:
+- Smooth mobile/tablet intro pan (`MistCanvas.jsx`): paused `preparation`
+  background shader compilation and PSO warm-up in `canRun()` while `intro` is
+  active (resuming inside `endIntro()`), waited for `peaksBake.outerReady`
+  during `'hold'` (driven at full frame rate via `bakePending` in `peaksWork`)
+  so zero terrain baking or `prevCam` wipes happen mid-pan, and ran the fast
+  middle of the tilt (`k < 0.72`) at `moveScale` (`4×` fewer pixels on phones &
+  tablets) before ramping progressively through `+30% → +62% → 1.0×` over the
+  final `600 ms` smootherstep ease-out on fast GPUs (`emaGap < 24 ms`, keeping
+  TDR-safe banded `1.0×` post-landing settle on slow mobile GPUs).
+- Gradual scroll deceleration settle & silky close mist (`MistCanvas.jsx`,
+  `peaksShader.js`): tracked frame-time-normalized screen-space camera speed
+  (`movePx`) during Lenis deceleration on fast GPUs (`emaGap < 24 ms`) to step
+  monotonically through `base → +30% → +62% → 1.0×` while coasting into rest
+  (with `canReproj` disabled on upward resolution steps and `stillWait >= 12`
+  before silent `reprojDirty`/`use` refreshes), and gated moving IGN mist jitter
+  by `smoothstep(150., 600., dt)` to remove the `2×2` diagonal weave in close
+  mist while keeping far valley mist band-free and resting `uMotion == 0`
+  bit-identical.
+- Dynamic browser chrome colour (`MistCanvas.jsx`, `app/layout.jsx`,
+  `ThemeProvider.jsx`): added throttled `syncThemeColor()` (60 ms cadence +
+  trailing flush, zero GPU readbacks) updating `<meta name="theme-color">` and
+  root `backgroundColor` to match the top edge of the viewport across scroll
+  beats (opening/laptop/house sky `#3f68a6`/`#5f88b8` → top-down meadow
+  `#4a6f28` → pool timber deck `#473124` by day; `#161b2a`/`#1b2234` →
+  `#152218` → `#1d1511` by night, warming through dusk glow on switches).
+- Verified: headless Chromium phone `393×852@3` intro (`120.0 fps`, `p95 9.0 ms`,
+  `max 9.3 ms`, `0.5 → 0.65 → 0.81 → 1.0`), Lenis deceleration trace
+  (`1 → 0.5 → 0.65 → 0.81 → 1`, zero bounce), all 8 day/night `theme-color`
+  beats, `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own
