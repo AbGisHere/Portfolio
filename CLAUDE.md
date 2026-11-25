@@ -597,6 +597,38 @@ keeping 100% of background shader & PSO warm-up intact:
   (`0 > 20 ms`) PASS and `1728×1117@2` `118.1` scroll / `118.7` house (`0 >
   20 ms`) PASS; `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`.
 
+**0.5.36** (2026-11-25) fixes Apple Silicon Metal early-Z checkerboard
+corruption, restores strict `52/52` night house parity, and eliminates Adreno
+619 `/?desk=0.6` context loss across both Moto G71 5G and Galaxy Tab A9+:
+- Metal early-Z invariance & night house parity (`houseShader.js`,
+  `meadowShader.js`): added `invariant gl_Position;` to `HOUSE_VERTEX`,
+  `HOUSE_DEPTH_VERTEX`, and `MEADOW_LAWN_VERTEX`, eliminating 1-ULP `gl.LEQUAL`
+  Hi-Z tile rejection (black stripes/blocks in `living`, `bedroom`, `stair`,
+  `wc`, `porch`, and `terrace` on Apple M4 Metal / Chromium 148). Restored
+  exact additive `spec` in `lampAt()` and removed `#define HS_LSPEC` from
+  `HOUSE_MIRROR_FRAGMENT` to recover `52/52` night `house-parity` (`max <= 2,
+  mean < 0.2`).
+- Adreno 619 desk & probe stability (`MistCanvas.jsx`): extended tiny warm-up
+  targets from `onOpeningHero()` to `beforeHouse()` (`contact <= 0 && desk <
+  0.85`), added `pagehide`/`pageshow` WebGL context release (`WEBGL_lose_context`)
+  so Android 14 Chrome BFCache releases previous-page VRAM immediately on
+  navigation, split `warmHousePipelines()` into incremental per-variant idle
+  steps with `gl.flush()`, paced `warmProbes()` with a non-blocking
+  `probeFence` (`gl.fenceSync` + `gl.flush()`) so only one 384×384 probe face
+  is in flight at a time, and added `warmStage` to the context-loss error
+  string. Forced `peaksReveal = 1` when `frozen` (`?freeze=1`) to eliminate
+  mid-fade `regress` flakes and tightened the `>5.2M px` motion cap to
+  `560_000` px.
+- Measured: `house-parity` night **`52/52` PASS** (`max <= 2, mean < 0.2`,
+  against `v0.5.31` with the 3 `invariant gl_Position;` lines applied to isolate
+  from Chromium 148 Metal's pre-existing `v0.5.31` Hi-Z holes); BrowserStack
+  `devices`: **Moto G71 5G (`Adreno 619`) PASS**, **Galaxy Tab A9+ (`Adreno
+  619`) PASS** (both night house + `/?desk=0.6` grass list + 2nd WebGL2 probe),
+  **iPhone 13 (iOS 16) PASS** (`iPhone SE 2022` iOS 15 still hits the
+  pre-existing `0.5.24` Safari hang); `test:unit 88/88`, `test:adaptive 9/9`,
+  `hygiene 21/21`; Apple M4 `1728×1117@2` GL `perf --gate` `119.0 fps, p95
+  9.0 ms, max 17.3 ms, 0 > 20 ms` PASS on AC power.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

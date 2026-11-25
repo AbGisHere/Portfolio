@@ -472,14 +472,15 @@ export default function MistCanvas({ recipe, onFail }) {
 
     const onHouseRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/house');
     const isDirectHouse = typeof window !== 'undefined' && (window.location.pathname.startsWith('/house') || params.has('contact'));
-    // True while sitting at the opening hero (before scrolling down): keeps
+    // True before approaching the house (opening hero and desk stops): keeps
     // background warm-up shaders & PSOs 100% warm using 1×1 scratch targets so
     // budget mobile GPUs (Adreno 619) never overlap full-res house/bloom/glass
-    // FBOs with opening-only `peaksKept` + `peaksGeo` + `peaksBake` (~72 MB saved).
-    const onOpeningHero = () => {
-      if (isDirectHouse || houseSeen || deskSeen) return false;
+    // FBOs with opening `peaksKept` or desk `deskFrame`/`still`/`stillWorld`
+    // (~51–72 MB saved). Full-res `aoPass` upgrades once `desk >= 0.85 || contact > 0`.
+    const beforeHouse = () => {
+      if (isDirectHouse || houseSeen) return false;
       const d = getDescent();
-      return d.about < 0.25 && d.desk === 0 && (d.contact ?? 0) === 0;
+      return (d.contact ?? 0) <= 0 && d.desk < 0.85;
     };
 
     const ensureWarmHouse = (priority = false) => {
@@ -2104,6 +2105,13 @@ export default function MistCanvas({ recipe, onFail }) {
     // or direct navigation, preventing GPU context loss on mobile hero views.
     let housePipelinesWarmed = false;
     let houseQueueScheduled = false;
+    let warmStage = 'none';
+    let probeFence = null;
+    const clearProbeFence = () => {
+      if (!probeFence) return;
+      gl.deleteSync(probeFence);
+      probeFence = null;
+    };
     let cachedHouseLight = null;
     let cachedHouseLightKey = '';
     const houseLighting = () => {
@@ -2148,6 +2156,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // (Last, the shadow map under the light as it is: unless the light
       // moves first, the house's first frame finds it drawn.)
       const shadowNow = () => {
+        warmStage = 'shadowNow';
         const g = houseProgram(false);
         const sh = houseShadow(false);
         if (g === null || sh === null) return 'pending';
@@ -2156,11 +2165,25 @@ export default function MistCanvas({ recipe, onFail }) {
         return 'done';
       };
       const warmProbes = () => {
+        warmStage = 'probes';
         if (noMirror || !houseBuilt?.house.mirrors?.length) return 'disabled';
+        if (probeFence) {
+          const s = gl.clientWaitSync(probeFence, 0, 0);
+          if (s === gl.TIMEOUT_EXPIRED) return 'pending';
+          clearProbeFence();
+        }
         const hl = houseLighting();
         if (!hl?.colours || !mirrorProbes() || !houseProgram(false) || !probeBackdrop(false)) return 'pending';
-        // (A face drawn, more to draw: the next at the next idle slot.)
-        if (probeStep(false)) return probesStale() ? 'again' : 'done';
+        // Pace probe faces with a non-blocking GPU fence so budget mobile GPUs
+        // (Adreno 619) finish one face before queuing the next (zero TDR).
+        if (probeStep(false)) {
+          if (probesStale()) {
+            probeFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            gl.flush();
+            return 'again';
+          }
+          return 'done';
+        }
         return 'done';
       };
       // Its shader variants, once every program the house's first frame
@@ -2169,6 +2192,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // they draw the same pixels as the house's own program, which draws
       // their runs until then.
       const warmVariants = () => {
+        warmStage = 'variants';
         if (!useVariants) return 'disabled';
         if (house === false || houseFailed) return 'done';
         if (!house?.variants || shadow === null || (!noGlass && glass === null) || (!noAO && aoPass === null) || (!noMirror && backdrop === null)) return 'pending';
@@ -2197,7 +2221,10 @@ export default function MistCanvas({ recipe, onFail }) {
       };
       // Pre-compile backend Metal/ANGLE render pipeline states (PSOs) for every
       // house/AO/reflection/glass/cull target combination via 1×1 scissored
-      // offscreen draws so entering the house or settling at the pool never stalls.
+      // offscreen draws, split into small incremental steps (`'again'`) so
+      // budget mobile GPUs (Adreno 619) yield between PSO compiles and never
+      // hit a single-submission GPU watchdog timeout.
+      let warmPipeStep = 0;
       const warmHousePipelines = () => {
         if (housePipelinesWarmed || house === false || houseFailed) return 'done';
         if (!house || shadow === null || (!noGlass && glass === null) || (!noAO && aoPass === null) ||
@@ -2209,7 +2236,8 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'pending';
         }
         if (!noMirror && houseBuilt?.house.mirrors?.length && !mirrorProbes()) return 'pending';
-        housePipelinesWarmed = true;
+        const variants = (house.variants ?? []).map(v => v?.prog).filter(Boolean);
+        const finalStep = 3 + variants.length;
         if (shadow?.map) shadow.map.bind();
         gl.enable(gl.SCISSOR_TEST);
         gl.scissor(0, 0, 1, 1);
@@ -2237,166 +2265,168 @@ export default function MistCanvas({ recipe, onFail }) {
             else gl.drawArrays(gl.TRIANGLES, 0, 3);
           }
         };
-        // 1. aoPass.fbo (R16F + DEPTH24) — unbind unit 13 first to avoid feedback loop
-        if (aoPass && aoPass.fbo) {
-          gl.activeTexture(gl.TEXTURE13);
-          gl.bindTexture(gl.TEXTURE_2D, null);
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.fbo);
-          gl.enable(gl.DEPTH_TEST);
-          gl.depthFunc(gl.LESS);
-          gl.depthMask(true);
-          gl.disable(gl.BLEND);
-          if (aoPass.solidProg) {
-            gl.useProgram(aoPass.solidProg);
-            drawThreeVaos();
-          }
-          if (aoPass.prog) {
-            gl.useProgram(aoPass.prog);
-            gl.bindVertexArray(house.vao);
-            gl.depthMask(false);
-            gl.enable(gl.BLEND);
-            gl.blendEquation(gl.MIN);
-            drawRange(house, 0, 3);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.disable(gl.BLEND);
-            gl.depthMask(true);
-          }
-          drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
-          gl.activeTexture(gl.TEXTURE13);
-          gl.bindTexture(gl.TEXTURE_2D, aoPass.tex);
-          gl.activeTexture(gl.TEXTURE0);
-        }
-        // 2. P.geoFar PSO warm-up with exact RGBA16F + RGBA8 + DEPTH24 formats.
-        // Uses peaksGeo.prev if already allocated, otherwise a matched 1×1
-        // scratch target + 1×1 DEPTH24 renderbuffer (16 bytes, guaranteed
-        // complete without calling checkFramebufferStatus/GPU sync).
-        const P = peaksPrograms();
-        if (P?.geoFar && aoPass?.depth) {
-          const usePrev = !!(peaksGeo?.prev?.fbo && peaksGeo.w === aoPass.size[0] && peaksGeo.h === aoPass.size[1]);
-          const scratch = usePrev ? null : floatTarget(1, 1, 2, ['rgba16f', 'rgba8']);
-          const sDepth = scratch ? gl.createRenderbuffer() : null;
-          if (sDepth) {
-            gl.bindRenderbuffer(gl.RENDERBUFFER, sDepth);
-            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, 1, 1);
-            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
-          }
-          const pgTgt = usePrev ? peaksGeo.prev : scratch;
-          if (pgTgt?.fbo) {
-            for (const unit of [PEAKS_G0, PEAKS_G1, PEAKS_G2]) {
-              gl.activeTexture(gl.TEXTURE0 + unit);
-              gl.bindTexture(gl.TEXTURE_2D, null);
-            }
+        const step = warmPipeStep++;
+        warmStage = `pipe${step}`;
+        if (step === 0) {
+          // 1. aoPass.fbo (R16F + DEPTH24) — unbind unit 13 first to avoid feedback loop
+          if (aoPass && aoPass.fbo) {
+            gl.activeTexture(gl.TEXTURE13);
+            gl.bindTexture(gl.TEXTURE_2D, null);
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, pgTgt.fbo);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, usePrev ? aoPass.depth : sDepth);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.fbo);
             gl.enable(gl.DEPTH_TEST);
-            gl.depthFunc(gl.LEQUAL);
-            gl.depthMask(false);
-            gl.disable(gl.BLEND);
-            gl.bindVertexArray(null);
-            gl.useProgram(P.geoFar);
-            if (peaksNow) peaksView(P.geoFar, peaksNow);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
-            gl.depthMask(true);
             gl.depthFunc(gl.LESS);
-            gl.disable(gl.DEPTH_TEST);
-            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
-            drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
-            if (sDepth) gl.deleteRenderbuffer(sDepth);
-            if (scratch) dropTarget(scratch);
-            if (peaksGeo?.ready) {
-              gl.activeTexture(gl.TEXTURE0 + PEAKS_G0);
-              gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[0]);
-              gl.activeTexture(gl.TEXTURE0 + PEAKS_G1);
-              gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[1]);
-              gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
-              gl.bindTexture(gl.TEXTURE_2D, peaksGeo.hor.texs[0]);
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+            if (aoPass.solidProg) {
+              gl.useProgram(aoPass.solidProg);
+              drawThreeVaos();
+            }
+            if (aoPass.prog) {
+              gl.useProgram(aoPass.prog);
+              gl.bindVertexArray(house.vao);
+              gl.depthMask(false);
+              gl.enable(gl.BLEND);
+              gl.blendEquation(gl.MIN);
+              drawRange(house, 0, 3);
+              gl.blendEquation(gl.FUNC_ADD);
+              gl.disable(gl.BLEND);
+              gl.depthMask(true);
+            }
+            drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+            gl.activeTexture(gl.TEXTURE13);
+            gl.bindTexture(gl.TEXTURE_2D, aoPass.tex);
+            gl.activeTexture(gl.TEXTURE0);
+          }
+        } else if (step === 1) {
+          // 2. P.geoFar PSO warm-up + 3. reflect.fbo (RGBA8 + DEPTH24)
+          const P = peaksPrograms();
+          if (P?.geoFar && aoPass?.depth) {
+            const usePrev = !!(peaksGeo?.prev?.fbo && peaksGeo.w === aoPass.size[0] && peaksGeo.h === aoPass.size[1]);
+            const scratch = usePrev ? null : floatTarget(1, 1, 2, ['rgba16f', 'rgba8']);
+            const sDepth = scratch ? gl.createRenderbuffer() : null;
+            if (sDepth) {
+              gl.bindRenderbuffer(gl.RENDERBUFFER, sDepth);
+              gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, 1, 1);
+              gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+            }
+            const pgTgt = usePrev ? peaksGeo.prev : scratch;
+            if (pgTgt?.fbo) {
+              for (const unit of [PEAKS_G0, PEAKS_G1, PEAKS_G2]) {
+                gl.activeTexture(gl.TEXTURE0 + unit);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+              }
               gl.activeTexture(gl.TEXTURE0);
+              gl.bindFramebuffer(gl.FRAMEBUFFER, pgTgt.fbo);
+              gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+              gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, usePrev ? aoPass.depth : sDepth);
+              gl.enable(gl.DEPTH_TEST);
+              gl.depthFunc(gl.LEQUAL);
+              gl.depthMask(false);
+              gl.disable(gl.BLEND);
+              gl.bindVertexArray(null);
+              gl.useProgram(P.geoFar);
+              if (peaksNow) peaksView(P.geoFar, peaksNow);
+              gl.drawArrays(gl.TRIANGLES, 0, 3);
+              gl.depthMask(true);
+              gl.depthFunc(gl.LESS);
+              gl.disable(gl.DEPTH_TEST);
+              gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, null);
+              drop(gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1);
+              if (sDepth) gl.deleteRenderbuffer(sDepth);
+              if (scratch) dropTarget(scratch);
+              if (peaksGeo?.ready) {
+                gl.activeTexture(gl.TEXTURE0 + PEAKS_G0);
+                gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[0]);
+                gl.activeTexture(gl.TEXTURE0 + PEAKS_G1);
+                gl.bindTexture(gl.TEXTURE_2D, peaksGeo.texs[1]);
+                gl.activeTexture(gl.TEXTURE0 + PEAKS_G2);
+                gl.bindTexture(gl.TEXTURE_2D, peaksGeo.hor.texs[0]);
+                gl.activeTexture(gl.TEXTURE0);
+              }
             }
           }
-        }
-        // 3. reflect.fbo (RGBA8 + DEPTH24)
-        if (reflect && reflect.fbo && house.mirrorProg) {
-          gl.activeTexture(gl.TEXTURE12);
-          gl.bindTexture(gl.TEXTURE_2D, null);
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, reflect.fbo);
-          gl.enable(gl.DEPTH_TEST);
-          gl.depthFunc(gl.LESS);
-          gl.depthMask(true);
-          gl.disable(gl.BLEND);
-          gl.useProgram(house.mirrorProg);
-          drawThreeVaos();
-          drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
-          gl.activeTexture(gl.TEXTURE12);
-          gl.bindTexture(gl.TEXTURE_2D, reflect.tex);
-          gl.activeTexture(gl.TEXTURE0);
-        }
-        // 4. aoPass.frame.fbo (RGBA8 + DEPTH24)
-        if (aoPass?.frame?.fbo && aoPass.frameOk) {
+          if (reflect && reflect.fbo && house.mirrorProg) {
+            gl.activeTexture(gl.TEXTURE12);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, reflect.fbo);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LESS);
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+            gl.useProgram(house.mirrorProg);
+            drawThreeVaos();
+            drop(gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT);
+            gl.activeTexture(gl.TEXTURE12);
+            gl.bindTexture(gl.TEXTURE_2D, reflect.tex);
+            gl.activeTexture(gl.TEXTURE0);
+          }
+        } else if (aoPass?.frame?.fbo && aoPass.frameOk) {
+          // 4. aoPass.frame.fbo (RGBA8 + DEPTH24) — main house, 1 variant/step, then overlays
           gl.bindFramebuffer(gl.FRAMEBUFFER, aoPass.frame.fbo);
           gl.enable(gl.DEPTH_TEST);
           gl.disable(gl.BLEND);
-          gl.useProgram(house.prog);
-          gl.depthFunc(gl.LEQUAL);
-          gl.depthMask(false);
-          drawThreeVaos();
-          gl.depthFunc(gl.LESS);
-          gl.depthMask(true);
-          drawThreeVaos();
-          gl.bindVertexArray(house.vao);
-          for (const vp of (house.variants ?? []).map(v => v?.prog).filter(Boolean)) {
-            gl.useProgram(vp);
+          if (step === 2) {
+            gl.useProgram(house.prog);
             gl.depthFunc(gl.LEQUAL);
             gl.depthMask(false);
-            drawRange(house, 0, 3);
+            drawThreeVaos();
             gl.depthFunc(gl.LESS);
             gl.depthMask(true);
-            drawRange(house, 0, 3);
-          }
-          const leafProg = house.variants?.[H.LEAF_VARIANT]?.prog;
-          if (leafProg && L0?.vao && L0.count > 0) {
-            gl.useProgram(leafProg);
-            gl.bindVertexArray(L0.vao);
-            gl.depthFunc(gl.LEQUAL);
-            gl.depthMask(false);
-            gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
-            gl.depthFunc(gl.LESS);
-            gl.depthMask(true);
-            gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
-          }
-          if (meadowLawn?.prog) {
-            meadowTexture();
+            drawThreeVaos();
+          } else if (step < finalStep) {
             gl.bindVertexArray(house.vao);
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
+            gl.useProgram(variants[step - 3]);
             gl.depthFunc(gl.LEQUAL);
             gl.depthMask(false);
-            initCameraU(meadowLawn.prog, meadowLawn.u);
             drawRange(house, 0, 3);
-            gl.disable(gl.BLEND);
             gl.depthFunc(gl.LESS);
             gl.depthMask(true);
-          }
-          if (glass?.prog && glass.vao) {
-            prepareFrameCopy(glass, onOpeningHero());
-            gl.disable(gl.BLEND);
-            gl.depthFunc(gl.LEQUAL);
-            gl.depthMask(false);
-            gl.useProgram(glass.prog);
-            gl.bindVertexArray(glass.vao);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
-          }
-          if (glass?.waterProg && glass.waterVao) {
-            waterSim()?.bind();
-            gl.disable(gl.BLEND);
-            gl.depthFunc(gl.LEQUAL);
-            gl.depthMask(false);
-            gl.useProgram(glass.waterProg);
-            gl.bindVertexArray(glass.waterVao);
-            gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+            drawRange(house, 0, 3);
+          } else {
+            const leafProg = house.variants?.[H.LEAF_VARIANT]?.prog;
+            if (leafProg && L0?.vao && L0.count > 0) {
+              gl.useProgram(leafProg);
+              gl.bindVertexArray(L0.vao);
+              gl.depthFunc(gl.LEQUAL);
+              gl.depthMask(false);
+              gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
+              gl.depthFunc(gl.LESS);
+              gl.depthMask(true);
+              gl.drawElementsInstanced(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0, 1);
+            }
+            if (meadowLawn?.prog) {
+              meadowTexture();
+              gl.bindVertexArray(house.vao);
+              gl.enable(gl.BLEND);
+              gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR);
+              gl.depthFunc(gl.LEQUAL);
+              gl.depthMask(false);
+              initCameraU(meadowLawn.prog, meadowLawn.u);
+              drawRange(house, 0, 3);
+              gl.disable(gl.BLEND);
+              gl.depthFunc(gl.LESS);
+              gl.depthMask(true);
+            }
+            if (glass?.prog && glass.vao) {
+              prepareFrameCopy(glass, beforeHouse());
+              gl.disable(gl.BLEND);
+              gl.depthFunc(gl.LEQUAL);
+              gl.depthMask(false);
+              gl.useProgram(glass.prog);
+              gl.bindVertexArray(glass.vao);
+              gl.drawArrays(gl.TRIANGLES, 0, 3);
+            }
+            if (glass?.waterProg && glass.waterVao) {
+              waterSim()?.bind();
+              gl.disable(gl.BLEND);
+              gl.depthFunc(gl.LEQUAL);
+              gl.depthMask(false);
+              gl.useProgram(glass.waterProg);
+              gl.bindVertexArray(glass.waterVao);
+              gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+            }
           }
           gl.depthMask(true);
           gl.depthFunc(gl.LESS);
@@ -2408,10 +2438,16 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.depthMask(true);
         gl.depthFunc(gl.LESS);
         cleanGL();
+        if (step < finalStep) {
+          gl.flush();
+          return 'again';
+        }
+        housePipelinesWarmed = true;
         return 'done';
       };
       scheduleQueue([
         () => {
+          warmStage = 'prog';
           if (!houseAsync) {
             if (!canStartCompile()) return 'pending';
             startHouseAsync();
@@ -2423,20 +2459,23 @@ export default function MistCanvas({ recipe, onFail }) {
           return houseProgram(false) === null || (!noMeadowMesh && meadowLawn === null) ? 'pending' : 'done';
         },
         () => {
+          warmStage = 'shadow';
           if (!shadowAsync && !canStartCompile()) return 'pending';
           startShadowAsync();
           return houseShadow(false) === null ? 'pending' : 'done';
         },
         () => {
+          warmStage = 'glass';
           if (!glassAsync && !canStartCompile()) return 'pending';
           startGlassAsync();
           if (!glassWaterAsync && !canStartCompile()) return 'pending';
           startGlassWaterAsync();
           const gp = glassProgram(false);
-          if (gp) prepareFrameCopy(gp, onOpeningHero());
+          if (gp) prepareFrameCopy(gp, beforeHouse());
           return gp === null ? 'pending' : 'done';
         },
         () => {
+          warmStage = 'mirror';
           if (!noMirror && !noGlass && !houseMirrorAsync && !canStartCompile()) return 'pending';
           const mh = startHouseMirrorAsync();
           if (!mh) return 'disabled';
@@ -2450,19 +2489,22 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'done';
         },
         () => {
+          warmStage = 'ao';
           if (!depthAsync && !canStartCompile()) return 'pending';
           startDepthAsync();
           if (!depthSolidAsync && !canStartCompile()) return 'pending';
           startDepthSolidAsync();
-          const ao = aoTarget(false, onOpeningHero());
+          const ao = aoTarget(false, beforeHouse());
           return ao === null ? 'pending' : 'done';
         },
         () => {
+          warmStage = 'backdrop';
           if (!probeBackdropAsync && !canStartCompile()) return 'pending';
           startProbeBackdropAsync();
           return probeBackdrop(false) === null ? 'pending' : 'done';
         },
         () => {
+          warmStage = 'fx';
           // (0.4.65) The water's and the bloom's programs linked in
           // parallel first, so making them doesn't stall on the driver.
           // (0.5.13) Started two in flight at a time, like the other passes'.
@@ -2477,16 +2519,18 @@ export default function MistCanvas({ recipe, onFail }) {
           return 'done';
         },
         () => {
+          warmStage = 'reflect';
           if (!noMirror) reflectTarget();
           waterSim()?.prepare();
           return 'done';
         },
         () => {
+          warmStage = 'bloom';
           if (!noBloom) {
             bloom ??= H.makeBloom(gl, 14, fxProgram) || false;
             if (bloom) {
-              const hero = onOpeningHero();
-              bloom.prepare(hero ? 4 : canvas.width, hero ? 4 : canvas.height);
+              const tiny = beforeHouse();
+              bloom.prepare(tiny ? 4 : canvas.width, tiny ? 4 : canvas.height);
             }
           }
           return 'done';
@@ -3007,7 +3051,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const r = recipeRef.current;
       const { about, desk, contact = 0 } = getDescent();
       if (about > 0.35 || desk > 0 || contact > 0) ensureWarmHouse();
-      if ((desk > 0.3 || contact > 0) && aoPass && aoPass.size[0] < canvas.width) aoTarget(false);
+      if ((desk >= 0.85 || contact > 0) && aoPass && aoPass.size[0] < canvas.width) aoTarget(false);
       const free = getFreeCam();
       // Mid-switch the palette runs through the target's keyframes (dawn,
       // day…) on the switch's clock, and the ridges are relit from it; at
@@ -4366,12 +4410,12 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!housePipelinesWarmed) return;
       // Cover all submitted uploads/probe/warm-up work without gl.finish or a
       // blocking wait. A resize before initial readiness needs a fresh fence.
-      const hero = onOpeningHero();
-      if (!hero && glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
+      const tiny = beforeHouse();
+      if (!tiny && glass && (glass.size[0] !== canvas.width || glass.size[1] !== canvas.height)) {
         prepareFrameCopy(glass);
         gl.activeTexture(gl.TEXTURE0);
       }
-      if (bloom) bloom.prepare(hero ? 4 : canvas.width, hero ? 4 : canvas.height);
+      if (bloom) bloom.prepare(tiny ? 4 : canvas.width, tiny ? 4 : canvas.height);
       const completion = houseCompletion.poll(`${canvas.width}x${canvas.height}`);
       if (completion === 'pending') return;
       if (completion === 'failed') {
@@ -5414,7 +5458,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // Retina — still >1× CSS px & 3.3× fewer pixels so laptop-open & climb
         // hold ~120 fps), snapping immediately to full 1.0× on the first still frame.
         if (moved || peaksGeo.scale === undefined) {
-          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(650_000 / (W * H))) : 0.5;
+          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(560_000 / (W * H))) : 0.5;
           peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen
             ? (!pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1))
             : pk.behind && frameScale < 1 ? frameScale : 1;
@@ -5586,7 +5630,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // moves, 1 once the 1.0× settle completes; parity checks it after a scroll).
         const showPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
         setDs(document.documentElement, 'peaksScale', String(showPrev ? peaksGeo.dispScale : peaksGeo.scale));
-        peaksReveal = peaksReadyAt ? Math.min(1, (performance.now() - peaksReadyAt) / 550) : 0;
+        peaksReveal = peaksReadyAt ? (frozen ? 1 : Math.min(1, (performance.now() - peaksReadyAt) / 550)) : 0;
         const srcGeo = showPrev ? peaksGeo.prev : peaksGeo;
         gl.activeTexture(gl.TEXTURE0 + PEAKS_G0);
         gl.bindTexture(gl.TEXTURE_2D, srcGeo.texs[0]);
@@ -6293,12 +6337,15 @@ export default function MistCanvas({ recipe, onFail }) {
       dirty = true;
       kick();
     });
+    let hiding = false;
     const onLost = e => {
       e.preventDefault();
+      if (hiding) return;
       stopped = true;
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();
+      clearProbeFence();
       if (profiler) { profiler.dispose(); delete window.__houseProfile; }
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
       houseWorker?.terminate();
@@ -6306,9 +6353,30 @@ export default function MistCanvas({ recipe, onFail }) {
       cancelAnimationFrame(raf);
       raf = 0;
       const d = getDescent();
-      onFail?.(Object.assign(new Error(`webgl context lost (about=${d.about.toFixed(2)},desk=${d.desk.toFixed(2)},contact=${d.contact.toFixed(2)},house=${houseComplete ? 'ready' : houseBuilt ? 'mesh' : 'init'})`), { lost: true }));
+      onFail?.(Object.assign(new Error(`webgl context lost (about=${d.about.toFixed(2)},desk=${d.desk.toFixed(2)},contact=${d.contact.toFixed(2)},house=${houseComplete ? 'ready' : houseBuilt ? `mesh:${warmStage}` : 'init'})`), { lost: true }));
+    };
+    // Release GPU memory immediately on navigation (including BFCache on
+    // Android Chrome / iOS Safari) so the next page on budget mobile GPUs
+    // (Adreno 619) never overlaps two full WebGL2 contexts in VRAM.
+    const onPageHide = () => {
+      hiding = true;
+      stopped = true;
+      preparation.dispose();
+      houseCompletion.reset();
+      clearProbeFence();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
+      houseWorker?.terminate();
+      lmReadback?.();
+      try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {}
+    };
+    const onPageShow = e => {
+      if (e.persisted && hiding) window.location.reload();
     };
     canvas.addEventListener('webglcontextlost', onLost);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
 
     // (0.3.1) Footsteps: the pointer cast onto the ground while the grass
     // shows. A moving mouse walks; a touch taps one step.
@@ -6348,6 +6416,7 @@ export default function MistCanvas({ recipe, onFail }) {
       setHouseReadiness('failed');
       preparation.dispose();
       houseCompletion.reset();
+      clearProbeFence();
       if (profiler) { profiler.dispose(); delete window.__houseProfile; }
       cancelAnimationFrame(raf);
       for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
@@ -6362,6 +6431,8 @@ export default function MistCanvas({ recipe, onFail }) {
       unsubscribeLamp();
       unsubscribeFree();
       canvas.removeEventListener('webglcontextlost', onLost);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
       gl.deleteTexture(skyTex);
       gl.deleteTexture(crestTex);
       dropGpuCrests();

@@ -6,6 +6,51 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.36 — 2026-11-25
+
+Fixed Apple Silicon Metal early-Z black checkerboard corruption across all
+house interiors and exterior views, restored strict `52/52` night house parity
+(`max <= 2, mean < 0.2`), and eliminated Adreno 619 `/?desk=0.6`
+`webglcontextlost` on both Motorola Moto G71 5G and Samsung Galaxy Tab A9 Plus.
+
+- **Metal early-Z invariance & night house parity (`houseShader.js`, `meadowShader.js`):**
+  - Added `invariant gl_Position;` to `HOUSE_VERTEX`, `HOUSE_DEPTH_VERTEX`, and
+    `MEADOW_LAWN_VERTEX`, eliminating 1-ULP `gl.LEQUAL` Hi-Z tile rejection
+    (black stripes and 16×16/32×32 blocks in `living`, `bedroom`, `stair`,
+    `wc`, `porch`, and `terrace` on Apple M4 Metal / Chromium 148).
+  - Restored exact additive `spec` evaluation in `lampAt()` (reverting the
+    `0.5.33` `NdotL <= 0.0` skip that dropped non-zero `0.05/π` and grazing
+    `ggx` terms) and removed `#define HS_LSPEC` from `HOUSE_MIRROR_FRAGMENT`
+    for exact pool reflection and mirror parity.
+- **Adreno 619 desk & probe stability (`MistCanvas.jsx`):**
+  - Extended tiny warm-up targets from `onOpeningHero()` to `beforeHouse()`
+    (`contact <= 0 && desk < 0.85`), keeping `aoPass` (`1×1`), `glass.tex`
+    (`1×1`), and `bloom` (`4×4`) compact across the desk stop (`-51 MB` VRAM
+    overlap).
+  - Added `pagehide`/`pageshow` WebGL context release (`WEBGL_lose_context`) so
+    Android 14 Chrome BFCache releases previous-page VRAM immediately on
+    navigation.
+  - Split `warmHousePipelines()` into incremental per-variant idle steps with
+    `gl.flush()` and paced `warmProbes()` with a non-blocking `probeFence`
+    (`gl.fenceSync` + `gl.flush()`) so Adreno 619 finishes one 384×384 probe
+    face before queuing the next (eliminating `house=mesh:probes` GPU watchdog
+    TDRs), and added `warmStage` to the context-loss diagnostic string.
+- **Regression determinism & Retina motion headroom (`MistCanvas.jsx`):**
+  - Forced `peaksReveal = 1` when `frozen` (`?freeze=1`) so SwiftShader
+    `regress` captures never catch mid-550ms reveal fades, and tightened the
+    `>5.2M px` motion cap from `650_000` to `560_000` px.
+- **Verified (`npm run test:unit` `88/88`, `npm run test:adaptive` `9/9`, `npm run hygiene` `21/21`):**
+  - **`house-parity` night:** **`52/52` PASS** (`max <= 2, mean < 0.2`) against
+    `v0.5.31` (with the 3 `invariant gl_Position;` lines applied to the
+    reference to isolate our changes from Chromium 148 Metal's pre-existing
+    `v0.5.31` Hi-Z holes).
+  - **BrowserStack `devices`:** **Moto G71 5G (`Adreno 619`) PASS**, **Samsung
+    Galaxy Tab A9 Plus (`Adreno 619`) PASS** (both full WebGL2 night house +
+    `/?desk=0.6` grass list + 2nd WebGL2 probe), **iPhone 13 (iOS 16) PASS**.
+    (`iPhone SE 2022` iOS 15 remains the pre-existing `0.5.24` Safari hang.)
+  - **Apple M4 (`1728×1117@2` GL `perf --gate` on AC power):** `119.0 fps, p95
+    9.0 ms, max 17.3 ms, 0 > 20 ms` PASS.
+
 ## 0.5.35 — 2026-11-23
 
 Eliminated Moto G71 5G (`Adreno 619`, Android 11) opening-hero VRAM OOM
