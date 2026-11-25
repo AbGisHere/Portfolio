@@ -5458,7 +5458,11 @@ export default function MistCanvas({ recipe, onFail }) {
         // Retina — still >1× CSS px & 3.3× fewer pixels so laptop-open & climb
         // hold ~120 fps), snapping immediately to full 1.0× on the first still frame.
         if (moved || peaksGeo.scale === undefined) {
-          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(560_000 / (W * H))) : 0.5;
+          // Keep large Retina / 5K / 6K moving frames at the same ~1.30M px
+          // (1440×900) budget that holds 120 fps on M4 (~1418×917 on 1728×1117@2,
+          // ~1520×855 on 4K-capped 5K/6K@2 — 2.3× more pixels than 560k) while
+          // snapping back to full 1.0× on rest.
+          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(1_300_000 / (W * H))) : 0.5;
           peaksGeo.scale = moved && peaksShown && !noMotionRes && !frozen
             ? (!pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1))
             : pk.behind && frameScale < 1 ? frameScale : 1;
@@ -6337,10 +6341,8 @@ export default function MistCanvas({ recipe, onFail }) {
       dirty = true;
       kick();
     });
-    let hiding = false;
     const onLost = e => {
       e.preventDefault();
-      if (hiding) return;
       stopped = true;
       setHouseReadiness('failed');
       preparation.dispose();
@@ -6355,28 +6357,7 @@ export default function MistCanvas({ recipe, onFail }) {
       const d = getDescent();
       onFail?.(Object.assign(new Error(`webgl context lost (about=${d.about.toFixed(2)},desk=${d.desk.toFixed(2)},contact=${d.contact.toFixed(2)},house=${houseComplete ? 'ready' : houseBuilt ? `mesh:${warmStage}` : 'init'})`), { lost: true }));
     };
-    // Release GPU memory immediately on navigation (including BFCache on
-    // Android Chrome / iOS Safari) so the next page on budget mobile GPUs
-    // (Adreno 619) never overlaps two full WebGL2 contexts in VRAM.
-    const onPageHide = () => {
-      hiding = true;
-      stopped = true;
-      preparation.dispose();
-      houseCompletion.reset();
-      clearProbeFence();
-      cancelAnimationFrame(raf);
-      raf = 0;
-      for (const id of warmIdles) (window.cancelIdleCallback ?? clearTimeout)(id);
-      houseWorker?.terminate();
-      lmReadback?.();
-      try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {}
-    };
-    const onPageShow = e => {
-      if (e.persisted && hiding) window.location.reload();
-    };
     canvas.addEventListener('webglcontextlost', onLost);
-    window.addEventListener('pagehide', onPageHide);
-    window.addEventListener('pageshow', onPageShow);
 
     // (0.3.1) Footsteps: the pointer cast onto the ground while the grass
     // shows. A moving mouse walks; a touch taps one step.
@@ -6431,8 +6412,6 @@ export default function MistCanvas({ recipe, onFail }) {
       unsubscribeLamp();
       unsubscribeFree();
       canvas.removeEventListener('webglcontextlost', onLost);
-      window.removeEventListener('pagehide', onPageHide);
-      window.removeEventListener('pageshow', onPageShow);
       gl.deleteTexture(skyTex);
       gl.deleteTexture(crestTex);
       dropGpuCrests();

@@ -629,6 +629,24 @@ corruption, restores strict `52/52` night house parity, and eliminates Adreno
   `hygiene 21/21`; Apple M4 `1728×1117@2` GL `perf --gate` `119.0 fps, p95
   9.0 ms, max 17.3 ms, 0 > 20 ms` PASS on AC power.
 
+**0.5.37** (2026-11-25) restores instant BFCache Back-button navigation and
+raises the large-display moving mountain budget by `2.3×`:
+- Instant BFCache restores (`MistCanvas.jsx`): dropped `onPageHide` /
+  `onPageShow` WebGL teardown & `location.reload()` so pressing Back from an
+  external link restores the page instantly instead of forcing a full reload
+  and house rebuild. BrowserStack confirmed both Adreno 619 devices (**Moto G71
+  5G** and **Galaxy Tab A9+**) still pass `2/2` cleanly (full WebGL2 night
+  house, desk grass list, and 2nd WebGL2 probe) with `probeFence` +
+  `beforeHouse()` + incremental `warmHousePipelines()` alone.
+- Sharper moving flight on 16"/5K/6K displays (`MistCanvas.jsx`): lifted the
+  `>5.2M px` moving `peaksGeo` budget from `560_000` to `1_300_000 px` (matching
+  `1440×900@2`'s exact `1,296,000 px` 120 fps fill budget: `~1418×917` on
+  `1728×1117@2` and `~1521×856` on 4K-capped `5K@2`/`6K@2`, `2.32×` more
+  pixels than `560k`). Verified with `npm run sharp` (`2560×1440@2` &
+  `3008×1692@2`) and a live moving `5K@2` opening-flight capture (`peaksScale =
+  0.396`, sharp granite crests and mist), plus `test:unit 88/88` and
+  `test:adaptive 9/9`.
+
 **Next:** the climb on phones (`devices -- --climb --costs peaks-behind`);
 deferred R-series research (temporal reprojection, deferred shading, device
 tiers); then the owner's next steps on the valley flight, the cliffs' own

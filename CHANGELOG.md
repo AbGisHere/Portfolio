@@ -6,6 +6,35 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.37 — 2026-11-25
+
+Restored instant BFCache Back-button navigation across all devices and lifted
+the `>5.2M px` moving mountain budget by `2.3×` (`560_000 → 1_300_000 px`) so
+opening flight stays crisp on 16" Retina, 5K@2, and 6K@2 displays.
+
+- **Instant BFCache restores (`MistCanvas.jsx`):**
+  - Removed the `0.5.36` `onPageHide` (`WEBGL_lose_context`) / `onPageShow`
+    (`window.location.reload()`) handlers so visitors returning via the Back
+    button from a same-tab external link get an instant BFCache restore instead
+    of a full page reload and house rebuild.
+  - Verified on BrowserStack that **Motorola Moto G71 5G (`Adreno 619`)** and
+    **Samsung Galaxy Tab A9 Plus (`Adreno 619`)** still pass **`2/2`** cleanly
+    (night house, `/?desk=0.6` grass list, and 2nd WebGL2 probe) via
+    `probeFence` + `beforeHouse()` + incremental `warmHousePipelines()` alone.
+- **Sharper moving flight on large high-DPI displays (`MistCanvas.jsx`):**
+  - Raised the `>5.2M px` moving `peaksGeo` pixel budget from `560_000` to
+    `1_300_000 px` (matching `1440×900@2`'s exact `1,296,000 px` 120 fps fill
+    budget: `~1418×917` on `1728×1117@2` and `~1521×856` on 4K-capped
+    `5K@2`/`6K@2`, `2.32×` more pixels than `560k`, while avoiding the `-11 fps`
+    drop measured when lifting the cap to `1.93M px` on `1728×1117@2`).
+  - Ran `npm run sharp` at `2560×1440@2` and `3008×1692@2` (`min ratio 0.74`)
+    and visually inspected a live moving `5K@2` opening-flight frame
+    (`peaksScale = 0.396`, `1521×856` inside `3840×2160` buffer) — crests,
+    strata, snow flutes, and mist stay sharp in motion and snap to `1.0×` at
+    rest.
+- **Verified:** `npm run test:unit` **`88/88`**, `npm run test:adaptive`
+  **`9/9`**, `npm run build` clean, BrowserStack Adreno 619 **`2/2` PASS**.
+
 ## 0.5.36 — 2026-11-25
 
 Fixed Apple Silicon Metal early-Z black checkerboard corruption across all
