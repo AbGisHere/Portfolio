@@ -6,6 +6,41 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.40 — 2026-11-26
+
+The intro's landing no longer changes when it comes to rest, the intro gets a
+loading line and a real first frame, the night sky a Milky Way, and the intro
+its own check.
+
+- **Landing unchanged at rest (`MistCanvas.jsx`):** the tilt's full-size rungs
+  were reprojected (approximate) and, below the `emaGap < 24 ms` gate, the
+  landing kept one; the fresh march then replaced it on screen. 0.5.39 failed
+  3 of 4 runs of the new check (landing mean 4.0–4.6 by day vs the mist's own
+  drift 0.2–0.45; with `?reproj=0` 4/4 passed). No reprojection for the
+  intro's `1.0×` frames, and a fresh landing march on any desktop (slow touch
+  GPUs keep the banded settle). Also keeps the working-tree settle change:
+  a `reprojDirty`/`use` refresh on the first still frame (no 12-frame wait).
+- **Hold until ready (`MistCanvas.jsx`, `intro.js`):** the hold waits for the
+  mountains to a `4 s` cap (was `2.5 s`); the lock's fail-safe `6 → 8 s`.
+  Background preparation resumes `900 ms` after the landing.
+- **Loading line (`AtmosphereField.jsx`/`.module.css`):** a hairline at the
+  bottom centre filling with real progress (`--intro-p`: programs, the
+  ground's 18-step bake, the first shape), gone as the tilt starts; the
+  fallback renderer ends it at once.
+- **Real first frame (`scripts/intro-backdrop.mjs`, `public/intro/`):** the
+  backdrop before WebGL is the 3D up-sky itself, rendered per theme
+  (`npm run intro-backdrop`, `?introhold=1` holds in the sky; day 35 KB,
+  night 19 KB), over the 0.5.38 gradient. Rerun when the sky or `INTRO_LIFT`
+  changes.
+- **Milky Way (`peaksShader.js`):** a patchy band with dust lanes and crowding
+  faint stars on a great circle across the up-sky (low at rest by night).
+- **Checks:** `npm run intro` (`scripts/intro.mjs`, in `qa`'s full tier):
+  hold, tilt fps, landing vs drift (`≤ max(0.8, drift × 1.6)`), scroll held,
+  console; `--query` for flags. `device-profile` gains an intro phase.
+- Tried and dropped: a slower-tailed easing (1440×900@2 tilt `81 → 41 fps`).
+- **Measured** (M4, `npm run intro`, 2 runs): 8/8, 1440×900@2 tilt
+  `80–86 fps` (0.5.39 `76–84`), 393×852@2 `120 fps`, hold `0.9–1.1 s`.
+
 ## 0.5.39 — 2026-11-25
 
 Made the opening intro pan silky smooth on phones and tablets, replaced abrupt

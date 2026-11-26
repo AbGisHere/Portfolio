@@ -776,15 +776,41 @@ vec3 sky(vec3 rd) {
   }
   return toScreen(c);
 }
+// (0.5.40) The Milky Way: a band on a great circle tilted across the sky
+// the intro opens on (it passes near the up-view's middle, low and slanting
+// at rest): a soft glow, warmer where it's dense, cut by dark dust lanes,
+// and faint stars crowding into it (\`core\`, read by stars()).
+const vec3 MW_POLE = vec3(.8, -.35, .3);
+vec3 milkyWay(vec3 rd, out float core) {
+  vec3 P = normalize(MW_POLE);
+  vec3 e1 = normalize(cross(P, vec3(0., 1., 0.)));
+  vec3 e2 = cross(P, e1);
+  float lat = dot(rd, P);
+  float lon = atan(dot(rd, e2), dot(rd, e1));
+  float width = .2 + .07 * noise(vec2(lon * 1.7, 3.1));
+  float lw = lat / width;
+  core = exp(-1.6 * lw * lw);
+  if (core < .01) return vec3(0.);
+  // Star clouds: patchy, at three scales, brighter toward the middle.
+  vec2 q = vec2(lon * 5., lat * 14.);
+  float cloud = noise(q * .8 + .3) * .5 + noise(q * 2.1 + 1.7) * .3 + noise(q * 5.3 + 4.4) * .2;
+  // Dust lanes: long and soft, wandering about the middle line.
+  float mid = lat - .05 * width * (noise(vec2(lon * 2.3, 7.7)) - .5) * 4.;
+  float lane = smoothstep(.35, .7, noise(vec2(lon * 3.2, 1.3)) * .7 + noise(vec2(lon * 8., lat * 20.)) * .3) * exp(-6. * (mid / width) * (mid / width));
+  float glow = core * smoothstep(.15, .85, cloud) * (1. - .6 * lane);
+  vec3 col = mix(vec3(.5, .58, .82), vec3(.9, .82, .7), smoothstep(.45, .9, cloud) * core);
+  return col * glow * .05;
+}
 vec3 stars(vec3 rd) {
-  vec3 c = vec3(0);
+  float core;
+  vec3 c = milkyWay(rd, core);
   for (int l = 0; l < 3; l++) {
     float sc = l == 0 ? 160. : l == 1 ? 340. : 700.;
     vec3 q = rd * sc, id = floor(q), fq = fract(q) - .5;
-    if (hash3(id + float(l) * 17.) < (l == 0 ? .975 : l == 1 ? .94 : .9)) continue;
+    if (hash3(id + float(l) * 17.) < (l == 0 ? .975 : l == 1 ? .94 : .9 - .16 * core)) continue;
     vec3 jit = vec3(hash3(id + 1.3), hash3(id + 2.7), hash3(id + 4.1)) - .5;
     float d = length(fq - jit * .6);
-    float b = l == 0 ? 1.2 + 2.5 * pow(hash3(id + 9.1), 3.) : l == 1 ? .35 + .6 * pow(hash3(id + 9.1), 3.) : .18;
+    float b = l == 0 ? 1.2 + 2.5 * pow(hash3(id + 9.1), 3.) : l == 1 ? .35 + .6 * pow(hash3(id + 9.1), 3.) : .24;
     vec3 tint = mix(vec3(1., .82, .66), vec3(.75, .84, 1.), hash3(id + 5.5));
     c += tint * b * 1.4 * (smoothstep(.08, 0., d) + (l == 0 ? .25 * exp(-d * 14.) : 0.));
   }

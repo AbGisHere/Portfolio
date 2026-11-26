@@ -64,6 +64,11 @@ export default function AtmosphereField() {
   // context is handled on its own below.
   const [renderer, setRenderer] = useState(null);
   useEffect(() => setRenderer(pickRenderer()), []);
+  // (0.5.40) The intro runs only in the GL renderer; the fallback ends its
+  // wait (and the loading line) at once.
+  useEffect(() => {
+    if (renderer === 'layers' && !document.documentElement.dataset.intro) document.documentElement.dataset.intro = 'off';
+  }, [renderer]);
   // WebGL failed. If the context was lost (a GPU reset, a backgrounded tab),
   // the layered fallback covers while WebGL gets a few more tries; if it
   // never built, the fallback stays.
@@ -89,6 +94,12 @@ export default function AtmosphereField() {
       <div className={styles.scene} aria-hidden="true" data-renderer={renderer ?? undefined}>
         {renderer === 'gl' && <MistCanvas recipe={recipe} onFail={fallBack} />}
         {renderer === 'layers' && <LayeredScene recipe={recipe} />}
+      </div>
+
+      {/* (0.5.40) The intro's loading line: fills as the mountains load
+          (MistCanvas sets --intro-p), gone once the tilt starts. */}
+      <div className={styles.loading} aria-hidden="true">
+        <span className={styles.loadingFill} />
       </div>
 
       <SunToggle recipe={recipe} />

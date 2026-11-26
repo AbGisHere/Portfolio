@@ -197,6 +197,25 @@ try {
         (function s(now) { if (last !== undefined) gaps.push(now - last); last = now;
           if (now - t0 < 1500) requestAnimationFrame(s); else { gaps.sort((a, b) => a - b); done(Math.round(1000 / gaps[Math.floor(gaps.length / 2)])); } })(performance.now());`);
 
+      // (0.5.40) The intro, as a first-time visitor sees it: the hold in the
+      // sky (to `data-intro=tilt`), then the tilt's frames to the landing.
+      await driver.get(`${BASE}/?theme=${THEME}&adapt=0`);
+      row.intro = await driver.executeAsyncScript(`const done = arguments[arguments.length - 1];
+        const t0 = 0; const gaps = []; let last; let hold = null;
+        const end = r => done(r);
+        setTimeout(() => end({ hold, timeout: true, state: document.documentElement.dataset.intro ?? null }), 30000);
+        (function s(now) {
+          const st = document.documentElement.dataset.intro;
+          if (st === 'off') return end({ off: true });
+          if (st === 'tilt') { if (hold == null) hold = Math.round(now - t0); if (last !== undefined) gaps.push(now - last); last = now; }
+          if (st === 'done' && hold != null) {
+            gaps.sort((a, b) => a - b);
+            const span = gaps.reduce((a, b) => a + b, 0);
+            return end({ hold, fps: +(1000 * gaps.length / Math.max(1, span)).toFixed(1), p95: +(gaps[Math.floor(gaps.length * 0.95)] ?? 0).toFixed(1), max: +(gaps.at(-1) ?? 0).toFixed(1), over20: gaps.filter(g => g > 20).length });
+          }
+          requestAnimationFrame(s);
+        })(performance.now());`).catch(e => ({ error: String(e.message ?? e).split('\n')[0].slice(0, 120) }));
+
       // Load: from the opening, as a visitor arrives.
       const t0 = Date.now();
       await driver.get(`${BASE}/?theme=${THEME}&adapt=0&intro=0`);
@@ -255,6 +274,7 @@ try {
       const rr = s => s ? `${s.drawnPerSec}/s×${s.callsPerDraw} cpu ${s.cpuPerFrame}` : '—';
       console.log(`\n${d.deviceName} · ${row.gpu ?? '?'} · ${row.hz ?? '?'} Hz · dpr ${row.dpr ?? '?'}`);
       if (row.load) console.log(`  load    page ${row.load.pageLoad} ms · renderer ${row.load.rendererPicked} ms · house ${typeof row.load.house === 'object' ? `mesh ${(row.load.house.meshReady / 1000).toFixed(1)} s, ready ${(row.load.house.ready / 1000).toFixed(1)} s` : row.load.house} · heap ${row.load.heapMB ?? '—'} MB`);
+      if (row.intro) console.log(`  intro   ${row.intro.off ? 'off' : row.intro.error ? row.intro.error : row.intro.timeout ? `timed out (${row.intro.state}, hold ${row.intro.hold ?? '—'} ms)` : `hold ${row.intro.hold} ms · tilt ${row.intro.fps} fps, p95 ${row.intro.p95} ms, max ${row.intro.max} ms, >20 ms ${row.intro.over20}`}`);
       if (row.rest) console.log(`  rest    ${Object.entries(row.rest).map(([k, s]) => `${k} ${rr(s)}`).join(' · ')}`);
       if (row.move) for (const [k, s] of Object.entries(row.move)) console.log(`  ${k.padEnd(11)} ${f(s)} cpu ${s.cpuPerFrame}`);
       if (row.switch) console.log(`  switch      ${f(row.switch)}`);

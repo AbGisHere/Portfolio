@@ -677,6 +677,12 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.40** (2026-11-26) keeps the intro's landing unchanged at rest (no
+reprojected `1.0×` intro frames, a fresh landing march on desktop), holds
+until the mountains are ready (`4 s` cap), adds a loading line, the 3D
+up-sky as the pre-WebGL backdrop (`npm run intro-backdrop`), a Milky Way,
+and `npm run intro` (in `qa`) with an intro phase in `device-profile`.
+
 **0.5.39** (2026-11-25) makes the opening intro pan silky smooth on phones &
 tablets, replaces post-scroll resolution snaps with gradual deceleration
 sharpening, removes close moving-mist diagonal weave, and dynamically tints the
@@ -899,6 +905,8 @@ npm run parity         # layered vs GL, pixel by pixel (local, GPU)
 npm run perf           # frame timing, fps gate, tile dropout (local, GPU); `-- --house` sweeps the house alone (info, not in qa)
 npm run switch         # no cut in a day/night switch, frame by frame (local, GPU)
 npm run qa             # runs the checks above, one table; before every push (local, GPU)
+npm run intro          # the opening's intro: hold, tilt, landing unchanged at rest (local, GPU; in qa)
+npm run intro-backdrop # renders public/intro/sky-{day,night}.jpg from a running prod server
 npm run sharp          # 5K/6K crest and grain crops, capped vs uncapped (local, GPU; not in qa)
 npm run devices        # every shader on 31 real phones and tablets (BrowserStack; keys in .env.local; not in qa, on the owner's call); `-- --climb` times the pool climb on them
 ```

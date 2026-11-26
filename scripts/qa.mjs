@@ -63,6 +63,8 @@ const CHECKS = [
   { name: 'regress', cmd: harness('parity', '--a', 'gl', '--b', 'gl', '--baseline', 'scripts/out/baseline', '--viewports', '1440x900@2,393x852@2', '--scrolls', '0,0.3,0.6,0.9,1', '--desks', '0,0.3,0.6,1', '--threshold', '0.5', '--p99', '3', '--settle', '6000'), tiers: ['full'], server: true },
   { name: 'perf', cmd: harness('perf', '--gate'), tiers: ['full'], server: true },
   { name: 'switch', cmd: harness('switch'), tiers: ['full'], server: true },
+  // (0.5.40) The opening's intro: the hold, the tilt, the landing unchanged at rest.
+  { name: 'intro', cmd: harness('intro'), tiers: ['full'], server: true },
 ];
 
 /** Runs one check; returns its exit code and output. */

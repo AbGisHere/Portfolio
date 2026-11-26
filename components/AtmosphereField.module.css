@@ -33,15 +33,54 @@
    intro opens on, looking up: sampled from it, clouds averaged out. The
    recipes' 2D skies above would flash first otherwise. */
 :global(:root:not([data-intro='done']):not([data-intro='off'])) .field {
-  background: linear-gradient(to bottom, #3f68a6 0%, #6f91bd 55%, #c2d3e0 100%);
+  /* (0.5.40) The real first frame, rendered by scripts/intro-backdrop.mjs;
+     the gradient under it until it loads. */
+  background: url('/intro/sky-day.jpg') center / cover no-repeat, linear-gradient(to bottom, #3f68a6 0%, #6f91bd 55%, #c2d3e0 100%);
 }
 
 :global(:root[data-theme='night']:not([data-intro='done']):not([data-intro='off'])) .field {
-  background: linear-gradient(to bottom, #161b2a 0%, #1e222f 55%, #2b2e3b 100%);
+  background: url('/intro/sky-night.jpg') center / cover no-repeat, linear-gradient(to bottom, #161b2a 0%, #1e222f 55%, #2b2e3b 100%);
 }
 
 .scene {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+/* (0.5.40) The intro's loading line, bottom centre: a hairline track and its
+   fill, scaled by --intro-p (MistCanvas). Shown only while the intro hasn't
+   started tilting (no data-intro yet, or 'hold'); fades out with the tilt. */
+.loading {
+  position: absolute;
+  left: 50%;
+  bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px));
+  width: 112px;
+  height: 2px;
+  margin-left: -56px;
+  border-radius: 1px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--ink) 22%, transparent);
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+
+:global(:root:not([data-intro])) .loading,
+:global(:root[data-intro='hold']) .loading {
+  opacity: 1;
+}
+
+.loadingFill {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--ink) 85%, transparent);
+  transform: scaleX(var(--intro-p, 0.04));
+  transform-origin: left center;
+  transition: transform 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingFill {
+    transition: none;
+  }
 }

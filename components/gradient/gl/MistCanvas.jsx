@@ -103,7 +103,12 @@ const PEAKS_REST_HZ = 4;
 // (at most INTRO_HOLD_MS), then eases down over INTRO_TILT_MS (shorter
 // on a return visit in the same tab session). Scroll is held meanwhile.
 const INTRO_LIFT = 52;
-const INTRO_HOLD_MS = 2500;
+// (0.5.40) The hold waits for the mountains as long as they need, to a
+// hard cap: a slow phone stays in the sky, never tilts onto nothing.
+const INTRO_HOLD_MS = 4000;
+// After the landing the background loading waits this long, so its first
+// compiles don't land on the first frames at rest.
+const INTRO_CALM_MS = 900;
 const INTRO_TILT_MS = 2200;
 const INTRO_TILT_AGAIN_MS = 900;
 const INTRO_SEEN = 'abg-intro-seen';
@@ -1856,7 +1861,7 @@ export default function MistCanvas({ recipe, onFail }) {
       restore: cleanGL,
       canRun: () => {
         if (stopped || document.hidden) return false;
-        if (orbit || !settled() || intro) {
+        if (orbit || !settled() || intro || performance.now() < introCalmUntil) {
           setTimeout(() => preparation.resume(), 100);
           return false;
         }
@@ -2719,6 +2724,17 @@ export default function MistCanvas({ recipe, onFail }) {
     let introLift = 0;
     let introUsed = false;
     let introLand = false;
+    let introCalmUntil = 0;
+    // `?introhold=1` holds in the sky for good (scripts/intro-backdrop.mjs
+    // renders the backdrop's stills from it).
+    const introHoldOnly = params.get('introhold') === '1';
+    // The loading line's progress (AtmosphereField's indicator), 0–1.
+    let introP = -1;
+    const setIntroP = p => {
+      if (Math.abs(p - introP) < 0.01) return;
+      introP = p;
+      document.documentElement.style.setProperty('--intro-p', p.toFixed(3));
+    };
     // The canvas stays hidden until its first 3D frame: until the peaks'
     // programs link, the frame falls back to the 2D scene, whose sky would
     // flash over the backdrop (which matches the 3D sky looking up).
@@ -2755,7 +2771,8 @@ export default function MistCanvas({ recipe, onFail }) {
       introLift = 0;
       setIntroLock(false);
       document.documentElement.dataset.intro = 'done';
-      preparation.resume();
+      introCalmUntil = performance.now() + INTRO_CALM_MS;
+      setTimeout(() => preparation.resume(), INTRO_CALM_MS);
     };
     // One step of the intro on GL's frame loop (no loop of its own): true
     // when the view moved. The hold ends once the mountains (and outer bake)
@@ -2764,8 +2781,12 @@ export default function MistCanvas({ recipe, onFail }) {
       if (!intro) return false;
       if (intro.phase === 'hold') {
         const gone = peaksMode === false || (peaksMode && !peaksNow);
-        const outerDone = !peaksBake?.outer || peaksBake.outerReady;
-        if ((!peaksShown || !outerDone) && !gone && now - intro.at < INTRO_HOLD_MS) return false;
+        const outerDone = !!peaksBake && (!peaksBake.outer || peaksBake.outerReady);
+        // Loading progress: the programs, the ground's bake (18 steps with
+        // the far ranges), the first shape.
+        setIntroP(!peaksMode ? 0.08 : !peaksBake ? 0.15 : Math.min(0.9, 0.15 + 0.75 * (peaksBake.step / (peaksBake.outer ? 18 : 10))) + (peaksShown && outerDone ? 0.1 : 0));
+        if (introHoldOnly || ((!peaksShown || !outerDone) && !gone && now - intro.at < INTRO_HOLD_MS)) return false;
+        setIntroP(1);
         intro.phase = 'tilt';
         intro.at = now;
         intro.k = 0;
@@ -2777,9 +2798,14 @@ export default function MistCanvas({ recipe, onFail }) {
       const k = Math.min(1, (now - intro.at) / intro.tilt);
       intro.k = k;
       // Ease in and out (smootherstep): no jolt leaving the sky or landing.
+      // (0.5.40: a longer tail was tried and dropped: it held the costly
+      // full-size rungs longer, 1440×900@2 tilt 81 → 41 fps.)
       const e = k * k * k * (k * (k * 6 - 15) + 10);
       if (k >= 1) {
-        introLand = emaGap < 24;
+        // (0.5.40) A fresh full march on landing wherever the GPU can take
+        // one frame of it: fast GPUs, and any desktop (no TDR watchdog
+        // there); slow touch GPUs keep the banded settle.
+        introLand = emaGap < 24 || !window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
         endIntro();
       } else introLift = INTRO_LIFT * (1 - e);
       return true;
@@ -5282,7 +5308,6 @@ export default function MistCanvas({ recipe, onFail }) {
         gl.activeTexture(gl.TEXTURE0 + PEAKS_HO);
         gl.bindTexture(gl.TEXTURE_2D, peaksBake.outer.t);
         gl.activeTexture(gl.TEXTURE0);
-        if (peaksGeo) { peaksGeo.key = null; peaksGeo.prevCam = null; }
       } else if (peaksBake.step === 10) {
         peaksBake.ready = true;
         for (const [unit, x] of [[PEAKS_HN, peaksBake.near], [PEAKS_HF, peaksBake.far]]) {
@@ -5290,8 +5315,6 @@ export default function MistCanvas({ recipe, onFail }) {
           gl.bindTexture(gl.TEXTURE_2D, x.t);
         }
         gl.activeTexture(gl.TEXTURE0);
-        // The shape again, from the baked ground.
-        if (peaksGeo) { peaksGeo.key = null; peaksGeo.prevCam = null; }
       }
       return peaksBake.ready;
     }
@@ -5549,7 +5572,6 @@ export default function MistCanvas({ recipe, onFail }) {
             reproj: false,
             reprojDirty: false,
             slowFrames: 0,
-            stillFrames: 0,
             rung: 0,
             rungHold: 0,
             prevMovePx: Infinity,
@@ -5563,9 +5585,7 @@ export default function MistCanvas({ recipe, onFail }) {
         // Each pass that marches them sets which: all four unless the view
         // just moved and the opening is up.
         const use = moved && peaksShown && !noBearUse ? bearUse(pk) : null;
-        const stillWait = !moved && peaksGeo.ready ? ++peaksGeo.stillFrames : 0;
         if (moved) {
-          peaksGeo.stillFrames = 0;
           const pc = peaksGeo.prevCam;
           const camJump = pc ? Math.hypot(pk.cam.pos[0] - pc.pos[0], pk.cam.pos[1] - pc.pos[1], pk.cam.pos[2] - pc.pos[2]) : Infinity;
           const cb = pc ? camBasis(pk.cam) : null;
@@ -5631,22 +5651,30 @@ export default function MistCanvas({ recipe, onFail }) {
           const nextGW = nextScale < 1 ? Math.max(1, Math.ceil(W * nextScale)) : W;
           const nextGH = nextScale < 1 ? Math.max(1, Math.ceil(H * nextScale)) : H;
           peaksGeo.scale = nextScale;
+          const hadPrev = !!(peaksGeo.refining && !peaksGeo.ready && peaksGeo.holdPrev && peaksGeo.prev);
           peaksGeo.refining = teleport;
           peaksGeo.holdPrev = false;
           peaksGeo.holdCurr = false;
           // (0.5.30, 0.5.33) Allocate `prev` lazily on the first smooth move and
           // ping-pong swap so the previous frame stays intact for reprojection.
+          // If a tiny Lenis tick interrupts a banded settle (`hadPrev`), `prev`
+          // already holds the last completed frame so reuse it without swapping.
           // Skip reprojection on the intro's landing frame and whenever stepping UP
           // in resolution (0.5× → 1.0×) so coarse texels are never copied into 1.0×.
-          const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && peaksGeo.ready && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
+          // (0.5.40) Nor for the intro's full-size rungs: a reprojected 1.0×
+          // frame is approximate, and when the tilt lands it stays on screen
+          // until the fresh march replaces it (scripts/intro.mjs saw it).
+          const canReproj = !teleport && !noReproj && !frozen && !introLand && !(intro && nextScale === 1) && peaksShown && (peaksGeo.ready || hadPrev) && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
           introLand = false;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
           if (canReproj && peaksGeo.prev) {
-            const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
-            peaksGeo.fbo = peaksGeo.prev.fbo;
-            peaksGeo.texs = peaksGeo.prev.texs;
-            peaksGeo.prev.fbo = tfbo;
-            peaksGeo.prev.texs = ttexs;
+            if (!hadPrev) {
+              const tfbo = peaksGeo.fbo, ttexs = peaksGeo.texs;
+              peaksGeo.fbo = peaksGeo.prev.fbo;
+              peaksGeo.texs = peaksGeo.prev.texs;
+              peaksGeo.prev.fbo = tfbo;
+              peaksGeo.prev.texs = ttexs;
+            }
             peaksGeo.reproj = true;
             if (nextScale === 1) peaksGeo.reprojDirty = true;
           } else {
@@ -5656,9 +5684,8 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.key = viewKey;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
-        } else if (peaksGeo.ready && (peaksGeo.scale < 1 || (peaksGeo.reprojDirty && (frozen || stillWait >= 12)))) {
+        } else if (peaksGeo.ready && (peaksGeo.scale < 1 || peaksGeo.reprojDirty)) {
           peaksGeo.slowFrames = 0;
-          peaksGeo.stillFrames = 0;
           peaksGeo.rung = 0;
           peaksGeo.rungHold = 0;
           // (0.5.33) Settled after a reduced-size scroll (or a 1.0× reprojected
@@ -5695,9 +5722,8 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.reprojDirty = false;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
-        } else if (peaksGeo.ready && peaksGeo.use && (frozen || peaksGeo.scale < 1 || stillWait >= 12)) {
+        } else if (peaksGeo.ready && peaksGeo.use) {
           peaksGeo.slowFrames = 0;
-          peaksGeo.stillFrames = 0;
           peaksGeo.rung = 0;
           peaksGeo.rungHold = 0;
           // Settled: the horizons again, toward all four (banded when live).
