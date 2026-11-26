@@ -10,7 +10,7 @@
  * stuck.
  */
 
-const LOCK_CAP_MS = 8000;
+const LOCK_CAP_MS = 18000;
 const listeners = new Set();
 let locked = false;
 let capId = null;

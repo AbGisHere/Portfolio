@@ -677,6 +677,34 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.43** (2026-11-26) fixes real-device touch intro flicker, slow-phone
+unbanded landing, and premature mid-bake tilts (`MistCanvas.jsx`,
+`components/scroll/intro.js`, `docs/parts/atmosphere.md`):
+- Locks `intro.full = !touchDevice` once at intro start instead of re-reading
+  `emaGap < 24` each frame (BrowserStack showed sky-only `hold` reads `13 ms`
+  even on OnePlus 11R Adreno 730, causing `77–155 ms` frames once mountains
+  rise at `1.0×`, while re-reading `emaGap` mid-tilt risked scale oscillation
+  and flipped `introLand` true after cheap `moveScale` frames). Desktops keep
+  full `1.0×` + full march through the tilt and land with a fresh `1.0×` march;
+  touch devices run `hold` and `tilt` at `moveScale` (`0.5×`, `scales=[0.5]`,
+  `0` scale switches) and refine to `1.0×` in TDR-safe bands after landing.
+- Guards resting `1.0×` refinement with `!intro` so `hold` and frame 0 of
+  `tilt` (`k = 0`) never kick off a wasted `1.0×` refinement before the tilt
+  drops to `0.5×`.
+- Raises `INTRO_HOLD_MS` (`4000 → 12000 ms`, `scripts/intro.mjs` `HOLD_CAP_MS`
+  matched to `12000 ms`) and `LOCK_CAP_MS` (`8000 → 18000 ms`, leaving headroom
+  past a 12 s hold + slow-frame 2.2 s tilt) so slow mobile GPUs (Adreno 619:
+  Moto G71 5G & Galaxy Tab A9+) finish shader compilation and all 18 heightmap
+  bake slices before tilting instead of tilting onto `!peaksShown` mountains
+  (fast devices still exit hold in ~1–3 s as soon as ready). Adds
+  `window.__debugIntro()` alongside `__debugHouse()`.
+- Verified: `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`, `npm run
+  intro` `4/4` (`1440×900@2` `74.8 / 70.6 fps`, `393×852@2` `106.7 / 119.5 fps`,
+  worst frame `58.8 ms`), and BrowserStack real phones (iPhone 13 `hold 1102 ms`,
+  `60 fps, p95 17 ms, max 18 ms, sw=0`; OnePlus 11R `56 fps, p95 44.4 ms, max
+  55.6 ms, sw=0` vs `43.6 fps, max 155.2 ms`; Moto G71 5G & Galaxy Tab A9+
+  complete all 18 bake steps before tilting with `land.ready = true`).
+
 **0.5.42** (2026-11-26) aligns the intro tilt's full-quality gate with its
 landing gate (`MistCanvas.jsx`, `docs/parts/atmosphere.md`): caches
 `touchDevice` (`(hover: none) and (pointer: coarse)`) and applies the same

@@ -31,7 +31,7 @@ const THEMES = String(args.themes ?? 'day,night').split(',');
 const QUERY = args.query ? `&${args.query}` : '';
 const FLOOR = 0.8;
 const RATIO = 1.6;
-const HOLD_CAP_MS = 4000;
+const HOLD_CAP_MS = 12000;
 const OUT = ensureDir(join(OUT_DIR, 'intro'));
 
 /** Mean channel difference (0–255) of two PNG buffers, in a blank page. */

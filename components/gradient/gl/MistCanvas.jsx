@@ -103,9 +103,11 @@ const PEAKS_REST_HZ = 4;
 // (at most INTRO_HOLD_MS), then eases down over INTRO_TILT_MS (shorter
 // on a return visit in the same tab session). Scroll is held meanwhile.
 const INTRO_LIFT = 52;
-// (0.5.40) The hold waits for the mountains as long as they need, to a
-// hard cap: a slow phone stays in the sky, never tilts onto nothing.
-const INTRO_HOLD_MS = 4000;
+// (0.5.40, 0.5.43) The hold waits for the mountains as long as they need, to a
+// hard cap: slow mobile GPUs (Adreno 619) need ~7–9 s to compile and bake
+// near/far/outer heightmaps, so capping at 4 s caused them to tilt mid-bake
+// onto unready mountains. Fast devices exit hold in ~1–3 s as soon as ready.
+const INTRO_HOLD_MS = 12000;
 // After the landing the background loading waits this long, so its first
 // compiles don't land on the first frames at rest.
 const INTRO_CALM_MS = 900;
@@ -2725,6 +2727,8 @@ export default function MistCanvas({ recipe, onFail }) {
     let introLift = 0;
     let introUsed = false;
     let introLand = false;
+    let introFull = null;
+    let introHoldEma = null;
     let introCalmUntil = 0;
     // `?introhold=1` holds in the sky for good (scripts/intro-backdrop.mjs
     // renders the backdrop's stills from it).
@@ -2755,7 +2759,8 @@ export default function MistCanvas({ recipe, onFail }) {
         try {
           again = sessionStorage.getItem(INTRO_SEEN) === '1';
         } catch {}
-        intro = { phase: 'hold', at: performance.now(), tilt: again ? INTRO_TILT_AGAIN_MS : INTRO_TILT_MS };
+        intro = { phase: 'hold', at: performance.now(), tilt: again ? INTRO_TILT_AGAIN_MS : INTRO_TILT_MS, full: !touchDevice };
+        introFull = intro.full;
         introLift = INTRO_LIFT;
         introUsed = true;
         setIntroLock(true);
@@ -2791,6 +2796,13 @@ export default function MistCanvas({ recipe, onFail }) {
         intro.phase = 'tilt';
         intro.at = now;
         intro.k = 0;
+        // (0.5.43) Keep full 1.0× through the tilt and landing on desktops only
+        // (`!touchDevice`). Real-device measurements showed `hold`'s sky-only
+        // `emaGap` reads low even on flagship phones (OnePlus 11R Adreno 730:
+        // 13 ms in sky → 77–155 ms frames once mountains rise at 1.0×), while
+        // `moveScale` (0.5×) + banded settle holds locked 60 fps on phones.
+        introFull = intro.full;
+        introHoldEma = Math.round(emaGap * 10) / 10;
         document.documentElement.dataset.intro = 'tilt';
         // Mark seen once the tilt actually starts (not during mount setup) so
         // React StrictMode's dev double-mount doesn't shorten fresh loads to 900 ms.
@@ -2803,10 +2815,7 @@ export default function MistCanvas({ recipe, onFail }) {
       // full-size rungs longer, 1440×900@2 tilt 81 → 41 fps.)
       const e = k * k * k * (k * (k * 6 - 15) + 10);
       if (k >= 1) {
-        // (0.5.40, 0.5.42) Match the tilt's own full-quality gate: desktops and
-        // fast touch GPUs (`emaGap < 24 ms`) land with a fresh 1.0× march; slow
-        // touch GPUs stay at `moveScale` through the tilt and settle in bands.
-        introLand = !touchDevice || emaGap < 24;
+        introLand = !!intro.full;
         endIntro();
       } else introLift = INTRO_LIFT * (1 - e);
       return true;
@@ -5597,11 +5606,10 @@ export default function MistCanvas({ recipe, onFail }) {
           const movePx = rawPx * (16.67 / Math.max(lastGap, 4));
           // Gradual progressive settle during Lenis's scroll deceleration tail on
           // fast GPUs (`emaGap < 24 ms`): steps smoothly through 3 intermediate
-          // rungs (base → +30% → +62% → 1.0×). During the intro's tilt, desktops
-          // and fast touch GPUs hold full 1.0× via `keepFull` below; slow touch
-          // GPUs (`touchDevice && emaGap >= 24`) stay on rung 0 (`moveScale`) and
-          // refine to 1.0× in TDR-safe bands after landing.
-          if (intro?.phase === 'tilt') {
+          // rungs (base → +30% → +62% → 1.0×). During the intro, desktops hold
+          // full 1.0× via `keepFull` below; touch devices stay on rung 0
+          // (`moveScale`) and refine to 1.0× in TDR-safe bands after landing.
+          if (intro) {
             peaksGeo.rung = 0;
           } else {
             const inTail = peaksGeo.rung > 0;
@@ -5639,13 +5647,13 @@ export default function MistCanvas({ recipe, onFail }) {
             : peaksGeo.rung === 1 ? baseScale + (1 - baseScale) * 0.30
             : peaksGeo.rung === 2 ? baseScale + (1 - baseScale) * 0.62
             : 1;
-          // (0.5.41, 0.5.42) Draw the intro's tilt at full size and full march
-          // (uMotion = 0) on desktops and fast touch GPUs so moving and landed
-          // frames match; slow touch GPUs (`touchDevice && emaGap >= 24`) stay at
-          // `moveScale` during the tilt and settle to 1.0× in bands on landing so
-          // they never risk GPU TDR or drop 1.0× → 0.5× on the landing frame.
-          const keepFull = introLand || (!!intro && (!touchDevice || emaGap < 24));
-          const nextScale = peaksShown && !noMotionRes && !frozen && !keepFull
+          // (0.5.41, 0.5.42, 0.5.43) Draw the intro's tilt at full size and
+          // full march (uMotion = 0) on desktops (`intro.full === true`) so
+          // moving and landed frames match; touch devices (`intro.full === false`)
+          // run hold and tilt at `moveScale` (0.5×) and refine to 1.0× in
+          // TDR-safe bands after landing.
+          const keepFull = introLand || (!!intro && !!intro.full);
+          const nextScale = (peaksShown || (!!intro && !intro.full)) && !noMotionRes && !frozen && !keepFull
             ? rungScale
             : pk.behind && frameScale < 1 ? frameScale : 1;
           const nextGW = nextScale < 1 ? Math.max(1, Math.ceil(W * nextScale)) : W;
@@ -5681,7 +5689,7 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.key = viewKey;
           peaksGeo.step = 0;
           peaksGeo.ready = false;
-        } else if (peaksGeo.ready && (peaksGeo.scale < 1 || peaksGeo.reprojDirty)) {
+        } else if (peaksGeo.ready && !intro && (peaksGeo.scale < 1 || peaksGeo.reprojDirty)) {
           peaksGeo.slowFrames = 0;
           peaksGeo.rung = 0;
           peaksGeo.rungHold = 0;
@@ -6600,6 +6608,7 @@ export default function MistCanvas({ recipe, onFail }) {
     window.__houseCam = setFreeCam;
     window.__pinDescent = pinDescent;
     window.__debugHouse = () => ({ houseBuilt: !!houseBuilt, house: !!house, lightmap: !!house?.lightmap, lightmapCache: lmTimes, meadowAt: !!meadowAt, ready: houseComplete, probesStale: !!probesStale(), times: getHouseTimes(), verticesReleased: !!houseBuilt && !houseBuilt.house.vertices && !houseBuilt.house.indices });
+    window.__debugIntro = () => ({ phase: document.documentElement.dataset.intro ?? null, full: introFull, holdEma: introHoldEma, emaGap: Math.round(emaGap * 10) / 10, touchDevice, scale: peaksGeo?.scale ?? null, refining: !!peaksGeo?.refining, ready: !!peaksGeo?.ready, shown: peaksShown, bakeStep: peaksBake?.step ?? 0, outerReady: !!peaksBake?.outerReady });
     window.__warmAllProbes = () => {
       buildHouse();
       if (!houseBuilt) return false;

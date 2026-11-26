@@ -6,6 +6,50 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.43 — 2026-11-26
+
+Fixes touch-device intro tilt flicker, slow-phone unbanded landing, and
+premature mid-bake tilts, verified on real BrowserStack phones & tablets
+(`MistCanvas.jsx`, `components/scroll/intro.js`, `docs/parts/atmosphere.md`).
+
+- **Fixed intro quality decision (`MistCanvas.jsx`):** 0.5.42 re-evaluated
+  `emaGap < 24` on every frame of the intro tilt and on landing, which created
+  two feedback-loop bugs on touch devices: borderline phones could oscillate
+  between `1.0×` and `0.5×` mid-tilt, and slow phones running the tilt at
+  `0.5×` pulled `emaGap` under `24 ms` and triggered an unbanded `1.0×` landing
+  march. Real-device BrowserStack profiling also showed that `hold`'s sky-only
+  `emaGap` misclassifies flagship phones (OnePlus 11R Adreno 730 read `13 ms`
+  in sky, then dropped to `77–155 ms` frames once full `1.0×` mountains rose
+  into view). `intro.full` is now fixed once to `!touchDevice`: desktops keep
+  full `1.0×` + full march through the tilt and a fresh `1.0×` landing march,
+  while touch devices run `hold` and `tilt` at `moveScale` (`0.5×`, `0` scale
+  switches) and refine to `1.0×` in TDR-safe bands (`prev` + `prevHor`) after
+  landing.
+- **No wasted hold / frame-0 refinement (`MistCanvas.jsx`):** guarded the
+  resting `peaksGeo.scale < 1` refinement branch with `!intro` so `hold` and
+  frame 0 of `tilt` (`k = 0`) never start a `1.0×` refinement right before the
+  tilt marches at `0.5×`.
+- **Wait for compile + bake on slow mobile GPUs (`MistCanvas.jsx`,
+  `components/scroll/intro.js`, `scripts/intro.mjs`):** raised `INTRO_HOLD_MS`
+  (`4000 → 12000 ms`, `HOLD_CAP_MS` matched in `scripts/intro.mjs`) and
+  `LOCK_CAP_MS` (`8000 → 18000 ms`, leaving margin past a 12 s hold plus a
+  slow-frame 2.2 s tilt). On Adreno 619 (Moto G71 5G & Galaxy Tab A9+), the
+  `4 s` hold cap previously expired before shader compile and the 18 heightmap
+  bake slices finished, causing the camera to tilt onto unready (`!peaksShown`)
+  mountains; fast devices still exit hold in ~1–3 s as soon as
+  `peaksShown && outerDone`. Added read-only `window.__debugIntro()`.
+- **Verified:** `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`,
+  `npm run intro` `4/4` (`1440×900@2` `74.8 / 70.6 fps`, `393×852@2`
+  `106.7 / 119.5 fps`, worst tilt frame `58.8 ms`), and BrowserStack real
+  devices:
+
+  | Device | GPU / Hz | Before (`emaGap` gate + 4 s hold) | After (`!touchDevice` + 12 s hold + `!intro` guard) |
+  |---|---|---|---|
+  | **iPhone 13** | Apple A15 · 60 Hz | `hold 2559 ms`, `60 fps` (`max 19 ms`), `sw=1` | `hold 1102 ms`, `60 fps` (`p50 17 / p95 17 / max 18 ms`), `scales=[0.5] sw=0`, settles to `1.0×` |
+  | **OnePlus 11R** | Adreno 730 · 90 Hz | `full=true`, `43.6 fps` (`p95 77.7 / max 155.2 ms`) | `hold 3095 ms`, `56 fps` (`p50 11.2 / p95 44.4 / max 55.6 ms`), `scales=[0.5] sw=0`, settles to `1.0×` |
+  | **Moto G71 5G** | Adreno 619 · 60 Hz | tilted mid-bake (`land.ready=false`, `settle.ready=false`) | finishes all 18 bake steps before tilting (`shown=true, outer=true, land.ready=true`), settles in bands |
+  | **Galaxy Tab A9+** | Adreno 619 · 60 Hz | tilted mid-bake (`land.ready=false`, `settle.ready=false`) | finishes all 18 bake steps before tilting (`shown=true, outer=true, land.ready=true`), settles in bands |
+
 ## 0.5.42 — 2026-11-26
 
 Fixes a slow-touch contradiction introduced in 0.5.41 and aligns the intro's
