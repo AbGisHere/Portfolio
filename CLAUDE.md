@@ -677,6 +677,10 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.41** (2026-11-26) draws the intro's tilt at full size with the full
+march (no `moveScale`, no `uMotion`; reprojection only while moving), so the
+tilt looks like the frame it lands on: 1440×900@2 tilt 78 / 65 fps day / night.
+
 **0.5.40** (2026-11-26) keeps the intro's landing unchanged at rest (no
 reprojected `1.0×` intro frames, a fresh landing march on desktop), holds
 until the mountains are ready (`4 s` cap), adds a loading line, the 3D

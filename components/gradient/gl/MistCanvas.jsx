@@ -5644,7 +5644,10 @@ export default function MistCanvas({ recipe, onFail }) {
           // During the intro's tilt, use the same progressive rungs (`baseScale`
           // during the fast pan → +30% → +62% → 1.0× during ease-out) so phones
           // and tablets stay silky smooth; `introLand` holds 1.0× on landing.
-          const keepFull = introLand;
+          // (0.5.41) The whole intro at full quality (the owner: the tilt
+          // and the rest it lands on must look the same): full size, the
+          // full march (uMotion follows scale < 1), no reprojection.
+          const keepFull = introLand || !!intro;
           const nextScale = peaksShown && !noMotionRes && !frozen && !keepFull
             ? rungScale
             : pk.behind && frameScale < 1 ? frameScale : 1;
@@ -5664,7 +5667,7 @@ export default function MistCanvas({ recipe, onFail }) {
           // (0.5.40) Nor for the intro's full-size rungs: a reprojected 1.0×
           // frame is approximate, and when the tilt lands it stays on screen
           // until the fresh march replaces it (scripts/intro.mjs saw it).
-          const canReproj = !teleport && !noReproj && !frozen && !introLand && !(intro && nextScale === 1) && peaksShown && (peaksGeo.ready || hadPrev) && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
+          const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && (peaksGeo.ready || hadPrev) && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
           introLand = false;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
           if (canReproj && peaksGeo.prev) {

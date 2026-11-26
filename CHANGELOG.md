@@ -6,6 +6,22 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.41 — 2026-11-26
+
+The intro's tilt looks like the frame it lands on (the owner still saw it
+change between moving and stopped): the mountains are drawn full size with
+the full march through the whole tilt, never `moveScale` or the `uMotion`
+fast path (`MistCanvas.jsx`, `keepFull` while `intro`). Reprojection stays
+on while it moves (full-size texels, sub-pixel resampling), and the landing
+is always a fresh march (0.5.40), so nothing approximate is left at rest.
+
+- Costed with `?skip=` (1440×900@2 night): the tilt's cost is the light pass
+  (≥ 12 ms) and the shape march (~10 ms); coarse and horizons are small.
+  Fully fresh frames with no reprojection were tried: 30–65 fps.
+- **Measured** (M4, `npm run intro`, 6/6 landing ≤ drift): tilt 1440×900@2
+  `78.2` day / `65.2` night fps (0.5.40 `80–86` / `83–85`), 1728×1117@2
+  `69.8` / `52.5`, 393×852@2 `110–120`. `qa` and phones still to run.
+
 ## 0.5.40 — 2026-11-26
 
 The intro's landing no longer changes when it comes to rest, the intro gets a
