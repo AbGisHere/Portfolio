@@ -6,6 +6,36 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.42 — 2026-11-26
+
+Fixes a slow-touch contradiction introduced in 0.5.41 and aligns the intro's
+tilt and landing quality gates (`MistCanvas.jsx`, `docs/parts/atmosphere.md`).
+
+- **Unified intro quality gate (`MistCanvas.jsx`):** 0.5.41 set
+  `keepFull = introLand || !!intro` while `introLand` was gated by
+  `emaGap < 24 || !coarsePointer`. On slow touch GPUs (e.g. Adreno 619), that
+  forced unbanded `1.0×` during the tilt (risking GPU TDR and choppiness) and
+  then dropped to `0.5×` on the landing frame before refining back to `1.0×` in
+  bands. Both `keepFull` and `introLand` now share `!touchDevice || emaGap < 24`
+  (with `touchDevice` cached from `(hover: none) and (pointer: coarse)`):
+  desktops and fast touch GPUs keep full `1.0×` + full march (`uMotion = 0`)
+  with temporal reprojection throughout the tilt and a fresh `1.0×` march on
+  landing, while slow touch GPUs stay on rung 0 (`moveScale`) through the tilt
+  and refine cleanly to `1.0×` in TDR-safe bands (`prev` + `prevHor`) once the
+  tilt lands.
+- **Cleanup & docs (`MistCanvas.jsx`, `docs/parts/atmosphere.md`):** removed
+  the unreachable intro-rung ramp and contradictory comments in
+  `MistCanvas.jsx`, and updated the `?intro=0` hook docs in
+  `docs/parts/atmosphere.md` to document both the intro full-quality/banded
+  split and the 0.5.39 scroll deceleration rungs.
+- **Verified** (M4, production build): `test:unit 88/88`, `test:adaptive 9/9`,
+  `hygiene 21/21`, `npm run intro` `6/6` (all landings `≤ drift`:
+  1440×900@2 `76.3` day / `65.2` night fps, 1728×1117@2 `52.1` / `59.3`,
+  393×852@2 `120.0` / `119.1`), and day `parity` spot-check (`6/6`,
+  `1440×900@2` `s0`/`s1`/`d0.6` and `393×852@2` `s1`/`d0.6` all `mean 0.00,
+  p99 0`; `393×852@2` `s0` `mean 0.23, p99 1`; `settle after a scroll: shape 1
+  at rest`).
+
 ## 0.5.41 — 2026-11-26
 
 The intro's tilt looks like the frame it lands on (the owner still saw it

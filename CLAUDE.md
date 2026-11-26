@@ -677,6 +677,22 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.42** (2026-11-26) aligns the intro tilt's full-quality gate with its
+landing gate (`MistCanvas.jsx`, `docs/parts/atmosphere.md`): caches
+`touchDevice` (`(hover: none) and (pointer: coarse)`) and applies the same
+`!touchDevice || emaGap < 24` check to both `keepFull` and `introLand`. Desktops
+and fast touch GPUs keep full `1.0×` + full march (`uMotion = 0`) with temporal
+reprojection through the tilt and a fresh `1.0×` march on landing; slow touch
+GPUs (`touchDevice && emaGap >= 24 ms`) stay on rung 0 (`moveScale`) through the
+tilt and refine to `1.0×` in TDR-safe bands (`prev` + `prevHor`) on landing
+instead of risking TDR or dropping `1.0× → 0.5×` on the landing frame. Removes
+the dead intro-rung branch and stale comments in `MistCanvas.jsx`, and updates
+`docs/parts/atmosphere.md`. Verified: `test:unit 88/88`, `test:adaptive 9/9`,
+`hygiene 21/21`, `npm run intro` `6/6` (1440×900@2 `76.3 / 65.2 fps`,
+1728×1117@2 `52.1 / 59.3 fps`, 393×852@2 `120 / 119.1 fps`, all landings
+`<= drift`), and day `parity` spot-check (`6/6`, `mean 0.00–0.23, p99 0–1`,
+`settle after a scroll: shape 1 at rest`).
+
 **0.5.41** (2026-11-26) draws the intro's tilt at full size with the full
 march (no `moveScale`, no `uMotion`; reprojection only while moving), so the
 tilt looks like the frame it lands on: 1440×900@2 tilt 78 / 65 fps day / night.

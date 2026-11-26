@@ -2712,6 +2712,7 @@ export default function MistCanvas({ recipe, onFail }) {
     let visible = !document.hidden;
     let onScreen = true;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const touchDevice = !!window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
     let bloom;
     // (0.4.13) Start the house's build (above) once the page is idle.
     // Build only once the visitor approaches the desk; never queue the worker
@@ -2802,10 +2803,10 @@ export default function MistCanvas({ recipe, onFail }) {
       // full-size rungs longer, 1440×900@2 tilt 81 → 41 fps.)
       const e = k * k * k * (k * (k * 6 - 15) + 10);
       if (k >= 1) {
-        // (0.5.40) A fresh full march on landing wherever the GPU can take
-        // one frame of it: fast GPUs, and any desktop (no TDR watchdog
-        // there); slow touch GPUs keep the banded settle.
-        introLand = emaGap < 24 || !window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+        // (0.5.40, 0.5.42) Match the tilt's own full-quality gate: desktops and
+        // fast touch GPUs (`emaGap < 24 ms`) land with a fresh 1.0× march; slow
+        // touch GPUs stay at `moveScale` through the tilt and settle in bands.
+        introLand = !touchDevice || emaGap < 24;
         endIntro();
       } else introLift = INTRO_LIFT * (1 - e);
       return true;
@@ -5594,17 +5595,14 @@ export default function MistCanvas({ recipe, onFail }) {
           // so a single longer frame never looks like a sudden scroll acceleration.
           const rawPx = pc ? (angDelta + camJump / (pk.behind ? 2500 : 1500)) * cb.lens * (H * 0.5) : Infinity;
           const movePx = rawPx * (16.67 / Math.max(lastGap, 4));
-          // Gradual progressive settle during the intro's ease-out and Lenis's
-          // scroll deceleration tail on fast GPUs (emaGap < 24 ms): steps smoothly
-          // through 3 intermediate rungs (base → +30% → +62% → 1.0×) so the
-          // mountains sharpen little by little while gliding into rest instead of
-          // snapping abruptly or forcing full 1.0× during fast motion on mobile.
+          // Gradual progressive settle during Lenis's scroll deceleration tail on
+          // fast GPUs (`emaGap < 24 ms`): steps smoothly through 3 intermediate
+          // rungs (base → +30% → +62% → 1.0×). During the intro's tilt, desktops
+          // and fast touch GPUs hold full 1.0× via `keepFull` below; slow touch
+          // GPUs (`touchDevice && emaGap >= 24`) stay on rung 0 (`moveScale`) and
+          // refine to 1.0× in TDR-safe bands after landing.
           if (intro?.phase === 'tilt') {
-            const k = intro.k ?? 0;
-            const want = emaGap < 24 || peaksGeo.rung > 0
-              ? (k >= 0.94 ? 3 : k >= 0.84 ? 2 : k >= 0.72 ? 1 : 0)
-              : 0;
-            if (want > peaksGeo.rung) peaksGeo.rung = want;
+            peaksGeo.rung = 0;
           } else {
             const inTail = peaksGeo.rung > 0;
             const slowing = inTail || movePx <= peaksGeo.prevMovePx * 1.05;
@@ -5641,13 +5639,12 @@ export default function MistCanvas({ recipe, onFail }) {
             : peaksGeo.rung === 1 ? baseScale + (1 - baseScale) * 0.30
             : peaksGeo.rung === 2 ? baseScale + (1 - baseScale) * 0.62
             : 1;
-          // During the intro's tilt, use the same progressive rungs (`baseScale`
-          // during the fast pan → +30% → +62% → 1.0× during ease-out) so phones
-          // and tablets stay silky smooth; `introLand` holds 1.0× on landing.
-          // (0.5.41) The whole intro at full quality (the owner: the tilt
-          // and the rest it lands on must look the same): full size, the
-          // full march (uMotion follows scale < 1), no reprojection.
-          const keepFull = introLand || !!intro;
+          // (0.5.41, 0.5.42) Draw the intro's tilt at full size and full march
+          // (uMotion = 0) on desktops and fast touch GPUs so moving and landed
+          // frames match; slow touch GPUs (`touchDevice && emaGap >= 24`) stay at
+          // `moveScale` during the tilt and settle to 1.0× in bands on landing so
+          // they never risk GPU TDR or drop 1.0× → 0.5× on the landing frame.
+          const keepFull = introLand || (!!intro && (!touchDevice || emaGap < 24));
           const nextScale = peaksShown && !noMotionRes && !frozen && !keepFull
             ? rungScale
             : pk.behind && frameScale < 1 ? frameScale : 1;
@@ -5658,15 +5655,12 @@ export default function MistCanvas({ recipe, onFail }) {
           peaksGeo.refining = teleport;
           peaksGeo.holdPrev = false;
           peaksGeo.holdCurr = false;
-          // (0.5.30, 0.5.33) Allocate `prev` lazily on the first smooth move and
-          // ping-pong swap so the previous frame stays intact for reprojection.
-          // If a tiny Lenis tick interrupts a banded settle (`hadPrev`), `prev`
-          // already holds the last completed frame so reuse it without swapping.
-          // Skip reprojection on the intro's landing frame and whenever stepping UP
-          // in resolution (0.5× → 1.0×) so coarse texels are never copied into 1.0×.
-          // (0.5.40) Nor for the intro's full-size rungs: a reprojected 1.0×
-          // frame is approximate, and when the tilt lands it stays on screen
-          // until the fresh march replaces it (scripts/intro.mjs saw it).
+          // (0.5.30, 0.5.33, 0.5.41) Allocate `prev` lazily on the first smooth
+          // move and ping-pong swap for temporal reprojection while moving.
+          // If a tiny Lenis tick interrupts a banded settle (`hadPrev`), reuse
+          // `prev` without swapping. Skip reprojection on the intro's landing
+          // frame (`!introLand`) so resting peaks are always a fresh march, and
+          // whenever stepping up in resolution (`pc.gw >= nextGW && pc.gh >= nextGH`).
           const canReproj = !teleport && !noReproj && !frozen && !introLand && peaksShown && (peaksGeo.ready || hadPrev) && !!pc && pc.gw >= nextGW && pc.gh >= nextGH;
           introLand = false;
           if (canReproj && !peaksGeo.prev) peaksGeo.prev = floatTarget(W, H, 2, ['rgba16f', 'rgba8']);
