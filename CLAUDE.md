@@ -677,6 +677,34 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.45** (2026-11-27) eliminates the 0.5.37–0.5.39 scroll FPS regression
+(`MistCanvas.jsx`, `peaksShader.js`, `SmoothScroll.jsx`,
+`docs/parts/atmosphere.md`):
+- Fixes the `0.5.39` scroll deceleration rungs (`MistCanvas.jsx`), which were
+  climbing to unbanded `1.0×` (`uMotion = 0`) during steady scrolling in
+  `0–30%` of the track (`285–383` frames at `19–22 ms`, `95–97%` of all `>20 ms`
+  frames): tracks passive `wheel` timestamps (`lastWheelAt`), only steps
+  rungs while coasting (`>140 ms` after wheel), strictly decelerating, on
+  `emaGap < 12 ms` GPUs, and caps coasting rungs at `+30% → +62%` so the
+  TDR-safe banded settle finishes `1.0×` at rest. Restores the `650_000 px`
+  motion budget above `5.2M px` and widens `syncThemeColor()` throttling
+  (`diff >= 5`, `180 ms`).
+- Restores `v0.5.35`'s `uMotion` fast path in `peaksShader.js` (`128` march
+  steps, `(1. + t * .0024)` step floor, `aaMid`/`aaFine` skipped in motion,
+  `8` moving mist steps while keeping `0.5.39`'s smooth `dt`-gated IGN jitter)
+  and adds bit-exact early-outs to `stars()` (`rd.y <= .02`) and `milkyWay()`
+  (`abs(lat) > .48`), lifting `1728×1117@2` night switch `95.2 → 110.8 fps`.
+  Resting `uMotion == 0` frames remain bit-identical.
+- Attaches `SmoothScroll.jsx`'s non-passive `wheel`/`touchmove`/`keydown`
+  intro blockers only while `isIntroLocked()` is active and removes them once
+  the intro finishes.
+- Verified (Apple M4, Battery Power A/B): `1440×900@2` scroll `82.5 → 106.9 fps`
+  (`194 → 1` `>20 ms`, `max 58.5 → 24.3 ms`, matching unmodified `v0.5.35`'s
+  `107.4 fps / 5 >20 ms`), `1728×1117@2` `74.9 → 97.9–98.5 fps` (`275 → 2`
+  `>20 ms`, `max 48.9 → 25.0 ms` vs `v0.5.35`'s `101.4 fps`), `393×852@2`
+  `119.9 fps (1 >20 ms)`; `test:unit 88/88`, `test:adaptive 9/9`, `hygiene
+  21/21`, `intro 4/4` (`worst 48.6 ms`), day `parity 6/6` (`mean 0.00, p99 0`).
+
 **0.5.44** (2026-11-27) declares `precision highp int` in 35 shaders
 across 15 files (the trees' and desk's 32-bit hashes ran at mediump on phone
 GPUs; `houseLightmap.js` left as is, its hash covers the shader text), has

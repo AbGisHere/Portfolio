@@ -202,11 +202,27 @@ export default function SmoothScroll() {
       }
       e.preventDefault();
     };
-    const onIntro = on => (on ? lenis?.stop() : lenis?.start());
+    let introBound = false;
+    const bindIntroBlock = on => {
+      if (on === introBound) return;
+      introBound = on;
+      if (on) {
+        window.addEventListener('wheel', blockInput, { passive: false });
+        window.addEventListener('touchmove', blockInput, { passive: false });
+        window.addEventListener('keydown', blockInput);
+      } else {
+        window.removeEventListener('wheel', blockInput);
+        window.removeEventListener('touchmove', blockInput);
+        window.removeEventListener('keydown', blockInput);
+      }
+    };
+    const onIntro = on => {
+      bindIntroBlock(on);
+      if (on) lenis?.stop();
+      else lenis?.start();
+    };
     const unsubscribeIntro = subscribeIntro(onIntro);
-    window.addEventListener('wheel', blockInput, { passive: false });
-    window.addEventListener('touchmove', blockInput, { passive: false });
-    window.addEventListener('keydown', blockInput);
+    bindIntroBlock(isIntroLocked());
 
     if (!native()) {
       if ('requestIdleCallback' in window) {
@@ -220,9 +236,7 @@ export default function SmoothScroll() {
       dead = true;
       unsubscribeHouse();
       unsubscribeIntro();
-      window.removeEventListener('wheel', blockInput);
-      window.removeEventListener('touchmove', blockInput);
-      window.removeEventListener('keydown', blockInput);
+      bindIntroBlock(false);
       remeasure.current = null;
       if (idleId != null) {
         if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);

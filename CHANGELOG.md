@@ -6,6 +6,45 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.45 — 2026-11-27
+
+Eliminates the 0.5.37–0.5.39 scroll FPS regression (`MistCanvas.jsx`,
+`peaksShader.js`, `SmoothScroll.jsx`, `docs/parts/atmosphere.md`), restoring
+`v0.5.35`-level scroll performance with bit-identical resting frames (`0.00`
+parity diff).
+
+- **Coasting-only scroll rungs (`MistCanvas.jsx`):** 0.5.39's deceleration
+  rungs treated steady scrolling as "slowing" (`movePx <= prevMovePx * 1.05`)
+  and pinned `peaksGeo.scale = 1.0` (`uMotion = 0`, 190-step unbanded march)
+  for `285–383` moving frames in the `0–30%` mountain flight — accounting for
+  `95–97%` of all `>20 ms` frames. Rungs now only advance during Lenis's
+  coasting tail (`>140 ms` after the last passive `wheel` event, `emaGap < 12 ms`,
+  strictly decelerating) and cap at `+30% → +62%` (`uMotion = 1`) so the
+  TDR-safe banded settle finishes `1.0×` cleanly at rest. Active scrolling
+  stays at `baseScale`.
+- **Restored `uMotion` fast path & `milkyWay()` early-outs (`peaksShader.js`,
+  `MistCanvas.jsx`):** restored `v0.5.35`'s motion march (`128` steps,
+  `(1. + t * .0024)` floor, `aaMid`/`aaFine` skipped in motion), `8` moving
+  mist steps while keeping `0.5.39`'s smooth `dt`-gated Interleaved Gradient
+  Noise jitter, and `650_000 px` motion cap above `5.2M px`. Added bit-exact
+  early-outs in `stars()` (`rd.y <= .02`) and `milkyWay()` (`abs(lat) > .48`),
+  lifting `1728×1117@2` night switch `95.2 → 110.8 fps`. Widened
+  `syncThemeColor()` throttling (`diff >= 5`, `180 ms`).
+- **Scoped intro input blockers (`SmoothScroll.jsx`):** non-passive `wheel`,
+  `touchmove`, and `keydown` listeners are now attached only while
+  `isIntroLocked()` is true and removed immediately when the intro ends.
+- **Verified:** `test:unit 88/88`, `test:adaptive 9/9`, `hygiene 21/21`,
+  `npm run intro` `4/4` (`1440×900@2` `76.7 / 77.9 fps`, `393×852@2`
+  `120.0 / 119.1 fps`, worst tilt frame `48.6 ms`), day `parity` `6/6`
+  (`mean 0.00, p99 0`, `settle after a scroll: shape 1 at rest`), and M4
+  Battery Power A/B `perf.mjs`:
+
+  | Build (Apple M4, Battery Power) | `1440×900@2` GL scroll | `1728×1117@2` GL scroll | `393×852@2` GL scroll |
+  |---|---|---|---|
+  | **0.5.44 (before)** | `82.5 fps` (`194 >20 ms`, `max 58.5 ms`) | `74.9 fps` (`275 >20 ms`, `max 48.9 ms`) | `119.6 fps` (`0 >20 ms`) |
+  | **0.5.35 (A/B baseline)** | `107.4 fps` (`5 >20 ms`, `max 26.8 ms`) | `101.4 fps` (`2 >20 ms`, `max 33.0 ms`) | — |
+  | **0.5.45 (after)** | `106.9 fps` (`1 >20 ms`, `max 24.3 ms`) | `97.9–98.5 fps` (`2 >20 ms`, `max 25.0 ms`) | `119.9 fps` (`1 >20 ms`) |
+
 ## 0.5.44 — 2026-11-27
 
 Fixes from a read of the whole codebase.

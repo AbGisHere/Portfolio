@@ -380,7 +380,7 @@ uniform float uMotion;
 float march(vec3 ro, vec3 rd, float tmax, float t0) {
   float t = max(t0, 1.), tp = t, hp = 1.;
   bool gone = false;
-  int maxSteps = uMotion > .5 ? 152 : 190;
+  int maxSteps = uMotion > .5 ? 128 : 190;
   int binSteps = uMotion > .5 ? 3 : 5;
   for (int i = 0; i < 190; i++) {
     if (i >= maxSteps) break;
@@ -404,7 +404,7 @@ float march(vec3 ro, vec3 rd, float tmax, float t0) {
     if (t > tmax || (rd.y > 0. && p.y > CEILING)) { gone = true; break; }
     tp = t; hp = h;
     float kStep = (t < 2600. && p.z < ${f(SHELF.z - 200)}) ? .24 : .42;
-    t += max(h * kStep, uMotion > .5 ? (.75 + t * .0016) : (.5 + t * .0014));
+    t += max(h * kStep, uMotion > .5 ? (1. + t * .0024) : (.5 + t * .0014));
   }
   // Out of steps while still skimming the ground: only downward rays can
   // count as ground (an upward ray over the shelf must never fake a hit).
@@ -540,9 +540,7 @@ G geo(vec3 rd, float tStart) {
       float sdU = (mx - m0) * .80 * aaMacro;
       float sdV = (my - m0) * .56 * aaMacro;
       // Mid-scale chiseled granite blocks & diagonal cleavage planes (aperiodic).
-      // Naturally anti-aliased by pxW (which scales with uRes.y) so rock detail
-      // stays consistent while scrolling instead of popping in when scroll stops.
-      if (aaMid > .01) {
+      if (aaMid > .01 && uMotion < .5) {
         vec2 sq = vec2(fu.x / 26. + geoBand * .8, (fu.y * .85 + dip * .15) / 34.);
         float s0 = 1. - abs(2. * noise(sq) - 1.);
         float sx = 1. - abs(2. * noise(sq + vec2(.22, 0.)) - 1.);
@@ -551,7 +549,7 @@ G geo(vec3 rd, float tStart) {
         dV += (sy - s0) * 1.05 * aaMid;
       }
       // Fine granite micro-crag ONLY when well-resolved by screen pixels.
-      if (aaFine > .01) {
+      if (aaFine > .01 && uMotion < .5) {
         vec2 fq = fu / 11.;
         float f0 = noise(fq), fx = noise(fq + vec2(.25, 0.)), fy = noise(fq + vec2(0., .25));
         dU += (fx - f0) * .58 * aaFine;
@@ -577,15 +575,16 @@ G geo(vec3 rd, float tStart) {
     t1 = min(end, max(ta, tb));
   } else if (uCam.y > top || uCam.y < lo) t1 = 0.;
   if (t1 > t0) {
-    // Keep all 14 mist steps in motion and gate low-variance Interleaved
-    // Gradient Noise by step width dt so close mist stays silky smooth (no
-    // 2×2 diagonal weave) while grazing far-valley mist avoids slicing bands
-    // (leaving resting uMotion == 0 untouched).
-    float dt = (t1 - t0) / 14.;
+    // 8 mist steps in motion with dt-gated Interleaved Gradient Noise keeps
+    // close mist silky smooth (no 2×2 weave or white-noise grain) while staying
+    // inside the 120 Hz budget (leaving resting uMotion == 0 untouched).
+    int mSteps = uMotion > .5 ? 8 : 14;
+    float dt = (t1 - t0) / float(mSteps);
     float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
     float mJit = .5 + (ign - .5) * .5 * smoothstep(150., 600., dt);
     float j = (uMotion > .5 ? mJit : hash(gl_FragCoord.xy)) * dt;
     for (int i = 0; i < 14; i++) {
+      if (i >= mSteps) break;
       vec3 q = uCam + rd * (t0 + j + dt * float(i));
       float dn = mistAt(q) * dt;
       float a = exp(-tau);
@@ -783,9 +782,10 @@ vec3 sky(vec3 rd) {
 const vec3 MW_POLE = vec3(.8, -.35, .3);
 vec3 milkyWay(vec3 rd, out float core) {
   vec3 P = normalize(MW_POLE);
+  float lat = dot(rd, P);
+  if (abs(lat) > .48) { core = 0.; return vec3(0.); }
   vec3 e1 = normalize(cross(P, vec3(0., 1., 0.)));
   vec3 e2 = cross(P, e1);
-  float lat = dot(rd, P);
   float lon = atan(dot(rd, e2), dot(rd, e1));
   float width = .2 + .07 * noise(vec2(lon * 1.7, 3.1));
   float lw = lat / width;
@@ -802,6 +802,7 @@ vec3 milkyWay(vec3 rd, out float core) {
   return col * glow * .05;
 }
 vec3 stars(vec3 rd) {
+  if (rd.y <= .02) return vec3(0.);
   float core;
   vec3 c = milkyWay(rd, core);
   for (int l = 0; l < 3; l++) {

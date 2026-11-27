@@ -2714,6 +2714,7 @@ export default function MistCanvas({ recipe, onFail }) {
     let last = 0;
     let lastGap = 16;
     let emaGap = 16;
+    let lastWheelAt = -Infinity;
     let woke = true;
     let visible = !document.hidden;
     let onScreen = true;
@@ -3230,10 +3231,10 @@ export default function MistCanvas({ recipe, onFail }) {
       }
       const ri = Math.round(r), gi = Math.round(g), bi = Math.round(b);
       const diff = Math.max(Math.abs(ri - themeLastR), Math.abs(gi - themeLastG), Math.abs(bi - themeLastB));
-      if (themeLastR >= 0 && diff < 3) return;
+      if (themeLastR >= 0 && diff < 5) return;
       const hex = `#${((1 << 24) | (ri << 16) | (gi << 8) | bi).toString(16).slice(1)}`;
       const now = performance.now();
-      const wait = 60 - (now - themeLastAt);
+      const wait = 180 - (now - themeLastAt);
       if (themeLastR >= 0 && wait > 0) {
         window.clearTimeout(themeTimer);
         themeTimer = window.setTimeout(() => {
@@ -5608,21 +5609,23 @@ export default function MistCanvas({ recipe, onFail }) {
           // so a single longer frame never looks like a sudden scroll acceleration.
           const rawPx = pc ? (angDelta + camJump / (pk.behind ? 2500 : 1500)) * cb.lens * (H * 0.5) : Infinity;
           const movePx = rawPx * (16.67 / Math.max(lastGap, 4));
-          // Gradual progressive settle during Lenis's scroll deceleration tail on
-          // fast GPUs (`emaGap < 24 ms`): steps smoothly through 3 intermediate
-          // rungs (base → +30% → +62% → 1.0×). During the intro, desktops hold
-          // full 1.0× via `keepFull` below; touch devices stay on rung 0
-          // (`moveScale`) and refine to 1.0× in TDR-safe bands after landing.
+          // Gradual progressive settle during Lenis's coasting deceleration tail
+          // (only after wheel input pauses > 140 ms on 120 Hz-capable GPUs,
+          // `emaGap < 12 ms`): steps smoothly through 2 intermediate rungs
+          // (base → +30% → +62%, keeping `uMotion = 1`) and lets the TDR-safe
+          // banded settle finish `1.0×` once motion stops. Active steady
+          // scrolling stays on rung 0 (`baseScale`) at 120 fps.
           if (intro) {
             peaksGeo.rung = 0;
           } else {
             const inTail = peaksGeo.rung > 0;
-            const slowing = inTail || movePx <= peaksGeo.prevMovePx * 1.05;
-            const fastEnough = inTail || emaGap < 24;
-            const canGradual = fastEnough && (!pk.behind || frameScale === 1);
-            if (canGradual && movePx < 15 && (inTail ? movePx < 16 : slowing)) {
+            const coasting = performance.now() - lastWheelAt > 140;
+            const slowing = inTail ? movePx <= peaksGeo.prevMovePx * 1.02 : movePx < peaksGeo.prevMovePx * 0.96;
+            const fastEnough = emaGap < 12;
+            const canGradual = coasting && fastEnough && (!pk.behind || frameScale === 1);
+            if (canGradual && movePx < 10 && slowing) {
               peaksGeo.slowFrames++;
-              const want = movePx < 3.5 ? 3 : movePx < 7.5 ? 2 : movePx < 13 ? 1 : 0;
+              const want = movePx < 4.5 ? 2 : movePx < 9 ? 1 : 0;
               if (want > peaksGeo.rung && peaksGeo.slowFrames >= 3 && peaksGeo.rungHold >= 3) {
                 peaksGeo.rung++;
                 peaksGeo.rungHold = 0;
@@ -5641,16 +5644,15 @@ export default function MistCanvas({ recipe, onFail }) {
           // without allocating `prev` so Adreno 619 never hits GPU TDR.
           // Never trigger during normal flight scrolling (!pk.behind).
           const teleport = !frozen && peaksShown && !!pk.behind && !houseComplete && camJump > 200;
-          // Keep large Retina / 5K / 6K moving frames at the same ~1.30M px
-          // (1440×900) budget that holds 120 fps on M4 (~1418×917 on 1728×1117@2,
-          // ~1520×855 on 4K-capped 5K/6K@2 — 2.3× more pixels than 560k) while
-          // stepping smoothly up through progressive rungs during deceleration.
-          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(1_300_000 / (W * H))) : 0.5;
+          // Keep large Retina / 5K / 6K moving frames inside the 120 Hz (8.33 ms)
+          // budget alongside full-res `peaks-lit` (~650k px: ~1003×649 on
+          // 1728×1117@2, ~1075×605 on 4K-capped 5K/6K@2), while stepping up
+          // through deceleration rungs as Lenis coasts to rest.
+          const moveScale = W * H > 5_200_000 ? Math.min(0.5, Math.sqrt(650_000 / (W * H))) : 0.5;
           const baseScale = !pk.behind ? moveScale : frameScale < 1 ? frameScale : Math.min(0.55, moveScale * 1.1);
           const rungScale = peaksGeo.rung === 0 ? baseScale
             : peaksGeo.rung === 1 ? baseScale + (1 - baseScale) * 0.30
-            : peaksGeo.rung === 2 ? baseScale + (1 - baseScale) * 0.62
-            : 1;
+            : baseScale + (1 - baseScale) * 0.62;
           // (0.5.41, 0.5.42, 0.5.43) Draw the intro's tilt at full size and
           // full march (uMotion = 0) on desktops (`intro.full === true`) so
           // moving and landed frames match; touch devices (`intro.full === false`)
@@ -6675,10 +6677,14 @@ export default function MistCanvas({ recipe, onFail }) {
     function onPointerOut() {
       walker.lift();
     }
+    const onWheel = () => {
+      lastWheelAt = performance.now();
+    };
     window.addEventListener('pointermove', onPointer, { passive: true });
     window.addEventListener('pointerdown', onPointer, { passive: true });
     window.addEventListener('pointerleave', onPointerOut);
     window.addEventListener('blur', onPointerOut);
+    window.addEventListener('wheel', onWheel, { passive: true });
 
     resize();
     kick();
@@ -6819,6 +6825,7 @@ export default function MistCanvas({ recipe, onFail }) {
       window.removeEventListener('pointerdown', onPointer);
       window.removeEventListener('pointerleave', onPointerOut);
       window.removeEventListener('blur', onPointerOut);
+      window.removeEventListener('wheel', onWheel);
     };
   }, [onFail]);
 
