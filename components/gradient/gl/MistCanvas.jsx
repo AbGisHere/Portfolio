@@ -867,6 +867,7 @@ export default function MistCanvas({ recipe, onFail }) {
           // (0.4.44) Its second message: the browser's copy is written.
           if (e.data?.stored) return worker.terminate();
           if (stopped) return worker.terminate();
+          if (e.data?.error) return workerFailed(e.data.error);
           houseBuilt = e.data;
           // (0.4.57) A stored bake that isn't whole is dropped: baked instead.
           if (houseBuilt.lightmapData && !H.validLightmap(houseBuilt.lightmapData, ...H.LIGHTMAP_BOUNDS.size)) houseBuilt.lightmapData = null;
@@ -879,12 +880,15 @@ export default function MistCanvas({ recipe, onFail }) {
           dirty = true;
           kickRef.current();
         };
-        houseWorker.onerror = () => {
+        const workerFailed = msg => {
           if (stopped) return;
-          houseWorker?.terminate();
-          houseWorker = null;
+          worker.terminate();
+          if (houseWorker === worker) houseWorker = null;
+          if (Array.isArray(window.__errors)) window.__errors.push(`house worker: ${msg}`);
           here();
         };
+        worker.onerror = () => workerFailed('error');
+        worker.onmessageerror = () => workerFailed('messageerror');
         // (0.4.57) The prebuilt house (0.4.56) only where building is slow:
         // touch-first devices (phones and tablets, 5–8 s to build); a
         // desktop builds it quicker than it downloads (~1.4 s on the M4).

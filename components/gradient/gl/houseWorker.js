@@ -26,6 +26,8 @@ import { loadStoredLightmap } from './lightmapCache';
 
 const DB = 'portfolio-house';
 const STORE = 'mesh';
+// (Bump when the stored record's shape changes: older records are ignored.)
+const MESH_CACHE_V = 1;
 
 const open = () => new Promise((resolve, reject) => {
   const req = indexedDB.open(DB, 1);
@@ -102,8 +104,16 @@ const shippedLightmap = async url => {
 
 // (Only inside a worker: the unit tests import every module here.)
 if (typeof self !== 'undefined') {
-  self.onmessage = async e => {
-    const useCache = e.data?.cache !== false && typeof indexedDB !== 'undefined';
+  // (Any throw reaches the page as { error }; it builds the house itself.)
+  self.onerror = ev => {
+    self.postMessage({ error: String(ev?.message || ev) });
+  };
+  self.onmessage = e => run(e).catch(err => {
+    self.postMessage({ error: String(err?.message || err) });
+  });
+  const run = async e => {
+    // (Not in dev: the stored house could be stale against edited code.)
+    const useCache = e.data?.cache !== false && typeof indexedDB !== 'undefined' && process.env.NODE_ENV === 'production';
     const key = self.location.href;
     // (Read beside the mesh; null on any failure.)
     const kept = e.data?.lightmap ? loadStoredLightmap(`${key}#${e.data.lightmap}`).catch(() => null) : Promise.resolve(null);
@@ -112,23 +122,38 @@ if (typeof self !== 'undefined') {
     if (useCache) {
       try {
         db = await open();
-        const hit = await read(db, key);
+        const rec = await read(db, key);
+        const hit = rec?.v === MESH_CACHE_V ? rec.meshes : null;
         if (hit?.house?.vertices && hit.house.tables && hit.house.leaves && hit?.curtains?.vertices) {
+          db.close();
+          db = null;
           send(hit, true, key, await lightmap);
           self.postMessage({ stored: true });
           return;
         }
       } catch {
+        try {
+          db?.close();
+        } catch {
+          // already closed
+        }
         db = null;
       }
     }
     self.__noPrebuilt = e.data?.prebuilt === false;
-    const meshes = await build();
+    let meshes;
+    try {
+      meshes = await build();
+    } catch (err) {
+      db?.close();
+      throw err;
+    }
     let stored = null;
     if (db) {
       try {
-        stored = write(db, key, meshes);
+        stored = write(db, key, { v: MESH_CACHE_V, meshes }).finally(() => db.close());
       } catch {
+        db.close();
         stored = null;
       }
     }

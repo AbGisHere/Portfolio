@@ -193,8 +193,13 @@ export default function SmoothScroll() {
     // the canvas mid-intro.
     const SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End']);
     const blockInput = e => {
-      if (!isIntroLocked()) return;
-      if (e.type === 'keydown' && !SCROLL_KEYS.has(e.key)) return;
+      if (!isIntroLocked() || reduce.matches) return;
+      if (e.type === 'keydown') {
+        if (!SCROLL_KEYS.has(e.key)) return;
+        // Keys on a control keep their own meaning (Space on a button).
+        const t = e.target;
+        if (t instanceof Element && (t.isContentEditable || t.closest('button, a[href], input, textarea, select, [role="button"], [role="slider"]'))) return;
+      }
       e.preventDefault();
     };
     const onIntro = on => (on ? lenis?.stop() : lenis?.start());

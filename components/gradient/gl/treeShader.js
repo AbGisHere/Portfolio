@@ -381,6 +381,7 @@ float depthOf(vec3 w) {
 
 export const TREE_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec4 aA;
 layout(location = 1) in vec4 aB;
@@ -509,6 +510,7 @@ void main() {
 
 export const TREE_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec3 uShadeC;   // the crown's three tones
@@ -633,6 +635,7 @@ void main() {
 // shadows keep hardware Early-Z whenever fully faded in (uA >= 1, farM >= 1e4).
 export const TREE_OPAQUE_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 uniform vec2 uSunDir;
 uniform vec3 uShadeC;

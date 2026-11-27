@@ -10,7 +10,7 @@ export default function NotFound() {
   return (
     <ErrorScreen title="Off the map." message="Nothing lives at this address.">
       <Link href="/" className={actionClass}>
-        Back to the mountains
+        Back to the start
       </Link>
     </ErrorScreen>
   );

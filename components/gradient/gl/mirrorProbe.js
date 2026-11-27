@@ -223,6 +223,7 @@ void main() {
 
 export const PROBE_BACKDROP_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 in vec2 vP;
 uniform vec2 uYP;
 uniform vec3 uTop;

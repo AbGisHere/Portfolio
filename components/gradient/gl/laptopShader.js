@@ -359,6 +359,7 @@ float noise2(vec2 p) {
 
 export const LAPTOP_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -395,6 +396,7 @@ void main() {
 
 export const LAPTOP_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec2 uLid;

@@ -215,6 +215,7 @@ export function propsMesh() {
 
 export const PROPS_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -240,6 +241,7 @@ void main() {
 const M = PROPS.mug;
 export const PROPS_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec3 uSun;
@@ -430,6 +432,7 @@ export const STEAM_WISPS = 3;
 
 export const STEAM_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 out vec2 vUV;
@@ -454,6 +457,7 @@ void main() {
 
 export const STEAM_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 uniform float uT;       // seconds, the frame loop's clock
 uniform float uSteam;   // how much shows (0 … 1)

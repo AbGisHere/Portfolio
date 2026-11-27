@@ -14,6 +14,7 @@ import { BIRD_PART, SPECIES } from './birdShape';
 
 export const BIRD_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -91,6 +92,7 @@ void main() {
 const BP = BIRD_PART;
 export const BIRD_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform highp int uKind;      // 0 swallow, 1 kite, 2 goose, 3 a butterfly (0.4.24), 4 a firefly (0.4.26)

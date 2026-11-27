@@ -287,6 +287,7 @@ ${PUSH_SUM}
 
 export const FLOWER_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 uniform vec3 uMid;
 uniform vec3 uTip;

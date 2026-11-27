@@ -96,6 +96,7 @@ export function lampMesh(pose = LAMP_POSE) {
 
 export const LAMP_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -120,6 +121,7 @@ void main() {
 
 export const LAMP_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec3 uPaint;

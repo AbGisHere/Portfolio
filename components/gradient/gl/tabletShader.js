@@ -123,6 +123,7 @@ export function tabletTexels() {
 
 export const TABLET_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -151,6 +152,7 @@ void main() {
 
 export const TABLET_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec2 uLid;      // unused here; LAPTOP_SHADE_GLSL reads it

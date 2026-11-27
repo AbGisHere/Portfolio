@@ -128,6 +128,7 @@ vec3 viewOf(vec3 q) {
 
 export const HOUSE_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 invariant gl_Position;
 
 layout(location = 0) in vec3 aPos;
@@ -188,6 +189,7 @@ void main() {
  * its fragment reads, so the normal and ST tables aren't fetched there. */
 export const HOUSE_DEPTH_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 invariant gl_Position;
 
 layout(location = 0) in vec3 aPos;
@@ -624,6 +626,7 @@ void main() {
  * 100% active across all 518k solid house triangles and 15k leaf instances. */
 export const HOUSE_DEPTH_SOLID_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 in float vZ;
 out vec4 outColor;
 void main() {

@@ -134,6 +134,7 @@ export const PROJECT_GLSL = `vec4 project(vec3 w) {
 
 export const DESK_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec4 aA;
 layout(location = 1) in vec4 aB;
@@ -195,6 +196,7 @@ void main() {
 
 export const DESK_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${CAMERA_GLSL}
 uniform vec3 uWood;

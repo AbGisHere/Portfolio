@@ -315,6 +315,7 @@ export const MEADOW_FLOWERS_FLAT = MEADOW_FLOWERS.replace('#version 300 es\n', '
 // flat ground (MEADOW_PAINT_FLAT) and the lawn mesh (gl.EQUAL against lawn depth).
 export const MEADOW_LAWN_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 invariant gl_Position;
 layout(location = 0) in vec3 aPos;
 ${CAMERA_GLSL}

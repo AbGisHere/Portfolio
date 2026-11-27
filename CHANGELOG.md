@@ -6,6 +6,39 @@ in `CLAUDE.md` and `docs/parts/`. Measurements are production builds on an Apple
 Chromium unless noted. "GPU ms" is `?bench` (median of interleaved runs,
 budget 8.33 ms at 120 Hz); "idle" is main-thread ms per second at rest.
 
+## 0.5.44 — 2026-11-27
+
+Fixes from a read of the whole codebase.
+
+- **Shader integer precision.** `precision highp int` in 35 shaders across
+  15 files. The trees' and desk's pcg hashes (`v * 747796405u`) and the
+  dither indices ran under the fragment default, mediump, which phone GPUs
+  may run in 16 bits (the class of 0.4.41's dark garden).
+  `houseLightmap.js` is unchanged: the shipped lightmap's hash covers its
+  shader text.
+- **House worker.** A failed build now posts `{ error }` (and `onerror`),
+  and the page falls back to the main-thread build instead of waiting
+  forever. The IndexedDB connection is closed after each read and write.
+  Records carry `v: MESH_CACHE_V` (old ones rebuild once), and the cache is
+  used in production only.
+- **Intro lock.** It no longer swallows Space and arrow keys on controls,
+  and does nothing under reduced motion.
+- **Headers.** CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`,
+  `Permissions-Policy` and `X-Frame-Options` on every route.
+- **Derived surfaces.** A new share image, the 3D opening at 1200×630 (with
+  new alt text in the image file and the README), a current `llms.txt`,
+  "Back to the start" on the error pages, an `@graph` JSON-LD (Person and
+  WebSite), `en_US` OpenGraph locale, and no per-request `lastModified` in
+  the sitemap.
+
+`qa` (full, against 0.5.44):
+- parity: pass.
+- switch: 12/12 (worst ×2.9).
+- intro: 4/4.
+- perf: FAIL, scroll 82.5 fps at 1440×900@2 and 74.9 fps at 1728×1117@2.
+  This is accepted, and it isn't from this release (it was 118+ at 0.5.35).
+- regress: FAIL against the 25 Nov baseline, which predates 0.5.39–0.5.43.
+
 ## 0.5.43 — 2026-11-26
 
 Fixes touch-device intro tilt flicker, slow-phone unbanded landing, and

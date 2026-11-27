@@ -33,6 +33,7 @@ void main() {
 // One step: r the height, g its speed.
 const STEP = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uField;
 uniform vec2 uTexel;
 in vec2 vUv;
@@ -58,6 +59,7 @@ void main() {
 // radius (of the pool's width), uDrop.w how deep.
 const DROP = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uField;
 uniform vec4 uDrop;
 uniform vec2 uAspect;
@@ -459,6 +461,7 @@ ${TRAINS.map(([l, a, d]) => {
 
 const CAUSTIC_SLOPE_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uField;
 uniform vec2 uSize;
 uniform vec2 uTexel;
@@ -509,6 +512,7 @@ void main() {
 
 const CAUSTIC_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 in vec3 vOld;
 in vec3 vNew;
 out vec4 outColor;

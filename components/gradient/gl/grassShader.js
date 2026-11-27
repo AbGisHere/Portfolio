@@ -426,6 +426,7 @@ ${PUSH_SUM}
 
 export const GRASS_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 uniform vec3 uRoot;
 uniform vec3 uMid;

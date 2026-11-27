@@ -9,7 +9,7 @@ export function GET() {
 
 > ${SITE.description} This is his personal portfolio site.
 
-The site is being rebuilt layer by layer. What's live today is the opening scene: an animated mountain atmosphere with a day/night toggle (click the sun), and a scroll that pulls the camera back from the mountains as the sky turns toward evening and the sun sets into the ridges, then brings it down onto a desk in the meadow in front of them, where the projects will be. Projects, resume, dev log and contact arrive in later releases and will be listed here as they ship.
+The site is a single continuous, scroll-driven experience rather than a page of stacked sections. It opens on 3D mountain peaks under a real-light sky (a short tilt down from the sky on first load), with a day/night toggle (click the sun or moon). Scrolling pulls the camera back and down the mountain onto a desk with an open laptop in a meadow, where the projects will be, and on to a house on a hill with a pool, where contact will be. Real project, resume and contact content arrives in later releases and will be listed here as it ships.
 
 ## Links
 

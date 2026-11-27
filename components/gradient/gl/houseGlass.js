@@ -127,6 +127,7 @@ export function glassMesh(glass) {
 
 export const GLASS_PANE_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
@@ -153,6 +154,7 @@ void main() {
 
 export const GLASS_WATER_VERTEX = `#version 300 es
 precision highp float;
+precision highp int;
 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec2 aST;
@@ -223,6 +225,7 @@ vec3 mirrored(vec3 R, float a) {
 
 export const GLASS_WATER_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${GLASS_SHARED_FS}
 uniform sampler2D uWater;    // the water's field (r: height, metres)
@@ -281,6 +284,7 @@ void main() {
 
 export const GLASS_PANE_FRAGMENT = `#version 300 es
 precision highp float;
+precision highp int;
 
 ${GLASS_SHARED_FS}
 in vec3 vWorld;

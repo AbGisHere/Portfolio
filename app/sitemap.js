@@ -7,7 +7,6 @@ const ROUTES = [{ path: '/', priority: 1 }];
 export default function sitemap() {
   return ROUTES.map(({ path, priority }) => ({
     url: `${SITE.url}${path === '/' ? '' : path}`,
-    lastModified: new Date(),
     changeFrequency: 'monthly',
     priority,
   }));

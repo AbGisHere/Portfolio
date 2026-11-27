@@ -19,7 +19,7 @@ export default function RouteError({ error, retry }) {
         Try again
       </button>
       <Link href="/" className={actionClass}>
-        Back to the mountains
+        Back to the start
       </Link>
     </ErrorScreen>
   );

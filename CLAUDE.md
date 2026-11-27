@@ -677,6 +677,16 @@ scroll/settle mist, rock-detail, and horizon-shadow transition artifacts:
   during all 10 refine bands), `test:unit 88/88`, `test:adaptive 9/9`,
   `hygiene 21/21`.
 
+**0.5.44** (2026-11-27) declares `precision highp int` in 35 shaders
+across 15 files (the trees' and desk's 32-bit hashes ran at mediump on phone
+GPUs; `houseLightmap.js` left as is, its hash covers the shader text), has
+the house worker post its errors (the page falls back to building on the
+main thread), close its database and version its cache (`MESH_CACHE_V`,
+production only), keeps the intro's scroll lock off controls and under
+reduced motion, and adds security headers (CSP, HSTS, `nosniff`,
+`frame-ancestors 'none'`), a new share image, a current `llms.txt`,
+richer JSON-LD and "Back to the start" on the error pages.
+
 **0.5.43** (2026-11-26) fixes real-device touch intro flicker, slow-phone
 unbanded landing, and premature mid-bake tilts (`MistCanvas.jsx`,
 `components/scroll/intro.js`, `docs/parts/atmosphere.md`):

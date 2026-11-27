@@ -18,6 +18,7 @@ void main() {
 // The brightest parts: how far past the knee each colour is, softly.
 const BRIGHT = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uFrom;
 uniform vec2 uTexel;
 // (0.5.17) The part of the frame's texture it fills (1, 1 but while the
@@ -46,6 +47,7 @@ void main() {
 // A Gaussian of 9 taps along uDir.
 const BLUR = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uFrom;
 uniform vec2 uDir;
 in vec2 vUv;
@@ -63,6 +65,7 @@ void main() {
 
 const ADD = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uFrom;
 uniform float uAmount;
 // (0.4.57) With the frame itself (uBaseOn), written over the canvas with

@@ -14,7 +14,7 @@ const TINTS = {
  * Shared by the 404, the route error boundary and the last-resort global
  * error, so the three can't drift apart. `live` pages sit on the real
  * atmosphere, which the root layout keeps running across routes (so "Back
- * to the mountains" carries on from the same sky); global-error has no
+ * to the start" carries on from the same sky); global-error has no
  * layout, passes `live={false}` and gets the recipes' skies as plain CSS,
  * since whatever broke may be the renderer itself.
  *

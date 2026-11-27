@@ -14,6 +14,8 @@ export const metadata = {
   metadataBase: new URL(SITE.url),
   title: { default: SITE.name, template: `%s · ${SITE.name}` },
   description: SITE.description,
+  authors: [{ name: SITE.name, url: SITE.url }],
+  creator: SITE.name,
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
@@ -21,7 +23,7 @@ export const metadata = {
     siteName: SITE.name,
     title: SITE.name,
     description: SITE.description,
-    locale: 'en',
+    locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
@@ -54,14 +56,29 @@ const THEME_SCRIPT = `try{var q=(new URLSearchParams(location.search)).get('them
   `addEventListener('unhandledrejection',function(e){E(e.reason&&e.reason.message||e.reason)});` +
   `var ce=console.error;console.error=function(){E([].map.call(arguments,function(a){return String(a)}).join(' '));return ce.apply(console,arguments)}})();`;
 
-const personJsonLd = {
+const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: SITE.name,
-  alternateName: 'AbG',
-  url: SITE.url,
-  jobTitle: SITE.role,
-  sameAs: [SITE.github],
+  '@graph': [
+    {
+      '@type': 'Person',
+      '@id': `${SITE.url}/#person`,
+      name: SITE.name,
+      alternateName: 'AbG',
+      url: SITE.url,
+      description: SITE.description,
+      jobTitle: SITE.role,
+      sameAs: [SITE.github],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE.url}/#website`,
+      url: SITE.url,
+      name: SITE.name,
+      description: SITE.description,
+      inLanguage: 'en',
+      publisher: { '@id': `${SITE.url}/#person` },
+    },
+  ],
 };
 
 export default function RootLayout({ children }) {
@@ -78,7 +95,7 @@ export default function RootLayout({ children }) {
       <body>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <ThemeProvider>
           {children}

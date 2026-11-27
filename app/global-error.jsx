@@ -32,7 +32,7 @@ export default function GlobalError({ error }) {
           </button>
           {/* Likewise a full navigation, not a client-side one. */}
           <a href="/" className={actionClass}>
-            Back to the mountains
+            Back to the start
           </a>
         </ErrorScreen>
       </body>
